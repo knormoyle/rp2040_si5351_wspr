@@ -16,6 +16,13 @@
 #include <MemoryFree.h>
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
+
+
+// stuff moved to functions from this .ino (not libraries
+# include "gps_functions.h" // has a associated gps_functions.c
+
+
+// https://docs.arduino.cc/tutorials/generic/secrets-of-arduino-pwm/
 #include "hardware/pwm.h"
 
 #define SerialUSB   Serial
@@ -75,13 +82,12 @@ char hf_call[7] = "NOCALL";// DO NOT FORGET TO CHANGE YOUR CALLSIGN
 //#define WSPR_DEFAULT_FREQ       28126100UL //10m band
 //for all bands -> http://wsprnet.org/drupal/node/7352
 
-
 // Supported modes, default HF mode is WSPR
 enum mode {MODE_WSPR};
 enum mode cur_mode = MODE_WSPR; //default HF mode
 
 //*******************************************************************************
-//******************************  APRS SETTINGS *********************************
+//******************************  APRS SETTINGS (old)****************************
 
 boolean  aliveStatus = true; //for tx status message on first wake-up just once.
 static char telemetry_buff[100];// telemetry buffer
@@ -108,8 +114,7 @@ volatile bool proceed = false;
 //******************************  GPS SETTINGS   *********************************
 int16_t   GpsResetTime=1800; // timeout for reset if GPS is not fixed
 
-// GEOFENCE 
-boolean arissModEnabled = false; //do not change this, temp value. 
+// FIX! removed all geofence, not used for wspr
 
 boolean GpsFirstFix=false; //do not change this
 boolean ublox_high_alt_mode_enabled = false; //do not change this
@@ -885,161 +890,6 @@ void sendStatus() {
 
 }
 
-static void updateGpsData(int ms)
-{
-  Watchdog.reset();
-  GpsON;
-  while (!Serial) {delay(1);} // wait for serial port to connect.  
-
-  // FIX! do we need any config of the ATGM336?
-  if(!ublox_high_alt_mode_enabled){
-    //enable ublox high altitude mode
-    setGPS_DynamicModel6();
-    #if defined(DEVMODE)
-      SerialUSB.println(F("ublox DynamicModel6 enabled..."));
-    #endif      
-    ublox_high_alt_mode_enabled = true;      
-  }
-  
-  unsigned long start = millis();
-  unsigned long bekle=0;
-  do
-  {
-
-    while (Serial2.available()>0) {
-      char c;
-      c=Serial2.read();
-      gps.encode(c);
-      bekle= millis();
-    }
-    
-    if (bekle!=0 && bekle+10<millis())break;
-    updateStatusLED();
-  } while (millis() - start < ms);
-
-  #if defined(DEVMODE2)
-  printf("gps.time.isValid():%u\n", gps.time.isValid());
-  #endif
-  if (gps.time.isValid())
-  {
-    // kevin 11_6_24 0 instead of NULL (not pointer)
-    // causes problems with the routines declares?
-    setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);     
-    #if defined(DEVMODE2)
-    printf("setTime(%02u:%02u:%02u)\n", gps.time.hour(), gps.time.minute(), gps.time.second());
-    #endif
-  }
-}
-
-//following GPS code from : https://github.com/HABduino/HABduino/blob/master/Software/habduino_v4/habduino_v4.ino
-void setGPS_DynamicModel6()
-{  
-  int gps_set_sucess=0;
-  uint8_t setdm6[] = {
-  0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x06,
-  0x03, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00,
-  0x05, 0x00, 0xFA, 0x00, 0xFA, 0x00, 0x64, 0x00, 0x2C,
-  0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0xDC };
-
-  while(!gps_set_sucess)
-  {
-    #if defined(DEVMODE)
-      SerialUSB.println(F("ublox DynamicModel6 try..."));
-    #endif 
-    sendUBX(setdm6, sizeof(setdm6)/sizeof(uint8_t));
-    gps_set_sucess=getUBX_ACK(setdm6);
-  }
-}
-
-void sendUBX(uint8_t *MSG, uint8_t len) {
-  Serial2.write(0xFF);
-  delay(500);
-  for(int i=0; i<len; i++) {
-    Serial2.write(MSG[i]);
-  }
-}
-
-boolean getUBX_ACK(uint8_t *MSG) {
-  uint8_t b;
-  uint8_t ackByteID = 0;
-  uint8_t ackPacket[10];
-  unsigned long startTime = millis();
-  boolean status =false;
-
-  // Construct the expected ACK packet
-  ackPacket[0] = 0xB5; // header
-  ackPacket[1] = 0x62; // header
-  ackPacket[2] = 0x05; // class
-  ackPacket[3] = 0x01; // id
-  ackPacket[4] = 0x02; // length
-  ackPacket[5] = 0x00;
-  ackPacket[6] = MSG[2]; // ACK class
-  ackPacket[7] = MSG[3]; // ACK id
-  ackPacket[8] = 0; // CK_A
-  ackPacket[9] = 0; // CK_B
-
-  // Calculate the checksums
-  for (uint8_t ubxi=2; ubxi<8; ubxi++) {
-    ackPacket[8] = ackPacket[8] + ackPacket[ubxi];
-    ackPacket[9] = ackPacket[9] + ackPacket[8];
-  }
-
-  while (1) {
-    // Test for success
-    if (ackByteID > 9) {
-      // All packets in order!
-      status= true;
-      break;
-    }
-
-    // Timeout if no valid response in 3 seconds
-    if (millis() - startTime > 3000) {
-      status= false;
-      break;
-    }
-
-    // Make sure data is available to read
-    if (Serial2.available()) {
-      b = Serial2.read();
-
-      // Check that bytes arrive in sequence as per expected ACK packet
-      if (b == ackPacket[ackByteID]) {
-        ackByteID++;
-      }
-      else {
-        ackByteID = 0; // Reset and look again, invalid order
-      }
-    }
-  }
-  return status;
-}
-
-void gpsDebug() {
-#if defined(DEVMODE)
-  SerialUSB.println();
-  SerialUSB.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars Sentences Checksum"));
-  SerialUSB.println(F("          (deg)      (deg)       Age                      Age  (m)    --- from GPS ----  RX    RX        Fail"));
-  SerialUSB.println(F("-----------------------------------------------------------------------------------------------------------------"));
-
-  printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
-  printInt(gps.hdop.value(), gps.hdop.isValid(), 5);
-  printFloat(gps.location.lat(), gps.location.isValid(), 11, 6);
-  printFloat(gps.location.lng(), gps.location.isValid(), 12, 6);
-  printInt(gps.location.age(), gps.location.isValid(), 5);
-  printDateTime(gps.date, gps.time);
-  printFloat(gps.altitude.meters(), gps.altitude.isValid(), 7, 2);
-  printFloat(gps.course.deg(), gps.course.isValid(), 7, 2);
-  printFloat(gps.speed.kmph(), gps.speed.isValid(), 6, 2);
-  printStr(gps.course.isValid() ? TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
-
-  printInt(gps.charsProcessed(), true, 6);
-  printInt(gps.sentencesWithFix(), true, 10);
-  printInt(gps.failedChecksum(), true, 9);
-  SerialUSB.println();
-
-#endif
-}
 
 static void printFloat(float val, bool valid, int len, int prec)
 {
@@ -1235,28 +1085,6 @@ void set_tx_buffer()
     jtencode.wspr_encode(hf_call, hf_loc, dbm, tx_buffer);
     break;
   }
-}
-
-void GridLocator(char *dst, float latt, float lon) {
-  int o1, o2;
-  int a1, a2;
-  float remainder;
-  // longitude
-  remainder = lon + 180.0;
-  o1 = (int)(remainder / 20.0);
-  remainder = remainder - (float)o1 * 20.0;
-  o2 = (int)(remainder / 2.0);
-  // latitude
-  remainder = latt + 90.0;
-  a1 = (int)(remainder / 10.0);
-  remainder = remainder - (float)a1 * 10.0;
-  a2 = (int)(remainder);
-
-  dst[0] = (char)o1 + 'A';
-  dst[1] = (char)a1 + 'A';
-  dst[2] = (char)o2 + '0';
-  dst[3] = (char)a2 + '0';
-  dst[4] = (char)0;
 }
 
 void freeMem() {
