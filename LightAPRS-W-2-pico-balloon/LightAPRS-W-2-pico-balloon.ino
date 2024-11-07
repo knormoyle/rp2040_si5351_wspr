@@ -716,9 +716,10 @@ void setup() {
 
   APRS_init();
   APRS_setCallsign(CallSign, CallNumber);
-  APRS_setDestination("APLIGA", 0);
-  APRS_setPath1("WIDE1", Wide1);
-  APRS_setPath2("WIDE2", Wide2);
+  // kevin 11_6_24 compile error
+  // APRS_setDestination("APLIGA", 0);
+  // APRS_setPath1("WIDE1", Wide1);
+  // APRS_setPath2("WIDE2", Wide2);
   APRS_setPathSize(2);
   APRS_useAlternateSymbolTable(alternateSymbolTable);
   APRS_setSymbol(Symbol);
@@ -756,7 +757,7 @@ if (((readBatt() > BattMin) && GpsFirstFix) || ((readBatt() > GpsMinVolt) && !Gp
 
     if (aliveStatus) {
 
-      sendStatus();	  
+      sendStatus();
       aliveStatus = false;
 
       while (readBatt() < BattMin) {
@@ -955,8 +956,9 @@ void configureFreqbyLocation() {
 
 
   if(beaconViaARISS && inARISSGeoFence(tempLat, tempLong)) {
-    APRS_setPath1("ARISS", Wide1);
-    APRS_setPath2("WIDE2", Wide2);
+    // kevin 11_6_24 compile error
+    // APRS_setPath1("ARISS", Wide1);
+    // APRS_setPath2("WIDE2", Wide2);
     APRS_setPathSize(2);
     GEOFENCE_APRS_frequency=145825000;
     arissModEnabled = true;
@@ -1225,7 +1227,9 @@ static void updateGpsData(int ms)
   #endif
   if (gps.time.isValid())
   {
-    setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), NULL, NULL, NULL);     
+    // kevin 11_6_24 0 instead of NULL (not pointer)
+    // causes problems with the routines declares?
+    setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);     
     #if defined(DEVMODE2)
     printf("setTime(%02u:%02u:%02u)\n", gps.time.hour(), gps.time.minute(), gps.time.second());
     #endif

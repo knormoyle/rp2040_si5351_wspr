@@ -37,12 +37,12 @@ Download and install [Arduino IDE](https://www.arduino.cc/en/Main/Software). If 
 ### 2. Configure Board
 
 - Open the **Tools > Board > Boards Manager...** menu item.
-- Type "raspberry pi pico" in the search bar until you see the **Raspberry Pi Pico/RP2040** entry and click on it.
-  - For more details about the **Raspberry Pi Pico/RP2040**, please refer to [Arduino-Pico documentation](https://arduino-pico.readthedocs.io/en/latest/index.html).
+- Type "raspberry pi pico" in the search bar until you see the **Raspberry Pi Pico - Arduino Mbed OS RP2040 Boards** entry and click on it.
+  - For more details, please refer to [Arduino-Pico documentation](https://arduino-pico.readthedocs.io/en/latest/index.html).
   - If you use Arduino IDE v1.*, please refer to [here](https://arduino-pico.readthedocs.io/en/latest/install.html#installing-via-arduino-boards-manager).
 - Click **Install** .
 - After installation is complete, close the **Boards Manager** window.
-- Open the **Tools > Board** menu item and select **Raspberry Pi Pico/RP2040 -> Raspberry Pi Pico** from the the list.
+- Open the **Tools > Board** menu item and select **Raspberry Pi Pico - Arduino Mbed OS RP2040 Boards** from the the list.
 - Open the **Tools** menu again to select values below:
   - Debug Level: "None"
   - Debug Port: "Serial"
@@ -63,6 +63,7 @@ Download and install [Arduino IDE](https://www.arduino.cc/en/Main/Software). If 
 - You will notice some folders in the "libraries" folder. You have to copy these folders (libraries) into your Arduino libraries folder on your computer. Path to your Arduino libraries:
 - **Windows** : This PC\Documents\Arduino\libraries\
 - **Mac** : /Users/\<username\>/Documents/Arduino/libraries/
+- **Ubuntu** : /Users/\<username\>/Arduino/libraries/
 
 **IMPORTANT :** If you already have folders that have same name, you still need to overwrite them. Otherwise you get a compile error.
 
