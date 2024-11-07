@@ -13,14 +13,11 @@
 #include <JTEncode.h>                       //https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
 #include <TimeLib.h>                        //https://github.com/PaulStoffregen/Time
 
-#if defined(ARDUINO_ARCH_RP2040)
 #include <MemoryFree.h>
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
 #include "hardware/pwm.h"
-#endif
 
-#if defined(ARDUINO_ARCH_RP2040)
 #define SerialUSB   Serial
 #define Si5351Pwr     4
 #define BattPin       A3
@@ -47,8 +44,6 @@
     /*printf("GpsOFF\n");*/     \
   } while (false)
 
-#endif
-
 #define DEVMODE // Development mode. Uncomment to enable for debugging.
 #define DEVMODE2// Development mode. Uncomment to enable for debugging.
 
@@ -62,13 +57,11 @@ char    StatusMessage[50] = "LightAPRS-W 2.0 by TA2NHP & TA2MUN";
 
 uint16_t  BeaconWait=50;  //seconds sleep for next beacon (HF or VHF). This is an optimized value, do not change this if possible.
 
-#if defined(ARDUINO_ARCH_RP2040)
 uint16_t  BattWait=1;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel) 
-float     BattMin=0.0;    // min Volts to wake up.
+float     BattMin=0.0;    //min Volts to wake up.
 float     GpsMinVolt=0.0; //min Volts for GPS to wake up. (important if power source is solar panel) 
 float     WsprBattMin=0.0;//min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
 float     HighVolt=9.9;   //GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
-#endif
 
 //******************************  HF (WSPR) CONFIG *************************************
 
@@ -97,9 +90,9 @@ uint16_t TxCount = 1; //increase +1 after every APRS transmission
 //*******************************************************************************
 //******************************  HF SETTINGS   *********************************
 
-#define WSPR_TONE_SPACING       146          // ~1.46 Hz
-#define WSPR_DELAY              683          // Delay value for WSPR
-#define HF_CORRECTION           -13000       // Change this for your ref osc
+#define WSPR_TONE_SPACING  146          // ~1.46 Hz
+#define WSPR_DELAY         683          // Delay value for WSPR
+#define HF_CORRECTION      -13000       // Change this for your ref osc
   
 // Global variables
 unsigned long hf_freq;
@@ -127,8 +120,6 @@ int16_t GpsInvalidTime=0; //do not change this
 TinyGPSPlus gps;
 Adafruit_BMP085 bmp;
 JTEncode jtencode;
-
-#if defined(ARDUINO_ARCH_RP2040)
 
 // when we set both?
 #define WSPR_TX_CLK_NUM     0
@@ -317,9 +308,9 @@ void si5351a_setup_multisynth0(uint32_t div)
                                   SI5351A_CLK0_MS0_SRC_PLLB | 
                                   SI5351A_CLK0_SRC_MULTISYNTH_0 | 
                                   s_vfo_drive_strength[0]));
+
 #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
   i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
-
   i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT | 
                                   SI5351A_CLK1_MS1_SRC_PLLB | 
                                   SI5351A_CLK1_CLK1_INV | 
@@ -513,6 +504,8 @@ void vfo_turn_off(void)
 
 #define turnOnLED(turn_on)          digitalWrite(STATUS_LED_PIN, (turn_on) ? HIGH : LOW)
 #define isLEDOn()                   (digitalRead(STATUS_LED_PIN) ? true : false)
+// background
+// https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 #define flipLED()                   turnLedOn(!isLedOn())
 
 #define LED_BLINK_ON_PERIOD_USEC    50000
@@ -571,7 +564,6 @@ void updateStatusLED(void)
   }
 }
 
-#endif
 
 
 void setup() {
@@ -580,23 +572,21 @@ void setup() {
   // While the energy rises slowly with the solar panel, 
   // using the analog reference low solves the analog measurement errors.
 
-#if defined(ARDUINO_ARCH_RP2040)
   initStatusLED();
   setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+  // FIX! why is this commented out?
   // pinMode(Si5351Pwr, OUTPUT);
   pinMode(GpsPwr, OUTPUT);
+  // FIX! why is this commented out?
   // pinMode(BattPin, INPUT);
   analogReadResolution(12);
-#endif
   
   GpsOFF;
   Si5351OFF;  
 
-#if defined(ARDUINO_ARCH_RP2040)
   Serial2.setRX(GPS_UART1_RX_PIN);
   Serial2.setTX(GPS_UART1_TX_PIN);
   Serial2.begin(9600);//GPS
-#endif
 
   SerialUSB.begin(115200);
   // Wait up to 5 seconds for serial to be opened, to allow catching
@@ -609,10 +599,8 @@ void setup() {
 
   SerialUSB.println(F("Starting"));
 
-#elif defined(ARDUINO_ARCH_RP2040)
   Wire.begin(); // somehow this is necessary for Serial2 to work properly
   vfo_init();
-#endif
 
   SerialUSB.print(F("WSPR (HF) CallSign: "));
   SerialUSB.println(hf_call);
@@ -622,12 +610,9 @@ void setup() {
 
 void loop() {
   Watchdog.reset();
-
-#if defined(ARDUINO_ARCH_RP2040)
   updateStatusLED();
-#endif
 
-if (((readBatt() > BattMin) && GpsFirstFix) || ((readBatt() > GpsMinVolt) && !GpsFirstFix)) {
+  if (((readBatt() > BattMin) && GpsFirstFix) || ((readBatt() > GpsMinVolt) && !GpsFirstFix)) {
 
     if (aliveStatus) {
 
@@ -644,15 +629,11 @@ if (((readBatt() > BattMin) && GpsFirstFix) || ((readBatt() > GpsMinVolt) && !Gp
 
       if(gps.location.isValid() && gps.location.age()<1000){
         GpsInvalidTime=0;
-        #if defined(ARDUINO_ARCH_RP2040)
         setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
-        #endif
       }else{
         GpsInvalidTime++;
-        #if defined(ARDUINO_ARCH_RP2040)
         if (gps.date.year() != 2000) setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
         else setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-        #endif
         if(GpsInvalidTime > GpsResetTime){
           GpsOFF; 
           ublox_high_alt_mode_enabled = false; //gps sleep mode resets high altitude mode.
@@ -672,22 +653,19 @@ if (((readBatt() > BattMin) && GpsFirstFix) || ((readBatt() > GpsMinVolt) && !Gp
           }      
           GpsInvalidTime=0;
 
-          // Checks if there is an HF (WSPR) TX window is soon, if not then send APRS beacon
+          // Checks if there is an HF (WSPR) TX window is soon
           if (!((minute() % 10 == 3 || minute() % 10 == 7) &&  second()>50 && readBatt() > WsprBattMin && timeStatus() == timeSet)){
-             updateTelemetry();
+            updateTelemetry();
             freeMem();
             SerialUSB.flush();
 
           }   
 
-          // preparations for HF starts one minute before TX time at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57. No APRS TX during this period...
-          #if defined(DEVMODE2)
+          // FIX! it should depend on the channel starting minute - 1 (modulo 10)
+          // preparations for HF starts one minute before TX time at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57. 
           printf("timeStatus():%u minute():%u\n", timeStatus(), minute());
-          #endif
           if (readBatt() > WsprBattMin && timeStatus() == timeSet && ((minute() % 10 == 3) || (minute() % 10 == 7)) ) { 
-            #if defined(DEVMODE2)
             printf("start WSPR\n");
-            #endif
             GridLocator(hf_loc, gps.location.lat(), gps.location.lng());
             sprintf(hf_message,"%s %s",hf_call,hf_loc);
             
@@ -698,39 +676,33 @@ if (((readBatt() > BattMin) && GpsFirstFix) || ((readBatt() > GpsMinVolt) && !Gp
             #endif
             
             //HF transmission starts at minute 4, 8, 14, 18, 24, 28, 34, 38, 44, 48, 54 or 58 
+            // FIX! start on hte starting minute of the channel
             while (((minute() % 10 != 4) || (minute() % 10 != 8)) && second() != 0) {
               Watchdog.reset();
               delay(1);
-              #if defined(ARDUINO_ARCH_RP2040)
               updateStatusLED();
-              #endif
             }
             #if defined(DEVMODE)
             SerialUSB.println(F("Digital HF Mode Sending..."));
             #endif          
-            #if defined(ARDUINO_ARCH_RP2040)
             setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
-            #endif
             encode();
             //HFSent=true;
 
             #if defined(DEVMODE)
             SerialUSB.println(F("Digital HF Mode Sent"));
             #endif             
-            #if defined(ARDUINO_ARCH_RP2040)
             setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-            #endif
   
           } else {
             sleepSeconds(BeaconWait);
           }   
         }else {
           #if defined(DEVMODE)
-          SerialUSB.println(F("Not enough sattelites"));
+          SerialUSB.println(F("Not enough satelites"));
           #endif
         }
       }
-
     
   } else {
     sleepSeconds(BattWait);
@@ -741,7 +713,7 @@ void sleepSeconds(int sec) {
   Si5351OFF;
   SerialUSB.flush();
   for (int i = 0; i < sec; i++) {
-    if (GpsFirstFix){//sleep gps after first fix
+    if (GpsFirstFix){ //sleep gps after first fix
       if (readBatt() < HighVolt){
         GpsOFF;
         ublox_high_alt_mode_enabled = false;
@@ -755,12 +727,10 @@ void sleepSeconds(int sec) {
      
     Watchdog.reset();
 
-#if defined(ARDUINO_ARCH_RP2040)
     uint32_t usec = time_us_32();
     while ((time_us_32() - usec) < 1000000) {
       updateStatusLED();
     }
-#endif
     
   }
   Watchdog.reset();
@@ -835,7 +805,6 @@ void updateTelemetry() {
   delay(1);
 
   telemetry_buff[23] = ' '; float tempC = bmp.readTemperature();
-  telemetry_buff[23] = ' '; float tempC = bmp.readTemperature();
   // telemetry_buff[23] = ' '; float tempC = 0.f;
   dtostrf(tempC, 6, 2, telemetry_buff + 24);
 
@@ -862,7 +831,6 @@ void updateTelemetry() {
   // remove temperature and pressure info
   // memmove(&telemetry_buff[24], &telemetry_buff[43], (sizeof(telemetry_buff) - 43));
 
-
 #if defined(DEVMODE)
   SerialUSB.println(telemetry_buff);
 #endif
@@ -876,7 +844,7 @@ void sendLocation() {
 #endif
 
   // FIX! how do we end the telemetry_buff
-  GEOFENCE_APRS_frequency=0;
+  int GEOFENCE_APRS_frequency=0;
 
   // vfo_set_drive_strength(APRS_TX_CLK_NUM, SI5351A_CLK_IDRV_8MA);
   // vfo_turn_on(APRS_TX_CLK_NUM);
@@ -884,7 +852,7 @@ void sendLocation() {
   {
     delay(500);
     // FIX! how do we end the telemetry_buff
-    APRS_sendLoc(telemetry_buff);
+    // APRS_sendLoc(telemetry_buff);
     delay(10);
     vfo_turn_off();
     SerialUSB.print(F("APRS Location sent (Freq: "));
@@ -898,14 +866,14 @@ void sendLocation() {
 
 void sendStatus() {
   // FIX! how do we end the telemetry_buff
-  GEOFENCE_APRS_frequency=0;
+  int GEOFENCE_APRS_frequency=0;
 
   // vfo_set_drive_strength(APRS_TX_CLK_NUM, SI5351A_CLK_IDRV_8MA);
   // vfo_turn_on(APRS_TX_CLK_NUM);
   // vfo_set_freq_x16(APRS_TX_CLK_NUM, (GEOFENCE_APRS_frequency << PLL_CALCULATION_PRECISION));
   {
     delay(500);
-    APRS_sendStatus(StatusMessage);
+    // APRS_sendStatus(StatusMessage);
     delay(10);
     vfo_turn_off();
     SerialUSB.print(F("Status sent (Freq: "));
@@ -938,19 +906,15 @@ static void updateGpsData(int ms)
   do
   {
 
-#if defined(ARDUINO_ARCH_RP2040)
     while (Serial2.available()>0) {
       char c;
       c=Serial2.read();
-#endif
       gps.encode(c);
       bekle= millis();
     }
     
     if (bekle!=0 && bekle+10<millis())break;
-#if defined(ARDUINO_ARCH_RP2040)
     updateStatusLED();
-#endif
   } while (millis() - start < ms);
 
   #if defined(DEVMODE2)
@@ -989,19 +953,11 @@ void setGPS_DynamicModel6()
 }
 
 void sendUBX(uint8_t *MSG, uint8_t len) {
-#if defined(ARDUINO_ARCH_SAMD)
-  Serial.write(0xFF);
-  delay(500);
-  for(int i=0; i<len; i++) {
-    Serial.write(MSG[i]);
-  }
-#elif defined(ARDUINO_ARCH_RP2040)
   Serial2.write(0xFF);
   delay(500);
   for(int i=0; i<len; i++) {
     Serial2.write(MSG[i]);
   }
-#endif
 }
 
 boolean getUBX_ACK(uint8_t *MSG) {
@@ -1044,10 +1000,8 @@ boolean getUBX_ACK(uint8_t *MSG) {
     }
 
     // Make sure data is available to read
-#elif defined(ARDUINO_ARCH_RP2040)
     if (Serial2.available()) {
       b = Serial2.read();
-#endif
 
       // Check that bytes arrive in sequence as per expected ACK packet
       if (b == ackPacket[ackByteID]) {
@@ -1163,24 +1117,38 @@ static void printStr(const char *str, int len)
 
 
 float readBatt() {
-#if defined(ARDUINO_ARCH_RP2040)
   int adc_val = 0;
   adc_val = analogRead(BattPin);
   adc_val += analogRead(BattPin);
   adc_val += analogRead(BattPin);
+  // The Raspberry Pi Pico's analog to digital converter (ADC) can measure voltages between 0 and 3.3 volts. 
+  // The ADC uses a 3.3V reference voltage, 
+  // and a read operation returns a number between 0 and 4095. 
+  // The ADC's resolution is 3.3/4096, or roughly 0.8 millivolts. 
+  // is the precision set to 4096? (12 not 16 bits resolution)
+  // 4096/3.3 = 1241
+  // 1241 / 3 = 413.66
+
+  // FIX! this doesn't seem right. should I just multiply by the conversion factor
+  // he's got some special 1/3 voltage divider for VBUS to BATT_V
+  // you leave it open than the ADC converter voltage reference is the 3.3V .
+  // In reality it is the voltage of the pin 3V3 - ( ~150uA * 200) which is roughly a 30mv drop. (0.8mv * 30 = 24 steps)
+
+  // this must be a calibrated linear equation? only need to calibrate between 2.8v and 5v?
   float solar_voltage = ((float)adc_val / 3.0f - 27.0f) / 412.0f;
+  // there is a 200 ohm resistor between 3V3 and ADC_AVDD
+  // we did 3 reads above ..averaging? so don't need the 3x because of onboard voltage divider
+  // pico-WSPRer does this (no use of ADC_AVDD) ?
+  // const float conversionFactor = 3.3f / (1 << 12);  
+  // float solar_voltage = 3 * (float)adc_read() * conversionFactor;   
+
   // if (solar_voltage < 0.0f) solar_voltage = 0.0f;
   // if (solar_voltage > 9.9f) solar_voltage = 9.9f;
   return solar_voltage;
-#endif
 }
 
-#if defined(ARDUINO_ARCH_RP2040)
-
 #define WSPR_PWM_SLICE_NUM  4
-
 static pwm_config wspr_pwm_config;
-
 void PWM4_Handler(void) {
   pwm_clear_irq(WSPR_PWM_SLICE_NUM);
   static int cnt = 0;
@@ -1189,11 +1157,8 @@ void PWM4_Handler(void) {
     proceed = true;
   }
 }
-#endif
-
 
 void zeroTimerSetPeriodMs(float ms){
-#if defined(ARDUINO_ARCH_RP2040)
   wspr_pwm_config = pwm_get_default_config();
   pwm_config_set_clkdiv_int(&wspr_pwm_config, 250); // 2uS
   pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)ms - 1));
@@ -1204,20 +1169,17 @@ void zeroTimerSetPeriodMs(float ms){
   pwm_clear_irq(WSPR_PWM_SLICE_NUM);
   pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
   pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
-#endif
 }
 
 void encode()
 {
   Watchdog.reset();
-#elif defined(ARDUINO_ARCH_RP2040)
   vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
   vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
   vfo_turn_on(WSPR_TX_CLK_NUM);
   // do we have to turn on the differential clock?
   // they share a pll ? so the differential enable ifdef should handle that?
   // vfo_turn_on(WSPR_TX_CLK_1_NUM);
-#endif
   uint8_t i;
 
   #if defined(DEVMODE2)
@@ -1226,20 +1188,18 @@ void encode()
   switch(cur_mode)
   {
   case MODE_WSPR:
-#elif defined(ARDUINO_ARCH_RP2040)
     hf_freq = WSPR_DEFAULT_FREQ - 100 + (rand() % 200);
+
     #if defined(DEVMODE2)
     printf("WSPR freq: %u\n", hf_freq);
     #endif
-#endif
+
     symbol_count = WSPR_SYMBOL_COUNT; // From the library defines
     tone_spacing = WSPR_TONE_SPACING;
     tone_delay = WSPR_DELAY;
     break;
   }
   set_tx_buffer();
-
-  
   zeroTimerSetPeriodMs(tone_delay); 
   
   for(i = 0; i < symbol_count; i++)
@@ -1249,21 +1209,17 @@ void encode()
       vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
       proceed = false;
 
-if defined(ARDUINO_ARCH_RP2040)
       while (!proceed) {
         updateStatusLED();
       }
-#endif
       Watchdog.reset();
   }
-#if defined(ARDUINO_ARCH_RP2040)
   pwm_set_enabled(WSPR_PWM_SLICE_NUM, false);
   pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, false);
   pwm_clear_irq(WSPR_PWM_SLICE_NUM);
   irq_set_enabled(PWM_IRQ_WRAP, false);
   irq_remove_handler(PWM_IRQ_WRAP, PWM4_Handler);
   vfo_turn_off();
-#endif
   Watchdog.reset();
 }
 
