@@ -46,8 +46,18 @@ However, TinyGPSPlus’s programmer interface is considerably simpler to use tha
 // in libraries: wget https://github.com/adafruit/Adafruit_BusIO/archive/refs/heads/master.zip
 #include <Adafruit_I2CDevice.h> // https://github.com/adafruit/Adafruit_BusIO
 
+// board uses the BMP280? (doesn't have temp)
+// in libraries: wget https://github.com/adafruit/Adafruit_BMP280_Library/archive/refs/heads/master.zip
+// can I put the BMP085 on there?
+#include <Adafruit_BMP280.h> // https://github.com/adafruit/Adafruit_BMP280_Library
+// this needs the Adafruit_Sensor.h also
+// in libraries: wget https://github.com/adafruit/Adafruit_Sensor/archive/refs/heads/master.zip
+// https://github.com/adafruit/Adafruit_sensor
+// they have accelerometer, gyroscope, magnetometer, humidity sensors, light?
+
+// old
 // Requires the https://github.com/adafruit/Adafruit_BusIO library for I2C abstraction
-#include <Adafruit_BMP085.h> // https://github.com/adafruit/Adafruit-BMP085-Library
+// #include <Adafruit_BMP085.h> // https://github.com/adafruit/Adafruit-BMP085-Library
 
 // wget https://github.com/adafruit/Adafruit-BMP085-Library/archive/refs/heads/master.zip
 #include <JTEncode.h> // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
@@ -81,8 +91,7 @@ However, TinyGPSPlus’s programmer interface is considerably simpler to use tha
 
 const int Si5351Pwr=4;
 const int BattPin=A3;
-// so it can be used in gps_functions.cpp
-const int GpsPwr=16;
+
 
 //macros
 // FIX! does nothing?
@@ -167,62 +176,83 @@ int16_t GpsInvalidTime=0; //do not change this
 TinyGPSPlus gps;
 
 #include "debug_functions.h"
-// stuff moved to functions from this .ino (not libraries)
-#include "gps_functions.h" // has a associated gps_functions.c
 
-//********************************************************************************
-Adafruit_BMP085 bmp;
+//*********************************
+// in AdaFruit_I2CDevice.h
+// theWire The I2C bus to use, defaults to &Wire
+const int BMP280_I2C1_SDA_PIN=2;
+const int BMP280_I2C1_SCL_PIN=3;
+#include "bmp_functions.h"
+
+bmp_init();
+Adafruit_BMP280 bmp;
+// Adafruit_BMP805 bmp;
+
 JTEncode jtencode;
 
-//********************************************************************************
-const int STATUS_LED_PIN=25;
+//*********************************
+extern const int STATUS_LED_PIN=25;
 
-const int LED_STATUS_NO_GPS=1;
-const int LED_STATUS_GPS_TIME=2;
-const int LED_STATUS_GPS_FIX=3;
-const int LED_STATUS_TX_WSPR=4;
-const int LED_STATUS_TX_TELEMETRY=5;
-const int LED_STATUS_TX_TELEN1=6;
-const int LED_STATUS_TX_TELEN2=7;
+extern const int LED_STATUS_NO_GPS=1;
+extern const int LED_STATUS_GPS_TIME=2;
+extern const int LED_STATUS_GPS_FIX=3;
+extern const int LED_STATUS_TX_WSPR=4;
+extern const int LED_STATUS_TX_TELEMETRY=5;
+extern const int LED_STATUS_TX_TELEN1=6;
+extern const int LED_STATUS_TX_TELEN2=7;
 
 #include "led_functions.h"
+
+//*********************************
 // some stuff on using namespace
 // https://forum.arduino.cc/t/using-a-constant-defined-in-the-header-file/380178
 
-//************************************************
 // flash background
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
-//************************************************
 
-const int GPS_VCC_ON_N_PIN=16;
-const int GPS_NRESET_PIN=5;
-const int GPS_ON_PIN=6;
-const int GPS_UART1_TX_PIN=8;
-const int GPS_UART1_RX_PIN=9;
-const int GPS_1PPS_PIN=17;
+//*********************************
+// so it can be used in gps_functions.cpp
+// extern is needed or the linker doesn't find it. see https://forum.arduino.cc/t/linker-problems-with-extern-const-struct/647136/2
+extern const int GpsPwr=16;
+// not used..GpsPwr is used
+// const int GPS_VCC_ON_N_PIN=16;     // output ..this cuts VCC, leaves VBAT
 
-const int BMP280_I2C1_SDA_PIN=2;
-const int BMP280_I2C1_SCL_PIN=3;
+// FIX! where are these used
+extern const int GPS_NRESET_PIN=5; // output ..active low..should be 1?
+extern const int GPS_ON_PIN=6;     // output ..this puts in sleep mode? should be 1?
 
-const int VFO_VDD_ON_N_PIN=4;
-const int VFO_I2C0_SDA_PIN=12;
-const int VFO_I2C0_SCL_PIN=13;
+// FIX! where is this used (calibration maybe)
+extern const int GPS_1PPS_PIN=17;         // input
 
+extern const int GPS_UART1_TX_PIN=8;
+extern const int GPS_UART1_RX_PIN=9;
+
+// stuff moved to functions from this .ino (not libraries)
+#include "gps_functions.h"
+
+
+
+//*********************************
 // when we set both?
-const int WSPR_TX_CLK_1_NUM=1;
+extern const int WSPR_TX_CLK_1_NUM=1;
 // this is the other differential clock for wspr? (was aprs)
-const int WSPR_TX_CLK_0_NUM=0;
-const int WSPR_TX_CLK_NUM=0;
+extern const int WSPR_TX_CLK_0_NUM=0;
+extern const int WSPR_TX_CLK_NUM=0;
 
 
-const int SI5351A_CLK_IDRV_8MA=(3 << 0);
-const int SI5351A_CLK_IDRV_6MA=(2 << 0);
-const int SI5351A_CLK_IDRV_4MA=(1 << 0);
-const int SI5351A_CLK_IDRV_2MA=(0 << 0);
+//*********************************
+extern const int SI5351A_CLK_IDRV_8MA=(3 << 0);
+extern const int SI5351A_CLK_IDRV_6MA=(2 << 0);
+extern const int SI5351A_CLK_IDRV_4MA=(1 << 0);
+extern const int SI5351A_CLK_IDRV_2MA=(0 << 0);
 
 const int PLL_CALCULATION_PRECISION=4;
 
+extern const int VFO_VDD_ON_N_PIN=4;
+extern const int VFO_I2C0_SDA_PIN=12;
+extern const int VFO_I2C0_SCL_PIN=13;
 #include "si5351_functions.h"
+//*********************************
 
 void setup() {
   Watchdog.enable(30000);
@@ -241,10 +271,7 @@ void setup() {
 
   GpsOFF();
   Si5351OFF;
-
-  Serial2.setRX(GPS_UART1_RX_PIN);
-  Serial2.setTX(GPS_UART1_TX_PIN);
-  Serial2.begin(9600); //GPS
+  GpsINIT();
 
   //**********************
   SerialUSB.begin(115200);
@@ -285,10 +312,7 @@ void loop() {
 
       sendStatus();
       aliveStatus = false;
-
-      while (readBatt() < BattMin) {
-        sleepSeconds(BattWait);
-      }
+      while (readBatt() < BattMin) sleepSeconds(BattWait);
     }
 
       updateGpsData(1000);
@@ -470,19 +494,21 @@ void updateTelemetry() {
   telemetry_buff[21] = 'x';
   telemetry_buff[22] = 'C';
 
-  Si5351ON;//little hack to prevent a BMP180 related issue (does nothing?)
+  // FIX! don't need anymore?
+  // Si5351ON; //little hack to prevent a BMP180 related issue (does nothing?)
   delay(1);
 
-  telemetry_buff[23] = ' '; float tempC = bmp.readTemperature();
+  telemetry_buff[23] = ' '; float tempC = bmp_read_temperature();
   // telemetry_buff[23] = ' '; float tempC = 0.f;
   dtostrf(tempC, 6, 2, telemetry_buff + 24);
 
   telemetry_buff[30] = 'C';
-  telemetry_buff[31] = ' '; float pressure = bmp.readPressure() / 100.0; //Pa to hPa
+  telemetry_buff[31] = ' '; float pressure = bmp_read_pressure() / 100.0; //Pa to hPa
   // telemetry_buff[31] = ' '; float pressure = 0.f; //Pa to hPa
   dtostrf(pressure, 7, 2, telemetry_buff + 32);
 
-  Si5351OFF;
+  // FIX! don't need anymore?
+  // Si5351OFF;
 
   telemetry_buff[39] = 'h';
   telemetry_buff[40] = 'P';
@@ -675,8 +701,6 @@ void set_tx_buffer()
 }
 
 void freeMem() {
-#if defined(DEVMODE)
+  if (DEVMODE) return;
   SerialUSB.print(F("Free RAM: ")); SerialUSB.print(freeMemory(), DEC); SerialUSB.println(F(" byte"));
-#endif
-
 }

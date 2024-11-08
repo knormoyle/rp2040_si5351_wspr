@@ -37,7 +37,8 @@ const int VFO_I2C0_SCL_HZ=(1000 * 1000);
 // for memcpy
 #include <cstring>
 
-static void vfo_init(void)
+// removed static
+void vfo_init(void)
 {
   // turn ON VFO VDD
   gpio_init(VFO_VDD_ON_N_PIN);
@@ -54,7 +55,8 @@ static void vfo_init(void)
   gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
 }
 
-static void vfo_set_power_on(bool turn_on)
+// removed static
+void vfo_set_power_on(bool turn_on)
 {
   static bool s_is_on = false;
   if (turn_on == s_is_on) return;
@@ -164,6 +166,7 @@ static uint32_t prev_ms_div = 0;
 static uint8_t s_regs[8];
 static uint8_t s_vfo_drive_strength[3];  // 0:2mA, 1:4mA, 2:6mA, 3:8mA
 
+// removed static
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom)
 {
   uint32_t p1 = 128 * mult + ((128 * num) / denom) - 512;
@@ -199,6 +202,7 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom)
 }
 
 // div must be even number
+// removed static
 void si5351a_setup_multisynth0(uint32_t div)
 {
   uint32_t p1 = 128 * div - 512;
