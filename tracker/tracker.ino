@@ -145,7 +145,7 @@ https://arduino-pico.readthedocs.io/en/latest/serial.html
 The Arduino-Pico core implements a software-based Serial-over-USB port using the USB ACM-CDC model to support a wide variety of operating systems.
 
 Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate, this rate is ignored since it is USB-based. (Also be aware that this USB Serial port is responsible for resetting the RP2040 during the upload process, following the Arduino standard of 1200bps = reset to bootloader).
-*?
+*/
 
 /*
 The RP2040 provides two hardware-based UARTS with configurable pin selection.

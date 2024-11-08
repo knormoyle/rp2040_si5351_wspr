@@ -20,12 +20,10 @@
 // Traquito website can fingerprint callsign/telemetry frequency even if out of bin. 
 // LU7AA website not so well (although 'wide' helps). 
 // SDR can be used to report actual TX freq and correction applied to adjust.
-
 // Any correction should be fixed: the same for all bands for a particular tracker.
 
-// No auto-calibration of RP2040 clock frequency
+// No auto-calibration of RP2040 clock frequency (not needed)
 // Manual config for setting rp2040 clock frequency, 115 to 250 Mhz. 115Mhz default
-// (could calibrate/adjust with GPS PPS and then calibrate the Si5351 Tx frequency (signals go to RP2040 input)
 
 //*******************************************
 // Arduino IDE created by many
@@ -60,7 +58,7 @@
 // 2) depopulates all APRS support on AG6NS 0.4 pcb (or firmware)
 // 3) enables differential Tx drive for higher Tx power
 // 4) capacitive coupling on Tx to both HF antenna legs, and lighter dc load across legs (larger R)
-// 3) optionally populates the temp/pressure sensor BMP280
+// 3) optionally populates the Bosch pressure sensor BMP280
 // 4) uses the default LDO between solar power and 3V3. AG6NS board uses voltage monitor (resets)
 // 5) User config menu over usb serial to config 
 // 6) Configurable channel config, and bands 20M/17M/15M/12M/10M supported
@@ -72,13 +70,21 @@
 // 12) USB serial for config input and output. No need to modify software for callsign/band etc
 // 13) Uses MS5351M instead of Si5351a.  Hans Summers G0UPL did a review here: https://qrp-labs.com/synth/ms5351m.html 
 
-/* key parts withi jlpcb #
-C90770   ATGM336H-5N31
-C2040    RP2040
-C5546    3.3V LDO
-C9965    MAX809STRG
-C132296  26Mhz
-C83291   BMP280
-C2843335 W25Q16JVUXIQ
-C1509083 MS5351M
+/* key parts with jlpcb # (Cxxx)
+C90770   ATGM336H-5N31  https://jlcpcb.com/partdetail/Zhongkewei-ATGM336H5N31/C90770
+C2040    RP2040         https://jlcpcb.com/partdetail/RaspberryPi-RP2040/C2040
+C5446    XC6206P332MR-G https://jlcpcb.com/partdetail/TorexSemicon-XC6206P332MRG/C5446 '200mA Fixed 3.3V 6V Low Drop Out (LDO) Regulator'
+C9965    MAX809STRG     https://jlcpcb.com/partdetail/Onsemi-MAX809STRG/C9965 '2.93v 140ms Active Low Supervisor and Reset'
+C132296  26Mhz          https://jlcpcb.com/partdetail/KdsDaishinku-1XXB26000MAA/C132296 '1.8V~2.8V ±1.5ppm 26MHz 4P Temperature Compensated Crystal Oscillators (TCXO)' 
+C83291   BMP280         https://jlcpcb.com/partdetail/BoschSensortec-BMP280/C83291 'Bosch Digital Pressure Sensor'
+C2843335 W25Q16JVUXIQ   https://jlcpcb.com/partdetail/WinbondElec-W25Q16JVUXIQ/C2843335 '3V 16Mbit Serial Flash Memory w Dual/Quad SPI'
+C1509083 MS5351M        https://jlcpcb.com/partdetail/Hangzhou_RuimengTech-MS5351M/C1509083 'I2C 200Mhz Clock Generator'
+
+https://www.lcsc.com/datasheet/lcsc_datasheet_2404181014_Hangzhou-Ruimeng-Tech-MS5351M_C1509083.pdf
+datasheet above is Mandarin 2023.11.24 11 pages
+https://xonstorage.blob.core.windows.net/pdf/ruimeng_ms5351m_apr22_xonlink.pdf
+datasheet above is Mandarin 2020.06.25 40 pages ..from http://www.relmon.com
+short english datasheet 2021.03.08 10 pages
+https://www.qrp-labs.com/images/synth/ms5351m.pdf
+(does it draw 8mA more current?)
 */
