@@ -7,7 +7,16 @@
 
 #include <TinyGPS++.h>                      //https://github.com/mikalhart/TinyGPSPlus
 #include <GEOFENCE.h>                       // Modified version of https://github.com/TomasTT7/TT7F-Float-Tracker/blob/master/Software/ARM_GEOFENCE.c
+
+// this is included in gps_functions.cpp? shouldn't be needed here or maybe need for Watchdog.* ?
 #include <Adafruit_SleepyDog.h>             //https://github.com/adafruit/Adafruit_SleepyDog
+
+// new for BMP085.h Uses Adafruit_I2CDevice.h and .cpp
+// added Adafruit_BusIO to our repo 11_7_24 (libraries)
+// wget https://github.com/adafruit/Adafruit_BusIO/archive/refs/heads/master.zip
+
+#include <Adafruit_I2CDevice.h>             //https://github.com/adafruit/Adafruit_BusIO
+// Requires the https://github.com/adafruit/Adafruit_BusIO library for I2C abstraction
 #include <Adafruit_BMP085.h>                //https://github.com/adafruit/Adafruit-BMP085-Library
 
 #include <JTEncode.h>                       //https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
@@ -17,39 +26,31 @@
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
 
-
-// stuff moved to functions from this .ino (not libraries
-# include "gps_functions.h" // has a associated gps_functions.c
-
-
 // https://docs.arduino.cc/tutorials/generic/secrets-of-arduino-pwm/
 #include "hardware/pwm.h"
 
+// lots of things used from Arduino-Pico core
+// RP2040 Helper Class.
+// https://arduino-pico.readthedocs.io/en/latest/rp2040.html
+
+// const is typed, #define macros are not.
+// const is scoped by C block, #define applies to a file (compilation unit)
+// const is most useful with parameter passing.
+// If you see const used on a prototype with pointers, you know it is safe to pass your array or struct because the function will not alter it. No const and it can.
+// example: strcpy()
+// Apply "const-ness" to function prototypes at the outset.
+
 #define SerialUSB   Serial
-#define Si5351Pwr     4
-#define BattPin       A3
-#define GpsPwr        16
+
+const int Si5351Pwr=4;
+const int BattPin=A3;
+// so it can be used in gps_functions.cpp
+const int GpsPwr=16;
 
 //macros
 // FIX! not used?
-#define Si5351ON    
-
+#define Si5351ON
 #define Si5351OFF   vfo_turn_off()
-
-#define GpsON                   \
-  do {                          \
-    Serial2.begin(9600);        \
-    digitalWrite(GpsPwr, LOW);  \
-    /*printf("GpsON\n");*/      \
-  } while (false)
-
-#define GpsOFF                  \
-  do {                          \
-    digitalWrite(GpsPwr, HIGH); \
-    Serial2.end();              \
-    gps.date.clear();           \
-    /*printf("GpsOFF\n");*/     \
-  } while (false)
 
 #define DEVMODE // Development mode. Uncomment to enable for debugging.
 #define DEVMODE2// Development mode. Uncomment to enable for debugging.
@@ -64,9 +65,9 @@ char    StatusMessage[50] = "LightAPRS-W 2.0 by TA2NHP & TA2MUN";
 
 uint16_t  BeaconWait=50;  //seconds sleep for next beacon (HF or VHF). This is an optimized value, do not change this if possible.
 
-uint16_t  BattWait=1;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel) 
+uint16_t  BattWait=1;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel)
 float     BattMin=0.0;    //min Volts to wake up.
-float     GpsMinVolt=0.0; //min Volts for GPS to wake up. (important if power source is solar panel) 
+float     GpsMinVolt=0.0; //min Volts for GPS to wake up. (important if power source is solar panel)
 float     WsprBattMin=0.0;//min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
 float     HighVolt=9.9;   //GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
 
@@ -99,7 +100,7 @@ uint16_t TxCount = 1; //increase +1 after every APRS transmission
 #define WSPR_TONE_SPACING  146          // ~1.46 Hz
 #define WSPR_DELAY         683          // Delay value for WSPR
 #define HF_CORRECTION      -13000       // Change this for your ref osc
-  
+
 // Global variables
 unsigned long hf_freq;
 char hf_message[13] = "NOCALL AA00";//for WSPR, updated by hf_call and GPS location
@@ -120,9 +121,14 @@ boolean GpsFirstFix=false; //do not change this
 boolean ublox_high_alt_mode_enabled = false; //do not change this
 int16_t GpsInvalidTime=0; //do not change this
 
-//********************************************************************************
-
+// gps_functions.cpp refers to this
 TinyGPSPlus gps;
+
+// stuff moved to functions from this .ino (not libraries)
+# include "gps_functions.h" // has a associated gps_functions.c
+
+
+//********************************************************************************
 Adafruit_BMP085 bmp;
 JTEncode jtencode;
 
@@ -309,17 +315,17 @@ void si5351a_setup_multisynth0(uint32_t div)
   s_regs[6] = 0;
   s_regs[7] = 0;
   i2cWriten(SI5351A_MULTISYNTH0_BASE, s_regs, 8);
-  i2cWrite(SI5351A_CLK0_CONTROL, (SI5351A_CLK0_MS0_INT | 
-                                  SI5351A_CLK0_MS0_SRC_PLLB | 
-                                  SI5351A_CLK0_SRC_MULTISYNTH_0 | 
+  i2cWrite(SI5351A_CLK0_CONTROL, (SI5351A_CLK0_MS0_INT |
+                                  SI5351A_CLK0_MS0_SRC_PLLB |
+                                  SI5351A_CLK0_SRC_MULTISYNTH_0 |
                                   s_vfo_drive_strength[0]));
 
 #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
   i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
-  i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT | 
-                                  SI5351A_CLK1_MS1_SRC_PLLB | 
-                                  SI5351A_CLK1_CLK1_INV | 
-                                  SI5351A_CLK1_SRC_MULTISYNTH_1 | 
+  i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT |
+                                  SI5351A_CLK1_MS1_SRC_PLLB |
+                                  SI5351A_CLK1_CLK1_INV |
+                                  SI5351A_CLK1_SRC_MULTISYNTH_1 |
                                   s_vfo_drive_strength[0]));
 #endif
 
@@ -343,9 +349,9 @@ static void si5351a_setup_multisynth1(uint32_t div)
   s_regs[7] = 0;
   i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
 
-  i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT | 
-                                  SI5351A_CLK1_MS1_SRC_PLLB | 
-                                  SI5351A_CLK1_SRC_MULTISYNTH_1 | 
+  i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT |
+                                  SI5351A_CLK1_MS1_SRC_PLLB |
+                                  SI5351A_CLK1_SRC_MULTISYNTH_1 |
                                   s_vfo_drive_strength[1]));
 #ifdef TEST_ONLY
   printf("VFO_DRIVE_STRENGTH: %d\n", (int)s_vfo_drive_strength[1]);
@@ -501,80 +507,35 @@ void vfo_turn_off(void)
 }
 
 
-/*
-  status indicator LED
-*/
+#************************************************
+const int STATUS_LED_PIN=25
 
-#define STATUS_LED_PIN              25
-
-#define turnOnLED(turn_on)          digitalWrite(STATUS_LED_PIN, (turn_on) ? HIGH : LOW)
-#define isLEDOn()                   (digitalRead(STATUS_LED_PIN) ? true : false)
-// background
-// https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
-#define flipLED()                   turnLedOn(!isLedOn())
 
 #define LED_BLINK_ON_PERIOD_USEC    50000
 #define LED_BLINK_OFF_PERIOD_USEC   300000
 #define LED_BLINK_PAUSE_PERIOD_USEC 1000000
 
-#define LED_STATUS_NO_GPS           1
-#define LED_STATUS_GPS_TIME         2
-#define LED_STATUS_GPS_FIX          3
-#define LED_STATUS_TX_APRS          4
-#define LED_STATUS_TX_WSPR          5
+const int LED_STATUS_NO_GPS=1
+const int LED_STATUS_GPS_TIME=2
+const int LED_STATUS_GPS_FIX=3
+const int LED_STATUS_TX_APRS=4
+const int LED_STATUS_TX_WSPR=5
 
 int statusLEDBlinkCnt = 0;
+#include "led_functions.h"
 
-void initStatusLED(void)
-{
-  pinMode(STATUS_LED_PIN, OUTPUT);
-  turnOnLED(true);
-}
+#define turnOnLED(turn_on)  digitalWrite(STATUS_LED_PIN, (turn_on) ? HIGH : LOW)
+#define isLEDOn()           (digitalRead(STATUS_LED_PIN) ? true : false)
+// background
+// https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
+#define flipLED()           turnLedOn(!isLedOn())
 
-void setStatusLEDBlinkCount(int cnt)
-{
-  statusLEDBlinkCnt = cnt;
-}
-
-void updateStatusLED(void)
-{
-  static uint32_t nextFlipUsec = 0;
-  static int targetBlinkCnt = 0;
-  static int currBlinkCnt = 0;
-
-  uint32_t usec = time_us_32();
-  if ((int32_t)(nextFlipUsec - usec) <= 0) {
-    if (isLEDOn() == false) {
-      // OFF to ON
-      if (targetBlinkCnt == 0) {
-        targetBlinkCnt = statusLEDBlinkCnt;
-        currBlinkCnt = 0;
-      }
-      if (++currBlinkCnt <= targetBlinkCnt) {
-        turnOnLED(true);
-      }
-      nextFlipUsec = usec + LED_BLINK_ON_PERIOD_USEC;
-    }
-    else {
-      // ON to OFF
-      turnOnLED(false);
-      if (currBlinkCnt >= targetBlinkCnt) {
-        nextFlipUsec = usec + LED_BLINK_PAUSE_PERIOD_USEC;
-        targetBlinkCnt = 0;
-      }
-      else {
-        nextFlipUsec = usec + LED_BLINK_OFF_PERIOD_USEC;
-      }
-    }
-  }
-}
-
-
+#************************************************
 
 void setup() {
   Watchdog.enable(30000);
   Watchdog.reset();
-  // While the energy rises slowly with the solar panel, 
+  // While the energy rises slowly with the solar panel,
   // using the analog reference low solves the analog measurement errors.
 
   initStatusLED();
@@ -585,22 +546,33 @@ void setup() {
   // FIX! why is this commented out?
   // pinMode(BattPin, INPUT);
   analogReadResolution(12);
-  
-  GpsOFF;
-  Si5351OFF;  
+
+  GpsOFF();
+  Si5351OFF;
 
   Serial2.setRX(GPS_UART1_RX_PIN);
   Serial2.setTX(GPS_UART1_TX_PIN);
-  Serial2.begin(9600);//GPS
+  Serial2.begin(9600); //GPS
 
+  //**********************
   SerialUSB.begin(115200);
   // Wait up to 5 seconds for serial to be opened, to allow catching
-  // startup messages on native USB boards (that do not reset when
-  // serial is opened).
-  Watchdog.reset();  
+  // startup messages on native USB boards (that do not reset when serial is opened).
+
+  // FIX! should I do this?
+  while (!SerialUSB)
+    ; // Serial is via USB; wait for enumeration
+  }
+
+  if (SerialUSB.read() > 0) { // read and discard data
+    Serial.println("SerialUSB.read() detected input")
+  }
+  //**********************
+
+  Watchdog.reset();
   unsigned long start = millis();
   while (millis() - start < 5000 && !SerialUSB){;}
-  Watchdog.reset(); 
+  Watchdog.reset();
 
   SerialUSB.println(F("Starting"));
 
@@ -610,7 +582,7 @@ void setup() {
   SerialUSB.print(F("WSPR (HF) CallSign: "));
   SerialUSB.println(hf_call);
   SerialUSB.println(F(""));
-  
+
 }
 
 void loop() {
@@ -625,10 +597,10 @@ void loop() {
       aliveStatus = false;
 
       while (readBatt() < BattMin) {
-        sleepSeconds(BattWait); 
-      }   
+        sleepSeconds(BattWait);
+      }
     }
-    
+
       updateGpsData(1000);
       gpsDebug();
 
@@ -640,12 +612,12 @@ void loop() {
         if (gps.date.year() != 2000) setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
         else setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
         if(GpsInvalidTime > GpsResetTime){
-          GpsOFF; 
+          GpsOFF();
           ublox_high_alt_mode_enabled = false; //gps sleep mode resets high altitude mode.
           Watchdog.reset();
           delay(1000);
-          GpsON;
-          GpsInvalidTime=0;     
+          GpsON();
+          GpsInvalidTime=0;
         }
       }
 
@@ -653,9 +625,9 @@ void loop() {
         if (gps.satellites.isValid() && gps.satellites.value() > 3) {
           GpsFirstFix = true;
           if(readBatt() < HighVolt){
-             GpsOFF; 
+             GpsOFF();
              ublox_high_alt_mode_enabled = false; //gps sleep mode resets high altitude mode.
-          }      
+          }
           GpsInvalidTime=0;
 
           // Checks if there is an HF (WSPR) TX window is soon
@@ -664,23 +636,23 @@ void loop() {
             freeMem();
             SerialUSB.flush();
 
-          }   
+          }
 
           // FIX! it should depend on the channel starting minute - 1 (modulo 10)
-          // preparations for HF starts one minute before TX time at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57. 
+          // preparations for HF starts one minute before TX time at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
           printf("timeStatus():%u minute():%u\n", timeStatus(), minute());
-          if (readBatt() > WsprBattMin && timeStatus() == timeSet && ((minute() % 10 == 3) || (minute() % 10 == 7)) ) { 
+          if (readBatt() > WsprBattMin && timeStatus() == timeSet && ((minute() % 10 == 3) || (minute() % 10 == 7)) ) {
             printf("start WSPR\n");
             GridLocator(hf_loc, gps.location.lat(), gps.location.lng());
             sprintf(hf_message,"%s %s",hf_call,hf_loc);
-            
+
             #if defined(DEVMODE)
             SerialUSB.println(F("Digital HF Mode Preparing"));
             SerialUSB.print(F("Grid Locator: "));
             SerialUSB.println(hf_loc);
             #endif
-            
-            //HF transmission starts at minute 4, 8, 14, 18, 24, 28, 34, 38, 44, 48, 54 or 58 
+
+            //HF transmission starts at minute 4, 8, 14, 18, 24, 28, 34, 38, 44, 48, 54 or 58
             // FIX! start on hte starting minute of the channel
             while (((minute() % 10 != 4) || (minute() % 10 != 8)) && second() != 0) {
               Watchdog.reset();
@@ -689,26 +661,26 @@ void loop() {
             }
             #if defined(DEVMODE)
             SerialUSB.println(F("Digital HF Mode Sending..."));
-            #endif          
+            #endif
             setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
             encode();
             //HFSent=true;
 
             #if defined(DEVMODE)
             SerialUSB.println(F("Digital HF Mode Sent"));
-            #endif             
+            #endif
             setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-  
+
           } else {
             sleepSeconds(BeaconWait);
-          }   
+          }
         }else {
           #if defined(DEVMODE)
           SerialUSB.println(F("Not enough satelites"));
           #endif
         }
       }
-    
+
   } else {
     sleepSeconds(BattWait);
   }
@@ -720,23 +692,23 @@ void sleepSeconds(int sec) {
   for (int i = 0; i < sec; i++) {
     if (GpsFirstFix){ //sleep gps after first fix
       if (readBatt() < HighVolt){
-        GpsOFF;
+        GpsOFF();
         ublox_high_alt_mode_enabled = false;
       }
     }else{
       if (readBatt() < BattMin){
-        GpsOFF;
+        GpsOFF();
         ublox_high_alt_mode_enabled = false;
       }
-    } 
-     
+    }
+
     Watchdog.reset();
 
     uint32_t usec = time_us_32();
     while ((time_us_32() - usec) < 1000000) {
       updateStatusLED();
     }
-    
+
   }
   Watchdog.reset();
 }
@@ -799,14 +771,14 @@ void updateTelemetry() {
   } else{
     //for negative values
     sprintf(telemetry_buff + 10, "%06d", (long)tempAltitude);
-    } 
-  
+    }
+
   telemetry_buff[16] = ' ';
   sprintf(telemetry_buff + 17, "%03d", TxCount);
   telemetry_buff[20] = 'T';
   telemetry_buff[21] = 'x';
   telemetry_buff[22] = 'C';
-  Si5351ON;//little hack to prevent a BMP180 related issue 
+  Si5351ON;//little hack to prevent a BMP180 related issue
   delay(1);
 
   telemetry_buff[23] = ' '; float tempC = bmp.readTemperature();
@@ -818,7 +790,7 @@ void updateTelemetry() {
   // telemetry_buff[31] = ' '; float pressure = 0.f; //Pa to hPa
   dtostrf(pressure, 7, 2, telemetry_buff + 32);
 
-  Si5351OFF; 
+  Si5351OFF;
 
   telemetry_buff[39] = 'h';
   telemetry_buff[40] = 'P';
@@ -832,7 +804,7 @@ void updateTelemetry() {
   sprintf(telemetry_buff + 50, "%02d", gps.satellites.isValid() ? (int)gps.satellites.value() : 0);
   telemetry_buff[52] = 'S';
   telemetry_buff[53] = ' ';
-  sprintf(telemetry_buff + 54, "%s", comment);   
+  sprintf(telemetry_buff + 54, "%s", comment);
   // remove temperature and pressure info
   // memmove(&telemetry_buff[24], &telemetry_buff[43], (sizeof(telemetry_buff) - 43));
 
@@ -862,7 +834,7 @@ void sendLocation() {
     vfo_turn_off();
     SerialUSB.print(F("APRS Location sent (Freq: "));
     SerialUSB.print(GEOFENCE_APRS_frequency);
-    SerialUSB.print(F(") - "));    
+    SerialUSB.print(F(") - "));
     SerialUSB.println(TxCount);
     TxCount++;
   }
@@ -971,10 +943,10 @@ float readBatt() {
   adc_val = analogRead(BattPin);
   adc_val += analogRead(BattPin);
   adc_val += analogRead(BattPin);
-  // The Raspberry Pi Pico's analog to digital converter (ADC) can measure voltages between 0 and 3.3 volts. 
-  // The ADC uses a 3.3V reference voltage, 
-  // and a read operation returns a number between 0 and 4095. 
-  // The ADC's resolution is 3.3/4096, or roughly 0.8 millivolts. 
+  // The Raspberry Pi Pico's analog to digital converter (ADC) can measure voltages between 0 and 3.3 volts.
+  // The ADC uses a 3.3V reference voltage,
+  // and a read operation returns a number between 0 and 4095.
+  // The ADC's resolution is 3.3/4096, or roughly 0.8 millivolts.
   // is the precision set to 4096? (12 not 16 bits resolution)
   // 4096/3.3 = 1241
   // 1241 / 3 = 413.66
@@ -989,8 +961,8 @@ float readBatt() {
   // there is a 200 ohm resistor between 3V3 and ADC_AVDD
   // we did 3 reads above ..averaging? so don't need the 3x because of onboard voltage divider
   // pico-WSPRer does this (no use of ADC_AVDD) ?
-  // const float conversionFactor = 3.3f / (1 << 12);  
-  // float solar_voltage = 3 * (float)adc_read() * conversionFactor;   
+  // const float conversionFactor = 3.3f / (1 << 12);
+  // float solar_voltage = 3 * (float)adc_read() * conversionFactor;
 
   // if (solar_voltage < 0.0f) solar_voltage = 0.0f;
   // if (solar_voltage > 9.9f) solar_voltage = 9.9f;
@@ -1050,8 +1022,8 @@ void encode()
     break;
   }
   set_tx_buffer();
-  zeroTimerSetPeriodMs(tone_delay); 
-  
+  zeroTimerSetPeriodMs(tone_delay);
+
   for(i = 0; i < symbol_count; i++)
   {
       uint32_t freq_x16 = (hf_freq << PLL_CALCULATION_PRECISION) + (tx_buffer[i] * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
