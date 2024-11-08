@@ -1,17 +1,17 @@
 #include <Arduino.h>
 
-// BOth in arduino-pico core?  yes, see https://github.com/earlephilhower/arduino-pico/tree/master/libraries
-#include <SPI.h>
-#include <Wire.h>
-
 #include <math.h>
 #include <stdio.h>
 #include <avr/dtostrf.h>
 
-#include <TinyGPS++.h>                      //https://github.com/mikalhart/TinyGPSPlus
+// These are in arduino-pio core
+// see https://github.com/earlephilhower/arduino-pico/tree/master/libraries
+#include <SPI.h>
+#include <Wire.h>
 
-
-// gets the head 1.1-beta? not release
+//**************************
+#include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
+// gets the head 1.1-beta? not released version
 // wget https://github.com/mikalhart/TinyGPSPlus/archive/refs/heads/master.zip
 
 /* v1.0.a current A new, customizable Arduino NMEA parsing library A NEW Full-featured GPS/NMEA Parser for Arduino TinyGPSPlus is a new Arduino library for parsing NMEA data streams provided by GPS modules.
@@ -27,8 +27,9 @@ Like its predecessor, TinyGPS, this library provides compact and easy-to-use met
 
 However, TinyGPSPlus’s programmer interface is considerably simpler to use than TinyGPS, and the new library can extract arbitrary data from any of the myriad NMEA sentences out there, even proprietary ones.
 */
+//**************************
 
-// got latest from https://github.com/kaduhi/LightAPRS-W-2.0
+// got latest LightAPRS_Geofence from https://github.com/kaduhi/LightAPRS-W-2.0
 // https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker/libraries/LightAPRS_Geofence
 // libraries/LightAPRS_Geofence:
 // wget https://raw.githubusercontent.com/kaduhi/LightAPRS-W-2.0/refs/heads/port_to_ag6ns_rp2040_picoballoon_tracker/libraries/LightAPRS_Geofence/GEOFENCE.cpp
@@ -87,11 +88,36 @@ However, TinyGPSPlus’s programmer interface is considerably simpler to use tha
 // example: strcpy()
 // Apply "const-ness" to function prototypes at the outset.
 
-#define SerialUSB   Serial
+/*
+https://arduino-pico.readthedocs.io/en/latest/serial.html
+
+The Arduino-Pico core implements a software-based Serial-over-USB port using the USB ACM-CDC model to support a wide variety of operating systems.
+
+Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate, this rate is ignored since it is USB-based. (Also be aware that this USB Serial port is responsible for resetting the RP2040 during the upload process, following the Arduino standard of 1200bps = reset to bootloader).
+*?
+
+/*
+The RP2040 provides two hardware-based UARTS with configurable pin selection.
+Serial1 is UART0, and Serial2 is UART1.
+The size of the receive FIFO may also be adjusted from the default 32 bytes by using the setFIFOSize call prior to calling begin()
+
+    Serial1.setFIFOSize(128);
+    Serial1.begin(baud);
+
+The FIFO is normally handled via an interrupt, which reduced CPU load and makes it less likely to lose characters.
+
+For applications where an IRQ driven serial port is not appropriate, use setPollingMode(true) before calling begin()
+
+    Serial1.setPollingMode(true);
+    Serial1.begin(300)
+
+*/
+
+// Got rid of this, and just use Serial. everywhere
+// #define Serial   Serial
 
 const int Si5351Pwr=4;
 const int BattPin=A3;
-
 
 //macros
 // FIX! does nothing?
@@ -274,31 +300,41 @@ void setup() {
   bmp_init();
 
   //**********************
-  SerialUSB.begin(115200);
+  Serial.begin(115200);
   // Wait up to 5 seconds for serial to be opened, to allow catching
   // startup messages on native USB boards (that do not reset when serial is opened).
 
   // FIX! should I do this?
-  while (!SerialUSB) { ; } // Serial is via USB; wait for enumeration
+  while (!Serial) { ; } // Serial is via USB; wait for enumeration
 
-  if (SerialUSB.read() > 0) { // read and discard data
-    Serial.println("SerialUSB.read() detected input");
+  if (Serial.read() > 0) { // read and discard data
+    Serial.println("Serial.read() detected input");
   }
-  //**********************
+
+  // should we only look at input when IDE is not connected
+  // Waits for usb serial input?
+  // while (Serial.available() == 0 {
+  //   ;
+  // }
+  // to parse the data in the serial buffer
+  // Serial.parseInt();
+  // Serial.parseFloat();
+
+
 
   Watchdog.reset();
   unsigned long start = millis();
-  while (millis() - start < 5000 && !SerialUSB){;}
+  while (millis() - start < 5000 && !Serial){;}
   Watchdog.reset();
 
-  SerialUSB.println(F("Starting"));
+  Serial.println(F("Starting"));
 
   Wire.begin(); // somehow this is necessary for Serial2 to work properly
   vfo_init();
 
-  SerialUSB.print(F("WSPR (HF) CallSign: "));
-  SerialUSB.println(hf_call);
-  SerialUSB.println(F(""));
+  Serial.print(F("WSPR (HF) CallSign: "));
+  Serial.println(hf_call);
+  Serial.println(F(""));
 
 }
 
@@ -348,7 +384,7 @@ void loop() {
           if (!((minute() % 10 == 3 || minute() % 10 == 7) &&  second()>50 && readBatt() > WsprBattMin && timeStatus() == timeSet)){
             updateTelemetry();
             freeMem();
-            SerialUSB.flush();
+            Serial.flush();
 
           }
 
@@ -361,9 +397,9 @@ void loop() {
             sprintf(hf_message,"%s %s",hf_call,hf_loc);
 
             if (DEVMODE) {
-                SerialUSB.println(F("Digital HF Mode Preparing"));
-                SerialUSB.print(F("Grid Locator: "));
-                SerialUSB.println(hf_loc);
+                Serial.println(F("Digital HF Mode Preparing"));
+                Serial.print(F("Grid Locator: "));
+                Serial.println(hf_loc);
             }
 
             //HF transmission starts at minute 4, 8, 14, 18, 24, 28, 34, 38, 44, 48, 54 or 58
@@ -374,14 +410,14 @@ void loop() {
               updateStatusLED();
             }
             if (DEVMODE) {
-              SerialUSB.println(F("Digital HF Mode Sending..."));
+              Serial.println(F("Digital HF Mode Sending..."));
             }
             setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
             encode();
             //HFSent=true;
 
             if (DEVMODE) {
-              SerialUSB.println(F("Digital HF Mode Sent"));
+              Serial.println(F("Digital HF Mode Sent"));
             }
             setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
@@ -390,7 +426,7 @@ void loop() {
           }
         }else {
           if (DEVMODE) {
-            SerialUSB.println(F("Not enough satelites"));
+            Serial.println(F("Not enough satelites"));
           }
         }
       }
@@ -402,7 +438,7 @@ void loop() {
 
 void sleepSeconds(int sec) {
   Si5351OFF;
-  SerialUSB.flush();
+  Serial.flush();
   for (int i = 0; i < sec; i++) {
     if (GpsFirstFix){ //sleep gps after first fix
       if (readBatt() < HighVolt){
@@ -527,14 +563,14 @@ void updateTelemetry() {
   // memmove(&telemetry_buff[24], &telemetry_buff[43], (sizeof(telemetry_buff) - 43));
 
   if (DEVMODE) {
-    SerialUSB.println(telemetry_buff);
+    Serial.println(telemetry_buff);
   }
 
 }
 
 void sendLocation() {
   if (DEVMODE) {
-    SerialUSB.println(F("Location sending with comment"));
+    Serial.println(F("Location sending with comment"));
   }
 
   // FIX! how do we end the telemetry_buff
@@ -549,10 +585,10 @@ void sendLocation() {
     // APRS_sendLoc(telemetry_buff);
     delay(10);
     vfo_turn_off();
-    SerialUSB.print(F("APRS Location sent (Freq: "));
-    SerialUSB.print(GEOFENCE_APRS_frequency);
-    SerialUSB.print(F(") - "));
-    SerialUSB.println(TxCount);
+    Serial.print(F("APRS Location sent (Freq: "));
+    Serial.print(GEOFENCE_APRS_frequency);
+    Serial.print(F(") - "));
+    Serial.println(TxCount);
     TxCount++;
   }
 
@@ -570,10 +606,10 @@ void sendStatus() {
     // APRS_sendStatus(StatusMessage);
     delay(10);
     vfo_turn_off();
-    SerialUSB.print(F("Status sent (Freq: "));
-    SerialUSB.print(GEOFENCE_APRS_frequency);
-    SerialUSB.print(F(") - "));
-    SerialUSB.println(TxCount);
+    Serial.print(F("Status sent (Freq: "));
+    Serial.print(GEOFENCE_APRS_frequency);
+    Serial.print(F(") - "));
+    Serial.println(TxCount);
     TxCount++;
   }
 
@@ -702,5 +738,38 @@ void set_tx_buffer()
 
 void freeMem() {
   if (DEVMODE) return;
-  SerialUSB.print(F("Free RAM: ")); SerialUSB.print(freeMemory(), DEC); SerialUSB.println(F(" byte"));
+
+  // Using F() for strings
+  // what happens in a Harvard architecture uC is that the compiled string stays in flash and does not get copied to SRAM during the C++ initialization that happens before your sketch receives run control.
+  // Since the string is not moved to SRAM, it has the PROGMEM property and runs from flash.
+  // FIX! do we want this? slower?
+  // When you compile your program it says how much program memory (stored in flash) you are using and 
+  // how much dynamic ram you are using.
+  // rp2040: 264 KB ram (256 KB?), 2MB flash
+  Serial.print(F("Free RAM: ")); Serial.print(freeMemory(), DEC); Serial.println(F(" byte"));
 }
+
+
+//**********************
+// Standard for strings in this *.ino and in *functions.cpp
+// we'll just use c-style char arrays for strings
+// options:
+
+// c++
+// #include <string>
+// string charString = Serial.parseString();
+// Strings in C++ can be defined either 
+// using the std::string class 
+// or the C-style character arrays.
+
+// c style string. stored in array of characters terminated by null: '\0'
+// char e[] = "geeks";
+// char el[] = {'g', 'f', 'g', '10'}'
+// char* c = "geeksforgeeks"
+
+// c++ style string (string class in std library). don't bother with String
+// string str = ("gfg");
+// string str = "gfg";
+// string str; str = "gfg";
+
+//**********************

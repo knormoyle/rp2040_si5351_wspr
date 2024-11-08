@@ -5,7 +5,8 @@
  * Kevin Normoyle (AD6Z)
 */
 
-#define SerialUSB Serial
+// Got rid of this and use Serial everywhere
+#define Serial Serial
 
 // In the Arduino IDE, to reference a variable declared within a function from another part of
 // your code, you need to declare the variable as "global" by defining it outside of any specific function,
@@ -19,7 +20,7 @@
 // the automatically created function prototype is placed before the declaration of that data type.
 
 
-// A CPP file isn't an Arduino file.
+// A .cpp file isn't an Arduino file.
 // It doesn't know about anything Arduino-esque unless you tell it
 // The simplest way is to just add, at the top of the file:
 // need this for Serial2.* ?? otherwise says no type
@@ -151,14 +152,14 @@ void updateGpsData(int ms)
 {
   Watchdog.reset();
   GpsON();
-  // while (!SerialUSB) {delay(1);} // wait for serial port to connect.
+  // while (!Serial) {delay(1);} // wait for serial port to connect.
 
   // FIX! do we need any config of the ATGM336?
   if(!ublox_high_alt_mode_enabled){
     //enable ublox high altitude mode
     setGPS_DynamicModel6();
     if (DEVMODE) {
-      SerialUSB.println(F("ublox DynamicModel6 enabled..."));
+      Serial.println(F("ublox DynamicModel6 enabled..."));
     }
     ublox_high_alt_mode_enabled = true;
   }
@@ -271,7 +272,7 @@ void setGPS_DynamicModel6()
   while(!gps_set_success)
   {
     if (DEVMODE) {
-      SerialUSB.println(F("ublox DynamicModel6 try..."));
+      Serial.println(F("ublox DynamicModel6 try..."));
     }
     sendUBX(setdm6, sizeof(setdm6)/sizeof(uint8_t));
     gps_set_success=getUBX_ACK(setdm6);
@@ -281,10 +282,10 @@ void setGPS_DynamicModel6()
 void gpsDebug() {
   if (! DEVMODE) return;
 
-  SerialUSB.println();
-  SerialUSB.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars Sentences Checksum"));
-  SerialUSB.println(F("          (deg)      (deg)       Age                      Age  (m)    --- from GPS ----  RX    RX        Fail"));
-  SerialUSB.println(F("-----------------------------------------------------------------------------------------------------------------"));
+  Serial.println();
+  Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars Sentences Checksum"));
+  Serial.println(F("          (deg)      (deg)       Age                      Age  (m)    --- from GPS ----  RX    RX        Fail"));
+  Serial.println(F("-----------------------------------------------------------------------------------------------------------------"));
 
   printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
   printInt(gps.hdop.value(), gps.hdop.isValid(), 5);
@@ -300,7 +301,7 @@ void gpsDebug() {
   printInt(gps.charsProcessed(), true, 6);
   printInt(gps.sentencesWithFix(), true, 10);
   printInt(gps.failedChecksum(), true, 9);
-  SerialUSB.println();
+  Serial.println();
 
 }
 

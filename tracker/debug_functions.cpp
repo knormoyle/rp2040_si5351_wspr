@@ -5,7 +5,8 @@
  * Kevin Normoyle (AD6Z)
 */
 
-#define SerialUSB   Serial
+// Got rid of this and use Serial everywhere
+// #define SerialUSB Serial
 extern bool DEVMODE;
 
 // for TinyGPSDate definition
@@ -22,7 +23,7 @@ void printInt(unsigned long val, bool valid, int len)
   for (int i = strlen(sz); i < len; ++i) sz[i] = ' ';
 
   if (len > 0) sz[len - 1] = ' ';
-  SerialUSB.print(sz);
+  Serial.print(sz);
 }
 
 // why was this static
@@ -31,19 +32,19 @@ void printDateTime(TinyGPSDate &d, TinyGPSTime &t)
   if (! DEVMODE) return;
 
   if (!d.isValid()) {
-    SerialUSB.print(F("********** "));
+    Serial.print(F("********** "));
   } else {
     char sz[32];
     sprintf(sz, "%02d/%02d/%02d ", d.month(), d.day(), d.year());
-    SerialUSB.print(sz);
+    Serial.print(sz);
   }
 
   if (!t.isValid()) {
-    SerialUSB.print(F("******** "));
+    Serial.print(F("******** "));
   } else {
     char sz[32];
     sprintf(sz, "%02d:%02d:%02d ", t.hour(), t.minute(), t.second());
-    SerialUSB.print(sz);
+    Serial.print(sz);
   }
 
   printInt(d.age(), d.isValid(), 5);
@@ -54,7 +55,7 @@ void printStr(const char *str, int len)
 {
   if (! DEVMODE) return;
   int slen = strlen(str);
-  for (int i = 0; i < len; ++i) SerialUSB.print(i < slen ? str[i] : ' ');
+  for (int i = 0; i < len; ++i) Serial.print(i < slen ? str[i] : ' ');
 }
 
 
@@ -64,16 +65,16 @@ void printFloat(float val, bool valid, int len, int prec)
   if (! DEVMODE) return;
 
   if (!valid) {
-    while (len-- > 1) SerialUSB.print('*');
-    SerialUSB.print(' ');
+    while (len-- > 1) Serial.print('*');
+    Serial.print(' ');
 
   } else {
-    SerialUSB.print(val, prec);
+    Serial.print(val, prec);
     int vi = abs((int)val);
 
     int flen = prec + (val < 0.0 ? 2 : 1); // . and -
     flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
-    for (int i = flen; i < len; ++i) SerialUSB.print(' ');
+    for (int i = flen; i < len; ++i) Serial.print(' ');
   }
 }
 
