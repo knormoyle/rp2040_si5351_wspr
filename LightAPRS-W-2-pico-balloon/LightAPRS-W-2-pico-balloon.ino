@@ -9,6 +9,25 @@
 #include <avr/dtostrf.h>
 
 #include <TinyGPS++.h>                      //https://github.com/mikalhart/TinyGPSPlus
+
+
+// gets the head 1.1-beta? not release
+// wget https://github.com/mikalhart/TinyGPSPlus/archive/refs/heads/master.zip
+
+/* v1.0.a current A new, customizable Arduino NMEA parsing library A NEW Full-featured GPS/NMEA Parser for Arduino TinyGPSPlus is a new Arduino library for parsing NMEA data streams provided by GPS modules.
+
+1.1-beta update: Several pull requests incorporated (or equiv)
+
+Added Fix Quality and Fix Mode
+Fix stringop truncation warning
+Support for non-Arduino platforms
+Slight change to earth radius
+Support all satellite groups
+Like its predecessor, TinyGPS, this library provides compact and easy-to-use methods for extracting position, date, time, altitude, speed, and course from consumer GPS devices.
+
+However, TinyGPSPlus’s programmer interface is considerably simpler to use than TinyGPS, and the new library can extract arbitrary data from any of the myriad NMEA sentences out there, even proprietary ones.
+*/
+
 #include <GEOFENCE.h>                       // Modified version of https://github.com/TomasTT7/TT7F-Float-Tracker/blob/master/Software/ARM_GEOFENCE.c
 
 // this is included in gps_functions.cpp? shouldn't be needed here or maybe need for Watchdog.* ?
@@ -16,12 +35,12 @@
 
 // new for BMP085.h Uses Adafruit_I2CDevice.h and .cpp
 // added Adafruit_BusIO to our repo 11_7_24 (libraries)
-// cd ../libraries; wget https://github.com/adafruit/Adafruit_BusIO/archive/refs/heads/master.zip
-
+// wget https://github.com/adafruit/Adafruit_BusIO/archive/refs/heads/master.zip
 #include <Adafruit_I2CDevice.h>             //https://github.com/adafruit/Adafruit_BusIO
+
 // Requires the https://github.com/adafruit/Adafruit_BusIO library for I2C abstraction
 #include <Adafruit_BMP085.h>                //https://github.com/adafruit/Adafruit-BMP085-Library
-// cd ../libraries; wget https://github.com/adafruit/Adafruit-BMP085-Library/archive/refs/heads/master.zip
+// wget https://github.com/adafruit/Adafruit-BMP085-Library/archive/refs/heads/master.zip
 #include <JTEncode.h>                       //https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
 #include <TimeLib.h>                        //https://github.com/PaulStoffregen/Time
 
@@ -68,7 +87,7 @@ char    StatusMessage[50] = "LightAPRS-W 2.0 by TA2NHP & TA2MUN";
 
 //*****************************************************************************
 
-uint16_t  BeaconWait=50;  //seconds sleep for next beacon (HF or VHF). This is an optimized value, do not change this if possible.
+uint16_t  BeaconWait=50;  //seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
 
 uint16_t  BattWait=1;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel)
 float     BattMin=0.0;    //min Volts to wake up.
@@ -132,13 +151,11 @@ TinyGPSPlus gps;
 // stuff moved to functions from this .ino (not libraries)
 # include "gps_functions.h" // has a associated gps_functions.c
 
-
 //********************************************************************************
 Adafruit_BMP085 bmp;
 JTEncode jtencode;
 
-
-#************************************************
+//********************************************************************************
 const int STATUS_LED_PIN=25;
 
 const int LED_STATUS_NO_GPS=1
@@ -158,10 +175,10 @@ const int LED_STATUS_TX_TELEN2=7
 #define isLEDOn()           (digitalRead(STATUS_LED_PIN) ? true : false)
 #define flipLED()           turnLedOn(!isLedOn())
 
-#************************************************
+//************************************************
 // flash background
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
-#************************************************
+//************************************************
 
 const int GPS_VCC_ON_N_PIN=16;
 const int GPS_NRESET_PIN=5;

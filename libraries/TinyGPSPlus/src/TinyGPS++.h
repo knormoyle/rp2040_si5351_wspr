@@ -93,13 +93,17 @@ public:
    uint16_t year();
    uint8_t month();
    uint8_t day();
+   //*************
+   // HACK: kevin moved from private 11_7_24 so the .ino can clear them in GpsOFF
+   bool valid, updated;
+   uint32_t date;
+   //*************
 
    TinyGPSDate() : valid(false), updated(false), date(0)
    {}
 
 private:
-   bool valid, updated;
-   uint32_t date, newDate;
+   uint32_t newDate;
    uint32_t lastCommitTime;
    void commit();
    void setDate(const char *term);
