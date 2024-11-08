@@ -23,7 +23,6 @@ void bmp_init(void)
 {
   // always on? these pins don't exist
   // gpio_init(BMP280_VDD_ON_N_PIN);
-error: expected constructor, destructor, or type conversion before ';'   // gpio_pull_up(BMP280_VDD_ON_N_PIN);
   // gpio_put(BMP280_VDD_ON_N_PIN, 0);
 
   // init I2C1 for BMP

@@ -184,7 +184,6 @@ const int BMP280_I2C1_SDA_PIN=2;
 const int BMP280_I2C1_SCL_PIN=3;
 #include "bmp_functions.h"
 
-bmp_init();
 Adafruit_BMP280 bmp;
 // Adafruit_BMP805 bmp;
 
@@ -246,7 +245,7 @@ extern const int SI5351A_CLK_IDRV_6MA=(2 << 0);
 extern const int SI5351A_CLK_IDRV_4MA=(1 << 0);
 extern const int SI5351A_CLK_IDRV_2MA=(0 << 0);
 
-const int PLL_CALCULATION_PRECISION=4;
+extern const int PLL_CALCULATION_PRECISION=4;
 
 extern const int VFO_VDD_ON_N_PIN=4;
 extern const int VFO_I2C0_SDA_PIN=12;
@@ -272,6 +271,7 @@ void setup() {
   GpsOFF();
   Si5351OFF;
   GpsINIT();
+  bmp_init();
 
   //**********************
   SerialUSB.begin(115200);

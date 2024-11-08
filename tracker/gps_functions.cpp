@@ -151,7 +151,7 @@ void updateGpsData(int ms)
 {
   Watchdog.reset();
   GpsON();
-  while (!SerialUSB) {delay(1);} // wait for serial port to connect.
+  // while (!SerialUSB) {delay(1);} // wait for serial port to connect.
 
   // FIX! do we need any config of the ATGM336?
   if(!ublox_high_alt_mode_enabled){
