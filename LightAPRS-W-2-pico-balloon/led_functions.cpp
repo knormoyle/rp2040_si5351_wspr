@@ -12,14 +12,16 @@ extern const int STATUS_LED_PIN;
 extern const int LED_STATUS_NO_GPS;
 extern const int LED_STATUS_GPS_TIME;
 extern const int LED_STATUS_GPS_FIX;
-extern const int LED_STATUS_TX_APRS;
-extern const int LED_STATUS_TX_WSPR;
-
-extern int statusLEDBlinkCnt;
+extern const int LED_STATUS_TX_WSPR
+extern const int LED_STATUS_TX_TELEMETRY
+extern const int LED_STATUS_TX_TELEN1
+extern const int LED_STATUS_TX_TELEN2
 
 const int LED_BLINK_ON_PERIOD_USEC=50000;
 const int LED_BLINK_OFF_PERIOD_USEC=300000;
 const int LED_BLINK_PAUSE_PERIOD_USEC=1000000;
+
+int statusLEDBlinkCnt=0;
 
 void initStatusLED(void)
 {
