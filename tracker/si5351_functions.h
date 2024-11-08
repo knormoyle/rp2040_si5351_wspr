@@ -1,17 +1,23 @@
-/* 
- * si5351_functions.cpp
- * Created: 11.7.2024
- * initial: Kazuhisa “Kazu” Terasaki (AG6NS)
- * Kevin Normoyle (AD6Z)
-*/
+// Project: https://github.com/knormoyle/rp2040_si5351_wspr
+// Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
+// Author: Kevin Normoyle AD6Z initial 11/2024
+
+// Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
+// Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
+
+// Incorporates work by: Kazuhisa “Kazu” Terasaki AG6NS. Thank you.
+// https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
+// https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker
+
+// Incorporates work by: Rob Votin KC3LBR. Thank you.
+// https://github.com/EngineerGuy314/pico-WSPRer
 
 #ifndef SI5351_FUNCTIONS_H
 #define SI5351_FUNCTIONS_H
 #include <stdint.h>
 
 // FIX! why were these static?
-// The keyword static has different meanings depending on where it is applied. In the context of a function, static means that the function has internal linkage. This means that the function can only be called from within the same translation unit (i.e., the same source file). It is not visible to other files.
-
+// static would mean you can only call it from within this translation unit
 void vfo_init(void); // removed static
 void vfo_set_power_on(bool turn_on); // removed static
 void si5351a_reset_PLLB(void); // removed static
@@ -31,4 +37,3 @@ void vfo_turn_off_clk_out(uint8_t clk_number);
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength);
 
 #endif
-
