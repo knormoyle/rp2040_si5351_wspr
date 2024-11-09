@@ -13,6 +13,9 @@
 // Incorporates work by: Rob Votin KC3LBR. Thank you.
 // https://github.com/EngineerGuy314/pico-WSPRer
 
+// Incorporates work by: Roman Piksaykin R2BDY. Thank you.
+// https://github.com/RPiks/pico-WSPR-tx
+
 // Open source c/c++/arduino ide with arduino-pico core allows customization if you have software skills
 
 // No auto-calibration of Si5351 Tx frequency (yet?). 

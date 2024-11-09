@@ -39,11 +39,11 @@
 
 // in libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 // for setTime()
-#include <TimeLib.h> //https://github.com/PaulStoffregen/Time
+#include <TimeLib.h> // https://github.com/PaulStoffregen/Time
 
 // need this file to be .cpp because this uses type class
 // for Watchdog.*
-#include <Adafruit_SleepyDog.h>             //https://github.com/adafruit/Adafruit_SleepyDog
+#include <Adafruit_SleepyDog.h> // https://github.com/adafruit/Adafruit_SleepyDog
 
 // extern void updateStatusLED(void)
 // instead, should we have
@@ -70,7 +70,8 @@ extern const int GPS_UART1_RX_PIN;
 extern const int GPS_UART1_TX_PIN;
 
 // access library variables
-// it's declared in a class only if the library uses a class. if it is declared in a class, it must be public for you to access it.
+// it's declared in a class only if the library uses a class. 
+// if it is declared in a class, it must be public for you to access it.
 
 // inside your own sketch
 // if it's not inside a class, then you should be able to access it by using "extern" inside your sketch
@@ -78,8 +79,7 @@ extern const int GPS_UART1_TX_PIN;
 
 // FIX! a bunch of things work because includes where done before gps_functions.h was included?
 
-void GpsINIT()
-{
+void GpsINIT() {
   Serial2.setRX(GPS_UART1_RX_PIN);
   Serial2.setTX(GPS_UART1_TX_PIN);
   Serial2.begin(9600); //GPS
@@ -101,8 +101,7 @@ void GpsINIT()
   // digitalWrite(GPS_ON_PIN, HIGH);
 }
 
-void GpsON()
-{
+void GpsON() {
   Serial2.begin(9600);
   // these two weren't written before
   digitalWrite(GpsPwr, LOW);
@@ -121,8 +120,7 @@ This used to be in the LightAPRS version of TinyGPSPlus-0.95
 < #endif
 */
 
-void GpsOFF()
-{
+void GpsOFF() {
   digitalWrite(GpsPwr, HIGH);
   Serial2.end();
   // gps.date.clear();
@@ -154,15 +152,14 @@ void GpsOFF()
 }
 
 // FIX! why was this static void before?
-void updateGpsData(int ms)
+void updateGpsData(int ms) {
 // ms has to be positive?
-{
   Watchdog.reset();
   GpsON();
   // while (!Serial) {delay(1);} // wait for serial port to connect.
 
   // FIX! do we need any config of the ATGM336?
-  if(!ublox_high_alt_mode_enabled){
+  if (!ublox_high_alt_mode_enabled) {
     //enable ublox high altitude mode
     setGPS_DynamicModel6();
     if (DEVMODE) {
@@ -171,27 +168,24 @@ void updateGpsData(int ms)
     ublox_high_alt_mode_enabled = true;
   }
 
-  unsigned long start = millis();
-  unsigned long bekle=0;
-  do
-  {
-
-    while (Serial2.available()>0) {
+  uint64_t start = millis();
+  uint64_t bekle = 0;
+  do {
+    while (Serial2.available() > 0) {
       char c;
-      c=Serial2.read();
+      c = Serial2.read();
       gps.encode(c);
-      bekle= millis();
+      bekle = millis();
     }
 
-    if (bekle!=0 && bekle+10<millis())break;
+    if (bekle!=0 && bekle+10 < millis()) break;
     updateStatusLED();
-  } while ( (millis() - start) < (unsigned long) ms);
+  } while ( (millis() - start) < (uint64_t) ms);
 
   if (DEVMODE) {
     printf("gps.time.isValid():%u\n", gps.time.isValid());
   }
-  if (gps.time.isValid())
-  {
+  if (gps.time.isValid()) {
     // kevin 11_6_24 0 instead of NULL (not pointer)
     // causes problems with the routines declares?
     setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
@@ -214,8 +208,8 @@ boolean getUBX_ACK(uint8_t *MSG) {
   uint8_t b;
   uint8_t ackByteID = 0;
   uint8_t ackPacket[10];
-  unsigned long startTime = millis();
-  boolean status =false;
+  uint64_t startTime = millis();
+  boolean status = false;
 
   // Construct the expected ACK packet
   ackPacket[0] = 0xB5; // header
@@ -252,22 +246,16 @@ boolean getUBX_ACK(uint8_t *MSG) {
     // Make sure data is available to read
     if (Serial2.available()) {
       b = Serial2.read();
-
       // Check that bytes arrive in sequence as per expected ACK packet
-      if (b == ackPacket[ackByteID]) {
-        ackByteID++;
-      }
-      else {
-        ackByteID = 0; // Reset and look again, invalid order
-      }
+      if (b == ackPacket[ackByteID]) ackByteID++;
+      else ackByteID = 0; // Reset and look again, invalid order
     }
   }
   return status;
 }
 
 //following GPS code from : https://github.com/HABduino/HABduino/blob/master/Software/habduino_v4/habduino_v4.ino
-void setGPS_DynamicModel6()
-{
+void setGPS_DynamicModel6() {
   int gps_set_success=0;
   uint8_t setdm6[] = {
   0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x06,
@@ -276,8 +264,7 @@ void setGPS_DynamicModel6()
   0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0xDC };
 
-  while(!gps_set_success)
-  {
+  while (!gps_set_success) {
     if (DEVMODE) {
       Serial.println(F("ublox DynamicModel6 try..."));
     }
@@ -287,7 +274,7 @@ void setGPS_DynamicModel6()
 }
 
 void gpsDebug() {
-  if (! DEVMODE) return;
+  if (!DEVMODE) return;
 
   Serial.println();
   Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars Sentences Checksum"));
@@ -309,7 +296,6 @@ void gpsDebug() {
   printInt(gps.sentencesWithFix(), true, 10);
   printInt(gps.failedChecksum(), true, 9);
   Serial.println();
-
 }
 
 void GridLocator(char *dst, float latt, float lon) {
@@ -333,5 +319,3 @@ void GridLocator(char *dst, float latt, float lon) {
   dst[3] = (char)a2 + '0';
   dst[4] = (char)0;
 }
-
-

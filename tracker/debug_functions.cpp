@@ -12,6 +12,9 @@
 // Incorporates work by: Rob Votin KC3LBR. Thank you.
 // https://github.com/EngineerGuy314/pico-WSPRer
 
+// Incorporates work by: Roman Piksaykin R2BDY. Thank you.
+// https://github.com/RPiks/pico-WSPR-tx
+
 // Got rid of this and use Serial everywhere
 // #define SerialUSB Serial
 extern bool DEVMODE;
@@ -85,3 +88,77 @@ void printFloat(float val, bool valid, int len, int prec)
   }
 }
 
+//********************************************
+// how many of these do we need here?
+
+#include <stdint.h>
+#include <stdio.h>
+#include <stdarg.h>
+
+// stdlib https://www.tutorialspoint.com/c_standard_library/stdlib_h.htm
+// #include <stdlib.h>
+// #include <string.h>
+
+// #include "hardware/clocks.h"
+// #include "pico/stdlib.h"
+
+// maybe 10 lines?
+#define BUFFER_SIZE 1024
+
+static char logBuffer[BUFFER_SIZE] = {0};
+
+// Buffers the log information to the log buffer
+// it is much faster than direct UART output
+// pformat printf style format
+// ... argument list to print 
+void StampPrintf(const char* pformat, ...)
+{
+    // background on i/o
+    // interesting info on tracking GPIO transitions with IRQ and callback function 
+    // https://ceworkbench.wordpress.com/2023/01/04/using-the-raspberry-pi-pico-gpio-with-the-c-c-sdk/
+    
+    static uint32_t sTick = 0;
+    // inits the serial port so you can use printf
+    if(!sTick) stdio_init_all();
+
+    StampPrintf("ixi:%u", pctx->_pTX->_ix_input);
+    uint64_t tm_us = to_us_since_boot(get_absolute_time());
+    
+    const uint32_t tm_day = (uint32_t)(tm_us / 86400000000ULL);
+    tm_us -= (uint64_t)tm_day * 86400000000ULL;
+    const uint32_t tm_hour = (uint32_t)(tm_us / 3600000000ULL);
+    tm_us -= (uint64_t)tm_hour * 3600000000ULL;
+    const uint32_t tm_min = (uint32_t)(tm_us / 60000000ULL);
+    tm_us -= (uint64_t)tm_min * 60000000ULL;
+    const uint32_t tm_sec = (uint32_t)(tm_us / 1000000ULL);
+    tm_us -= (uint64_t)tm_sec * 1000000ULL;
+
+    char timestamp[64];  //let's create timestamp
+    snprintf(timestamp, sizeof(timestamp), "%02lud%02lu:%02lu:%02lu.%06llu [%04lu] ", tm_day, tm_hour, tm_min, tm_sec, tm_us, sTick++);
+
+    // va_start stdarg https://www.tutorialspoint.com/c_standard_library/c_macro_va_start.htm
+    va_list argptr;
+    va_start(argptr, pformat);
+    char message[BUFFER_SIZE];
+    // vsnprintf https://cplusplus.com/reference/cstdio/vsnprintf/
+    vsnprintf(message, sizeof(message), pformat, argptr); //let's format the message 
+    va_end(argptr);
+
+    strncat(logBuffer, timestamp, BUFFER_SIZE - strlen(logBuffer) - 1);
+    strncat(logBuffer, message, BUFFER_SIZE - strlen(logBuffer) - 1);
+    strncat(logBuffer, "\n", BUFFER_SIZE - strlen(logBuffer) - 1);
+    
+}
+
+// Outputs the content of the log buffer to stdio (UART and/or USB)
+// Direct output to UART is very slow so we will do it in CPU idle times
+// and not in time critical functions
+void DoLogPrint()
+{
+    if (logBuffer[0] != '\0')
+    {
+        printf("%s", logBuffer);
+        logBuffer[0] = '\0';  // Clear the buffer
+    }
+
+}

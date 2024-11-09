@@ -15,18 +15,17 @@
 #define BMP280_I2C_INSTANCE i2c1
 #include "bmp_functions.h"
 
-extern const int BMP280_I2C1_SDA_PIN=2;
-extern const int BMP280_I2C1_SCL_PIN=3;
+extern const int BMP280_I2C1_SDA_PIN = 2;
+extern const int BMP280_I2C1_SCL_PIN = 3;
 // extern Adafruit_BMP085 bmp;
 extern Adafruit_BMP280 bmp;
 
-// This precision sensor from Bosch is the best low-cost sensing solution 
-// for measuring barometric pressure and temperature. 
+// This precision sensor from Bosch is the best low-cost sensing solution
+// for measuring barometric pressure and temperature.
 
-const int BMP280_I2C1_SCL_HZ=(1000 * 1000);
+const int BMP280_I2C1_SCL_HZ = (1000 * 1000);
 
-void bmp_init(void)
-{
+void bmp_init(void) {
   // always on? these pins don't exist
   // gpio_init(BMP280_VDD_ON_N_PIN);
   // gpio_put(BMP280_VDD_ON_N_PIN, 0);
@@ -42,13 +41,11 @@ void bmp_init(void)
 }
 
 
-float bmp_read_temperature(void) 
-{
+float bmp_read_temperature(void) {
     return bmp.readTemperature();
 }
 
-float bmp_read_pressure(void) 
-{
+float bmp_read_pressure(void) {
     return bmp.readPressure();
 }
 

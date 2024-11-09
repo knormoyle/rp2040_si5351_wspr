@@ -13,6 +13,9 @@
 // Incorporates work by: Rob Votin KC3LBR. Thank you.
 // https://github.com/EngineerGuy314/pico-WSPRer
 
+// Incorporates work by: Roman Piksaykin R2BDY. Thank you
+// https://github.com/RPiks/pico-WSPR-tx
+
 // Open source c/c++/arduino ide with arduino-pico core allows customization if you have software skills
 
 // No auto-calibration of Si5351 Tx frequency (yet?). 
@@ -59,24 +62,28 @@
 // see https://github.com/earlephilhower/arduino-pico/tree/master/libraries
 #include <SPI.h>
 #include <Wire.h>
+//**************************
+// nvram? from kc3lbr
+#include "hardware/flash.h"
 
 //**************************
 #include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
 // gets the head 1.1-beta? not released version
 // wget https://github.com/mikalhart/TinyGPSPlus/archive/refs/heads/master.zip
 
-/* v1.0.a current A new, customizable Arduino NMEA parsing library A NEW Full-featured GPS/NMEA Parser for Arduino TinyGPSPlus is a new Arduino library for parsing NMEA data streams provided by GPS modules.
+/* v1.0.a 
+TinyGPSPlus is a new Arduino library for parsing NMEA data streams provided by GPS modules.
 
-1.1-beta update: Several pull requests incorporated (or equiv)
+1.1-beta update: Several pull requests incorporated
 
 Added Fix Quality and Fix Mode
-Fix stringop truncation warning
-Support for non-Arduino platforms
 Slight change to earth radius
 Support all satellite groups
-Like its predecessor, TinyGPS, this library provides compact and easy-to-use methods for extracting position, date, time, altitude, speed, and course from consumer GPS devices.
 
-However, TinyGPSPlus’s programmer interface is considerably simpler to use than TinyGPS, and the new library can extract arbitrary data from any of the myriad NMEA sentences out there, even proprietary ones.
+Provides compact and easy-to-use methods for extracting position, date, time, altitude, speed, and course from consumer GPS devices.
+
+TinyGPSPlus’s api is considerably simpler to use than TinyGPS, 
+and the new library can extract arbitrary data from any of the myriad NMEA sentences out there, even proprietary ones.
 */
 //**************************
 
@@ -142,9 +149,11 @@ However, TinyGPSPlus’s programmer interface is considerably simpler to use tha
 /*
 https://arduino-pico.readthedocs.io/en/latest/serial.html
 
-The Arduino-Pico core implements a software-based Serial-over-USB port using the USB ACM-CDC model to support a wide variety of operating systems.
-
-Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate, this rate is ignored since it is USB-based. (Also be aware that this USB Serial port is responsible for resetting the RP2040 during the upload process, following the Arduino standard of 1200bps = reset to bootloader).
+Arduino-Pico core implements a software-based Serial-over-USB port using the USB ACM-CDC model
+Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate, 
+this rate is ignored since it is USB-based. 
+Be aware that this USB Serial port is responsible for resetting the RP2040 during the upload process, 
+following the Arduino standard of 1200bps = reset to bootloader).
 */
 
 /*
@@ -156,37 +165,26 @@ The size of the receive FIFO may also be adjusted from the default 32 bytes by u
     Serial1.begin(baud);
 
 The FIFO is normally handled via an interrupt, which reduced CPU load and makes it less likely to lose characters.
-
 For applications where an IRQ driven serial port is not appropriate, use setPollingMode(true) before calling begin()
-
     Serial1.setPollingMode(true);
     Serial1.begin(300)
-
 */
-
-// Got rid of this, and just use Serial. everywhere
-// #define Serial   Serial
 
 const int Si5351Pwr=4;
 const int BattPin=A3;
 
-//macros
 // FIX! does nothing?
 #define Si5351ON
-
-// used
 #define Si5351OFF   vfo_turn_off()
 
-
-//******************************  CONFIG **********************************
+//******************************* CONFIG **********************************
 char    CallSign[7]="NOCALL";//DO NOT FORGET TO CHANGE YOUR CALLSIGN
 int8_t  CallNumber=11; //11; //SSID http://www.aprs.org/aprs11/SSIDs.txt
 // FIX! only have 46 bytes? (was 50)
 char    comment[46] = "tracker 1.0";// Max 50 char
 char    StatusMessage[50] = "tracker 1.0";
 
-//*****************************************************************************
-
+//*************************************************************************
 uint16_t  BeaconWait=50;  //seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
 
 uint16_t  BattWait=1;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel)
@@ -196,7 +194,6 @@ float     WsprBattMin=0.0;//min Volts for HF (WSPR) radio module to transmit (TX
 float     HighVolt=9.9;   //GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
 
 //******************************  HF (WSPR) CONFIG *************************************
-
 char hf_call[7] = "NOCALL";// DO NOT FORGET TO CHANGE YOUR CALLSIGN
 
 // const unsigned long WSPR_DEFAULT_FREQ=10140200UL; //30m band
@@ -213,16 +210,13 @@ enum mode cur_mode = MODE_WSPR; //default HF mode
 
 // #define DEVMODE // Development mode. Uncomment to enable for debugging.
 boolean DEVMODE = true;
-//*******************************************************************************
 //******************************  APRS SETTINGS (old)****************************
 
 boolean  aliveStatus = true; //for tx status message on first wake-up just once.
 static char telemetry_buff[100];// telemetry buffer
 uint16_t TxCount = 1; //increase +1 after every APRS transmission
 
-//*******************************************************************************
 //******************************  HF SETTINGS   *********************************
-
 const int WSPR_TONE_SPACING=146; // ~1.46 Hz
 const int WSPR_DELAY=683;        // Delay value for WSPR
 
@@ -239,7 +233,6 @@ uint8_t symbol_count;
 uint16_t tone_delay, tone_spacing;
 volatile bool proceed = false;
 
-//*******************************************************************************
 //******************************  GPS SETTINGS   *********************************
 int16_t   GpsResetTime=1800; // timeout for reset if GPS is not fixed
 
@@ -306,8 +299,6 @@ extern const int GPS_UART1_RX_PIN=9;
 // stuff moved to functions from this .ino (not libraries)
 #include "gps_functions.h"
 
-
-
 //*********************************
 // when we set both?
 extern const int WSPR_TX_CLK_1_NUM=1;
@@ -328,8 +319,19 @@ extern const int VFO_VDD_ON_N_PIN=4;
 extern const int VFO_I2C0_SDA_PIN=12;
 extern const int VFO_I2C0_SCL_PIN=13;
 #include "si5351_functions.h"
-//*********************************
 
+//*********************************
+#include "u4b_functions.h"
+// 0 should never happen (init_rf_freq will always init from saved nvram/live state)
+uint32_t XMIT_FREQUENCY=0;
+
+//*********************************
+absolute_time_t loop_us_start = 0;
+absolute_time_t loop_us_end = 0;
+int64_t loop_us_elapsed;
+int64_t loop_ms_elapsed;
+
+//***********************************************************
 void setup() {
   Watchdog.enable(30000);
   Watchdog.reset();
@@ -371,8 +373,6 @@ void setup() {
   // Serial.parseInt();
   // Serial.parseFloat();
 
-
-
   Watchdog.reset();
   unsigned long start = millis();
   while (millis() - start < 5000 && !Serial){;}
@@ -387,9 +387,66 @@ void setup() {
   Serial.println(hf_call);
   Serial.println(F(""));
 
+  process_chan_num(); //sets minute/lane/id from chan number. usually redundant at this point, but can't hurt
+
+  if (getchar_timeout_us(0)>0)   //looks for input on USB serial port only. Note: getchar_timeout_us(0) returns a -2 (as of sdk 2) if no keypress. Must do this check BEFORE setting Clock Speed in Case you bricked it
+  {
+      DCO._pGPStime->user_setup_menu_active=1;
+      user_interface();
+  }
+  //***************
+  // kevin 10_31_24
+  if (InitPicoClock(PLL_SYS_MHZ)==-1) // Tries to set the system clock generator  
+  {
+      // example of bad _Klock_speed is 205
+      printf("FAILED with PLL_SYS_MHZ %d trying to reset _Klock_speed (and NVRAM) to default 115", PLL_SYS_MHZ);
+      strcpy(_Klock_speed,"115");
+      write_NVRAM();
+      PLL_SYS_MHZ = 115;
+      InitPicoClock(PLL_SYS_MHZ); // This should work now
+  }
+  // don't have to redo if it passed the first time
+  //***************
+
 }
 
+//***********************************************************
+// for config_functions.cpp
+char _callsign[7];        //these get set via terminal, and then from NVRAM on boot
+char _id13[3];
+char _start_minute[2];
+char _lane[2];
+char _suffix[2];
+char _verbosity[2];
+// this isn't modifiable by user but still checked for correct default value
+char _oscillator[2];
+char _custom_PCB[2];
+char _TELEN_config[5];
+char _battery_mode[2];
+char _Klock_speed[4];
+char _Datalog_mode[2];
+char _U4B_chan[4];
+//**********
+// kevin 10_30_24
+char _Band[3]; // string with 10, 12, 15, 17, 20 legal. null at end
+
+/*
+Verbosity notes:
+0: none
+1: temp/volts every second, message if no gps
+2: GPS status every second
+3: messages when a xmition started
+4: x-tended messages when a xmition started 
+5: dump context every 20 secs
+6: show PPB every second
+7: Display GxRMC and GxGGA messages
+8: display ALL serial input from GPS module
+*/
+
 void loop() {
+  // copied from loop_us_end while in the loop (at bottom)
+  if (loop_us_start == 0) loop_us_start = get_absolute_time();
+
   Watchdog.reset();
   updateStatusLED();
 
@@ -485,6 +542,46 @@ void loop() {
   } else {
     sleepSeconds(BattWait);
   }
+
+  if (verbosity>=1) {
+    StampPrintf("Temp: %.1f  Volts: %0.2f  Altitude: %0.0f  Satellite count: %d grid6: %s\n", 
+        tempU,volts,_altitude, sat_count, grid6);
+  }    
+
+  DoLogPrint(); 	
+  //***************
+  // kevin 10_31_24 FIX! put in a conditional delay that depends on clock frequency
+  // faster cpu clock will want more delay? (won't affect the PIO block doing RF)
+  // time the loop
+
+  // static uint64_t to_us_since_boot	( absolute_time_t t	)	
+  // convert an absolute_time_t into a number of microseconds since boot.
+  //****************
+
+  loop_us_end = get_absolute_time();
+  loop_us_elapsed = absolute_time_diff_us(loop_us_start, loop_us_end);
+  // floor divide to get milliseconds
+  loop_ms_elapsed = loop_us_elapsed / 1000ULL;
+
+  if (verbosity>=5)
+  {
+      if(0==(tick % 20)) // every ~20 * 0.5 = 10 secs
+      {
+          StampPrintf("main/20: _Band %s loop_ms_elapsed: %d millisecs loop_us_start: %llu microsecs loop_us_end: %llu microsecs", _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
+      }
+  }	
+
+  // next start is this end
+  loop_us_start = loop_us_end;
+  // will always 0 or greater? (unless bug with time)
+  /*
+  if ((loop_ms_elapsed < 500) && (loop_ms_elapsed > 0)) {
+    sleep_ms(500 - loop_ms_elapsed);
+      
+  }
+  */
+  //****************
+
 }
 
 void sleepSeconds(int sec) {
@@ -619,6 +716,7 @@ void updateTelemetry() {
 
 }
 
+//****************************************************
 void sendLocation() {
   if (DEVMODE) {
     Serial.println(F("Location sending with comment"));
@@ -720,7 +818,7 @@ void zeroTimerSetPeriodMs(float ms){
   pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
   pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
 }
-
+//********************************************
 void encode()
 {
   Watchdog.reset();
@@ -773,6 +871,7 @@ void encode()
   Watchdog.reset();
 }
 
+//********************************************
 void set_tx_buffer()
 {
   // Clear out the transmit buffer
@@ -800,6 +899,40 @@ void freeMem() {
   Serial.print(F("Free RAM: ")); Serial.print(freeMemory(), DEC); Serial.println(F(" byte"));
 }
 
+// were any of these needed for InitPicoClock?
+// #include <stdio.h>
+// #include <string.h>
+// #include <ctype.h>
+// #include <defines.h>
+// #include "pico/stdlib.h"
+// #include "hardware/clocks.h"
+// #include "hardware/gpio.h"
+// #include "hardware/adc.h"
+
+int InitPicoClock(int PLL_SYS_MHZ)
+{
+  const uint32_t clkhz = PLL_SYS_MHZ * 1000000L;
+
+  // kevin 10_31_24
+  // frequencies like 205 mhz will PANIC, System clock of 205000 kHz cannot be exactly achieved
+  // should detect the failure and change the nvram, otherwise we're stuck even on reboot
+  if (!set_sys_clock_khz(clkhz / kHz, false))
+  {
+      // won't work
+      printf("\n NOT LEGAL TO SET SYSTEM KLOCK TO %dMhz. Cannot be achieved\n", PLL_SYS_MHZ);
+      return -1;
+  }
+
+  printf("\n ATTEMPT TO SET SYSTEM KLOCK TO %dMhz (legal)\n", PLL_SYS_MHZ);
+  // 2nd arg is "required"
+  set_sys_clock_khz(clkhz / kHz, true);
+  clock_configure(clk_peri, 0,
+      CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
+      PLL_SYS_MHZ * MHZ,
+      PLL_SYS_MHZ * MHZ);
+
+  return 0;
+}
 
 //**********************
 // Standard for strings in this *.ino and in *functions.cpp

@@ -12,6 +12,9 @@
 // Incorporates work by: Rob Votin KC3LBR. Thank you.
 // https://github.com/EngineerGuy314/pico-WSPRer
 
+// Incorporates work by: Roman Piksaykin R2BDY. Thank you.
+// https://github.com/RPiks/pico-WSPR-tx
+
 #ifndef GPS_FUNCTIONS_H
 #define GPS_FUNCTIONS_H
 #include <stdint.h>

@@ -12,22 +12,11 @@
 // Incorporates work by: Rob Votin KC3LBR. Thank you.
 // https://github.com/EngineerGuy314/pico-WSPRer
 
-// Incorporates work by: Roman Piksaykin R2BDY. Thank you.
-// https://github.com/RPiks/pico-WSPR-tx
-
-#ifndef DEBUG_FUNCTIONS_H
-#define DEBUG_FUNCTIONS_H
+#ifndef U4B_FUNCTIONS_H
+#define U4B_FUNCTIONS_H
 #include <stdint.h>
 
-#include <TinyGPS++.h>
-// no buffering
-void printDateTime(TinyGPSDate &d, TinyGPSTime &t);
-void printStr(const char *str, int len);
-void printFloat(float val, bool valid, int len, int prec);
-void printInt(unsigned long val, bool valid, int len);
-
-// buffering that emptys with DoLogPrint()
-void StampPrintf(const char* pformat, ...);
-void DoLogPrint();
+void process_chan_num()
+uint32_t init_rf_freq(void)
 
 #endif
