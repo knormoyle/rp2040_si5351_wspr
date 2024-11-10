@@ -178,31 +178,32 @@ const int BattPin=A3;
 #define Si5351OFF   vfo_turn_off()
 
 //******************************* CONFIG **********************************
-char    CallSign[7]="NOCALL";//DO NOT FORGET TO CHANGE YOUR CALLSIGN
-int8_t  CallNumber=11; //11; //SSID http://www.aprs.org/aprs11/SSIDs.txt
-// FIX! only have 46 bytes? (was 50)
-char    comment[46] = "tracker 1.0";// Max 50 char
+char    CallSign[7]="NOCALL"; // DO NOT FORGET TO CHANGE YOUR CALLSIGN (config now does?)
+
+// FIX! are these used now? remnants of APRS messaging
+// Sized for APRS?
+char    comment[46] = "tracker 1.0";
 char    StatusMessage[50] = "tracker 1.0";
 
 //*************************************************************************
-uint16_t  BeaconWait=50;  //seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
+uint16_t  BeaconWait=50;  // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
 
-uint16_t  BattWait=1;    //seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel)
-float     BattMin=0.0;    //min Volts to wake up.
-float     GpsMinVolt=0.0; //min Volts for GPS to wake up. (important if power source is solar panel)
-float     WsprBattMin=0.0;//min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
-float     HighVolt=9.9;   //GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
+uint16_t  BattWait=1;     // seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel)
+float     BattMin=0.0;    // min Volts to wake up.
+float     GpsMinVolt=0.0; // min Volts for GPS to wake up. (important if power source is solar panel)
+float     WsprBattMin=0.0;// min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
+float     HighVolt=9.9;   // GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
 
 //******************************  HF (WSPR) CONFIG *************************************
 char hf_call[7] = "NOCALL";// DO NOT FORGET TO CHANGE YOUR CALLSIGN
 
 // const unsigned long WSPR_DEFAULT_FREQ=10140200UL; //30m band
 const unsigned long WSPR_DEFAULT_FREQ=14097100UL; //20m band
-//const unsigned long WSPR_DEFAULT_FREQ=18106100UL; //17M band
-//const unsigned long WSPR_DEFAULT_FREQ=21096100UL; //15m band
-//const unsigned long WSPR_DEFAULT_FREQ=24926100UL; //12M band
-//const unsigned long WSPR_DEFAULT_FREQ=28126100UL; //10m band
-//for all bands -> http://wsprnet.org/drupal/node/7352
+// const unsigned long WSPR_DEFAULT_FREQ=18106100UL; //17M band
+// const unsigned long WSPR_DEFAULT_FREQ=21096100UL; //15m band
+// const unsigned long WSPR_DEFAULT_FREQ=24926100UL; //12M band
+// const unsigned long WSPR_DEFAULT_FREQ=28126100UL; //10m band
+// for all bands -> http://wsprnet.org/drupal/node/7352
 
 // Supported modes, default HF mode is WSPR
 enum mode {MODE_WSPR};
@@ -588,12 +589,12 @@ void sleepSeconds(int sec) {
   Si5351OFF;
   Serial.flush();
   for (int i = 0; i < sec; i++) {
-    if (GpsFirstFix){ //sleep gps after first fix
+    if (GpsFirstFix) { // sleep gps after first fix
       if (readBatt() < HighVolt){
         GpsOFF();
         ublox_high_alt_mode_enabled = false;
       }
-    }else{
+    } else {
       if (readBatt() < BattMin){
         GpsOFF();
         ublox_high_alt_mode_enabled = false;

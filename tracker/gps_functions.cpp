@@ -106,6 +106,17 @@ void GpsON() {
   // these two weren't written before
   digitalWrite(GpsPwr, LOW);
   /*printf("GpsON\n");*/
+  // FIX! do we need any config of the ATGM336?
+  if (!ublox_high_alt_mode_enabled) {
+    // enable ublox high altitude mode if we have ublox
+    /*
+    setGPS_DynamicModel6();
+    if (DEVMODE) {
+      Serial.println(F("ublox DynamicModel6 enabled..."));
+    }
+    */
+    ublox_high_alt_mode_enabled = true;
+  }
 }
 
 
@@ -148,6 +159,8 @@ void GpsOFF() {
   // also has lastCommitTime = millis()
   // we don't change that?
 
+  ublox_high_alt_mode_enabled = false;
+
   /*printf("GpsOFF\n");*/
 }
 
@@ -158,15 +171,6 @@ void updateGpsData(int ms) {
   GpsON();
   // while (!Serial) {delay(1);} // wait for serial port to connect.
 
-  // FIX! do we need any config of the ATGM336?
-  if (!ublox_high_alt_mode_enabled) {
-    //enable ublox high altitude mode
-    setGPS_DynamicModel6();
-    if (DEVMODE) {
-      Serial.println(F("ublox DynamicModel6 enabled..."));
-    }
-    ublox_high_alt_mode_enabled = true;
-  }
 
   uint64_t start = millis();
   uint64_t bekle = 0;
