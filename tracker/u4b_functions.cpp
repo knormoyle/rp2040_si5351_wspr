@@ -66,17 +66,16 @@ uint32_t init_rf_freq(void)
             case '4':XMIT_FREQUENCY+=180UL; break;
             // in case invalid lane was read from EEPROM. This is center passband?? (not a valid lane?)
             default: XMIT_FREQUENCY+=100UL; 
-        }	
+        }    
 
         printf("\nrf_freq_init _Band %s BASE_FREQ_USED %d XMIT_FREQUENCY %d _Klock_speed %s\n", 
             _Band, BASE_FREQ_USED, XMIT_FREQUENCY, _Klock_speed);
         return XMIT_FREQUENCY;
 }
-//**************************
 
 /*
-kevin 10_30_24
-From Hans G0UPL  on 06/27/23 post #11140 (this is not documented elsewhere). We had been using a table-driven mapping before Hans posted his algo .
+From Hans G0UPL  on 06/27/23 post #11140 (this is not documented elsewhere). 
+We had been using a table-driven mapping before Hans posted his algo.
  
 The specification of U4B telemetry channels is as follows:
  
@@ -94,8 +93,14 @@ Frequency sector is
  
 That indicates into the array of transmit audio frequencies: {1420, 1460, 1540, 1580};
 which are the target transmit frequencies, each in their 5 sectors.
-Of course the actual transmit frequency is the standard WSPR USB dial frequency + the above mentioned audio frequency; USB dial frequencies:
-{136000, 474200, 1836600, 3568600, 5364700, 7038600, 10138700, 14095600, 18104600, 21094600, 24924600, 28124600, 50293000, 70091000, 144489000};
+
+The actual transmit frequency is the standard WSPR USB dial frequency + 
+the above mentioned audio frequency; 
+
+USB dial frequencies:
+{136000, 474200, 1836600, 3568600, 5364700, 7038600, 10138700, 
+14095600, 18104600, 21094600, 24924600, 28124600, 
+50293000, 70091000, 144489000};
  
 Transmit slot:
 The transmit slot (txSlot) is first calculated as (channel % 5).
@@ -124,29 +129,29 @@ include "u4b_functions.h"
 
 void process_chan_num()
 {
-	if ( (atoi(_U4B_chan)>=0) && (atoi(_U4B_chan)<600)) 
-	{
-		_id13[0]='1';
+    if ( (atoi(_U4B_chan)>=0) && (atoi(_U4B_chan)<600)) 
+    {
+        _id13[0]='1';
         // Channels 0 - 199: '0'
         // Channels 200-399: '1'
         // Channels 400-599: 'Q'
-		if  (atoi(_U4B_chan)<200) _id13[0]='0';
-		if  (atoi(_U4B_chan)>399) _id13[0]='Q';
+        if  (atoi(_U4B_chan)<200) _id13[0]='0';
+        if  (atoi(_U4B_chan)>399) _id13[0]='Q';
 
         // (channel % 200) / 20
-		int id3 = (atoi(_U4B_chan) % 200) / 20;
-		_id13[1]=id3+'0';
-		
+        int id3 = (atoi(_U4B_chan) % 200) / 20;
+        _id13[1]=id3+'0';
+        
         // Frequency discrimination:
         // Frequency sector is
         // (channel % 20) / 5
-		int lane = (atoi(_U4B_chan) % 20) / 5;
-		_lane[0]=lane+'1';
+        int lane = (atoi(_U4B_chan) % 20) / 5;
+        _lane[0]=lane+'1';
 
         // The transmit slot (txSlot) is first calculated as (channel % 5).
         // Then the start time in minutes past the hour, repeated every 10 minutes, is given by:
         // 2 * ((txSlot + 2 * txBand) % 5);
-		int txSlot = atoi(_U4B_chan) % 5;
+        int txSlot = atoi(_U4B_chan) % 5;
         int txBand;
         switch(atoi(_Band))
         {
@@ -157,8 +162,8 @@ void process_chan_num()
             case 10: txBand = 11; break; // 10m
             default: txBand = 7;  break; // default to 20M in case of error cases
         }
-		_start_minute[0] = '0' + (2 * ((txSlot + (txBand*2)) % 5));
-	}
+        _start_minute[0] = '0' + (2 * ((txSlot + (txBand*2)) % 5));
+    }
 }
 
 
@@ -189,25 +194,25 @@ if
     // grid6 = _pu8_locator[5];
     // altitude_snapshot=_pGPStime->_altitude;
             
-/* inputs:  pctx->_pu8_locator (6 char grid)
-			pctx->_txSched->temp_in_Celsius
-			pctx->_txSched->id13
-			pctx->_txSched->voltage
-*/	
-  	  // pick apart inputs
-      // char grid5 = pctx->_pu8_locator[4];  values of grid 5 and 6 were already set previously when packet 1 was created
-      //char grid6 = pctx->_pu8_locator[5];
+/* inputs:  _pu8_locator (6 char grid)
+            _temp_in_Celsius
+            _id13
+            _voltage
+*/    
+        // pick apart inputs
+      // char grid5 = _pu8_locator[4];  values of grid 5 and 6 were already set previously when packet 1 was created
+      //char grid6 = _pu8_locator[5];
       // convert inputs into components of a big number
         uint8_t grid5Val = grid5 - 'A';
         uint8_t grid6Val = grid6 - 'A';
-		uint16_t altFracM =  round((double)altitude_snapshot/ 20);     
+        uint16_t altFracM =  round((double)altitude_snapshot/ 20);     
 
-	 // convert inputs into a big number
+     // convert inputs into a big number
         uint32_t val = 0;
         val *=   24; val += grid5Val;
         val *=   24; val += grid6Val;
         val *= 1068; val += altFracM;
-		        // extract into altered dynamic base
+                // extract into altered dynamic base
         uint8_t id6Val = val % 26; val = val / 26;
         uint8_t id5Val = val % 26; val = val / 26;
         uint8_t id4Val = val % 26; val = val / 26;
@@ -217,49 +222,57 @@ if
         char id4 = 'A' + id4Val;
         char id5 = 'A' + id5Val;
         char id6 = 'A' + id6Val;
-        CallsignU4B[0] =  pctx->_txSched.id13[0];   //string{ id13[0], id2, id13[1], id4, id5, id6 };
-		CallsignU4B[1] =  id2;
-		CallsignU4B[2] =  pctx->_txSched.id13[1];
-		CallsignU4B[3] =  id4;
-		CallsignU4B[4] =  id5;
-		CallsignU4B[5] =  id6;
-		CallsignU4B[6] =  0;
 
-/* inputs:  pctx->_pu8_locator (6 char grid)
-			pctx->_txSched->temp_in_Celsius
-			pctx->_txSched->id13
-			pctx->_txSched->voltage
-*/	
-/* outputs :	char CallsignU4B[6]; 
-				char Grid_U4B[7]; 
-				uint8_t  power_U4B;
-				*/
+        //string{ id13[0], id2, id13[1], id4, id5, id6 };
+        CallsignU4B[0] =  _txSched.id13[0];   
+        CallsignU4B[1] =  id2;
+        CallsignU4B[2] =  _txSched.id13[1];
+        CallsignU4B[3] =  id4;
+        CallsignU4B[4] =  id5;
+        CallsignU4B[5] =  id6;
+        CallsignU4B[6] =  0;
+
+        /* inputs:  
+            _pu8_locator (6 char grid)
+            _temp_in_Celsius
+            _id13
+            _voltage
+        */    
+        /* outputs :    
+                char CallsignU4B[6]; 
+                char Grid_U4B[7]; 
+                uint8_t  power_U4B;
+                */
         // parse input presentations
-        double tempC   = pctx->_txSched.temp_in_Celsius;
-        double voltage = pctx->_txSched.voltage;
+        double tempC   = _txSched.temp_in_Celsius;
+        double voltage = _txSched.voltage;
         // map input presentations onto input radix (numbers within their stated range of possibilities)
 
         //**************
-        // kevin 10_30_24
         // handle possible illegal range (double wrap on tempC?). or should it clamp at the bounds?
         // uint8_t tempCNum      = tempC - -50;
         uint8_t tempCNum      = ((uint8_t) tempC - -50) % 90;
         uint8_t voltageNum    = ((uint8_t)round(((voltage * 100) - 300) / 5) + 20) % 40;
-		uint8_t speedKnotsNum = pctx->_pTX->_p_oscillator->_pGPStime->_time_data.sat_count;   //encoding # of satelites into knots
-        // handle possible illegal (0-41 legal range). clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
+        // FIX! encoding # of satelites into knots
+        uint8_t speedKnotsNum = _pTX->_p_oscillator->_pGPStime->_time_data.sat_count;   
+        // handle possible illegal (0-41 legal range). 
+        // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
         if (speedKnotsNum > 41) speedKnotsNum = 41;
         //****************
         
-        // kevin old code since this isn't 0 or 1 it should really check zero. don't want to say valid if dead reckoning fix? (6)
-        uint8_t gpsValidNum   = pctx->_pTX->_p_oscillator->_pGPStime->_time_data._u8_is_solution_active;
+        // kevin old code since this isn't 0 or 1 
+        // it should really check zero. don't want to say valid if dead reckoning fix? (6)
+        uint8_t gpsValidNum   = _pTX->_p_oscillator->_pGPStime->_time_data._u8_is_solution_active;
         gpsValidNum=1; //changed sept 27 2024. because the traquito site won't show the 6 char grid if this bit is even momentarily off. Anyway, redundant cause sat count is sent as knots
-		// shift inputs into a big number
+        // shift inputs into a big number
         val = 0;
         val *= 90; val += tempCNum;
         val *= 40; val += voltageNum;
         val *= 42; val += speedKnotsNum;
         val *=  2; val += gpsValidNum;
-        val *=  2; val += 1;          // standard telemetry (1 for the 2nd U4B packet, 0 for "Extended TELEN") - Thanks Kevin!
+        // standard telemetry (1 for the 2nd U4B packet, 0 for "Extended TELEN")
+        val *=  2; val += 1;          
+
         // unshift big number into output radix values
         uint8_t powerVal = val % 19; val = val / 19;
         uint8_t g4Val    = val % 10; val = val / 10;
@@ -271,14 +284,14 @@ if
         char g2 = 'A' + g2Val;
         char g3 = '0' + g3Val;
         char g4 = '0' + g4Val;
- 	
-		Grid_U4B[0] = g1; // = string{ g1, g2, g3, g4 };
-		Grid_U4B[1] = g2;
-		Grid_U4B[2] = g3;
-		Grid_U4B[3] = g4;
-		Grid_U4B[4] = 0;
+     
+        Grid_U4B[0] = g1; // = string{ g1, g2, g3, g4 };
+        Grid_U4B[1] = g2;
+        Grid_U4B[2] = g3;
+        Grid_U4B[3] = g4;
+        Grid_U4B[4] = 0;
 
-	power_U4B=valid_dbm[powerVal];
+    power_U4B=valid_dbm[powerVal];
 
-	wspr_encode(CallsignU4B, Grid_U4B, power_U4B, pctx->_pu8_outbuf,pctx->_txSched.verbosity); 
+    wspr_encode(CallsignU4B, Grid_U4B, power_U4B, _pu8_outbuf,_txSched.verbosity); 
    }

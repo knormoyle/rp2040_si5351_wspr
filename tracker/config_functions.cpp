@@ -20,6 +20,18 @@
 // any of this needed
 #include <stdio.h>
 
+extern char _callsign[7];
+extern char _id13[3];
+extern char _start_minute[2];
+extern char _lane[2];
+extern char _suffix[2];
+extern char _verbosity[2];
+extern char _TELEN_config[5];
+extern char _clock_speed[4];
+extern char _U4B_chan[4];
+extern char _Band[3]; // string with 10, 12, 15, 17, 20 legal. null at end
+
+
 // #include <string.h>
 // #include <ctype.h>
 // #include <defines.h>
