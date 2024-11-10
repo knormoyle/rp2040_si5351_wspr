@@ -35,7 +35,6 @@ extern const int PLL_CALCULATION_PRECISION;
 
 const int VFO_I2C0_SCL_HZ=(1000 * 1000);
 
-
 // for i2c0
 #include "hardware/i2c.h"
 
@@ -121,7 +120,11 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt){   // write array
 // The Si5351 consists of two main stages: two PLLs which are locked to the reference oscillator (a 25/27 MHz crystal) and which can be set from 600 to 900 MHz, and the output (multisynth) clocks which are locked to a PLL of choice and can be set from 500 kHz to 200 MHz (per the datasheet, although it does seem to be possible to set an output up to 225 MHz).
 
 // Calibration
-// There will be some inherent error in the reference oscillator's actual frequency, so we can account for this by measuring the difference between the uncalibrated actual and nominal output frequencies, then using that difference as a correction factor in the library. The init() and set_correction() methods use a signed integer calibration constant measured in parts-per-billion. The easiest way to determine this correction factor is to measure a 10 MHz signal from one of the clock outputs (in Hz, or better resolution if you can measure it), scale it to parts-per-billion, then use it in the set_correction() method in future use of this particular reference oscillator. Once this correction factor is determined, it should not need to be measured again for the same reference oscillator/Si5351 pair unless you want to redo the calibration. With an accurate measurement at one frequency, this calibration should be good across the entire tuning range.
+// There will be some inherent error in the reference oscillator's actual frequency, so we can account for this by measuring the difference between the uncalibrated actual and nominal output frequencies, then using that difference as a correction factor in the library. 
+
+// The init() and set_correction() methods use a signed integer calibration constant measured in parts-per-billion. The easiest way to determine this correction factor is to measure a 10 MHz signal from one of the clock outputs (in Hz, or better resolution if you can measure it), scale it to parts-per-billion, then use it in the set_correction() method in future use of this particular reference oscillator. 
+
+// Once this correction factor is determined, it should not need to be measured again for the same reference oscillator/Si5351 pair unless you want to redo the calibration. With an accurate measurement at one frequency, this calibration should be good across the entire tuning range.
 
 // The calibration method is called like this:
 // si5351.set_correction(-6190, SI5351_PLL_INPUT_XO);
@@ -134,6 +137,11 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt){   // write array
 
 // correction is parts per billion for the frequency used/measured
 // Could try a number of correction values and decide which to use (try 10 WSPR with correction 10/20/50/100/500/1000?)
+
+// another source for programming comparison 
+// https://dk7ih.de/a-simple-software-to-control-the-si5351a-generator-chip/
+// https://cdn-shop.adafruit.com/datasheets/Si5351.pdf
+
 
 const int SI5351_TCXO_FREQ=26000000;
 
@@ -171,6 +179,7 @@ const int SI5351A_PLL_RESET_PLLB_RST=      (1 << 7);
 
 static uint32_t prev_ms_div = 0;
 static uint8_t s_regs[8];
+// updated with config _tx_high during vfo_turn_on()
 static uint8_t s_vfo_drive_strength[3];  // 0:2mA, 1:4mA, 2:6mA, 3:8mA
 
 // removed static
@@ -273,7 +282,7 @@ static void si5351a_setup_multisynth1(uint32_t div)
 // #include <Wire.h>
 // Si5351 si5351;
 
-// Si5351 Library (V2) for Arduino 
+// we don't user PLLA ?
 static void si5351a_reset_PLLB(void)
 {
   i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
@@ -282,134 +291,162 @@ static void si5351a_reset_PLLB(void)
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x16(uint8_t clk_number, uint32_t freq)
 {
-  const int PLL_MAX_FREQ=        900000000;
-  const int PLL_MIN_FREQ=        600000000;
-  const int PLL_MID_FREQ=        ((PLL_MAX_FREQ + PLL_MIN_FREQ) / 2); // divide by 2 result must be integer
-  const int PLL_DENOM_MAX=       0x000fffff;
+    const int PLL_MAX_FREQ  = 900000000;
+    const int PLL_MIN_FREQ  = 600000000;
+    const int PLL_MID_FREQ  = ((PLL_MAX_FREQ + PLL_MIN_FREQ) / 2); // divide by 2 result must be integer
+    const int PLL_DENOM_MAX = 0x000fffff;
 
-  uint32_t ms_div = PLL_MID_FREQ / (freq >> PLL_CALCULATION_PRECISION) + 1;
-  ms_div &= 0xfffffffe;   // make it even number
+    uint32_t ms_div = PLL_MID_FREQ / (freq >> PLL_CALCULATION_PRECISION) + 1;
+    ms_div &= 0xfffffffe;   // make it even number
 
-  uint32_t pll_freq = ((uint64_t)freq * ms_div) >> PLL_CALCULATION_PRECISION;
+    uint32_t pll_freq = ((uint64_t)freq * ms_div) >> PLL_CALCULATION_PRECISION;
 
-  uint32_t tcxo_freq = SI5351_TCXO_FREQ;
-  uint32_t pll_mult   = pll_freq / tcxo_freq;
-  uint32_t pll_remain = pll_freq - (pll_mult * tcxo_freq);
-  uint32_t pll_num    = (uint64_t)pll_remain * PLL_DENOM_MAX / tcxo_freq;
-  si5351a_setup_PLLB(pll_mult, pll_num, PLL_DENOM_MAX);
+    uint32_t tcxo_freq = SI5351_TCXO_FREQ;
+    uint32_t pll_mult   = pll_freq / tcxo_freq;
+    uint32_t pll_remain = pll_freq - (pll_mult * tcxo_freq);
+    uint32_t pll_num    = (uint64_t)pll_remain * PLL_DENOM_MAX / tcxo_freq;
+    si5351a_setup_PLLB(pll_mult, pll_num, PLL_DENOM_MAX);
 
-  if (ms_div != prev_ms_div) {
-    prev_ms_div = ms_div;
-    if (clk_number == 0) {
-      si5351a_setup_multisynth0(ms_div);
+    // only if it changes
+    if (ms_div != prev_ms_div) {
+        prev_ms_div = ms_div;
+        if (clk_number == 0) si5351a_setup_multisynth0(ms_div);
+        // this used to be for setting up the aprs clock on clk_num == 1?
+        else si5351a_setup_multisynth1(ms_div);
+        si5351a_reset_PLLB();
     }
-    else {
-      // this was for setting up the aprs clock on clk_num == 1?
-      si5351a_setup_multisynth1(ms_div);
-    }
-    si5351a_reset_PLLB();
-  }
 }
 
 static uint8_t  si5351bx_clken = 0xff;
 
 void vfo_turn_on_clk_out(uint8_t clk_number)
 {
-  uint8_t enable_bit = 1 << clk_number;
+    uint8_t enable_bit = 1 << clk_number;
 
-#ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
-  if (clk_number == 0) {
-    enable_bit |= 1 << 1;
-  }
-#endif
-  si5351bx_clken &= ~enable_bit;
-  i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+    #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
+    if (clk_number == 0) {
+        enable_bit |= 1 << 1;
+    }
+    #endif
+    si5351bx_clken &= ~enable_bit;
+    i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
 }
 
 void vfo_turn_off_clk_out(uint8_t clk_number)
 {
-  uint8_t enable_bit = 1 << clk_number;
-#ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
-  if (clk_number == 0) {
-    enable_bit |= 1 << 1;
-  }
-#endif
-  si5351bx_clken |= enable_bit;
-  i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+    uint8_t enable_bit = 1 << clk_number;
+    // always now
+    // #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
+    if (clk_number == 0) {
+        enable_bit |= 1 << 1;
+    }
+    // #endif
+    si5351bx_clken |= enable_bit;
+    i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
 }
 
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength)
+// only called during the initial vfo_turn_on()  
 {
-  s_vfo_drive_strength[clk_number] = strength;
-
-  // reset the prev_ms_div to force vfo_set_freq_x16() to call si5351a_setup_multisynth1() next time
-  prev_ms_div = 0;
+    s_vfo_drive_strength[clk_number] = strength;
+    // reset the prev_ms_div to force vfo_set_freq_x16() to call si5351a_setup_multisynth1() next time
+    prev_ms_div = 0;
 }
 
 bool vfo_is_on(void)
 {
-  return gpio_is_dir_out(VFO_VDD_ON_N_PIN);
+    if gpio_is_dir_out(VFO_VDD_ON_N_PIN) and vfo_turn_off_completed) // power off and completed successfully
+    else return vfo_turn_on_completed) // power on and completed successfully
 }
 
 // what is vfo_clk2 ? is that another PLL? is that used for calibration?
+
+static bool vfo_turn_on_completed = false;
+static bool vfo_turn_off_completed = false;
+
 void vfo_turn_on(uint8_t clk_number)
 {
-  if (vfo_is_on()) return;    // already on
 
-  gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-  gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
-  vfo_set_power_on(true);
-  // sleep_ms(100);
-  busy_wait_us_32(100000);
+    if (vfo_is_on() and vfo_turn_on_completed) return;  // already on successfully
 
-  // output 7MHz on CLK0
-  uint8_t reg;
-  while (i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff) < PICO_ERROR_NONE) {   // Disable all CLK output drivers
-    i2c_deinit(VFO_I2C_INSTANCE);
-    // sleep_ms(10);
-    busy_wait_us_32(10000);
-    i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+    vfo_turn_on_completed = false;
+    vfo_turn_off_completed = false;
+    // sets state to be used later
+    if (_tx_high[0] == '0') {
+        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_2MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_2MA);
+    else {
+        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
+    }
 
-    gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
-    gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
 
     gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+    vfo_set_power_on(true);
+    // sleep_ms(100);
+    busy_wait_us_32(100000);
 
-    // sleep_ms(10);
-    busy_wait_us_32(10000);
-  }
+    // output 7MHz on CLK0
+    uint8_t reg;
+    while (i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff) < PICO_ERROR_NONE) {   // Disable all CLK output drivers
+        i2c_deinit(VFO_I2C_INSTANCE);
+        // sleep_ms(10);
+        busy_wait_us_32(10000);
+        i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
 
-  for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) i2cWrite(reg, 0xCC);    // Powerdown CLK's
+        gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
+        gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
 
-  static const uint8_t s_ms_values[] = { 0, 1, 0x0C, 0, 0, 0, 0, 0 };
-  i2cWriten(42, (uint8_t *)s_ms_values, 8);   // set MS0 for div_4 mode (minimum division)
-  i2cWriten(50, (uint8_t *)s_ms_values, 8);   // set MS1 for div_4 mode (minimum division)
-  i2cWriten(58, (uint8_t *)s_ms_values, 8);   // set MS2 for div_4 mode (minimum division)
+        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
+        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
 
-  static const uint8_t s_pll_values[] = { 0, 0, 0, 0x05, 0x00, 0, 0, 0 };
-  i2cWriten(26, (uint8_t *)s_pll_values, 8);  // set PLLA for div_16 mode (minimum even integer division)
-  i2cWriten(34, (uint8_t *)s_pll_values, 8);  // set PLLB for div_16 mode (minimum even integer division)
+        // sleep_ms(10);
+        busy_wait_us_32(10000);
+    }
 
-  i2cWrite(149, 0x00);  // Disable Spread Spectrum
-  i2cWrite(177, 0xA0);  // Reset PLLA and PLLB
-  i2cWrite(187, 0x00);  // Disable all fanout
+    for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) i2cWrite(reg, 0xCC);    // Powerdown CLK's
 
-  prev_ms_div = 0;
+    static const uint8_t s_ms_values[] = { 0, 1, 0x0C, 0, 0, 0, 0, 0 };
+    i2cWriten(42, (uint8_t *)s_ms_values, 8);   // set MS0 for div_4 mode (minimum division)
+    i2cWriten(50, (uint8_t *)s_ms_values, 8);   // set MS1 for div_4 mode (minimum division)
+    i2cWriten(58, (uint8_t *)s_ms_values, 8);   // set MS2 for div_4 mode (minimum division)
 
-  // uint32_t freq = 7040000UL << PLL_CALCULATION_PRECISION;
+    static const uint8_t s_pll_values[] = { 0, 0, 0, 0x05, 0x00, 0, 0, 0 };
+    i2cWriten(26, (uint8_t *)s_pll_values, 8);  // set PLLA for div_16 mode (minimum even integer division)
+    i2cWriten(34, (uint8_t *)s_pll_values, 8);  // set PLLB for div_16 mode (minimum even integer division)
 
-  // FIX! make this the base freq for the band?
-  uint32_t freq = 14097000UL << PLL_CALCULATION_PRECISION;
-  vfo_set_freq_x16(clk_number, freq);
+    i2cWrite(149, 0x00);  // Disable Spread Spectrum
+    i2cWrite(177, 0xA0);  // Reset PLLA and PLLB
+    i2cWrite(187, 0x00);  // Disable all fanout
 
-  si5351bx_clken = 0xff;
-  vfo_turn_on_clk_out(clk_number);
+    prev_ms_div = 0;
+
+    // do a parts per billion correction?
+    freq = XMIT_FREQUENCY;
+    if (atoi(_correction[0])!=0) {
+        // this will be a floor divide
+        // _correction will be -3000 to 3000
+        uint32_t orig_freq = freq;
+        freq = freq + (atoi(_correction) * freq / 1000000000UL)
+        if (DEVMODE) {
+            printf("correction shifts %d orig freq %d, to new freq, %d", atoi(_correction), orig_freq, freq)
+        }
+    }
+
+    uint32_t freq = (uint32_t) freq << PLL_CALCULATION_PRECISION;
+    vfo_set_freq_x16(clk_number, freq);
+
+    si5351bx_clken = 0xff;
+    vfo_turn_on_clk_out(clk_number);
+    vfo_turn_on_completed = true;
 }
 
 void vfo_turn_off(void)
 {
-  if (!vfo_is_on()) return;   // already off
+  if (!vfo_is_on() and vfo_turn_off_completed) return;   // already off successfully
+  vfo_turn_on_completed = false;
+  vfo_turn_off_completed = false;
 
   // disable all clk output
   si5351bx_clken = 0xff;
@@ -420,4 +457,5 @@ void vfo_turn_off(void)
   vfo_set_power_on(false);
   gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
   gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
+  vfo_turn_off_completed = true;
 }

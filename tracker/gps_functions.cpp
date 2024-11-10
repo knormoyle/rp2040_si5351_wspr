@@ -69,7 +69,12 @@ extern const int GPS_1PPS_PIN;
 extern const int GPS_UART1_RX_PIN;
 extern const int GPS_UART1_TX_PIN;
 
-extern bool GpsIsOn = false;
+extern bool GpsIsOn;
+
+// for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
+extern absolute_time_t GpsStartTime; // usecs
+extern GpsTimeToLastFix; // milliseconds
+
 // access library variables
 // it's declared in a class only if the library uses a class. 
 // if it is declared in a class, it must be public for you to access it.
@@ -83,6 +88,8 @@ extern bool GpsIsOn = false;
 void GpsINIT() {
     Serial2.setRX(GPS_UART1_RX_PIN);
     Serial2.setTX(GPS_UART1_TX_PIN);
+    Serial2.setPollingMode(true);
+    Serial2.setFIFOSize(512);
     Serial2.begin(9600); //GPS
 
     gpio_init(GpsPwr);
@@ -102,42 +109,100 @@ void GpsINIT() {
     // digitalWrite(GPS_ON_PIN, HIGH);
 }
 
-void GpsON() {
-    Serial2.begin(9600);
-    // these two weren't written before
+void GpsON(bool GpsColdReset) {
+    // could be off or on already
+    // Assume GpsINIT was already done
+
+    // Just in case: wait for serial port to connect.
+    // do we need these two each time?
+
+    // while (!Serial2) { delay(1); } 
+    // Serial2.begin(9600);
+
     digitalWrite(GpsPwr, LOW);
-    /*printf("GpsON\n");*/
-    // FIX! do we need any config of the ATGM336?
-    if (!ublox_high_alt_mode_enabled) {
-        // enable ublox high altitude mode if we have ublox
-        /*
-        setGPS_DynamicModel6();
-        if (DEVMODE) {
-            Serial.println(F("ublox DynamicModel6 enabled..."));
+    sleep_ms(2000);
+
+    // alternative GPS
+    // SIM28ML
+    // SIM28ML/9600 9.7x10.1mm
+
+    // ATGM336H-5N11 9.7x10.1mm https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_ZHONGKEWEI-ATGM336H-5N11_C90769.pdf 5N-1X is gps only. saw + lnda
+    // Ipeak = 100mA
+    // ATGM336H-5N31 9.7x10.1mm https://www.lcsc.com/datasheet/lcsc_datasheet_1810261521_ZHONGKEWEI-ATGM336H-5N31_C90770.pdf 5N-3X is gps + bda. saw + lna
+
+    // Ipeak = 100mA
+    // ATGM336H-5NR32 10.1x9.7mm https://www.lcsc.com/datasheet/lcsc_datasheet_2411041759_ZHONGKEWEI-ATGM336H-5NR32_C5117921.pdf gps + bds. lna + saw
+
+    // 6N-32 is gps + bd2/3. -74 has GLO. 115200baud
+    // Ipeak = 100mA
+    // ATGM336H-6N-74 10.1x9.7mm https://www.lcsc.com/datasheet/lcsc_datasheet_2401121833_ZHONGKEWEI-ATGM336H-6N-74_C5804601.pdf 
+
+
+    // https://www.sparkfun.com/datasheets/GPS/Modules/PMTK_Protocol.pdf
+    // Cold Start. doesn't clear any system/user configs 
+    // Serial2.print("$PMTK103*30\r\n");
+
+    // Full Cold Start. any system/user configs (back to factory status)
+    // FIX! should we wait for ack or no?
+    // have to toggle power off/on to get this effect? no?
+    if (GpsColdReset) {
+        Serial2.print("$PMTK104*37\r\n");
+        sleep_ms(2000);
+        // don't worry about setting balloon mode (3) for ATGM336?
+        // Serial2.print("$PSIMNAV,W,3*3A\r\n");
+        // normal mode
+        // Serial2.print("$PSIMNAV,W,0*39\r\n");
+
+        // don't need?
+        // digitalWrite(GpsPwr, HIGH);
+        // sleep_ms(2000);
+        // digitalWrite(GpsPwr, LOW);
+        // sleep_ms(2000);
+
+        // ATGM336 might not support this:
+        // could use as PMTK_API_SET_PWR_SAV_MODE (elsewhere) rather than powering off?
+        // would have to wait for ack or time, after changing
+        // https://www.meme.au/nmea-checksum.html
+        // power saving mod off: (should this really be checksum 2F?)
+        // $PMTK320,0*26\r\n" manual has wrong checksum here?
+        // power saving mod on:
+        // $PMTK320,1*2E\r\n"
+
+        /*printf("GpsON\n");*/
+        // FIX! do we need any config of the ATGM336?
+        if (!ublox_high_alt_mode_enabled) {
+            // enable ublox high altitude mode if we have ublox
+            /*
+            setGPS_DynamicModel6();
+            if (DEVMODE) {
+                Serial.println(F("ublox DynamicModel6 enabled..."));
+            }
+            */
+            ublox_high_alt_mode_enabled = true;
         }
-        */
-        ublox_high_alt_mode_enabled = true;
+        GpsIsOn = true;
+        GpsStartTime = get_absolute_time(): // usecs
+        GpsTimeToLastFix = 0;
     }
-    GpsIsOn = true;
-}
 
 
-/*
-This used to be in the LightAPRS version of TinyGPSPlus-0.95
-< #if defined(ARDUINO_ARCH_RP2040)
-< void TinyGPSDate::clear()
-< {
-<    valid = updated = false;
-<    date = 0;
-< }
-< #endif
-*/
+    /*
+    This used to be in the LightAPRS version of TinyGPSPlus-0.95
+    I instead updated TinyGPSPlus (latest) in libraries to make them public, not private
+    < #if defined(ARDUINO_ARCH_RP2040)
+    < void TinyGPSDate::clear()
+    < {
+    <    valid = updated = false;
+    <    date = 0;
+    < }
+    < #endif
+    */
 
-void GpsOFF() {
-    digitalWrite(GpsPwr, HIGH);
-    Serial2.end();
-    // gps.date.clear();
-    // are these declared private?
+    void GpsOFF() {
+        digitalWrite(GpsPwr, HIGH);
+        Serial2.end();
+        // gps.date.clear();
+        // are these declared private?
     // FIX! how can we clear these? Do we change the library to make them public?
 
     /* from TinyGPS++.h in libraries..modify it and move to public? (in struct TinyGPSDate
@@ -165,11 +230,15 @@ void GpsOFF() {
 
     /*printf("GpsOFF\n");*/
     GpsIsOn = false;
+    GpsStartTime = 0;
+    GpsTimeToLastFix = 0;
 }
 
 // FIX! why was this static void before?
-void updateGpsData(int ms) {
+void updateGpsDataAndTime(int ms) {
     // ms has to be positive?
+    // grab data for no more than ms milliseconds
+    // stop if no data for 10 milliseconds
     Watchdog.reset();
     GpsON();
     // while (!Serial) {delay(1);} // wait for serial port to connect.
@@ -185,13 +254,13 @@ void updateGpsData(int ms) {
         while (Serial2.available() > 0) {
             // FIX! in DEVMODE can we print all the sentences?
             char c;
+            // should this be readln?
             c = Serial2.read();
             gps.encode(c);
             bekle = millis();
         }
-
-        if (bekle!=0 && bekle+10 < millis()) break;
-        updateStatusLED();
+        // did we wait more than 10 millis() good data read?
+        if (bekle!=0 && (millis() > bekle+10) break;
     } while ( (millis() - start) < (uint64_t) ms);
 
     if (DEVMODE) {
@@ -201,9 +270,10 @@ void updateGpsData(int ms) {
     if (gps.time.isValid()) {
         // 11_6_24 0 instead of NULL (not pointer)
         // causes problems with the routines declares?
+        // setTime is in the Time library.
         setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
         if (DEVMODE) {
-          printf("setTime(%02u:%02u:%02u)\n", gps.time.hour(), gps.time.minute(), gps.time.second());
+            printf("setTime(%02u:%02u:%02u)\n", gps.time.hour(), gps.time.minute(), gps.time.second());
         }
     }
 }

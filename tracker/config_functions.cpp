@@ -31,6 +31,12 @@ extern char _clock_speed[4];
 extern char _U4B_chan[4];
 extern char _Band[3]; // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _tx_high[1]; // 0 is 2mA si5351. 1 is 8mA si5351
+extern char _devmode[2]; 
+// don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
+extern char _correction[6];  // parts per billion -3000 to 3000. default 0
+// traquito: 500 correction does  ~7 hz lower on 20M (14095.600 base freq)
+// traquito: 500 correction does ~14 hz lower on 10M (28124.600 base freq)
+
 
 
 // #include <string.h>
@@ -234,6 +240,16 @@ void user_interface(void) {
                 get_user_input("Enter Tx power: (0 or 1) ", _tx_power, sizeof(_tx_power));
                 write_FLASH();
                 break;
+            case 'D':
+                get_user_input("Enter DEVMODE to enale messaging: (0 or 1) ", _devmode, sizeof(_devmode));
+                write_FLASH();
+                break;
+            case 'R':
+                printf("Don't cause than approx. 43 hz 'correction' on a band. Effect varies per band?")
+                get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ", _correction, sizeof(_correction));
+                write_FLASH();
+                break;
+
 
             //********************
             case 13:  break;
@@ -271,6 +287,8 @@ void read_FLASH(void) {
     strncpy(_U4B_chan,     flash_target_contents+14, 3); _U4B_chan[3] = 0;
     strncpy(_Band,         flash_target_contents+17, 2); _Band[2] = 0;
     strncpy(_tx_power,     flash_target_contents+19, 1); _tx_power[1] = 0;
+    strncpy(_devmode,      flash_target_contents+20, 1); _devmode[1] = 0;
+    strncpy(_correction,   flash_target_contents+21, 6); _correction[6] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
 
@@ -296,6 +314,8 @@ void write_FLASH(void) {
     strncpy(data_chunk+14, _U4B_chan, 3);
     strncpy(data_chunk+17, _Band, 2);
     strncpy(data_chunk+19, _tx_power, 1);
+    strncpy(data_chunk+20, _devmode, 1);
+    strncpy(data_chunk+21, _correction, 6);
 
     // you could theoretically write 16 pages at once (a whole sector).
     // don't interrupt
@@ -465,18 +485,27 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
+    if (_devmode[0] != '0' && _devmode[0] > '1') {
+        printf("%s\n_devmode %s is not supported/legal, initting to 0\n%s",
+            RED, _devmode, NORMAL);
+        strcpy(_devmode, "0");
+        write_FLASH();
+        result = -1;
+    }
+    if (atoi(_correction < -3000 || atoi(_correction) > 3000) {
+        printf("%s\n_correction %s is not supported/legal, initting to 0\n%s",
+            RED, _correction, NORMAL);
+        strcpy(_correction, "0");
+        write_FLASH();
+        result = -1;
+    }
     return result;
     //****************
 }
 
 // Function that writes out the current set values of parameters
 void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
-    printf("%s", CLEAR_SCREEN);
-    printf("%s", UNDERLINE_ON);
-    printf("%s", BRIGHT);
-    printf("\n\nCurrent values:\n");
-    printf("%s", UNDERLINE_OFF);
-    printf("%s", NORMAL);
+    printf("%s%s%s\n\nCurrent values:\n%s%s", CLEAR_SCREEN, UNDERLINE_ON, BRIGHT, UNDERLINE_OFF_NORMAL);
 
     printf("\n\tcallsign:%s\n\t", _callsign);
     printf("U4B channel:%s", _U4B_chan);
@@ -488,12 +517,10 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     printf("clock speed:%sMhz\n\t", _clock_speed);
     printf("band:%s\n\t", _Band);
     printf("XMIT_FREQUENCY:%d\n\t", XMIT_FREQUENCY);
+    printf("DEVMODE:%d\n\t", _devmode);
+    printf("correction:%d\n\t", _correction);
 
-    printf("%s", UNDERLINE_ON);
-    printf("%s", BRIGHT);
-    printf("Valid commands: ");
-    printf("%s", UNDERLINE_OFF);
-    printf("%s", NORMAL);
+    printf("%s%sValid commands: %s%s", UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
 
     printf("\n\n\tX: eXit configuration and reboot\n\t")
     printf("C: change Callsign (6 char max)\n\t");
@@ -502,6 +529,8 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     printf("V: verbosity (0 for no messages, 9 for all) \n\t");
     printf("T: TELEN config\n\t");
     printf("K: clock speed  (default: 133)\n\t");
+    printf("D: DEVMODE to enable messaging (default: 0)\n\t");
+    printf("R: si5351 ppb correction (-3000 to 3000) (default: 0)\n\t");
 }
 
 // Converts string to upper case

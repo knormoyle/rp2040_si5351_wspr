@@ -168,130 +168,135 @@ void process_chan_num()
 }
 
 
-void u4b_encode() 
-{
-if 
+// callsign, grid4, dbm are legal outputs. null term on callsign. no leading space on callsign, or any space.
+// the encode to wspr is done elsewhere
+extern char telemetry_buf[];
+
+void u4b_encode_1( char[6] callsign, char[4] grid4), char[2] dbm ) { 
+    // normal telemetry
     _u8_txpower =10; //hardcoded at 10dbM when doing u4b MSG 1
-    if (verbosity>=3) printf("creating U4B packet 1\n");
+    if (DEVMODE && verbosity>=3) printf("creating U4B packet 1\n");
     char _4_char_version_of_locator[5];
     //only take first 4 chars of locator
     strncpy(_4_char_version_of_locator,_pu8_locator, 4);  _4_char_version_of_locator[4]=0;  //add null terminator
-    wspr_encode(_pu8_callsign, _4_char_version_of_locator, _u8_txpower, _pu8_outbuf, verbosity);  
+
+    // done elsewhere
+    // wspr_encode(_pu8_callsign, _4_char_version_of_locator, _u8_txpower, _pu8_outbuf, verbosity);  
 
     //record the values of grid chars 5 and 6 now, but they won't be used until packet type 2 is created
     grid5 = _pu8_locator[4];  
     grid6 = _pu8_locator[5];
-    // save the value for later when used in 2nd packet
+
     altitude_snapshot=_altitude;     
-    at_least_one_first_packet_sent=1;
-}
-    if (verbosity>=3) printf("creating U4B packet 2 \n");
+
+    if (DEVMODE && verbosity>=3) printf("creating U4B packet 2 \n");
     char CallsignU4B[7];
     char Grid_U4B[7];
-    uint8_t  power_U4B;
+    uint8_t power_U4B;
 
     // record the values of grid chars 5 and 6 now, but they won't be used until packet type 2 is created
     // grid5 = _pu8_locator[4];  
     // grid6 = _pu8_locator[5];
     // altitude_snapshot=_pGPStime->_altitude;
             
-/* inputs:  _pu8_locator (6 char grid)
-            _temp_in_Celsius
-            _id13
-            _voltage
-*/    
-        // pick apart inputs
-      // char grid5 = _pu8_locator[4];  values of grid 5 and 6 were already set previously when packet 1 was created
-      //char grid6 = _pu8_locator[5];
-      // convert inputs into components of a big number
-        uint8_t grid5Val = grid5 - 'A';
-        uint8_t grid6Val = grid6 - 'A';
-        uint16_t altFracM =  round((double)altitude_snapshot/ 20);     
+    // inputs:  
+    // _pu8_locator (6 char grid)
+    // _temp_in_Celsius
+    // _id13
+    // _voltage
 
-     // convert inputs into a big number
-        uint32_t val = 0;
-        val *=   24; val += grid5Val;
-        val *=   24; val += grid6Val;
-        val *= 1068; val += altFracM;
-                // extract into altered dynamic base
-        uint8_t id6Val = val % 26; val = val / 26;
-        uint8_t id5Val = val % 26; val = val / 26;
-        uint8_t id4Val = val % 26; val = val / 26;
-        uint8_t id2Val = val % 36; val = val / 36;
-        uint8_t id2Val = val % 36; val = val / 36;
-        // convert to encoded CallsignU4B
-        char id2 = EncodeBase36(id2Val);
-        char id4 = 'A' + id4Val;
-        char id5 = 'A' + id5Val;
-        char id6 = 'A' + id6Val;
+    // pick apart inputs
+    // char grid5 = _pu8_locator[4];  values of grid 5 and 6 were already set previously when packet 1 was created
+    // char grid6 = _pu8_locator[5];
+    // convert inputs into components of a big number
+    uint8_t grid5Val = grid5 - 'A';
+    uint8_t grid6Val = grid6 - 'A';
+    uint16_t altFracM =  round((double)altitude_snapshot/ 20);     
 
-        //string{ id13[0], id2, id13[1], id4, id5, id6 };
-        CallsignU4B[0] =  _txSched.id13[0];   
-        CallsignU4B[1] =  id2;
-        CallsignU4B[2] =  _txSched.id13[1];
-        CallsignU4B[3] =  id4;
-        CallsignU4B[4] =  id5;
-        CallsignU4B[5] =  id6;
-        CallsignU4B[6] =  0;
+    // convert inputs into a big number
+    uint32_t val = 0;
+    val *=   24; val += grid5Val;
+    val *=   24; val += grid6Val;
+    val *= 1068; val += altFracM;
+    // extract into altered dynamic base
+    uint8_t id6Val = val % 26; val = val / 26;
+    uint8_t id5Val = val % 26; val = val / 26;
+    uint8_t id4Val = val % 26; val = val / 26;
+    uint8_t id2Val = val % 36; val = val / 36;
+    uint8_t id2Val = val % 36; val = val / 36;
+    // convert to encoded CallsignU4B
+    char id2 = EncodeBase36(id2Val);
+    char id4 = 'A' + id4Val;
+    char id5 = 'A' + id5Val;
+    char id6 = 'A' + id6Val;
 
-        /* inputs:  
-            _pu8_locator (6 char grid)
-            _temp_in_Celsius
-            _id13
-            _voltage
-        */    
-        /* outputs :    
-                char CallsignU4B[6]; 
-                char Grid_U4B[7]; 
-                uint8_t  power_U4B;
-                */
-        // parse input presentations
-        double tempC   = _txSched.temp_in_Celsius;
-        double voltage = _txSched.voltage;
-        // map input presentations onto input radix (numbers within their stated range of possibilities)
+    //string{ id13[0], id2, id13[1], id4, id5, id6 };
+    CallsignU4B[0] =  _txSched.id13[0];   
+    CallsignU4B[1] =  id2;
+    CallsignU4B[2] =  _txSched.id13[1];
+    CallsignU4B[3] =  id4;
+    CallsignU4B[4] =  id5;
+    CallsignU4B[5] =  id6;
+    CallsignU4B[6] =  0;
 
-        //**************
-        // handle possible illegal range (double wrap on tempC?). or should it clamp at the bounds?
-        // uint8_t tempCNum      = tempC - -50;
-        uint8_t tempCNum      = ((uint8_t) tempC - -50) % 90;
-        uint8_t voltageNum    = ((uint8_t)round(((voltage * 100) - 300) / 5) + 20) % 40;
-        // FIX! encoding # of satelites into knots
-        uint8_t speedKnotsNum = _pTX->_p_oscillator->_pGPStime->_time_data.sat_count;   
-        // handle possible illegal (0-41 legal range). 
-        // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
-        if (speedKnotsNum > 41) speedKnotsNum = 41;
-        //****************
-        
-        // kevin old code since this isn't 0 or 1 
-        // it should really check zero. don't want to say valid if dead reckoning fix? (6)
-        uint8_t gpsValidNum   = _pTX->_p_oscillator->_pGPStime->_time_data._u8_is_solution_active;
-        gpsValidNum=1; //changed sept 27 2024. because the traquito site won't show the 6 char grid if this bit is even momentarily off. Anyway, redundant cause sat count is sent as knots
-        // shift inputs into a big number
-        val = 0;
-        val *= 90; val += tempCNum;
-        val *= 40; val += voltageNum;
-        val *= 42; val += speedKnotsNum;
-        val *=  2; val += gpsValidNum;
-        // standard telemetry (1 for the 2nd U4B packet, 0 for "Extended TELEN")
-        val *=  2; val += 1;          
+    /* inputs:  
+        _pu8_locator (6 char grid)
+        _temp_in_Celsius
+        _id13
+        _voltage
+    */    
+    /* outputs :    
+            char CallsignU4B[6]; 
+            char Grid_U4B[7]; 
+            uint8_t  power_U4B;
+            */
+    // parse input presentations
+    double tempC   = _txSched.temp_in_Celsius;
+    double voltage = _txSched.voltage;
+    // map input presentations onto input radix (numbers within their stated range of possibilities)
 
-        // unshift big number into output radix values
-        uint8_t powerVal = val % 19; val = val / 19;
-        uint8_t g4Val    = val % 10; val = val / 10;
-        uint8_t g3Val    = val % 10; val = val / 10;
-        uint8_t g2Val    = val % 18; val = val / 18;
-        uint8_t g1Val    = val % 18; val = val / 18;
-        // map output radix to presentation
-        char g1 = 'A' + g1Val;
-        char g2 = 'A' + g2Val;
-        char g3 = '0' + g3Val;
-        char g4 = '0' + g4Val;
-     
-        Grid_U4B[0] = g1; // = string{ g1, g2, g3, g4 };
-        Grid_U4B[1] = g2;
-        Grid_U4B[2] = g3;
-        Grid_U4B[3] = g4;
-        Grid_U4B[4] = 0;
+    //**************
+    // handle possible illegal range (double wrap on tempC?). or should it clamp at the bounds?
+    // uint8_t tempCNum      = tempC - -50;
+    uint8_t tempCNum      = ((uint8_t) tempC - -50) % 90;
+    uint8_t voltageNum    = ((uint8_t)round(((voltage * 100) - 300) / 5) + 20) % 40;
+    // FIX! encoding # of satelites into knots
+    uint8_t speedKnotsNum = _pTX->_p_oscillator->_pGPStime->_time_data.sat_count;   
+    // handle possible illegal (0-41 legal range). 
+    // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
+    if (speedKnotsNum > 41) speedKnotsNum = 41;
+    //****************
+    
+    // kevin old code since this isn't 0 or 1 
+    // it should really check zero. don't want to say valid if dead reckoning fix? (6)
+    uint8_t gpsValidNum   = _pTX->_p_oscillator->_pGPStime->_time_data._u8_is_solution_active;
+    gpsValidNum=1; //changed sept 27 2024. because the traquito site won't show the 6 char grid if this bit is even momentarily off. Anyway, redundant cause sat count is sent as knots
+    // shift inputs into a big number
+    val = 0;
+    val *= 90; val += tempCNum;
+    val *= 40; val += voltageNum;
+    val *= 42; val += speedKnotsNum;
+    val *=  2; val += gpsValidNum;
+    // standard telemetry (1 for the 2nd U4B packet, 0 for "Extended TELEN")
+    val *=  2; val += 1;          
+
+    // unshift big number into output radix values
+    uint8_t powerVal = val % 19; val = val / 19;
+    uint8_t g4Val    = val % 10; val = val / 10;
+    uint8_t g3Val    = val % 10; val = val / 10;
+    uint8_t g2Val    = val % 18; val = val / 18;
+    uint8_t g1Val    = val % 18; val = val / 18;
+    // map output radix to presentation
+    char g1 = 'A' + g1Val;
+    char g2 = 'A' + g2Val;
+    char g3 = '0' + g3Val;
+    char g4 = '0' + g4Val;
+ 
+    Grid_U4B[0] = g1; // = string{ g1, g2, g3, g4 };
+    Grid_U4B[1] = g2;
+    Grid_U4B[2] = g3;
+    Grid_U4B[3] = g4;
+    Grid_U4B[4] = 0;
 
     power_U4B=valid_dbm[powerVal];
 

@@ -35,7 +35,8 @@
 // Adafruit libraries created by many
 // arduino-pico core https://github.com/earlephilhower/arduino-pico
 // JTEncode library: https://github.com/etherkit/JTEncode
-// https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png// TinyGPSPlus library: //https://github.com/mikalhart/TinyGPSPlus
+// https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png
+// TinyGPSPlus library: //https://github.com/mikalhart/TinyGPSPlus
 // Time library: //https://github.com/PaulStoffregen/Time
 // Si5351 programming: based on work by: Kazuhisa “Kazu” Terasaki AG6NS
 // U4B telemetry protocol defined by Hans Summers G0UPL
@@ -59,7 +60,7 @@
 #include <avr/dtostrf.h>
 
 // These are in arduino-pio core
-// see https://github.com/earlephilhower/arduino-pico/tree/master/libraries
+// https://github.com/earlephilhower/arduino-pico/tree/master/libraries
 #include <SPI.h>
 #include <Wire.h>
 //**************************
@@ -82,8 +83,8 @@ Support all satellite groups
 
 Provides compact and easy-to-use methods for extracting position, date, time, altitude, speed, and course from consumer GPS devices.
 
-TinyGPSPlus’s api is considerably simpler to use than TinyGPS,
-and the new library can extract arbitrary data from any of the myriad NMEA sentences out there, even proprietary ones.
+TinyGPSPlus’s api is considerably simpler to use than TinyGPS
+Can extract arbitrary data from any of the myriad NMEA sentences out there.
 */
 //**************************
 
@@ -114,7 +115,7 @@ and the new library can extract arbitrary data from any of the myriad NMEA sente
 // https://github.com/adafruit/Adafruit_sensor
 // they have accelerometer, gyroscope, magnetometer, humidity sensors, light?
 
-// old
+// don't need BMP085 ?
 // Requires the https://github.com/adafruit/Adafruit_BusIO library for I2C abstraction
 // #include <Adafruit_BMP085.h> // https://github.com/adafruit/Adafruit-BMP085-Library
 
@@ -122,7 +123,6 @@ and the new library can extract arbitrary data from any of the myriad NMEA sente
 #include <JTEncode.h> // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
 // in libraries: wget https://github.com/etherkit/JTEncode/archive/refs/heads/master.zip
 
-// not used here any more.
 // setTime() use moved to gps_functions.cpp
 // libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 // do we use minute() here?
@@ -142,40 +142,32 @@ and the new library can extract arbitrary data from any of the myriad NMEA sente
 // const is typed, #define macros are not.
 // const is scoped by C block, #define applies to a file (compilation unit)
 // const is most useful with parameter passing.
-// If you see const used on a prototype with pointers, you know it is safe to pass your array or struct because the function will not alter it. No const and it can.
+// If you see const used on a prototype with pointers, 
+// you know it is safe to pass your array or struct because the function will not alter it. 
+// No const and it can.
 // example: strcpy()
-// Apply "const-ness" to function prototypes at the outset.
 
-/*
-https://arduino-pico.readthedocs.io/en/latest/serial.html
+// https://arduino-pico.readthedocs.io/en/latest/serial.html
+// Arduino-Pico core implements a software-based Serial-over-USB port using the USB ACM-CDC model
+// Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate,
+// this rate is ignored since it is USB-based.
+// Be aware that this USB Serial port is responsible for resetting the RP2040 during the upload process,
+// following the Arduino standard of 1200bps = reset to bootloader).
 
-Arduino-Pico core implements a software-based Serial-over-USB port using the USB ACM-CDC model
-Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate,
-this rate is ignored since it is USB-based.
-Be aware that this USB Serial port is responsible for resetting the RP2040 during the upload process,
-following the Arduino standard of 1200bps = reset to bootloader).
-*/
 
-/*
-The RP2040 provides two hardware-based UARTS with configurable pin selection.
-Serial1 is UART0, and Serial2 is UART1.
-FIX! should we get a bigger buffer to avoid missing ATGM336 NMEA sentences?
-The size of the receive FIFO may also be adjusted from the default 32 bytes by using the setFIFOSize call prior to calling begin()
-    Serial1.setFIFOSize(128);
-    Serial1.begin(baud);
-
-The FIFO is normally handled via an interrupt, which reduced CPU load and makes it less likely to lose characters.
-For applications where an IRQ driven serial port is not appropriate, use setPollingMode(true) before calling begin()
-    Serial1.setPollingMode(true);
-    Serial1.begin(300)
-*/
+// The RP2040 provides two hardware-based UARTS with configurable pin selection.
+// Serial1 is UART0, and Serial2 is UART1.
+// FIX! should we get a bigger buffer to avoid missing ATGM336 NMEA sentences?
+// The size of the receive FIFO can be adjusted from the default 32 bytes with setFIFOSize call prior to calling begin()
+//     Serial1.setFIFOSize(128);
+//     Serial1.begin(baud);
+// 
+// The FIFO is normally handled via an interrupt, which reduced CPU load and makes it less likely to lose characters.
+// For applications where an IRQ driven serial port is not appropriate, use setPollingMode(true) before calling begin()
+//     Serial1.setPollingMode(true);
 
 const int Si5351Pwr=4;
 const int BattPin=A3;
-
-// FIX! does nothing?
-#define Si5351ON
-#define Si5351OFF   vfo_turn_off()
 
 //******************************* CONFIG **********************************
 // FIX! are these used now? remnants of APRS messaging
@@ -184,35 +176,19 @@ char    comment[46] = "tracker 1.0";
 char    StatusMessage[50] = "tracker 1.0";
 
 
-//******************************  HF (WSPR) CONFIG *************************************
-char hf_call[7] = "NOCALL";// DO NOT FORGET TO CHANGE YOUR CALLSIGN
-
-// const unsigned long WSPR_DEFAULT_FREQ=10140200UL; //30m band
-const unsigned long WSPR_DEFAULT_FREQ=14097100UL; //20m band
-// const unsigned long WSPR_DEFAULT_FREQ=18106100UL; //17M band
-// const unsigned long WSPR_DEFAULT_FREQ=21096100UL; //15m band
-// const unsigned long WSPR_DEFAULT_FREQ=24926100UL; //12M band
-// const unsigned long WSPR_DEFAULT_FREQ=28126100UL; //10m band
-// for all bands -> http://wsprnet.org/drupal/node/7352
-
-// Supported modes, default HF mode is WSPR
-enum mode {MODE_WSPR};
-enum mode cur_mode = MODE_WSPR; // default HF mode
-
 // #define DEVMODE // Development mode. Uncomment to enable for debugging.
 boolean DEVMODE = true;
 
 //******************************  APRS SETTINGS (old)****************************
-boolean  aliveStatus = true; //for tx status message on first wake-up just once.
-static char telemetry_buff[100];// telemetry buffer
-uint16_t TxCount = 1; //increase +1 after every APRS transmission
+char telemetry_buff[100] = { 0 |;  // telemetry buffer
+uint16_t Tx_0_cnt = 0;  // increase +1 after every callsign tx
+uint16_t Tx_1_cnt = 0;  // increase +1 after every telemetry tx
+uint16_t Tx_2_cnt = 0;  // increase +1 after every telen1 tx
+uint16_t Tx_3_cnt = 0;  // increase +1 after every telen2 tx
 
 //******************************  HF SETTINGS   *********************************
-const int WSPR_TONE_SPACING=146; // ~1.46 Hz
-const int WSPR_DELAY=683;        // Delay value for WSPR
-
-// int HF_CORRECTION=-13000  // Change this for your ref osc
-int HF_CORRECTION=0;
+const int WSPR_TONE_SPACING=146;  // ~1.46 Hz
+const int WSPR_DELAY=683;         // Delay value for WSPR
 
 // Global variables
 unsigned long hf_freq;
@@ -225,9 +201,8 @@ uint16_t tone_delay, tone_spacing;
 volatile bool proceed = false;
 
 //******************************  GPS SETTINGS   *********************************
-int16_t GpsInvalidTime=0;
-int16_t TelemetryInvalidTime=0;
-int16_t SensorIvalidTime=0;
+int16_t GpsInvalidCnt=0;
+int16_t TelemetryBuffInvalidCnt=0;
 
 // gps_functions.cpp refers to this
 TinyGPSPlus gps;
@@ -236,7 +211,6 @@ TinyGPSPlus gps;
 
 //*********************************
 // in AdaFruit_I2CDevice.h
-// theWire The I2C bus to use, defaults to &Wire
 const int BMP280_I2C1_SDA_PIN=2;
 const int BMP280_I2C1_SCL_PIN=3;
 #include "bmp_functions.h"
@@ -314,6 +288,9 @@ uint32_t XMIT_FREQUENCY=0;
 //*********************************
 absolute_time_t loop_us_start = 0;
 absolute_time_t loop_us_end = 0;
+
+absolute_time_t gps_us_start = 0
+
 int64_t loop_us_elapsed;
 int64_t loop_ms_elapsed;
 
@@ -326,25 +303,22 @@ void setup() {
 
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-    // FIX! why is this commented out?
-    // pinMode(Si5351Pwr, OUTPUT);
+    // FIX! why was this commented out?
+    pinMode(Si5351Pwr, OUTPUT);
     pinMode(GpsPwr, OUTPUT);
-    // FIX! why is this commented out?
-    // pinMode(BattPin, INPUT);
+    // FIX! why was this commented out?
+    pinMode(BattPin, INPUT);
     analogReadResolution(12);
 
     GpsOFF();
-    Si5351OFF;
+    vfo_turn_off()
+
     GpsINIT();
     bmp_init();
+
     // FIX! why is this commented out?
     // pinMode(BattPin, INPUT);
     analogReadResolution(12);
-
-    GpsOFF();
-    Si5351OFF;
-    GpsINIT();
-    bmp_init();
 
     //**********************
     Serial.begin(115200);
@@ -419,6 +393,8 @@ char _clock_speed[4] = { 0 };
 char _U4B_chan[4] = { 0 };
 char _Band[3] = { 0 }; // string with 10, 12, 15, 17, 20 legal. null at end
 char _tx_high[2] = { 0 }; // 0 is 2mA si5351. 1 is 8mA si5351
+char _devmode[2] = { 0 }; 
+char _correction[6] = { 0 }; 
 
 /*
 Verbosity:
@@ -445,45 +421,52 @@ float     WsprBattMin = 0.0;// min Volts for HF (WSPR) radio module to transmit 
 
 float     HighVolt = 9.9;   // GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
 
+uint64_t GpsTimeToLastFix; // milliseconds
 void loop() {
     // copied from loop_us_end while in the loop (at bottom)
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
 
     Watchdog.reset();
     updateStatusLED();
-    TelemetryInvalidTime++;
+    TelemetryBuffInvalidCnt++;
 
     if ( !(GpsFirstFix && (readBatt() > BattMin)) || (!GpsFirstFix && (readBatt() > GpsMinVolt)) )) {
         sleepSeconds(BattWait);
     } else {
+        //*********************
         // FIX! what does this do? Just get time? Is unload of sentences interrupt-driven?
         // unload for 2 secs to make sure we get 1 sec broadcasts? (also: what about corruption if buffer overrun?)
         // does CRC check cover that? so okay if we have overrun?
-        updateGpsData(2000);
+        updateGpsDataAndTime(2000);
         gpsDebug();
 
         if (gps.location.isValid() && gps.location.age() < 1000) {
-            GpsInvalidTime=0;
+            GpsInvalidCnt=0;
             setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
         } else {
-            // FIX! at what rate is this incremented? what looks at it?
-            GpsInvalidTime++;
+            // FIX! at what rate is this incremented? ..once per loop iteration (time varies)
+            GpsInvalidCnt++;
             // FIX! instead of looking for not 2000, look for valid years
             // why doesn't this get included in valid gps fix?
-            // if (gps.date.year() != 2000) setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
-            if (gps.date.year() > 2000 && gps.date.year < 2030) setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
+            if (gps.date.year() >= 2024 && gps.date.year <= 2034) setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
             else setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
-            if(GpsInvalidTime > GpsResetTime){
+            if(GpsInvalidCnt > GpsResetTime){
+                // FIX! have to send cold gps reset, in case ephemeris is corrupted? since vbat is always there
+                // otherwise this is a warm reset?
                 GpsOFF();
                 Watchdog.reset();
                 sleep_ms(1000);
-                GpsON();
-                // Don't wait here for stuff to arrive from gps
-                // sleep_ms(5000);
-                GpsInvalidTime=0;
+                GpsON(true); // also do gps cold reset
+                GpsInvalidCnt=0;
+                setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
             }
         }
+        updateStatusLED();
+
+        //*********************
+        // some detail on TinyGPS. precision?
+        // https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps
 
         // FIX! why does isUpdated() get us past here?
         if (! (gps.location.isValid() && (gps.location.age() < 1000 || gps.location.isUpdated())) ) {
@@ -496,19 +479,40 @@ void loop() {
             }
             else {
                 GpsFirstFix = true;
-                GpsInvalidTime=0;
+                // gps_us_start is reset every time we turn the gps on
+                // cleared every time we turn it off (don't care)
+                // Should this is also cleared when we turn gps off? no?
+                // floor divide to get milliseconds
+                GpsTimeToLastFix = ( absolute_time_diff_us(gps_us_start, get_absolute_time()) ) / 1000ULL;
+                GpsInvalidCnt=0;
 
-                // don't updateTelemetry buffer if there is an HF (WSPR) TX window soon
+                // don't updateTelemetryBuff buffer if there is an WSPR TX window soon (any if config)
                 // since we'll grab info from that buffer in sendWSPR ??
                 // maybe make it less than 50
                 
-                // FIX! shouldn't change it during the whole plus 2 minute either since telemetry is going to use it 
-                // only blocks for 120 secs + 10 secs (out of 10 minute cycle)
-                if ( (timeStatus() == timeSet) && 
-                     (alignMinute(-1) == minute() && (second < 50)) {
-                    // FIX! this should check if gps is valid before updating
-                    updateTelemetry();
-                    TelemetryInvalidTime = 0;
+                // we can update the telemetry buffer any minute we're not tx'ing
+                bool updateTelemetryBuff = false;
+                // timeStatus is in Time library
+                if ( (timeStatus() != timeSet) {
+                    updateTelemetryBuff = false;
+                }
+                else {
+                    if (alignMinute(0) || alignMinute(2)) updateTelemetryBuff = false;
+
+                    if ( (_TELEN_config[0]!='-' || _TELEN_config[1]!='-') ||
+                         (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
+                        if (alignMinute(4)) updateTelemetryBuff = false;
+                    }
+
+                    if ( (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
+                        if (alignMinute(6)) updateTelemetryBuff = false;
+                    }
+                }
+
+                if (updateTelemetryBuff) {
+                    // FIX! this should check if gps is valid before updating? 
+                    updateTelemetryBuff();
+                    TelemetryBuffInvalidCnt = 0;
                     // freeMem();
                 }
 
@@ -568,8 +572,8 @@ void loop() {
 
     if (DEVMODE && verbosity>=1) {
         // FIX! should these be the data from the telemetry buffer?
-        // maybe show GpsInvalidTime also? how old are they
-        // maybe a TelemetryInvalidTime..cleared when we load it?
+        // maybe show GpsInvalidCnt also? how old are they
+        // maybe a TelemetryBuffInvalidCnt..cleared when we load it?
         StampPrintf("Temp: %.1f  Volts: %0.2f  Altitude: %0.0f  Satellite count: %d grid6: %s\n",
             tempU,volts,_altitude, sat_count, grid6);
     }
@@ -631,7 +635,7 @@ void syncAndSendWspr(int messageType) {
         Serial.println(hf_loc);
     }
 
-    int align_minute = alignMinute()
+    int align_minute = alignMinute(messageType)
     // this should be fine even if we wait a long time
     while (! (align_minute = minute() && second() != 0) {
         Watchdog.reset();
@@ -651,7 +655,7 @@ bool GpsIsOn = false;
 
 void sleepSeconds(int sec) {
     // always make sure tx is off?
-    Si5351OFF;
+    vfo_turn_off();
     Serial.flush();
     for (int i = 0; i < sec; i++) {
         // power off gps depending on voltage, after first fix
@@ -714,7 +718,7 @@ void updatePosition(int high_precision, char *dao) {
 }
 
 
-void updateTelemetry() {
+void updateTelemetryBuff() {
     // FIX! why does isUpdated() get us past here?
     if (! (gps.location.isValid() && (gps.location.age() < 1000 || gps.location.isUpdated())) ) {
         return
@@ -762,9 +766,6 @@ void updateTelemetry() {
     // telemetry_buff[31] = ' '; float pressure = 0.f; //Pa to hPa
     dtostrf(pressure, 7, 2, telemetry_buff + 32);
 
-    // FIX! don't need anymore?
-    // Si5351OFF;
-
     telemetry_buff[39] = 'h';
     telemetry_buff[40] = 'P';
     telemetry_buff[41] = 'a';
@@ -788,43 +789,6 @@ void updateTelemetry() {
 }
 
 //****************************************************
-void sendLocation() {
-    if (DEVMODE) Serial.println(F("Location sending with comment");
-    // FIX! how do we end the telemetry_buff
-    int GEOFENCE_APRS_frequency=0;
-
-    // vfo_set_drive_strength(APRS_TX_CLK_NUM, SI5351A_CLK_IDRV_8MA);
-    // vfo_turn_on(APRS_TX_CLK_NUM);
-    // vfo_set_freq_x16(APRS_TX_CLK_NUM, (GEOFENCE_APRS_frequency << PLL_CALCULATION_PRECISION));
-    delay(500);
-    // FIX! how do we end the telemetry_buff
-    // APRS_sendLoc(telemetry_buff);
-    delay(10);
-    vfo_turn_off();
-    Serial.print(F("APRS Location sent (Freq: "));
-    Serial.print(GEOFENCE_APRS_frequency);
-    Serial.print(F(") - "));
-    Serial.println(TxCount);
-    TxCount++;
-}
-
-void sendStatus() {
-    // FIX! how do we end the telemetry_buff
-    int GEOFENCE_APRS_frequency=0;
-
-    // vfo_set_drive_strength(APRS_TX_CLK_NUM, SI5351A_CLK_IDRV_8MA);
-    // vfo_turn_on(APRS_TX_CLK_NUM);
-    // vfo_set_freq_x16(APRS_TX_CLK_NUM, (GEOFENCE_APRS_frequency << PLL_CALCULATION_PRECISION));
-    delay(500);
-    // APRS_sendStatus(StatusMessage);
-    delay(10);
-    vfo_turn_off();
-    Serial.print(F("Status sent (Freq: "));
-    Serial.print(GEOFENCE_APRS_frequency);
-    Serial.print(F(") - "));
-    Serial.println(TxCount);
-    TxCount++;
-}
 
 float readBatt() {
   int adc_val = 0;
@@ -885,22 +849,28 @@ void zeroTimerSetPeriodMs(float ms){
 void sendWSPR(int messageType, bool vfoOffWhenDone) {
     Watchdog.reset();
     if (messageType < 0 || messageType > 3) {
-        return
+        if (DEVMODE) printf("bad messageType %d ..ignoring", messageType);
+        return;
     }
 
     // FIX! make the drive strength conditional on the config
     // we could even make the differential dependent on the config
     
-    vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
-    vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
+    // this is done in the vfo_turn_on. shouldn't need to do again
+    // vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
+    // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
     // turns on both tx clk. The first time, has pll setup already?
     vfo_turn_on(WSPR_TX_CLK_NUM);
-    uint8_t i;
 
     // FIX! use the u4b channel freq
     hf_freq = XMIT_FREQUENCY;
+    if (atoi(_correction) != 0) {
+        // this will be a floor divide
+        hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL)
+    }
 
-    if (DEVMODE) printf("WSPR freq: %lu\n", hf_freq);
+    // if (DEVMODE) printf("WSPR desired freq: %lu used hf_freq %lu with correction %s\n", 
+    //    XMIT_FREQUENCY, hf_freq, _correction);
 
     symbol_count = WSPR_SYMBOL_COUNT; // From the library defines
     tone_spacing = WSPR_TONE_SPACING;
@@ -909,6 +879,7 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
 
     zeroTimerSetPeriodMs(tone_delay);
 
+    uint8_t i;
     for(i = 0; i < symbol_count; i++)
     {
         uint32_t freq_x16 = 
