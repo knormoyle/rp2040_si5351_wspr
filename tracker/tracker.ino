@@ -183,14 +183,6 @@ const int BattPin=A3;
 char    comment[46] = "tracker 1.0";
 char    StatusMessage[50] = "tracker 1.0";
 
-//*************************************************************************
-uint16_t  BeaconWait=50;  // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
-
-uint16_t  BattWait=1;     // seconds sleep if super capacitors/batteries are below BattMin (important if power source is solar panel)
-float     BattMin=0.0;    // min Volts to wake up.
-float     GpsMinVolt=0.0; // min Volts for GPS to wake up. (important if power source is solar panel)
-float     WsprBattMin=0.0;// min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
-float     HighVolt=9.9;   // GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
 
 //******************************  HF (WSPR) CONFIG *************************************
 char hf_call[7] = "NOCALL";// DO NOT FORGET TO CHANGE YOUR CALLSIGN
@@ -205,7 +197,7 @@ const unsigned long WSPR_DEFAULT_FREQ=14097100UL; //20m band
 
 // Supported modes, default HF mode is WSPR
 enum mode {MODE_WSPR};
-enum mode cur_mode = MODE_WSPR; //default HF mode
+enum mode cur_mode = MODE_WSPR; // default HF mode
 
 // #define DEVMODE // Development mode. Uncomment to enable for debugging.
 boolean DEVMODE = true;
@@ -233,14 +225,6 @@ uint16_t tone_delay, tone_spacing;
 volatile bool proceed = false;
 
 //******************************  GPS SETTINGS   *********************************
-int16_t   GpsResetTime=1800; // timeout for reset if GPS is not fixed
-
-// FIX! removed all geofence, not used for wspr
-
-boolean GpsFirstFix = false; //do not change this
-boolean ublox_high_alt_mode_enabled = false; //do not change this
-
-// how many loop iterations where since it's been grabbed to the buffer?
 int16_t GpsInvalidTime=0;
 int16_t TelemetryInvalidTime=0;
 int16_t SensorIvalidTime=0;
@@ -353,6 +337,14 @@ void setup() {
     Si5351OFF;
     GpsINIT();
     bmp_init();
+    // FIX! why is this commented out?
+    // pinMode(BattPin, INPUT);
+    analogReadResolution(12);
+
+    GpsOFF();
+    Si5351OFF;
+    GpsINIT();
+    bmp_init();
 
     //**********************
     Serial.begin(115200);
@@ -426,6 +418,7 @@ char _TELEN_config[5] = { 0 };
 char _clock_speed[4] = { 0 };
 char _U4B_chan[4] = { 0 };
 char _Band[3] = { 0 }; // string with 10, 12, 15, 17, 20 legal. null at end
+char _tx_high[2] = { 0 }; // 0 is 2mA si5351. 1 is 8mA si5351
 
 /*
 Verbosity:
@@ -441,21 +434,32 @@ Verbosity:
 9: same as 8
 */
 
+//*************************************************************************
+uint16_t  BeaconWait = 50;  // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
+uint16_t  BattWait = 1;     // seconds sleep if super capacitors/batteries are below BattMin
+
+// FIX! should this be non-zero?
+float     GpsMinVolt = 0.0; // min Volts for GPS to wake up.
+float     BattMin = 0.0;    // min Volts to wake up.
+float     WsprBattMin = 0.0;// min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
+
+float     HighVolt = 9.9;   // GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
+
 void loop() {
     // copied from loop_us_end while in the loop (at bottom)
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
 
     Watchdog.reset();
     updateStatusLED();
-
     TelemetryInvalidTime++;
-    SensorInvalidTime++;
 
     if ( !(GpsFirstFix && (readBatt() > BattMin)) || (!GpsFirstFix && (readBatt() > GpsMinVolt)) )) {
         sleepSeconds(BattWait);
     } else {
-        // FIX! what does this do? Just get time?
-        updateGpsData(1000);
+        // FIX! what does this do? Just get time? Is unload of sentences interrupt-driven?
+        // unload for 2 secs to make sure we get 1 sec broadcasts? (also: what about corruption if buffer overrun?)
+        // does CRC check cover that? so okay if we have overrun?
+        updateGpsData(2000);
         gpsDebug();
 
         if (gps.location.isValid() && gps.location.age() < 1000) {
@@ -473,13 +477,11 @@ void loop() {
             if(GpsInvalidTime > GpsResetTime){
                 GpsOFF();
                 Watchdog.reset();
-                delay(1000);
+                sleep_ms(1000);
                 GpsON();
-                // FIX! wait some for maybe gps hot fix to come on. 10 secs?
-                delay(5000);
+                // Don't wait here for stuff to arrive from gps
+                // sleep_ms(5000);
                 GpsInvalidTime=0;
-                if (gps.date.year() > 2000 && gps.date.year < 2030) setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
-                else setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
             }
         }
 
@@ -496,40 +498,6 @@ void loop() {
                 GpsFirstFix = true;
                 GpsInvalidTime=0;
 
-                // FIX! it should depend on the channel starting minute - 1 (modulo 10)
-                // preparations for HF starts one minute before TX time 
-                // at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
-                if (DEVMODE) printf("timeStatus():%u minute():%u\n", timeStatus(), minute());
-
-                // FIX! why not look at seconds here? Oh, it will stall until lined up on secs below
-                bool doSerialFlush = false;
-                if (
-                    (readBatt() > WsprBattMin) && 
-                    (timeStatus() == timeSet) && u4bStartMinute()
-                    ) {
-
-                    // could we be too close to the start of sending? for this off transition? 
-                    GpsOFF();
-                    // FIX! change the message sent depending on where we are relative to start minute?
-                    // FIX! add parameter for 1, 2, 3, 4 consecutive U4B Tx
-                    // GPS will stay off for all
-                    syncAndSendWspr(1)
-                    // syncAndSendWspr(2)
-                    // FIX! when do we grab/buffer the extra sensor data? grab it during updateTelemetry?
-                    // maybe have updateTelenSensors() ?
-
-                    // syncAndSendWspr(3)
-                    // syncAndSendWspr(4)
-                    if (DEVMODE) Serial.println(F("WSPR callsign Tx sent"));
-                    // FIX! should we sneak in the 2nd Tx here? 
-
-                    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-                    GpsON();
-                    // FIX! is it okay to flush after Tx but before the telemetry Tx ?
-                    doSerialFlush = true;
-
-                }
-
                 // don't updateTelemetry buffer if there is an HF (WSPR) TX window soon
                 // since we'll grab info from that buffer in sendWSPR ??
                 // maybe make it less than 50
@@ -537,24 +505,68 @@ void loop() {
                 // FIX! shouldn't change it during the whole plus 2 minute either since telemetry is going to use it 
                 // only blocks for 120 secs + 10 secs (out of 10 minute cycle)
                 if ( (timeStatus() == timeSet) && 
-                    (!u4bStartMinuteP2 || (u4bStartMinute && (second < 50))) ) {
+                     (alignMinute(-1) == minute() && (second < 50)) {
                     // FIX! this should check if gps is valid before updating
                     updateTelemetry();
                     TelemetryInvalidTime = 0;
                     // freeMem();
                 }
-                if ( (timeStatus() == timeSet) && 
-                    (!(u4bStartMinuteP4 | u4bStartMinuteP6) || (u4bStartMinuteP2 && (second < 50))) ) {
-                    updateTelenSensors();
-                    SensorInvalidTime = 0;
+
+                // FIX! it should depend on the channel starting minute - 1 (modulo 10)
+                // preparations for HF starts one minute before TX time 
+                // at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
+                if (DEVMODE) printf("timeStatus():%u minute():%u\n", timeStatus(), minute());
+
+                // FIX! why not look at seconds here? Oh, it will stall until lined up on secs below
+                // align to somewhere in the minute before the callsign starting minute
+                if ( (readBatt() > WsprBattMin) && 
+                     (timeStatus() == timeSet) && alignMinute(-1) ) {
+                    GpsOFF();
+                    // FIX! change the message sent depending on where we are relative to start minute?
+                    // FIX! add parameter for 1, 2, 3, 4 consecutive U4B Tx
+                    // GPS will stay off for all
+                    syncAndSendWspr(0)
+                    if (DEVMODE) {
+                        // we have 10 secs or so at the end of WSPR to get this off?
+                        Serial.println(F("WSPR callsign Tx sent"));
+                        Serial.flush();
+                    }
+                    // we don't loop around again caring about gps fix, because we've saved
+                    // telemetry (and sensor data in there) right before the callsign tx
+                    syncAndSendWspr(1)
+                    if (DEVMODE) {
+                        // we have 10 secs or so at the end of WSPR to get this off?
+                        Serial.println(F("WSPR telemetry Tx sent"));
+                        Serial.flush();
+                    }
+                    // have to send this if telen1 or telen2 is enabled
+                    if ( (_TELEN_config[0]!='-' || _TELEN_config[1]!='-') ||
+                         (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
+                        syncAndSendWspr(2)
+                        if (DEVMODE) {
+                            // we have 10 secs or so at the end of WSPR to get this off?
+                            Serial.println(F("WSPR telen1 Tx sent"));
+                            Serial.flush();
+                        }
+                    }
+                    // have to send this if telen2 is enabled
+                    if ( (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
+                        syncAndSendWspr(2)
+                        if (DEVMODE) {
+                            // we have 10 secs or so at the end of WSPR to get this off?
+                            Serial.println(F("WSPR telen2 Tx sent"));
+                            Serial.flush();
+                        }
+                    }
+
+                    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+                    GpsON();
                 }
-                // FIX! could this take more than 10 secs?
-                if (DEVMODE && doSerialFlush) Serial.flush();
             }
         }
     }
 
-    if (verbosity>=1) {
+    if (DEVMODE && verbosity>=1) {
         // FIX! should these be the data from the telemetry buffer?
         // maybe show GpsInvalidTime also? how old are they
         // maybe a TelemetryInvalidTime..cleared when we load it?
@@ -562,105 +574,105 @@ void loop() {
             tempU,volts,_altitude, sat_count, grid6);
     }
 
-    DoLogPrint();
-    //***************
-    // FIX ?? put in a conditional delay that depends on clock frequency
-    // faster cpu clock will want more delay? (won't affect the PIO block doing RF)
-    // time the loop
-
-    // static uint64_t to_us_since_boot    ( absolute_time_t t    )
-    // convert an absolute_time_t into a number of microseconds since boot.
-    //****************
+    // all StampPrintf are qualified by DEVMODE? Should _verbosity be forced to 0 if not DEVMODE?
+    if (DEVMODE) DoLogPrint();
 
     loop_us_end = get_absolute_time();
     loop_us_elapsed = absolute_time_diff_us(loop_us_start, loop_us_end);
     // floor divide to get milliseconds
     loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
-    if (verbosity>=5) {
-        if(0==(tick % 20)) { // every ~20 * 0.5 = 10 secs
+    if (DEVMODE && verbosity>=5) {
         StampPrintf("main/20: _Band %s loop_ms_elapsed: %d millisecs loop_us_start: %llu microsecs loop_us_end: %llu microsecs", 
-            _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
-        }
+                _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
     }
 
     // next start is this end
     loop_us_start = loop_us_end;
-    // will always 0 or greater? (unless bug with time)
-    /*
-    if ((loop_ms_elapsed < 500) && (loop_ms_elapsed > 0)) {
-        sleep_ms(500 - loop_ms_elapsed);
+}
+
+// -1 is returned if anything illegal
+// FIX! should check what caller does if -1
+void alignMinute (int offset) {
+    // offset can be -1, 0, 1, 2, 3, 4, 5, 6 (3 messages)
+    // if not one of those, set the start minute to -1?
+    // caller should detect that and not wait?
+    if (offset < 0 || offset > 6) {
+        offset = 0 
     }
-    */
+
+    // this should have been only set to be char strs 0, 2, 4, 6, or 8
+    int align_minute = atoi(_start_minute)
+    switch (align_minute) {
+        case 0: ;
+        case 2: ;
+        case 4: ;
+        case 6: ;
+        case 8: align_minute += offset ; 
+        default: align_minute = -1 ; break
+    }
+
+    // FIX! update to look at u4b channel config
+    return align_minute
 }
 
-void u4bStartMinute {
-    // FIX! update to look at u4b channel config
-    return ((minute() % 10 == 3) || (minute() % 10 == 7)) 
-}
+void syncAndSendWspr(int messageType) {
+    // messageType should be 0-3?
+    printf("will start WSPR messageType %d when aligned zero secs, currently %d secs\n", 
+        messageType, seconds());
 
-// telemetry
-void u4bStartMinuteP2 { // plus 2 minutes (modulo 10)
-    // FIX! update to look at u4b channel config
-    return ((minute() % 10 == 3) || (minute() % 10 == 7)) 
-}
-// telen1
-void u4bStartMinuteP4 { // plus 2 minutes (modulo 10)
-    // FIX! update to look at u4b channel config
-    return ((minute() % 10 == 3) || (minute() % 10 == 7)) 
-}
-// telen2
-void u4bStartMinuteP6 { // plus 2 minutes (modulo 10)
-    // FIX! update to look at u4b channel config
-    return ((minute() % 10 == 3) || (minute() % 10 == 7)) 
-}
-
-void syncAndSendWspr() {
-    printf("will start WSPR when aligned to the minute\n");
     // FIX! it should use the captured telemetry, not live gps
     GridLocator(hf_loc, gps.location.lat(), gps.location.lng());
     sprintf(hf_message, "%s %s", hf_call, hf_loc);
 
     if (DEVMODE) {
-        Serial.println(F("Digital HF Mode Preparing"));
+        Serial.println(F("WSPR messageType %d Preparing", messageType));
         Serial.print(F("Grid Locator: "));
         Serial.println(hf_loc);
     }
 
-    // HF transmission starts at minute 4, 8, 14, 18, 24, 28, 34, 38, 44, 48, 54 or 58
-    // FIX! start on the starting minute of the U4B channel
-    while (((minute() % 10 != 4) || (minute() % 10 != 8)) && second() != 0) {
+    int align_minute = alignMinute()
+    // this should be fine even if we wait a long time
+    while (! (align_minute = minute() && second() != 0) {
         Watchdog.reset();
-        delay(1);
+        // FIX! delay 1 sec? change to pico busy_wait_us()?
+        sleep_ms(1000)
+        // delay(1);
         updateStatusLED();
     }
 
-    if (DEVMODE) Serial.println(F("Digital HF Mode Sending..."));
-
+    if (DEVMODE) Serial.println(F("WSPR messageType %d Sending...", messageType));
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
-    sendWSPR();
+    sendWSPR(messageType);
     //HFSent=true;
 }
 
+bool GpsIsOn = false;
+
 void sleepSeconds(int sec) {
+    // always make sure tx is off?
     Si5351OFF;
     Serial.flush();
     for (int i = 0; i < sec; i++) {
-        // sleep gps after first fix
+        // power off gps depending on voltage, after first fix
         if (GpsFirstFix & (readBatt() < HighVolt)) GpsOFF();
         else if (!GpsFirstFix & (readBatt() < BattMin) GpsOFF();
+
+        Watchdog.reset();
+        uint32_t usec = time_us_32();
+        while ((time_us_32() - usec) < 1000000) {
+            updateStatusLED();
+            // FIX! should we unload/use GPS data during this?
+            // gps could be on or off, so no?
+            if (isGpsOn()) {
+                updateGpsData(1);
+                Serial.flush();
+            else {
+                sleep_us(1000000);
+            }
+        }
     }
-}
-
-Watchdog.reset();
-
-uint32_t usec = time_us_32();
-while ((time_us_32() - usec) < 1000000) {
-    updateStatusLED();
-}
-
-}
-Watchdog.reset();
+    Watchdog.reset();
 }
 
 
@@ -842,10 +854,6 @@ float readBatt() {
 
   // if (solar_voltage < 0.0f) solar_voltage = 0.0f;
   // if (solar_voltage > 9.9f) solar_voltage = 9.9f;
-  return solar_voltage;
-}
-
-#define WSPR_PWM_SLICE_NUM  4
 static pwm_config wspr_pwm_config;
 void PWM4_Handler(void) {
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
@@ -870,19 +878,28 @@ void zeroTimerSetPeriodMs(float ms){
 }
 
 //********************************************
-void sendWSPR() {
+// expected this is called at least 10 secs before starting minute
+// if not in the minute before starting minute, 
+// it will wait until the right starting minute (depends on messageType)
+// messageType can be 0, 1, 2, 3
+void sendWSPR(int messageType, bool vfoOffWhenDone) {
     Watchdog.reset();
+    if (messageType < 0 || messageType > 3) {
+        return
+    }
+
+    // FIX! make the drive strength conditional on the config
+    // we could even make the differential dependent on the config
+    
     vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
     vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
+    // turns on both tx clk. The first time, has pll setup already?
     vfo_turn_on(WSPR_TX_CLK_NUM);
-
-    // do we have to turn on the differential clock?
-    // they share a pll ? so the differential enable ifdef should handle that?
-    // vfo_turn_on(WSPR_TX_CLK_1_NUM);
     uint8_t i;
 
     // FIX! use the u4b channel freq
-    hf_freq = WSPR_DEFAULT_FREQ - 100 + (rand() % 200);
+    hf_freq = XMIT_FREQUENCY;
+
     if (DEVMODE) printf("WSPR freq: %lu\n", hf_freq);
 
     symbol_count = WSPR_SYMBOL_COUNT; // From the library defines
@@ -911,7 +928,11 @@ void sendWSPR() {
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     irq_set_enabled(PWM_IRQ_WRAP, false);
     irq_remove_handler(PWM_IRQ_WRAP, PWM4_Handler);
-    vfo_turn_off();
+
+    // FIX! leave on if we're going to do telemetry?
+    if (vfoOffWhenDone) {
+        vfo_turn_off();
+    }
     Watchdog.reset();
 }
 

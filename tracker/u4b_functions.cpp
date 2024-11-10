@@ -162,6 +162,7 @@ void process_chan_num()
             case 10: txBand = 11; break; // 10m
             default: txBand = 7;  break; // default to 20M in case of error cases
         }
+        // will be char 0, 2, 4, 6 or 8 only
         _start_minute[0] = '0' + (2 * ((txSlot + (txBand*2)) % 5));
     }
 }
@@ -216,6 +217,7 @@ if
         uint8_t id6Val = val % 26; val = val / 26;
         uint8_t id5Val = val % 26; val = val / 26;
         uint8_t id4Val = val % 26; val = val / 26;
+        uint8_t id2Val = val % 36; val = val / 36;
         uint8_t id2Val = val % 36; val = val / 36;
         // convert to encoded CallsignU4B
         char id2 = EncodeBase36(id2Val);

@@ -30,6 +30,7 @@ extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];
 extern char _Band[3]; // string with 10, 12, 15, 17, 20 legal. null at end
+extern char _tx_high[1]; // 0 is 2mA si5351. 1 is 8mA si5351
 
 
 // #include <string.h>
@@ -156,7 +157,7 @@ void user_interface(void) {
     // background
     // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
     for (;;) {
-        printf("%s%s\nEnter single char command: X, C, U, V, T, K, or A%s%s",
+        printf("%s%s\nEnter single char command: X, C, U, V, T, K, A, or P%s%s",
             UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
         // in case user setup menu entered during flight,
         // this will reboot after 60 secs
@@ -220,12 +221,18 @@ void user_interface(void) {
                     result = -1;
                 }
                 break;
+
             case 'A':
                 get_user_input("Enter Band (10,12,15,17,20): ", _Band, sizeof(_Band));
                 // redo channel selection if we change bands, since U4B definition changes per band
                 write_FLASH();
                 process_chan_num();
-                _u32_dialfreqhz = XMIT_FREQUENCY = init_rf_freq();
+                XMIT_FREQUENCY = init_rf_freq();
+                break;
+
+            case 'P':
+                get_user_input("Enter Tx power: (0 or 1) ", _tx_power, sizeof(_tx_power));
+                write_FLASH();
                 break;
 
             //********************
@@ -263,6 +270,7 @@ void read_FLASH(void) {
     strncpy(_clock_speed,  flash_target_contents+11, 3); _clock_speed[3] = 0;
     strncpy(_U4B_chan,     flash_target_contents+14, 3); _U4B_chan[3] = 0;
     strncpy(_Band,         flash_target_contents+17, 2); _Band[2] = 0;
+    strncpy(_tx_power,     flash_target_contents+19, 1); _tx_power[1] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
 
@@ -287,6 +295,7 @@ void write_FLASH(void) {
     strncpy(data_chunk+11, _clock_speed, 3);
     strncpy(data_chunk+14, _U4B_chan, 3);
     strncpy(data_chunk+17, _Band, 2);
+    strncpy(data_chunk+19, _tx_power, 1);
 
     // you could theoretically write 16 pages at once (a whole sector).
     // don't interrupt
@@ -411,6 +420,7 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
+
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
         printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s", RED, PLL_SYS_MHZ, NORMAL);
         strcpy(_clock_speed, "133");
@@ -425,7 +435,7 @@ int check_data_validity_and_set_defaults(void) {
         strcpy(_U4B_chan, "599");
         write_FLASH();
         process_chan_num();
-        _u32_dialfreqhz = XMIT_FREQUENCY = init_rf_freq();
+        XMIT_FREQUENCY = init_rf_freq();
         result = -1;
     }
     //****************
@@ -444,9 +454,16 @@ int check_data_validity_and_set_defaults(void) {
             // figure out the XMIT_FREQUENCY for new band, and set _32_dialfreqhz
             // have to do this whenever we change bands
             process_chan_num();
-            _u32_dialfreqhz = XMIT_FREQUENCY = init_rf_freq();
+            XMIT_FREQUENCY = init_rf_freq();
             result = -1;
             break;
+    }
+    if (_tx_power[0] != '0' && _tx_power[0] > '1') {
+        printf("%s\n_tx_power %s is not supported/legal, initting to 1\n%s",
+            RED, _tx_power, NORMAL);
+        strcpy(_tx_power, "1");
+        write_FLASH();
+        result = -1;
     }
     return result;
     //****************
