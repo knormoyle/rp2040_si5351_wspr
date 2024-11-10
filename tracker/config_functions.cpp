@@ -30,14 +30,17 @@ extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];
 extern char _Band[3]; // string with 10, 12, 15, 17, 20 legal. null at end
-extern char _tx_high[1]; // 0 is 2mA si5351. 1 is 8mA si5351
+extern char _tx_high[2]; // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _devmode[2]; 
+
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
 extern char _correction[6];  // parts per billion -3000 to 3000. default 0
 // traquito: 500 correction does  ~7 hz lower on 20M (14095.600 base freq)
 // traquito: 500 correction does ~14 hz lower on 10M (28124.600 base freq)
 
-
+// test only: 1 means you don't wait for starting minute from _U4B_channel ;
+// does wait for any 2 minute alignment though
+extern char _go_when_rdy[2] ; 
 
 // #include <string.h>
 // #include <ctype.h>
@@ -135,21 +138,6 @@ d
     printf("See the Wiki for more info.\n\n");
 }
 
-// Function that implements simple user interface via UART
-/* For every new config variable to be added to the interface:
-    1: create a global character array at top of main.c
-    2: add entry in read_FLASH()
-    3: add entry in write_FLASH()
-    4: add limit checking in check_data_validity()
-    5: add limit checking in check_data_validity_and_set_defaults()
-    6: add TWO entries in show_values() (to display name and value, and also to display which key is used to change it)
-    7: add CASE statement entry in user_interface()
-    8: Either do something with the variable locally in Main.c, or if needed elsewhere:
-        -- add a member to the GPStimeContext or WSPRbeaconContext structure
-        -- add code in main.c to move the data from the local _tag to the context structure
-        -- do something with the data elsewhere in the program
- */
-
 // called if keystroke from terminal on USB detected during operation.
 void user_interface(void) {
     int c;
@@ -163,7 +151,7 @@ void user_interface(void) {
     // background
     // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
     for (;;) {
-        printf("%s%s\nEnter single char command: X, C, U, V, T, K, A, or P%s%s",
+        printf("%s%s\nEnter single char command: X, C, U, V, T, K, A, P, D, R, G%s%s",
             UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
         // in case user setup menu entered during flight,
         // this will reboot after 60 secs
@@ -241,12 +229,24 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'D':
-                get_user_input("Enter DEVMODE to enale messaging: (0 or 1) ", _devmode, sizeof(_devmode));
+                get_user_input("Enter DEVMODE to enable messaging: (0 or 1) ", _devmode, sizeof(_devmode));
                 write_FLASH();
                 break;
             case 'R':
                 printf("Don't cause than approx. 43 hz 'correction' on a band. Effect varies per band?")
                 get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ", _correction, sizeof(_correction));
+                write_FLASH();
+                break;
+            case 'D':
+                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ", 
+                    _go_when_rdy, sizeof(_go_when_rdy));
+                write_FLASH();
+                break;
+            case 'G':
+                printf("test only: 1 means you don't wait for starting minute from _U4B_channel") 
+                printf("does wait for any 2 minute alignment though")
+                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ", 
+                    _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
                 break;
 
@@ -289,6 +289,7 @@ void read_FLASH(void) {
     strncpy(_tx_power,     flash_target_contents+19, 1); _tx_power[1] = 0;
     strncpy(_devmode,      flash_target_contents+20, 1); _devmode[1] = 0;
     strncpy(_correction,   flash_target_contents+21, 6); _correction[6] = 0;
+    strncpy(_go_when_rdy,  flash_target_contents+27, 1); _go_when_rdy[1] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
 
@@ -499,6 +500,13 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
+    if (_go_when_rdy[0] != '0' && _go_when_rdy[0] > '1') {
+        printf("%s\n_go_when_rdy %s is not supported/legal, initting to 0\n%s",
+            RED, _go_when_rdy, NORMAL);
+        strcpy(_go_when_rdy, "0");
+        write_FLASH();
+        result = -1;
+    }
     return result;
     //****************
 }
@@ -519,6 +527,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     printf("XMIT_FREQUENCY:%d\n\t", XMIT_FREQUENCY);
     printf("DEVMODE:%d\n\t", _devmode);
     printf("correction:%d\n\t", _correction);
+    printf("go_when_rdy:%d\n\t", _go_when_rdy);
 
     printf("%s%sValid commands: %s%s", UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
 
@@ -531,6 +540,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     printf("K: clock speed  (default: 133)\n\t");
     printf("D: DEVMODE to enable messaging (default: 0)\n\t");
     printf("R: si5351 ppb correction (-3000 to 3000) (default: 0)\n\t");
+    printf("R: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)\n\t");
 }
 
 // Converts string to upper case

@@ -395,6 +395,7 @@ char _Band[3] = { 0 }; // string with 10, 12, 15, 17, 20 legal. null at end
 char _tx_high[2] = { 0 }; // 0 is 2mA si5351. 1 is 8mA si5351
 char _devmode[2] = { 0 }; 
 char _correction[6] = { 0 }; 
+char _go_when_rdy[2] = { 0 }; 
 
 /*
 Verbosity:
@@ -491,30 +492,30 @@ void loop() {
                 // maybe make it less than 50
                 
                 // we can update the telemetry buffer any minute we're not tx'ing
-                bool updateTelemetryBuff = false;
-                // timeStatus is in Time library
-                if ( (timeStatus() != timeSet) {
-                    updateTelemetryBuff = false;
-                }
-                else {
-                    if (alignMinute(0) || alignMinute(2)) updateTelemetryBuff = false;
+                // FIX! no longer need?
+                /*
+                bool alignedForTx = false;
+                if (alignMinute(0) || alignMinute(2)) alignedForTx = true;
 
-                    if ( (_TELEN_config[0]!='-' || _TELEN_config[1]!='-') ||
-                         (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
-                        if (alignMinute(4)) updateTelemetryBuff = false;
-                    }
-
-                    if ( (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
-                        if (alignMinute(6)) updateTelemetryBuff = false;
-                    }
+                if ( (_TELEN_config[0]!='-' || _TELEN_config[1]!='-') ||
+                     (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
+                    if (alignMinute(4)) alignedForTx = true;
                 }
 
-                if (updateTelemetryBuff) {
-                    // FIX! this should check if gps is valid before updating? 
-                    updateTelemetryBuff();
-                    TelemetryBuffInvalidCnt = 0;
-                    // freeMem();
+                if ( (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
+                    if (alignMinute(6)) alignedForTx = true;
                 }
+
+                // _go_when_rdy will just always change the telemety buff before Tx..just test. okay callsign+telemetry
+                // are non-atomic grid6 as a result
+                if ( (!alignedForTx) | _go_when_rdy[0]=="1") {
+                }
+                */
+
+                // FIX! this should check if gps is valid before updating? 
+                updateTelemetryBuff();
+                TelemetryBuffInvalidCnt = 0;
+                // freeMem();
 
                 // FIX! it should depend on the channel starting minute - 1 (modulo 10)
                 // preparations for HF starts one minute before TX time 
@@ -523,8 +524,7 @@ void loop() {
 
                 // FIX! why not look at seconds here? Oh, it will stall until lined up on secs below
                 // align to somewhere in the minute before the callsign starting minute
-                if ( (readBatt() > WsprBattMin) && 
-                     (timeStatus() == timeSet) && alignMinute(-1) ) {
+                if ( (readBatt() > WsprBattMin) && alignMinute(-1) ) {
                     GpsOFF();
                     // FIX! change the message sent depending on where we are relative to start minute?
                     // FIX! add parameter for 1, 2, 3, 4 consecutive U4B Tx
@@ -597,11 +597,14 @@ void loop() {
 
 // -1 is returned if anything illegal
 // FIX! should check what caller does if -1
-void alignMinute (int offset) {
+void alignMinute (int offset int ) {
+    // need good time
+    if ( (timeStatus() != timeSet) return false;
+        
     // offset can be -1, 0, 1, 2, 3, 4, 5, 6 (3 messages)
     // if not one of those, set the start minute to -1?
     // caller should detect that and not wait?
-    if (offset < 0 || offset > 6) {
+    if (offset < -1 || offset > 6) {
         offset = 0 
     }
 
@@ -612,12 +615,23 @@ void alignMinute (int offset) {
         case 2: ;
         case 4: ;
         case 6: ;
-        case 8: align_minute += offset ; 
-        default: align_minute = -1 ; break
+        case 8: align_minute = (align_minute + offset) % 10 ; 
+        default: align_minute = 0;
     }
 
     // FIX! update to look at u4b channel config
-    return align_minute
+    bool aligned = False;
+    aligned = (minutes() % 10)) == align_minute;
+    if (_go_when_rdy[0] == '1') {
+        // any odd minute
+        if (offset == -1) aligned = (minutes() % 2)) == 1
+        // any even minute
+        else aligned = (minutes() % 2)) == 0 
+        // telemetry buffer is also updated whenever if _go_when_ready
+
+    }
+                
+    
 }
 
 void syncAndSendWspr(int messageType) {
