@@ -64,14 +64,8 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
 // buf: Address of FLASH to list <input>
 // len: Length of storage to list <input>
 void printFLASH(const uint8_t *buf, size_t len) {
-    printf("%s", CLEAR_SCREEN);
-
-    printf("%s", BRIGHT);
-    printf("%s", BOLD_ON);
-    printf("%s", UNDERLINE_ON);
-    printf("\nFLASH dump: \n");
-    printf("%s", BOLD_OFF);
-    printf("%s", UNDERLINE_OFF);
+    printf("%s%s%s%s\nFLASH dump: \n%s%s",
+        CLEAR_SCREEN, BRIGHT, BOLD_ON, UNDERLINE_ON, BOLD_OFF, UNDERLINE_OFF);
 
     for (size_t i = 0; i < len; ++i) {
         printf("%02x", buf[i]);
@@ -82,19 +76,12 @@ void printFLASH(const uint8_t *buf, size_t len) {
 }
 
 void display_intro(void) {
-    printf("%s", CLEAR_SCREEN);
-    printf("%s", CURSOR_HOME);
-    printf("%s", (BRIGHT);
-    printf("\n\n\n\n\n\n\n\n\n\n\n\n");
+    printf("%s%s%s\n\n\n\n\n\n\n\n\n\n\n\n", CLEAR_SCREEN, CURSOR_HOME, BRIGHT);
     printf("=====================================================\n\n");
-    printf("%s", UNDERLINE_ON);
-    printf("tracker: AD6Z firmware for AG6NS 0.04 pcb");
-    printf("version: %s %s\n\n", __DATE__ , __TIME__);
-    printf("%s", UNDERLINE_OFF);
+    printf("%stracker: AD6Z firmware for AG6NS 0.04 pcb", UNDERLINE_ON);
+    printf("version: %s %s\n\n%s", __DATE__ , __TIME__, UNDERLINE_OFF);
     printf("\n===================================================\n");
-    printf("%s", RED);
-    printf("press any key to continue");
-    printf("%s", (NORMAL);
+    printf("%spress any key to continue%s", RED, NORMAL);
 
     // wait
     char c = getchar_timeout_us(60000000);
@@ -102,28 +89,30 @@ void display_intro(void) {
 }
 
 void show_TELEN_msg() {
-    printf("%s", BRIGHT);
-    printf("\n\n\n\n");
-    printf("%s", UNDERLINE_ON);
-    printf("TELEN CONFIG INSTRUCTIONS:\n\n");
-    printf("%s", UNDERLINE_OFF);
-    printf("%s", NORMAL);
+    printf("%s%s\n\n\n\nTELEN CONFIG INSTRUCTIONS:\n\n%s%s",
+        BRIGHT, UNDERLINE_ON, UNDERLINE_OFF, NORMAL);
     printf("* There are 4 possible TELEN values, corresponding to TELEN 1 value 1,\n");
     printf("  TELEN 1 value 2, TELEN 2 value 1 and TELEN 2 value 2.\n");
-    printf("* Enter 4 characters (legal 0-9 or -) in TELEN_config. use a '-' (minus) to disable one \n");
-    printf("  or more values.\n* example: '----' disables all telen \n");
-    printf("* example: '01--' sets Telen 1 value 1 to type 0, \n  Telen 1 val 2 to type 1,  disables all of TELEN 2 \n");
-    printf("%s", BRIGHT);
-    printf("%s", UNDERLINE_ON);
-    printf("\nTelen Types:\n\n");
-    printf("%s", UNDERLINE_OFF);
-    printf("%s", NORMAL);
+    printf("* Enter 4 characters (legal 0-9 or -) in TELEN_config.\n");
+    printf("  use a '-' (minus) to disable one or more values.\n")
+    printf("  example:\n");
+    printf("  '----' disables all telen \n");
+    printf("* example:\n");
+    printf("  '01--'\n");
+    printf("    Telen 1 value 1 to type 0\n")
+    printf("    Telen 1 value 2 to type 1\n")
+    printf("    disables all of TELEN 2\n");
+
+    printf("%s%s\nTelen Types:\n\n%s%s",
+        BRIGHT, UNDERLINE_ON, UNDERLINE_OFF, NORMAL);
     printf("-: disabled, 0: ADC0, 1: ADC1, 2: ADC2, 3: ADC3,\n");
+
     printf("4: minutes since boot, 5: minutes since GPS fix aquired \n");
     printf("6-9: OneWire temperature sensors 1 though 4 \n");
     printf("A: custom: OneWire temperature sensor 1 hourly low/high \n");
-    printf("B-Z: reserved for Future: I2C devices, other modes etc \n");
-    printf("\n(ADC values come through in units of mV)\n");
+    printf("B-Z: reserved for future I2C devices etc \n");
+d
+    printf("\n(ADC values are in units of mV)\n");
     printf("See the Wiki for more info.\n\n");
 }
 
@@ -155,18 +144,14 @@ void user_interface(void) {
     // background
     // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
     for (;;) {
-        printf("%s", UNDERLINE_ON);
-        printf("%s", BRIGHT);
-        printf("\nEnter single char command: X, C, U, V, T, K, or A")
-        printf("%s", UNDERLINE_OFF);
-        printf("%s", NORMAL);
+        printf("%s%s\nEnter single char command: X, C, U, V, T, K, or A%s%s",
+            UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
         // in case user setup menu entered during flight,
         // this will reboot after 60 secs
         c = getchar_timeout_us(60000000);
         printf("%c\n", c);
         if (c == PICO_ERROR_TIMEOUT) {
-            printf("%s", CLEAR_SCREEN);
-            printf("\n\n Timeout waiting for input, ..rebooting\n");
+            printf("%s\n\n Timeout waiting for input, ..rebooting\n", CLEAR_SCREEN);
             sleep_ms(100);
             Watchdog.enable(500);  // milliseconds
             for (;;) {}}
@@ -175,8 +160,7 @@ void user_interface(void) {
         if (c > 90) c -= 32;
         switch (c) {
             case 'X':
-                printf("%s", CLEAR_SCREEN);
-                printf("\n\nGoodbye ..rebooting");
+                printf("%s\n\nGoodbye ..rebooting", CLEAR_SCREEN);
                 Watchdog.enable(500);  // milliseconds
                 for (;;)    {}
             case 'C':
@@ -201,20 +185,27 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'K':
-                get_user_input("Enter clock speed (default 115): ", _clock_speed, sizeof(_clock_speed));
+                get_user_input("Enter clock speed (100-250): ", _clock_speed, sizeof(_clock_speed));
                 write_FLASH();
                 // frequencies like 205 mhz will PANIC,
                 // System clock of 205000 kHz cannot be exactly achieved
                 // should detect the failure and change the nvram, otherwise we're stuck even on reboot
                 // this is the only config where we don't let something bad get into flash
                 const uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
-                // don't change the pll, just check
-                if (!set_sys_clock_khz(clkhz / kHz, false)) {
-                    printf("%s", RED);
-                    printf("\n RP2040 can't change clock to %dMhz. Using 115 instead\n", PLL_SYS_MHZ);
-                    printf("%s", NORMAL);
-                    strcpy(_clock_speed, "115");
+                // don't change the pll, just check. change it on reboot
+                if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
+                    printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s",
+                        RED, _TELEN_config, NORMAL);
+                    strcpy(_clock_speed, "133");
                     write_FLASH();
+                    result = -1;
+                }
+                if (!set_sys_clock_khz(clkhz / kHz, false)) {
+                    printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s",
+                        RED, PLL_SYS_MHZ, NORMAL);
+                    strcpy(_clock_speed, "133");
+                    write_FLASH();
+                    result = -1;
                 }
                 break;
             case 'A':
@@ -229,8 +220,8 @@ void user_interface(void) {
             case 13:  break;
             case 10:  break;
             default:
-                printf("%s", CLEAR_SCREEN);
-                printf("\nYou pressed: %c - (0x%02x), invalid choice! ", c, c);
+                printf("%s\nYou pressed: %c - (0x%02x), invalid choice! ",
+                    CLEAR_SCREEN, c, c);
                 sleep_ms(1000);
                 break;
         }
@@ -360,9 +351,8 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     if (callsignBad) {
-        printf("%s", RED);
-        print("_callsign %s is not supported/legal, initting to AB1CDE", _callsign);
-        printf("%s", NORMAL);
+        printf("%s\n_callsign %s is not supported/legal, initting to AB1CDE\n%s",
+            RED, _callsign, NORMAL);
         strcpy(_callsign, "AB1CDE");
         write_FLASH();
         result = -1;
@@ -370,9 +360,8 @@ int check_data_validity_and_set_defaults(void) {
 
     // change to strcpy for null terminate
     if (_verbosity[0] < '0' || _verbosity[0] > '9') {
-        printf("%s", RED);
-        print("_verbosity %s is not supported/legal, initting to 1", _verbosity);
-        printf("%s", NORMAL);
+        printf("%s\n_verbosity %s is not supported/legal, initting to 1\n%s",
+            RED, _verbosity, NORMAL);
         strcpy(_verbosity, "1");
         write_FLASH();
         result = -1;
@@ -383,9 +372,8 @@ int check_data_validity_and_set_defaults(void) {
     int i;
     for (i = 1; i <= 3; ++i) {
         if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i]!='-') {
-            printf("%s", RED);
-            print("_TELEN_config %s is not supported/legal, initting to ---", _TELEN_config);
-            printf("%s", NORMAL);
+            printf("%s\n_TELEN_config %s is not supported/legal, initting to ---\n%s",
+                RED, _TELEN_config, NORMAL);
             strcpy(_TELEN_config, "----");
             write_FLASH();
             result = -1;
@@ -406,10 +394,14 @@ int check_data_validity_and_set_defaults(void) {
     // clock gets fixed, then the defaults will get fixed (where errors exist)
     // be sure to null terminate
     if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
-        printf("%s", RED);
-        print("_clock_speed %s is not supported/legal, initting to 115", _TELEN_config);
-        printf("%s", NORMAL);
-        strcpy(_clock_speed, "115");
+        printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s", RED, _clock_speed, NORMAL);
+        strcpy(_clock_speed, "133");
+        write_FLASH();
+        result = -1;
+    }
+    if (!set_sys_clock_khz(clkhz / kHz, false)) {
+        printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s", RED, PLL_SYS_MHZ, NORMAL);
+        strcpy(_clock_speed, "133");
         write_FLASH();
         result = -1;
     }
@@ -417,9 +409,7 @@ int check_data_validity_and_set_defaults(void) {
     //*********
     // be sure to null terminate
     if (atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
-        printf("%s", RED);
-        print("_U4B_chan %s is not supported/legal, initting to 599", _U4B_chan);
-        printf("%s", NORMAL);
+        printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s", RED, _U4B_chan, NORMAL);
         strcpy(_U4B_chan, "599");
         write_FLASH();
         process_chan_num();
@@ -435,9 +425,7 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            printf("%s", RED);
-            print("_Band %s is not supported/legal, initting to 20", _Band);
-            printf("%s", NORMAL);
+            printf("%s\n_Band %s is not supported/legal, initting to 20\n%s", RED, _Band, NORMAL);
             strcpy(_Band, "20");
             write_FLASH();
             // FIX! stop using _32_dialfreqhz
@@ -468,7 +456,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     printf(" lane:%s)\n\t", _lane);
     printf("verbosity:%s\n\t", _verbosity);
     printf("TELEN config:%s\n\t", _TELEN_config);
-    printf("clock speed:%sMhz  (default: 115)\n\t", _clock_speed);
+    printf("clock speed:%sMhz\n\t", _clock_speed);
     printf("band:%s\n\t", _Band);
     printf("XMIT_FREQUENCY:%d\n\t", XMIT_FREQUENCY);
 
@@ -484,7 +472,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     printf("A: change band (10,12,15,17,20 default 20)\n\t");
     printf("V: verbosity (0 for no messages, 9 for all) \n\t");
     printf("T: TELEN config\n\t");
-    printf("K: clock speed  (default: 115)\n\t");
+    printf("K: clock speed  (default: 133)\n\t");
 }
 
 // Converts string to upper case

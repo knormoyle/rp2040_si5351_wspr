@@ -23,5 +23,16 @@
 // #include <defines.h>
 // #include "pico/stdlib.h"
 
-void get_user_input(const char *prompt, char *input_variable, int max_length) {
+void user_interface(void);
+void get_user_input(const char *prompt, char *input_variable, int max_length);
+void display_intro(void);
+void show_values(void);
+void printFLASH(const uint8_t *buf, size_t len);
+void read_FLASH(void);
+void write_FLASH(void);
+void show_TELEN_msg(void);
+
+int check_data_validity_and_set_defaults(void);
+void convertToUpperCase(char *str);
+
 #endif

@@ -29,53 +29,48 @@
 //*******************************
 uint32_t init_rf_freq(void)
 {
-// kevin 10_30_24
-// base frequencies for different bands
-// the pico should be able to do up to 10M band with appropriate clock frequency? (250Mhz? or ??)
-// 136000, 474200, 1836600, 3568600, 5364700, 7038600, 10138700, 14095600, 18104600, 21094600, 24924600, 28124600, 50293000, 70091000, 144489000};
-// will support 20M, 17M, 15M, 12M, 10M
+    // base frequencies for different bands
+    // the pico should be able to do up to 10M band with appropriate clock frequency? (250Mhz? or ??)
+    // 136000 474200 1836600 3568600 5364700 7038600 10138700 
+    // 14095600 18104600 21094600 24924600 28124600 
+    // 50293000 70091000 144489000
+    // will support 20M, 17M, 15M, 12M, 10M
 
-enum BASE_FREQS {
-    BF20M=14095600UL,
-    BF17M=18104600UL,
-    BF15M=21094600UL,
-    BF12M=24924600UL,
-    BF10M=28124600UL
-};
+    enum BASE_FREQS {
+        BF20M=14095600UL,
+        BF17M=18104600UL,
+        BF15M=21094600UL,
+        BF12M=24924600UL,
+        BF10M=28124600UL
+    };
 
-uint32_t BASE_FREQ_USED;
-switch(atoi(_Band))
-{
-    case 20: BASE_FREQ_USED=BF20M; break;
-    case 17: BASE_FREQ_USED=BF17M; break;
-    case 15: BASE_FREQ_USED=BF15M; break;
-    case 12: BASE_FREQ_USED=BF12M; break;
-    case 10: BASE_FREQ_USED=BF10M; break;
-    default: BASE_FREQ_USED=BF20M; // default to 20M in case of error cases
-}
-
-XMIT_FREQUENCY=BASE_FREQ_USED + 1400UL; // offset from base for start of passband. same for all bands
-
-// add offset based on lane ..same for every band
-switch(_lane[0])                                     
-    // Center frequency for Zachtek (wspr 3) is hard set in WSPRBeacon.c to 14097100UL
+    uint32_t BASE_FREQ_USED;
+    switch(atoi(_Band))
     {
-        // old code for 20M:
-        // case '1':XMIT_FREQUENCY=14097020UL; break;
-        // case '2':XMIT_FREQUENCY=14097060UL; break;
-        // case '3':XMIT_FREQUENCY=14097140UL; break;
-        // case '4':XMIT_FREQUENCY=14097180UL; break;
-        // default: XMIT_FREQUENCY=14097100UL; // in case invalid lane was read from EEPROM. This is center passband?? (not a valid lane?)
-        // new code:
-        case '1':XMIT_FREQUENCY+=20UL;  break;
-        case '2':XMIT_FREQUENCY+=60UL;  break;
-        case '3':XMIT_FREQUENCY+=140UL; break;
-        case '4':XMIT_FREQUENCY+=180UL; break;
-        default: XMIT_FREQUENCY+=100UL; // in case invalid lane was read from EEPROM. This is center passband?? (not a valid lane?)
-    }	
+        case 20: BASE_FREQ_USED=BF20M; break;
+        case 17: BASE_FREQ_USED=BF17M; break;
+        case 15: BASE_FREQ_USED=BF15M; break;
+        case 12: BASE_FREQ_USED=BF12M; break;
+        case 10: BASE_FREQ_USED=BF10M; break;
+        default: BASE_FREQ_USED=BF20M; // default to 20M in case of error cases
+    }
 
-printf("\nrf_freq_init _Band %s BASE_FREQ_USED %d XMIT_FREQUENCY %d _Klock_speed %s\n", _Band, BASE_FREQ_USED, XMIT_FREQUENCY, _Klock_speed);
-    return XMIT_FREQUENCY;
+    XMIT_FREQUENCY=BASE_FREQ_USED + 1400UL; // offset from base for start of passband. same for all bands
+
+    // add offset based on lane ..same for every band
+    switch(_lane[0])                                     
+        {
+            case '1':XMIT_FREQUENCY+=20UL;  break;
+            case '2':XMIT_FREQUENCY+=60UL;  break;
+            case '3':XMIT_FREQUENCY+=140UL; break;
+            case '4':XMIT_FREQUENCY+=180UL; break;
+            // in case invalid lane was read from EEPROM. This is center passband?? (not a valid lane?)
+            default: XMIT_FREQUENCY+=100UL; 
+        }	
+
+        printf("\nrf_freq_init _Band %s BASE_FREQ_USED %d XMIT_FREQUENCY %d _Klock_speed %s\n", 
+            _Band, BASE_FREQ_USED, XMIT_FREQUENCY, _Klock_speed);
+        return XMIT_FREQUENCY;
 }
 //**************************
 
