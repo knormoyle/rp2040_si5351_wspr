@@ -282,6 +282,8 @@ extern const int VFO_VDD_ON_N_PIN=4;
 extern const int VFO_I2C0_SDA_PIN=12;
 extern const int VFO_I2C0_SCL_PIN=13;
 #include "si5351_functions.h"
+// 0 should never happen (init_rf_freq will always init from saved nvram/live state)
+uint32_t XMIT_FREQUENCY=0;
 
 //*********************************
 #include "u4b_functions.h"
@@ -289,7 +291,7 @@ extern const int VFO_I2C0_SCL_PIN=13;
 
 // telemetry_buff
 // always positive. clamp to 0 I guess
-char t_course[4];     // 3 bytes
+char t_course[4];     // 3 bytes + null term (like all here
 // always positive? 0-250 knots. clamp to 0 I guess
 char t_speed[4];      // 3 bytes
 // 60000 meters. plus 1 in case negative?
@@ -301,12 +303,15 @@ char t_temp[7];       // 6 bytes
 char t_pressure[8];   // 7 bytes
 char t_voltage[6];    // 5 bytes
 char t_sat_count[3];  // 2 bytes
+// lat/lon precision: How much to store
+// https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
+// 6 decimal places represent accuracy for ~ 10 cm
+// 7 decimal places for ~ 1 cm
+// The use of 6 digits should be enough. +/- is 1 more. decimal is one more. 0-180 is 3 more.
+// so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
 char t_lat[13];       // 12 bytes
 char t_lon[13];       // 12 bytes
 char t_grid[7];       // 6 bytes
-
-// 0 should never happen (init_rf_freq will always init from saved nvram/live state)
-uint32_t XMIT_FREQUENCY=0;
 
 //*********************************
 absolute_time_t loop_us_start = 0;
@@ -736,18 +741,6 @@ void sleepSeconds(int sec) {
     }
     Watchdog.reset();
 }
-
-
-
-
-// lat/lon precision: How much to store
-// https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
-// 6 decimal places represent accuracy for ~ 10 cm
-// 7 decimal places for ~ 1 cm
-// The use of 6 digits should be enough. +/- is 1 more. decimal is one more. 0-180 is 3 more.
-// so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
-char t_lat[12];       // 12 bytes starts at 53
-char t_lon[12];       // 12 bytes starts at
 
 //*******************************************************
 static pwm_config wspr_pwm_config;
