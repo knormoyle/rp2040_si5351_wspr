@@ -366,8 +366,12 @@ void gpsDebug() {
 
     printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
     printInt(gps.hdop.value(), gps.hdop.isValid(), 5);
-    printFloat(gps.location.lat(), gps.location.isValid(), 11, 6);
+    
+    // printFloat(gps.location.lat(), gps.location.isValid(), 11, 6);
+    // update to 12 to match
+    printFloat(gps.location.lat(), gps.location.isValid(), 12, 6);
     printFloat(gps.location.lng(), gps.location.isValid(), 12, 6);
+
     printInt(gps.location.age(), gps.location.isValid(), 5);
     printDateTime(gps.date, gps.time);
     printFloat(gps.altitude.meters(), gps.altitude.isValid(), 7, 2);
@@ -381,24 +385,3 @@ void gpsDebug() {
     Serial.println();
 }
 
-void GridLocator(char *dst, float latt, float lon) {
-    int o1, o2;
-    int a1, a2;
-    float remainder;
-    // longitude
-    remainder = lon + 180.0;
-    o1 = (int)(remainder / 20.0);
-    remainder = remainder - (float)o1 * 20.0;
-    o2 = (int)(remainder / 2.0);
-    // latitude
-    remainder = latt + 90.0;
-    a1 = (int)(remainder / 10.0);
-    remainder = remainder - (float)a1 * 10.0;
-    a2 = (int)(remainder);
-
-    dst[0] = (char)o1 + 'A';
-    dst[1] = (char)a1 + 'A';
-    dst[2] = (char)o2 + '0';
-    dst[3] = (char)a2 + '0';
-    dst[4] = (char)0;
-}

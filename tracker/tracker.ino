@@ -136,16 +136,14 @@ Can extract arbitrary data from any of the myriad NMEA sentences out there.
 #include "hardware/pwm.h"
 
 // lots of things used from Arduino-Pico core
-// RP2040 Helper Class.
 // https://arduino-pico.readthedocs.io/en/latest/rp2040.html
 
 // const is typed, #define macros are not.
 // const is scoped by C block, #define applies to a file (compilation unit)
 // const is most useful with parameter passing.
-// If you see const used on a prototype with pointers, 
-// you know it is safe to pass your array or struct because the function will not alter it. 
+// If you see const used on a prototype with pointers, it is safe to pass your array or struct 
+// because the function will not alter it.
 // No const and it can.
-// example: strcpy()
 
 // https://arduino-pico.readthedocs.io/en/latest/serial.html
 // Arduino-Pico core implements a software-based Serial-over-USB port using the USB ACM-CDC model
@@ -161,42 +159,47 @@ Can extract arbitrary data from any of the myriad NMEA sentences out there.
 // The size of the receive FIFO can be adjusted from the default 32 bytes with setFIFOSize call prior to calling begin()
 //     Serial1.setFIFOSize(128);
 //     Serial1.begin(baud);
-// 
-// The FIFO is normally handled via an interrupt, which reduced CPU load and makes it less likely to lose characters.
+//
+// The FIFO is normally handled via an interrupt.
 // For applications where an IRQ driven serial port is not appropriate, use setPollingMode(true) before calling begin()
 //     Serial1.setPollingMode(true);
 
-const int Si5351Pwr=4;
-const int BattPin=A3;
+const int Si5351Pwr = 4;
+const int BattPin = A3;
 
 //******************************* CONFIG **********************************
 // FIX! are these used now? remnants of APRS messaging
-// Sized for APRS?
-char    comment[46] = "tracker 1.0";
-char    StatusMessage[50] = "tracker 1.0";
-
+char comment[] = "tracker 1.0";
 
 // #define DEVMODE // Development mode. Uncomment to enable for debugging.
 boolean DEVMODE = true;
 
-//******************************  APRS SETTINGS (old)****************************
+const int WSPR_TONE_SPACING=146;  // ~1.46 Hz
+const int WSPR_DELAY=683;         // Delay value for WSPR
 char telemetry_buff[100] = { 0 |;  // telemetry buffer
 uint16_t Tx_0_cnt = 0;  // increase +1 after every callsign tx
 uint16_t Tx_1_cnt = 0;  // increase +1 after every telemetry tx
 uint16_t Tx_2_cnt = 0;  // increase +1 after every telen1 tx
 uint16_t Tx_3_cnt = 0;  // increase +1 after every telen2 tx
 
-//******************************  HF SETTINGS   *********************************
-const int WSPR_TONE_SPACING=146;  // ~1.46 Hz
-const int WSPR_DELAY=683;         // Delay value for WSPR
-
 // Global variables
-unsigned long hf_freq;
-char hf_message[13] = "NOCALL AA00";//for WSPR, updated by hf_call and GPS location
-char hf_loc[] = "AA00";             //for WSPR, updated by GPS location. You don't have to change this.
-uint8_t dbm = 10;
-uint8_t tx_buffer[255];
-uint8_t symbol_count;
+// FIX! the tx_buffer doesn't need so much reserved space
+// The maximum number of binary channel symbols in a WSPR message is 162.
+// This is calculated by adding the constraint length (K) of 32 to the
+// total number of bits in a standard message (50), and then multiplying by 2.
+
+// the library agrees
+// JTEncode.h:#define WSPR_SYMBOL_COUNT 162
+
+// background
+// https://hackaday.io/project/166875-careless-wspr/log/167301-encoding-wsprs
+// http://www.g4jnt.com/Coding/WSPR_Coding_Process.pdf
+
+// below we always loop thru the entire tx_buffer?
+// so we always loop thru 162 symbols, but the last ones might not matter.
+uint8_t symbol_count; // is this less than 256? probaby the real max?
+
+uint8_t tx_buffer[255]; // is this bigger than WSPR_SYMBOL_COUNT?
 uint16_t tone_delay, tone_spacing;
 volatile bool proceed = false;
 
@@ -282,6 +285,26 @@ extern const int VFO_I2C0_SCL_PIN=13;
 
 //*********************************
 #include "u4b_functions.h"
+#include "tele_functions.h"
+
+// telemetry_buff
+// always positive. clamp to 0 I guess
+char t_course[4];     // 3 bytes
+// always positive? 0-250 knots. clamp to 0 I guess
+char t_speed[4];      // 3 bytes
+// 60000 meters. plus 1 in case negative?
+char t_altitude[7];   // 6 bytes
+// 24 * 30 per hour = 720 per day if every two minutes
+// reboot once per day? (starts at 0)
+char t_tx_count_0[4]; // 3 bytes
+char t_temp[7];       // 6 bytes
+char t_pressure[8];   // 7 bytes
+char t_voltage[6];    // 5 bytes
+char t_sat_count[3];  // 2 bytes
+char t_lat[13];       // 12 bytes
+char t_lon[13];       // 12 bytes
+char t_grid[7];       // 6 bytes
+
 // 0 should never happen (init_rf_freq will always init from saved nvram/live state)
 uint32_t XMIT_FREQUENCY=0;
 
@@ -381,7 +404,7 @@ void setup() {
 //***********************************************************
 // for config_functions.cpp
 // these get set via terminal, and then from NVRAM on boot
-// init with all null 
+// init with all null
 char _callsign[7] = { 0 };
 char _id13[3] = { 0 };
 char _start_minute[2] = { 0 };
@@ -393,9 +416,9 @@ char _clock_speed[4] = { 0 };
 char _U4B_chan[4] = { 0 };
 char _Band[3] = { 0 }; // string with 10, 12, 15, 17, 20 legal. null at end
 char _tx_high[2] = { 0 }; // 0 is 2mA si5351. 1 is 8mA si5351
-char _devmode[2] = { 0 }; 
-char _correction[6] = { 0 }; 
-char _go_when_rdy[2] = { 0 }; 
+char _devmode[2] = { 0 };
+char _correction[6] = { 0 };
+char _go_when_rdy[2] = { 0 };
 
 /*
 Verbosity:
@@ -490,7 +513,7 @@ void loop() {
                 // don't updateTelemetryBuff buffer if there is an WSPR TX window soon (any if config)
                 // since we'll grab info from that buffer in sendWSPR ??
                 // maybe make it less than 50
-                
+
                 // we can update the telemetry buffer any minute we're not tx'ing
                 // FIX! no longer need?
                 /*
@@ -512,13 +535,28 @@ void loop() {
                 }
                 */
 
-                // FIX! this should check if gps is valid before updating? 
+                // FIX! this should check if gps is valid before updating?
                 updateTelemetryBuff();
+                /* sets:
+                char t_course[4];     // 3 bytes, starts at 0
+                char t_speed[4];      // 3 bytes, starts at 4
+                char t_altitude[7];   // 6 bytes, starts at 10 .. guaranteed positive
+                char t_tx_count_0[4]; // 3 bytes starts at 17 ...stored tx_count_0 + 1
+                char t_temp[7];       // 6 bytes starts at 24 (float)
+                char t_pressure[8];   // 7 bytes starts at 31(float) Pa
+                char t_voltage[6];    // 5 bytes starts at 43
+                char t_sat_count[3];  // 2 bytes starts at 43
+                // fix! need to save grid6 from lat/long
+                */
+                // voltage is captured when we write the buff? So it's before GPS is turned off?
+                // should we look at the live voltage instead?
+                extractFromTelemetryBuff();
                 TelemetryBuffInvalidCnt = 0;
+
                 // freeMem();
 
                 // FIX! it should depend on the channel starting minute - 1 (modulo 10)
-                // preparations for HF starts one minute before TX time 
+                // preparations for HF starts one minute before TX time
                 // at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
                 if (DEVMODE) printf("timeStatus():%u minute():%u\n", timeStatus(), minute());
 
@@ -531,6 +569,7 @@ void loop() {
                     // GPS will stay off for all
                     syncAndSendWspr(0)
                     if (DEVMODE) {
+                        Tx_0_cnt += 1;
                         // we have 10 secs or so at the end of WSPR to get this off?
                         Serial.println(F("WSPR callsign Tx sent"));
                         Serial.flush();
@@ -539,6 +578,7 @@ void loop() {
                     // telemetry (and sensor data in there) right before the callsign tx
                     syncAndSendWspr(1)
                     if (DEVMODE) {
+                        Tx_1_cnt += 1;
                         // we have 10 secs or so at the end of WSPR to get this off?
                         Serial.println(F("WSPR telemetry Tx sent"));
                         Serial.flush();
@@ -548,6 +588,7 @@ void loop() {
                          (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
                         syncAndSendWspr(2)
                         if (DEVMODE) {
+                            Tx_2_cnt += 1;
                             // we have 10 secs or so at the end of WSPR to get this off?
                             Serial.println(F("WSPR telen1 Tx sent"));
                             Serial.flush();
@@ -557,6 +598,7 @@ void loop() {
                     if ( (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
                         syncAndSendWspr(2)
                         if (DEVMODE) {
+                            Tx_3_cnt += 1;
                             // we have 10 secs or so at the end of WSPR to get this off?
                             Serial.println(F("WSPR telen2 Tx sent"));
                             Serial.flush();
@@ -587,7 +629,7 @@ void loop() {
     loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
     if (DEVMODE && verbosity>=5) {
-        StampPrintf("main/20: _Band %s loop_ms_elapsed: %d millisecs loop_us_start: %llu microsecs loop_us_end: %llu microsecs", 
+        StampPrintf("main/20: _Band %s loop_ms_elapsed: %d millisecs loop_us_start: %llu microsecs loop_us_end: %llu microsecs",
                 _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
     }
 
@@ -600,12 +642,12 @@ void loop() {
 void alignMinute (int offset int ) {
     // need good time
     if ( (timeStatus() != timeSet) return false;
-        
+
     // offset can be -1, 0, 1, 2, 3, 4, 5, 6 (3 messages)
     // if not one of those, set the start minute to -1?
     // caller should detect that and not wait?
     if (offset < -1 || offset > 6) {
-        offset = 0 
+        offset = 0
     }
 
     // this should have been only set to be char strs 0, 2, 4, 6, or 8
@@ -615,7 +657,7 @@ void alignMinute (int offset int ) {
         case 2: ;
         case 4: ;
         case 6: ;
-        case 8: align_minute = (align_minute + offset) % 10 ; 
+        case 8: align_minute = (align_minute + offset) % 10 ;
         default: align_minute = 0;
     }
 
@@ -626,21 +668,23 @@ void alignMinute (int offset int ) {
         // any odd minute
         if (offset == -1) aligned = (minutes() % 2)) == 1
         // any even minute
-        else aligned = (minutes() % 2)) == 0 
+        else aligned = (minutes() % 2)) == 0
         // telemetry buffer is also updated whenever if _go_when_ready
 
     }
-                
-    
+
+
 }
 
 void syncAndSendWspr(int messageType) {
     // messageType should be 0-3?
-    printf("will start WSPR messageType %d when aligned zero secs, currently %d secs\n", 
+    printf("will start WSPR messageType %d when aligned zero secs, currently %d secs\n",
         messageType, seconds());
 
     // FIX! it should use the captured telemetry, not live gps
+    char hf_loc[] = "AA00";
     GridLocator(hf_loc, gps.location.lat(), gps.location.lng());
+    char hf_message[13] = "000AAA AA00"
     sprintf(hf_message, "%s %s", hf_call, hf_loc);
 
     if (DEVMODE) {
@@ -694,144 +738,18 @@ void sleepSeconds(int sec) {
 }
 
 
-void updatePosition(int high_precision, char *dao) {
-  // Convert and set latitude NMEA string Degree Minute Hundreths of minutes ddmm.hh[S,N].
-  char latStr[10];
-  RawDegrees rawDeg = gps.location.rawLat();
-  uint32_t min_nnnnn;
-  // not used
-  // char lat_dao = 0;
-  min_nnnnn = rawDeg.billionths * 0.006;
-  if ( ((min_nnnnn / (high_precision ? 1 : 100)) % 10) >= 5 && min_nnnnn < (6000000 - ((high_precision ? 1 : 100)*5)) ) {
-    // round up. Avoid overflow (59.999999 should never become 60.0 or more)
-    min_nnnnn = min_nnnnn + (high_precision ? 1 : 100)*5;
-  }
-  sprintf(latStr, "%02u%02u.%02u%c", (unsigned int ) (rawDeg.deg % 100), (unsigned int ) ((min_nnnnn / 100000) % 100), (unsigned int ) ((min_nnnnn / 1000) % 100), rawDeg.negative ? 'S' : 'N');
-  if (dao)
-    dao[0] = (char) ((min_nnnnn % 1000) / 11) + 33;
-
-  // FIX! what is this
-  // APRS_setLat(latStr);
-
-  // Convert and set longitude NMEA string Degree Minute Hundreths of minutes ddmm.hh[E,W].
-  char lonStr[10];
-  rawDeg = gps.location.rawLng();
-  min_nnnnn = rawDeg.billionths * 0.006;
-  if ( ((min_nnnnn / (high_precision ? 1 : 100)) % 10) >= 5 && min_nnnnn < (6000000 - ((high_precision ? 1 : 100)*5)) ) {
-    min_nnnnn = min_nnnnn + (high_precision ? 1 : 100)*5;
-  }
-  sprintf(lonStr, "%03u%02u.%02u%c", (unsigned int ) (rawDeg.deg % 1000), (unsigned int ) ((min_nnnnn / 100000) % 100), (unsigned int ) ((min_nnnnn / 1000) % 100), rawDeg.negative ? 'W' : 'E');
-  if (dao) {
-    dao[1] = (char) ((min_nnnnn % 1000) / 11) + 33;
-    dao[2] = 0;
-  }
-
-  // FIX! what is this?
-  // APRS_setLon(lonStr);
-  // APRS_setTimeStamp(gps.time.hour(), gps.time.minute(),gps.time.second());
-}
 
 
-void updateTelemetryBuff() {
-    // FIX! why does isUpdated() get us past here?
-    if (! (gps.location.isValid() && (gps.location.age() < 1000 || gps.location.isUpdated())) ) {
-        return
-    }
-    if (! (gps.satellites.isValid() && gps.satellites.value() > 3)) {
-        return
-    }
-    sprintf(telemetry_buff, "%03d", gps.course.isValid() ? (int)gps.course.deg() : 0);
-    telemetry_buff[3] = '/';
+// lat/lon precision: How much to store
+// https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
+// 6 decimal places represent accuracy for ~ 10 cm
+// 7 decimal places for ~ 1 cm
+// The use of 6 digits should be enough. +/- is 1 more. decimal is one more. 0-180 is 3 more.
+// so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
+char t_lat[12];       // 12 bytes starts at 53
+char t_lon[12];       // 12 bytes starts at
 
-    sprintf(telemetry_buff + 4, "%03d", gps.speed.isValid() ? (int)gps.speed.knots() : 0);
-    telemetry_buff[7] = '/';
-
-    telemetry_buff[8] = 'A';
-    telemetry_buff[9] = '=';
-    //sprintf(telemetry_buff + 10, "%06lu", (long)gps.altitude.feet());
-
-    //fixing negative altitude values causing display bug on aprs.fi
-    float tempAltitude = gps.altitude.feet();
-
-    if (tempAltitude>0){
-    //for positive values
-    sprintf(telemetry_buff + 10, "%06lu", (long)tempAltitude);
-    } else{
-    //for negative values
-    sprintf(telemetry_buff + 10, "%06d", (int)tempAltitude);
-    }
-
-    telemetry_buff[16] = ' ';
-    sprintf(telemetry_buff + 17, "%03d", TxCount);
-    telemetry_buff[20] = 'T';
-    telemetry_buff[21] = 'x';
-    telemetry_buff[22] = 'C';
-
-    // FIX! don't need anymore?
-    // Si5351ON; //little hack to prevent a BMP180 related issue (does nothing?)
-    delay(1);
-
-    telemetry_buff[23] = ' '; float tempC = bmp_read_temperature();
-    // telemetry_buff[23] = ' '; float tempC = 0.f;
-    dtostrf(tempC, 6, 2, telemetry_buff + 24);
-
-    telemetry_buff[30] = 'C';
-    telemetry_buff[31] = ' '; float pressure = bmp_read_pressure() / 100.0; //Pa to hPa
-    // telemetry_buff[31] = ' '; float pressure = 0.f; //Pa to hPa
-    dtostrf(pressure, 7, 2, telemetry_buff + 32);
-
-    telemetry_buff[39] = 'h';
-    telemetry_buff[40] = 'P';
-    telemetry_buff[41] = 'a';
-    telemetry_buff[42] = ' ';
-
-    dtostrf(readBatt(), 5, 2, telemetry_buff + 43);
-    telemetry_buff[48] = 'V';
-    telemetry_buff[49] = ' ';
-
-    sprintf(telemetry_buff + 50, "%02d", gps.satellites.isValid() ? (int)gps.satellites.value() : 0);
-    telemetry_buff[52] = 'S';
-    telemetry_buff[53] = ' ';
-    sprintf(telemetry_buff + 54, "%s", comment);
-
-    // FIX! why?
-    // remove temperature and pressure info
-    // memmove(&telemetry_buff[24], &telemetry_buff[43], (sizeof(telemetry_buff) - 43));
-
-    if (DEVMODE) Serial.println(telemetry_buff);
-
-}
-
-//****************************************************
-
-float readBatt() {
-  int adc_val = 0;
-  adc_val = analogRead(BattPin);
-  adc_val += analogRead(BattPin);
-  adc_val += analogRead(BattPin);
-  // The Raspberry Pi Pico's analog to digital converter (ADC) can measure voltages between 0 and 3.3 volts.
-  // The ADC uses a 3.3V reference voltage,
-  // and a read operation returns a number between 0 and 4095.
-  // The ADC's resolution is 3.3/4096, or roughly 0.8 millivolts.
-  // is the precision set to 4096? (12 not 16 bits resolution)
-  // 4096/3.3 = 1241
-  // 1241 / 3 = 413.66
-
-  // FIX! this doesn't seem right. should I just multiply by the conversion factor
-  // he's got some special 1/3 voltage divider for VBUS to BATT_V
-  // you leave it open than the ADC converter voltage reference is the 3.3V .
-  // In reality it is the voltage of the pin 3V3 - ( ~150uA * 200) which is roughly a 30mv drop. (0.8mv * 30 = 24 steps)
-
-  // this must be a calibrated linear equation? only need to calibrate between 2.8v and 5v?
-  float solar_voltage = ((float)adc_val / 3.0f - 27.0f) / 412.0f;
-  // there is a 200 ohm resistor between 3V3 and ADC_AVDD
-  // we did 3 reads above ..averaging? so don't need the 3x because of onboard voltage divider
-  // pico-WSPRer does this (no use of ADC_AVDD) ?
-  // const float conversionFactor = 3.3f / (1 << 12);
-  // float solar_voltage = 3 * (float)adc_read() * conversionFactor;
-
-  // if (solar_voltage < 0.0f) solar_voltage = 0.0f;
-  // if (solar_voltage > 9.9f) solar_voltage = 9.9f;
+//*******************************************************
 static pwm_config wspr_pwm_config;
 void PWM4_Handler(void) {
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
@@ -857,7 +775,7 @@ void zeroTimerSetPeriodMs(float ms){
 
 //********************************************
 // expected this is called at least 10 secs before starting minute
-// if not in the minute before starting minute, 
+// if not in the minute before starting minute,
 // it will wait until the right starting minute (depends on messageType)
 // messageType can be 0, 1, 2, 3
 void sendWSPR(int messageType, bool vfoOffWhenDone) {
@@ -869,7 +787,7 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
 
     // FIX! make the drive strength conditional on the config
     // we could even make the differential dependent on the config
-    
+
     // this is done in the vfo_turn_on. shouldn't need to do again
     // vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
     // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
@@ -877,27 +795,54 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
     vfo_turn_on(WSPR_TX_CLK_NUM);
 
     // FIX! use the u4b channel freq
+    unsigned long hf_freq;
     hf_freq = XMIT_FREQUENCY;
     if (atoi(_correction) != 0) {
         // this will be a floor divide
         hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL)
     }
 
-    // if (DEVMODE) printf("WSPR desired freq: %lu used hf_freq %lu with correction %s\n", 
+    // if (DEVMODE) printf("WSPR desired freq: %lu used hf_freq %lu with correction %s\n",
     //    XMIT_FREQUENCY, hf_freq, _correction);
 
     symbol_count = WSPR_SYMBOL_COUNT; // From the library defines
     tone_spacing = WSPR_TONE_SPACING;
     tone_delay = WSPR_DELAY;
-    set_tx_buffer();
+
+    char[7] hf_callsign;
+    char[5] hf_grid4;
+    uint8_t hf_power;
+    if (message_type == 3) {
+        // include the null term?
+        hf_callsign =
+        hf_grid4 = ??
+        hf_power = ??
+    else if (message_type == 2) {
+        // include the null term?
+        hf_callsign = ??
+        hf_grid4 = ??
+        hf_power = ??
+    else if (message_type == 1) {
+        // include the null term?
+        hf_callsign = ??
+        hf_grid4 = ??
+        hf_power = ??
+    else { // default to normal callsign
+        // include the null term?
+        hf_callsign = _callsign;
+        hf_grid4 = ??
+        hf_grid4 = 17; // ad6z tracker ?
+    }
+
+    set_tx_buffer(hf_callsign, hf_grid4, hf_power, tx_buffer);
 
     zeroTimerSetPeriodMs(tone_delay);
 
     uint8_t i;
     for(i = 0; i < symbol_count; i++)
     {
-        uint32_t freq_x16 = 
-            (hf_freq << PLL_CALCULATION_PRECISION) + 
+        uint32_t freq_x16 =
+            (hf_freq << PLL_CALCULATION_PRECISION) +
             (tx_buffer[i] * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
         // printf("%s vfo_set_freq_x16(%u)\n", __func__, (freq_x16 >> PLL_CALCULATION_PRECISION));
         vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
@@ -921,12 +866,29 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
     Watchdog.reset();
 }
 
-//********************************************
-void set_tx_buffer() {
+//**********************
+void set_tx_buffer(const hf_callsign const char[7], const char[5] hf_loc, uint8_t hf_power, uint8_t * tx_buffer) {
     // Clear out the transmit buffer
-    memset(tx_buffer, 0, 255);
+    memset(tx_buffer, 0, 255); // is this bigger than WSPR_SYMBOL_COUNT ?
     // Set the proper frequency and timer CTC
-    jtencode.wspr_encode(hf_call, hf_loc, dbm, tx_buffer);
+    // legalPower = [0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60]
+
+    // get all the message date outside this?
+    // FIX! does this strip null terms? what about strlen(hf_all) < 6 ?
+    /*
+     * wspr_encode(const char * call, const char * loc, const uint8_t dbm, uint8_t * symbols)
+     *
+     * Takes a callsign, grid locator, and power level and returns a WSPR symbol
+     * table for a Type 1, 2, or 3 message.
+     *
+     * call - Callsign (12 characters maximum.. we guarantee 6 max).
+     * loc - Maidenhead grid locator (6 characters maximum).
+     * dbm - Output power in dBm.
+     * symbols - Array of channel symbols to transmit returned by the method.
+     *  Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT to the method.
+     *
+    */
+    jtencode.wspr_encode(hf_call, hf_loc, hf_power, tx_buffer);
 }
 
 void freeMem() {
@@ -959,11 +921,11 @@ int InitPicoClock(int PLL_SYS_MHZ) {
     // should detect the failure and change the nvram, otherwise we're stuck even on reboot
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
       // won't work
-      printf("\nCan not set system clock to %dMhz. 'pico 'Cannot be achieved''\n", PLL_SYS_MHZ);
+      printf("\nCan not set clock to %dMhz. 'pico 'Cannot be achieved''\n", PLL_SYS_MHZ);
       return -1;
     }
 
-    printf("\n ATTEMPT TO SET SYSTEM KLOCK TO %dMhz (legal)\n", PLL_SYS_MHZ);
+    printf("\n Attempt to set rp2040 clock to %dMhz (legal)\n", PLL_SYS_MHZ);
     // 2nd arg is "required"
     set_sys_clock_khz(clkhz / kHz, true);
     clock_configure(clk_peri, 0,
@@ -977,7 +939,7 @@ int InitPicoClock(int PLL_SYS_MHZ) {
 //**********************
 // Standard for strings in this *.ino and in *functions.cpp
 // we'll just use c-style char arrays for strings
-// options:
+// other options:
 
 // c++
 // #include <string>

@@ -209,8 +209,10 @@ void u4b_encode_1( char[6] callsign, char[4] grid4), char[2] dbm ) {
     // char grid5 = _pu8_locator[4];  values of grid 5 and 6 were already set previously when packet 1 was created
     // char grid6 = _pu8_locator[5];
     // convert inputs into components of a big number
+    // upper case?
     uint8_t grid5Val = grid5 - 'A';
     uint8_t grid6Val = grid6 - 'A';
+
     uint16_t altFracM =  round((double)altitude_snapshot/ 20);     
 
     // convert inputs into a big number
@@ -218,12 +220,14 @@ void u4b_encode_1( char[6] callsign, char[4] grid4), char[2] dbm ) {
     val *=   24; val += grid5Val;
     val *=   24; val += grid6Val;
     val *= 1068; val += altFracM;
+
     // extract into altered dynamic base
     uint8_t id6Val = val % 26; val = val / 26;
     uint8_t id5Val = val % 26; val = val / 26;
     uint8_t id4Val = val % 26; val = val / 26;
     uint8_t id2Val = val % 36; val = val / 36;
     uint8_t id2Val = val % 36; val = val / 36;
+
     // convert to encoded CallsignU4B
     char id2 = EncodeBase36(id2Val);
     char id4 = 'A' + id4Val;
