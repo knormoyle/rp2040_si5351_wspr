@@ -31,7 +31,9 @@ extern char _clock_speed[4];
 extern char _U4B_chan[4];
 extern char _Band[3]; // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _tx_high[2]; // 0 is 2mA si5351. 1 is 8mA si5351
-extern char _devmode[2]; 
+extern char _devmode[2];
+
+extern bool DEVMODE;
 
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
 extern char _correction[6];  // parts per billion -3000 to 3000. default 0
@@ -40,7 +42,22 @@ extern char _correction[6];  // parts per billion -3000 to 3000. default 0
 
 // test only: 1 means you don't wait for starting minute from _U4B_channel ;
 // does wait for any 2 minute alignment though
-extern char _go_when_rdy[2] ; 
+extern char _go_when_rdy[2] ;
+
+/*
+Verbosity:
+0: none
+1: temp/volts every second, message if no gps
+2: GPS status every second
+3: messages when a Tx started
+4: x-tended messages when a Tx started
+5: dump context every 20 secs
+6: show PPB every second
+7: Display GxRMC and GxGGA messages
+8: display ALL NMEA sentences from GPS module
+9: same as 8
+*/
+
 
 // #include <string.h>
 // #include <ctype.h>
@@ -76,6 +93,8 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
             }
         }
         fflush(stdout);
+        // whenever something might have taken a long time like printing the big buffer
+        updateStatusLED();
     }
 
     input_variable[index] = '\0';  // Null-terminate the string
@@ -238,14 +257,14 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'D':
-                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ", 
+                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ",
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
                 break;
             case 'G':
-                printf("test only: 1 means you don't wait for starting minute from _U4B_channel") 
+                printf("test only: 1 means you don't wait for starting minute from _U4B_channel")
                 printf("does wait for any 2 minute alignment though")
-                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ", 
+                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ",
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
                 break;
@@ -301,6 +320,8 @@ void read_FLASH(void) {
     // _32_dialfreqhz not used any more
     // FIX! define this as extern?
     XMIT_FREQUENCY = init_rf_freq();
+    if (_devmode[0] == 1) DEVMODE = true;
+    else DEVMODE = false;
 }
 
 // Write the user entered data into FLASH
@@ -455,6 +476,7 @@ int check_data_validity_and_set_defaults(void) {
         printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s", RED, _U4B_chan, NORMAL);
         strcpy(_U4B_chan, "599");
         write_FLASH();
+        // this will set _lane, _id13, _start_minute
         process_chan_num();
         XMIT_FREQUENCY = init_rf_freq();
         result = -1;
@@ -492,6 +514,8 @@ int check_data_validity_and_set_defaults(void) {
         strcpy(_devmode, "0");
         write_FLASH();
         result = -1;
+
+        DEVMOD = false;
     }
     if (atoi(_correction < -3000 || atoi(_correction) > 3000) {
         printf("%s\n_correction %s is not supported/legal, initting to 0\n%s",

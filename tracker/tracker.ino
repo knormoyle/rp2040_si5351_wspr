@@ -1,59 +1,9 @@
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
-// Author: Kevin Normoyle AD6Z initial 11/2024
-
-// tracker firmware:
-// Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
-// Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
-
-// Incorporates work by: Kazuhisa “Kazu” Terasaki AG6NS. Thank you.
-// https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
-// https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker
-
-// Incorporates work by: Rob Votin KC3LBR. Thank you.
-// https://github.com/EngineerGuy314/pico-WSPRer
-
-// Incorporates work by: Roman Piksaykin R2BDY. Thank you
-// https://github.com/RPiks/pico-WSPR-tx
-
-// Open source c/c++/arduino ide with arduino-pico core allows customization if you have software skills
-
-// No auto-calibration of Si5351 Tx frequency (yet?).
-// Manual config for passing 'correction" (parts per billion) to Si5351, in case Tx Frequency is outside of U4B channel bin.
-// Traquito website can fingerprint callsign/telemetry frequency even if out of bin.
-// LU7AA website not so well (although 'wide' helps).
-// SDR can be used to report actual TX freq and correction applied to adjust.
-
-// Any correction should be fixed: the same for all bands for a particular tracker.
-
-// No auto-calibration of RP2040 clock frequency
-// Manual config for setting rp2040 clock frequency, 115 to 250 Mhz. 115Mhz default
-// (could calibrate/adjust with GPS PPS and then calibrate the Si5351 Tx frequency (signals go to RP2040 input)
+// Author/Gather: Kevin Normoyle AD6Z initially 11/2024
+// See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
 //*******************************************
-// Arduino IDE created by many
-// Adafruit libraries created by many
-// arduino-pico core https://github.com/earlephilhower/arduino-pico
-// JTEncode library: https://github.com/etherkit/JTEncode
-// https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png
-// TinyGPSPlus library: //https://github.com/mikalhart/TinyGPSPlus
-// Time library: //https://github.com/PaulStoffregen/Time
-// Si5351 programming: based on work by: Kazuhisa “Kazu” Terasaki AG6NS
-// U4B telemetry protocol defined by Hans Summers G0UPL
-// WSPR protocol defined by Joe Taylor K1JT
-
-// Thanks to all authors and contributors
-// Thanks to the entire WSPR RX ecosystem of spotters and database maintainers
-
-// Thanks to the tracker websites and authors/maintainers
-// http://lu7aa.org/wsprx.asp Pedro Converso LU7AA
-// https://traquito.github.io/channelmap/ Doug Malnati KD2KDD
-// https://amateur.sondehub.org
-
-// Thanks for knowledge/support from everyone at https://groups.io/g/picoballoon
-
-//*******************************************
-
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
@@ -63,8 +13,9 @@
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
 #include <SPI.h>
 #include <Wire.h>
+
 //**************************
-// nvram? from kc3lbr
+// flash config
 #include "hardware/flash.h"
 
 //**************************
@@ -125,6 +76,7 @@ Can extract arbitrary data from any of the myriad NMEA sentences out there.
 
 // setTime() use moved to gps_functions.cpp
 // libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
+
 // do we use minute() here?
 #include <TimeLib.h> //https://github.com/PaulStoffregen/Time
 
@@ -152,7 +104,6 @@ Can extract arbitrary data from any of the myriad NMEA sentences out there.
 // Be aware that this USB Serial port is responsible for resetting the RP2040 during the upload process,
 // following the Arduino standard of 1200bps = reset to bootloader).
 
-
 // The RP2040 provides two hardware-based UARTS with configurable pin selection.
 // Serial1 is UART0, and Serial2 is UART1.
 // FIX! should we get a bigger buffer to avoid missing ATGM336 NMEA sentences?
@@ -171,11 +122,9 @@ const int BattPin = A3;
 // FIX! are these used now? remnants of APRS messaging
 char comment[] = "tracker 1.0";
 
-// #define DEVMODE // Development mode. Uncomment to enable for debugging.
-boolean DEVMODE = true;
-
 const int WSPR_TONE_SPACING=146;  // ~1.46 Hz
 const int WSPR_DELAY=683;         // Delay value for WSPR
+
 char telemetry_buff[100] = { 0 |;  // telemetry buffer
 uint16_t Tx_0_cnt = 0;  // increase +1 after every callsign tx
 uint16_t Tx_1_cnt = 0;  // increase +1 after every telemetry tx
@@ -194,6 +143,10 @@ uint16_t Tx_3_cnt = 0;  // increase +1 after every telen2 tx
 // background
 // https://hackaday.io/project/166875-careless-wspr/log/167301-encoding-wsprs
 // http://www.g4jnt.com/Coding/WSPR_Coding_Process.pdf
+
+// useful python code for playing around with wspr encoding
+// https://github.com/robertostling/wspr-tools
+
 
 // below we always loop thru the entire tx_buffer?
 // so we always loop thru 162 symbols, but the last ones might not matter.
@@ -281,6 +234,7 @@ extern const int PLL_CALCULATION_PRECISION=4;
 extern const int VFO_VDD_ON_N_PIN=4;
 extern const int VFO_I2C0_SDA_PIN=12;
 extern const int VFO_I2C0_SCL_PIN=13;
+
 #include "si5351_functions.h"
 // 0 should never happen (init_rf_freq will always init from saved nvram/live state)
 uint32_t XMIT_FREQUENCY=0;
@@ -290,33 +244,49 @@ uint32_t XMIT_FREQUENCY=0;
 #include "tele_functions.h"
 
 // telemetry_buff
+// init to 0 is just in case. Should always be set to something valid before use
+// empty string is not valid (not sure what will happen if used while empty..I suppose it can print ok)
 // always positive. clamp to 0 I guess
-char t_course[4];     // 3 bytes + null term (like all here
+char t_course[4] = { 0 };     // 3 bytes + null term (like all here
 // always positive? 0-250 knots. clamp to 0 I guess
-char t_speed[4];      // 3 bytes
+char t_speed[4] = { 0 };      // 3 bytes
 // 60000 meters. plus 1 in case negative?
-char t_altitude[7];   // 6 bytes
+char t_altitude[7] = { 0 };   // 6 bytes
 // 24 * 30 per hour = 720 per day if every two minutes
 // reboot once per day? (starts at 0)
-char t_tx_count_0[4]; // 3 bytes
-char t_temp[7];       // 6 bytes
-char t_pressure[8];   // 7 bytes
-char t_voltage[6];    // 5 bytes
-char t_sat_count[3];  // 2 bytes
+char t_tx_count_0[4] = { 0 }; // 3 bytes
+char t_temp[7] = { 0 };       // 6 bytes
+char t_pressure[8] = { 0 };   // 7 bytes
+char t_voltage[6] = { 0 };    // 5 bytes
+char t_sat_count[3] = { 0 };  // 2 bytes
 // lat/lon precision: How much to store
 // https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
 // 6 decimal places represent accuracy for ~ 10 cm
 // 7 decimal places for ~ 1 cm
 // The use of 6 digits should be enough. +/- is 1 more. decimal is one more. 0-180 is 3 more.
 // so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
-char t_lat[13];       // 12 bytes
-char t_lon[13];       // 12 bytes
-char t_grid[7];       // 6 bytes
+char t_lat[13] = { 0 };       // 12 bytes
+char t_lon[13] = { 0 };       // 12 bytes
+char t_grid6[7] = { 0 };      // 6 bytes
+char t_power[3] = { 0 };      // 2 bytes
+// t_power is clamped to string versions of these. use 0 if illegal
+// int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
+// ad6z will differentiate from u4b (10) and traquito (13) by using 3 or 7 in normal callsign tx 
+// 3 for low power, 7 for high power
+
+
+
+// In C, there are two text related data types: char and strings. 
+// A string is a pointer to an array of chars, that by convention is terminated with a NUL character ('\0'). 
+// A char is a single byte representing an ASCII character.
+// You create a string literal by compiling a series of characters contained between opening and closing double quotes: 
+// "this is a string literal"
+// You create a char literal by compiling a single character expression - possibly with a backslash escape - 
+// between a pair of single quotes
 
 //*********************************
 absolute_time_t loop_us_start = 0;
 absolute_time_t loop_us_end = 0;
-
 absolute_time_t gps_us_start = 0
 
 int64_t loop_us_elapsed;
@@ -349,12 +319,16 @@ void setup() {
     analogReadResolution(12);
 
     //**********************
+    // this is the usb serial. the baud rate doesn't really change usb data rates
     Serial.begin(115200);
     // Wait up to 5 seconds for serial to be opened, to allow catching
     // startup messages on native USB boards (that do not reset when serial is opened).
 
     // FIX! should I do this?
-    while (!Serial) { ; } // Serial is via USB; wait for enumeration
+    while (!Serial) // Serial is via USB; wait for enumeration
+        // whenever we have spin loops we need to updateStatusLED()
+        updateStatusLED();
+    }
 
     if (Serial.read() > 0) { // read and discard data
         Serial.println("Serial.read() detected input");
@@ -371,7 +345,11 @@ void setup() {
 
     Watchdog.reset();
     unsigned long start = millis();
-    while (millis() - start < 5000 && !Serial){;}
+    while (millis() - start < 5000 && !Serial) {
+        // whenever we have spin loops we need to updateStatusLED()
+        updateStatusLED();
+    }
+
     Watchdog.reset();
 
     Serial.println(F("Starting"));
@@ -425,19 +403,7 @@ char _devmode[2] = { 0 };
 char _correction[6] = { 0 };
 char _go_when_rdy[2] = { 0 };
 
-/*
-Verbosity:
-0: none
-1: temp/volts every second, message if no gps
-2: GPS status every second
-3: messages when a Tx started
-4: x-tended messages when a Tx started
-5: dump context every 20 secs
-6: show PPB every second
-7: Display GxRMC and GxGGA messages
-8: display ALL NMEA sentences from GPS module
-9: same as 8
-*/
+bool DEVMODE = false; // set when _devmode is set
 
 //*************************************************************************
 uint16_t  BeaconWait = 50;  // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
@@ -447,19 +413,17 @@ uint16_t  BattWait = 1;     // seconds sleep if super capacitors/batteries are b
 float     GpsMinVolt = 0.0; // min Volts for GPS to wake up.
 float     BattMin = 0.0;    // min Volts to wake up.
 float     WsprBattMin = 0.0;// min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
-
 float     HighVolt = 9.9;   // GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
 
 uint64_t GpsTimeToLastFix; // milliseconds
 void loop() {
     // copied from loop_us_end while in the loop (at bottom)
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
-
     Watchdog.reset();
     updateStatusLED();
     TelemetryBuffInvalidCnt++;
 
-    if ( !(GpsFirstFix && (readBatt() > BattMin)) || (!GpsFirstFix && (readBatt() > GpsMinVolt)) )) {
+    if ( !(GpsFirstFix && (readVoltage() > BattMin)) || (!GpsFirstFix && (readVoltage() > GpsMinVolt)) )) {
         sleepSeconds(BattWait);
     } else {
         //*********************
@@ -515,98 +479,92 @@ void loop() {
                 GpsTimeToLastFix = ( absolute_time_diff_us(gps_us_start, get_absolute_time()) ) / 1000ULL;
                 GpsInvalidCnt=0;
 
-                // don't updateTelemetryBuff buffer if there is an WSPR TX window soon (any if config)
+                // don't snapTelemetry buffer if there is an WSPR TX window soon (any if config)
                 // since we'll grab info from that buffer in sendWSPR ??
                 // maybe make it less than 50
 
+            
                 // we can update the telemetry buffer any minute we're not tx'ing
-                // FIX! no longer need?
-                /*
-                bool alignedForTx = false;
-                if (alignMinute(0) || alignMinute(2)) alignedForTx = true;
-
-                if ( (_TELEN_config[0]!='-' || _TELEN_config[1]!='-') ||
-                     (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
-                    if (alignMinute(4)) alignedForTx = true;
-                }
-
-                if ( (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
-                    if (alignMinute(6)) alignedForTx = true;
-                }
-
-                // _go_when_rdy will just always change the telemety buff before Tx..just test. okay callsign+telemetry
-                // are non-atomic grid6 as a result
-                if ( (!alignedForTx) | _go_when_rdy[0]=="1") {
-                }
-                */
+                //**************************************
 
                 // FIX! this should check if gps is valid before updating?
-                updateTelemetryBuff();
-                /* sets:
-                char t_course[4];     // 3 bytes, starts at 0
-                char t_speed[4];      // 3 bytes, starts at 4
-                char t_altitude[7];   // 6 bytes, starts at 10 .. guaranteed positive
-                char t_tx_count_0[4]; // 3 bytes starts at 17 ...stored tx_count_0 + 1
-                char t_temp[7];       // 6 bytes starts at 24 (float)
-                char t_pressure[8];   // 7 bytes starts at 31(float) Pa
-                char t_voltage[6];    // 5 bytes starts at 43
-                char t_sat_count[3];  // 2 bytes starts at 43
-                // fix! need to save grid6 from lat/long
-                */
+                snapTelemetry();
+                // sets all the t_* strings above
                 // voltage is captured when we write the buff? So it's before GPS is turned off?
                 // should we look at the live voltage instead?
-                extractFromTelemetryBuff();
                 TelemetryBuffInvalidCnt = 0;
+                if (DEVMODE) StampPrintf("After snapTelemetry() timeStatus():%u minute():%u\n", timeStatus(), minute());
+                // make sure the buffer of prints is empty to avoid overflow
+                DoLogPrint();
 
                 // freeMem();
 
                 // FIX! it should depend on the channel starting minute - 1 (modulo 10)
                 // preparations for HF starts one minute before TX time
                 // at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
-                if (DEVMODE) printf("timeStatus():%u minute():%u\n", timeStatus(), minute());
 
                 // FIX! why not look at seconds here? Oh, it will stall until lined up on secs below
                 // align to somewhere in the minute before the callsign starting minute
-                if ( (readBatt() > WsprBattMin) && alignMinute(-1) ) {
+                if ( (readVoltage() > WsprBattMin) && alignMinute(-1) ) {
                     GpsOFF();
-                    // FIX! change the message sent depending on where we are relative to start minute?
-                    // FIX! add parameter for 1, 2, 3, 4 consecutive U4B Tx
                     // GPS will stay off for all
-                    syncAndSendWspr(0)
+                    char hf_grid6[7] = { 0 };
+                    hf_callsign = _callsign;
+                    hf_grid6 = get_mh_6((double) t_lat, (double) t_lon);
+                    hf_grid4 = hf_loc[0:3]
+                    hf_grid4[4] = 0;
+                    
+
+                    char hf_power[3]  = "15";
+
+                    setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
+                    // syncAndSendWspr(char[7] hf_callsign, char[5] hf_grid4, char hf_power,  char[2]) {
+                    syncAndSendWspr(hf_callsign, hf_grid4, hf_power)
                     if (DEVMODE) {
-                        Tx_0_cnt += 1;
+                        tx_0_cnt += 1;
                         // we have 10 secs or so at the end of WSPR to get this off?
-                        Serial.println(F("WSPR callsign Tx sent"));
-                        Serial.flush();
+                        if (DEVMODE) {
+                            StampPrintf("WSPR callsign Tx sent. minutes %d secs %d", minutes(), seconds());
+                            DoLogPrint(); // we might have to delay this?
+                        }
                     }
                     // we don't loop around again caring about gps fix, because we've saved
                     // telemetry (and sensor data in there) right before the callsign tx
+                    setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
                     syncAndSendWspr(1)
                     if (DEVMODE) {
-                        Tx_1_cnt += 1;
+                        tx_1_cnt += 1;
                         // we have 10 secs or so at the end of WSPR to get this off?
-                        Serial.println(F("WSPR telemetry Tx sent"));
-                        Serial.flush();
+                        if (DEVMODE) {
+                            StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d", minutes(), seconds());
+                            DoLogPrint(); // we might have to delay this?
+                        }
                     }
                     // have to send this if telen1 or telen2 is enabled
                     if ( (_TELEN_config[0]!='-' || _TELEN_config[1]!='-') ||
                          (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
+                        setStatusLEDBlinkCount(LED_STATUS_TX_TELEN1);
                         syncAndSendWspr(2)
                         if (DEVMODE) {
-                            Tx_2_cnt += 1;
+                            tx_2_cnt += 1;
                             // we have 10 secs or so at the end of WSPR to get this off?
-                            Serial.println(F("WSPR telen1 Tx sent"));
-                            Serial.flush();
+                            if (DEVMODE) {
+                                StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d", minutes(), seconds());
+                                DoLogPrint(); // we might have to delay this?
+                            }
                         }
                     }
                     // have to send this if telen2 is enabled
                     if ( (_TELEN_config[2]!='-' || _TELEN_config[3]!='-') ) {
+                        setStatusLEDBlinkCount(LED_STATUS_TX_TELEN2);
                         syncAndSendWspr(2)
                         if (DEVMODE) {
-                            Tx_3_cnt += 1;
+                            tx_3_cnt += 1;
                             // we have 10 secs or so at the end of WSPR to get this off?
-                            Serial.println(F("WSPR telen2 Tx sent"));
-                            Serial.flush();
+                            if (DEVMODE) {
+                                StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d", minutes(), seconds());
+                                DoLogPrint(); // we might have to delay this?
+                            }
                         }
                     }
 
@@ -617,29 +575,31 @@ void loop() {
         }
     }
 
-    if (DEVMODE && verbosity>=1) {
-        // FIX! should these be the data from the telemetry buffer?
-        // maybe show GpsInvalidCnt also? how old are they
-        // maybe a TelemetryBuffInvalidCnt..cleared when we load it?
-        StampPrintf("Temp: %.1f  Volts: %0.2f  Altitude: %0.0f  Satellite count: %d grid6: %s\n",
-            tempU,volts,_altitude, sat_count, grid6);
-    }
-
-    // all StampPrintf are qualified by DEVMODE? Should _verbosity be forced to 0 if not DEVMODE?
-    if (DEVMODE) DoLogPrint();
 
     loop_us_end = get_absolute_time();
     loop_us_elapsed = absolute_time_diff_us(loop_us_start, loop_us_end);
     // floor divide to get milliseconds
     loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
-    if (DEVMODE && verbosity>=5) {
-        StampPrintf("main/20: _Band %s loop_ms_elapsed: %d millisecs loop_us_start: %llu microsecs loop_us_end: %llu microsecs",
+    if (DEVMODE) {
+        if (verbosity>=1) {
+            // FIX! should these be the data from the telemetry buffer?
+            // maybe show GpsInvalidCnt also? how old are they
+            // maybe a TelemetryBuffInvalidCnt..cleared when we load it?
+            StampPrintf(t_temp: %0.2f  t_altitude: %0.0f  t_grid6: %s t_sat_count: %d GpsTimeToLastFix %d\n",
+                t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, GpsTimeToLastFix)
+        } 
+        if (verbosity>=5) {
+            StampPrintf("main/20: _Band %s loop_ms_elapsed: %d millisecs loop_us_start: %llu microsecs loop_us_end: %llu microsecs",
                 _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
+        }
     }
+    DoLogPrint();
+    updateStatusLED();
 
     // next start is this end
     loop_us_start = loop_us_end;
+    // whenever we have spin loops we need to updateStatusLED()
 }
 
 // -1 is returned if anything illegal
@@ -681,35 +641,27 @@ void alignMinute (int offset int ) {
 
 }
 
-void syncAndSendWspr(int messageType) {
-    // messageType should be 0-3?
-    printf("will start WSPR messageType %d when aligned zero secs, currently %d secs\n",
-        messageType, seconds());
-
-    // FIX! it should use the captured telemetry, not live gps
-    char hf_loc[] = "AA00";
-    GridLocator(hf_loc, gps.location.lat(), gps.location.lng());
-    char hf_message[13] = "000AAA AA00"
-    sprintf(hf_message, "%s %s", hf_call, hf_loc);
+void syncAndSendWspr(char[7] hf_callsign, char[5] hf_grid4, char hf_power, char[2]) {
 
     if (DEVMODE) {
+        Serial.println("will start WSPR messageType %d when aligned zero secs, currently %d secs\n",
+            messageType, seconds());
         Serial.println(F("WSPR messageType %d Preparing", messageType));
         Serial.print(F("Grid Locator: "));
         Serial.println(hf_loc);
     }
 
-    int align_minute = alignMinute(messageType)
     // this should be fine even if we wait a long time
-    while (! (align_minute = minute() && second() != 0) {
+    while (! second() != 0) {
         Watchdog.reset();
         // FIX! delay 1 sec? change to pico busy_wait_us()?
         sleep_ms(1000)
         // delay(1);
+        // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();
     }
 
-    if (DEVMODE) Serial.println(F("WSPR messageType %d Sending...", messageType));
-    setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
+    sendWspr(hf_callsign, hf_grid4, hf_power);
     sendWSPR(messageType);
     //HFSent=true;
 }
@@ -722,12 +674,13 @@ void sleepSeconds(int sec) {
     Serial.flush();
     for (int i = 0; i < sec; i++) {
         // power off gps depending on voltage, after first fix
-        if (GpsFirstFix & (readBatt() < HighVolt)) GpsOFF();
-        else if (!GpsFirstFix & (readBatt() < BattMin) GpsOFF();
+        if (GpsFirstFix & (readVoltage() < HighVolt)) GpsOFF();
+        else if (!GpsFirstFix & (readVoltage() < BattMin) GpsOFF();
 
         Watchdog.reset();
         uint32_t usec = time_us_32();
         while ((time_us_32() - usec) < 1000000) {
+            // whenever we have spin loops we need to updateStatusLED()
             updateStatusLED();
             // FIX! should we unload/use GPS data during this?
             // gps could be on or off, so no?
@@ -842,6 +795,7 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
         // PWM handler sets proceed?
         proceed = false;
         while (!proceed) {
+            // whenever we have spin loops we need to updateStatusLED()
             updateStatusLED();
         }
         Watchdog.reset();
@@ -882,6 +836,9 @@ void set_tx_buffer(const hf_callsign const char[7], const char[5] hf_loc, uint8_
      *
     */
     jtencode.wspr_encode(hf_call, hf_loc, hf_power, tx_buffer);
+    // maybe useful python for testing wspr encoding
+    // https://github.com/robertostling/wspr-tools/blob/master/README.md
+
 }
 
 void freeMem() {

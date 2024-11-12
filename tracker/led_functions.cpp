@@ -81,3 +81,11 @@ void flipLED(void)
 }
 
 
+// parallel led blinking code
+// to avoid need to call updateStatusLED()
+// Output library supports HIGH, LOW, TOGGLE, PULSE, BLINK_WITHOUT_DELAY. 
+// https://github.com/ArduinoGetStarted/output
+// https://github.com/ArduinoGetStarted/output/tree/master/examples
+// + without using delay() function. This is a non-blocking example 
+
+

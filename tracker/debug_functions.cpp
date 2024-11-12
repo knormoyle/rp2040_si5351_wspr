@@ -36,9 +36,13 @@ void printInt(uint64_t val, bool valid, int len) {
     for (int i = strlen(sz); i < len; ++i) sz[i] = ' ';
     if (len > 0) sz[len - 1] = ' ';
     Serial.print(sz);
+
+    // whenever something might have taken a long time like printing
+    updateStatusLED();
 }
 
 // why was this static
+// with arduino, can't we just use printf to stdout rather than Serial.print() ?
 void printDateTime(TinyGPSDate &d, TinyGPSTime &t) {
     if (!DEVMODE) return;
     char sz[32];
@@ -56,17 +60,23 @@ void printDateTime(TinyGPSDate &d, TinyGPSTime &t) {
         Serial.print(sz);
     }
     printInt(d.age(), d.isValid(), 5);
+    // whenever something might have taken a long time like printing
+    updateStatusLED();
 }
 
 // why was this static
+// with arduino, can't we just use printf to stdout rather than Serial.print() ?
 void printStr(const char *str, int len) {
     if (!DEVMODE) return;
     int slen = strlen(str);
     for (int i = 0; i < len; ++i) Serial.print(i < slen ? str[i] : ' ');
+    // whenever something might have taken a long time like printing
+    updateStatusLED();
 }
 
 
 // why was this static?
+// with arduino, can't we just use printf to stdout rather than Serial.print() ?
 void printFloat(float val, bool valid, int len, int prec) {
     if (!DEVMODE) return;
 
@@ -80,6 +90,9 @@ void printFloat(float val, bool valid, int len, int prec) {
         flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
         for (int i = flen; i < len; ++i) Serial.print(' ');
     }
+    // whenever something might have taken a long time like printing
+    updateStatusLED();
+
 }
 
 //********************************************
@@ -156,6 +169,7 @@ void StampPrintf(const char* pformat, ...) {
     strncat(logBuffer, message, BUFFER_SIZE - strlen(logBuffer) - 1);
     strncat(logBuffer, "\n", BUFFER_SIZE - strlen(logBuffer) - 1);
 
+
 // Outputs the content of the log buffer to stdio (UART and/or USB)
 // Direct output to UART is very slow so we will do it in CPU idle times
 // and not in time critical functions
@@ -164,4 +178,7 @@ void DoLogPrint() {
         printf("%s", logBuffer);
         logBuffer[0] = '\0';  // Clear the buffer
     }
+    // whenever something might have taken a long time like printing the big buffer
+    updateStatusLED();
+
 }

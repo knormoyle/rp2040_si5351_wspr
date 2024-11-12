@@ -167,114 +167,146 @@ void process_chan_num()
     }
 }
 
+// telemetry_buff is a snapshot of consistent-in-time data that is used to 
+// generated encoded rf, spread out over a later time.
+// multiple wspr transmissions then can be combined to recreate the single consistent snapshot
+// grid4 plus subsquare for grid6, in two different transmissions, is notable example.
 
-// callsign, grid4, dbm are legal outputs. null term on callsign. no leading space on callsign, or any space.
-// the encode to wspr is done elsewhere
-extern char telemetry_buf[];
+// always positive int. clamped to 0, 360 ?
+extern char t_course[4];     // 3 bytes + null term (like all here)
 
-void u4b_encode_1( char[6] callsign, char[4] grid4), char[2] dbm ) { 
+// always positive int. clamped to 0,999
+extern char t_speed[4];      // 3 bytes
+
+// always positive int. clamped to 0, 999999
+extern char t_altitude[7];   // 6 bytes
+// two letters, two digits, two letters
+// base 18, base 18, base 10, base 10, base 24, base 24
+// [A-R][A-R][0-9][0-9][A-X][A-X]
+// I guess clamp to AA00AA if illegal? (easy to find errors?)
+
+// always positive int. clamped to 0, 999
+extern char t_tx_count_0[4]; // 3 bytes
+
+//  positive or negative float. clamped to -999.9 to 999.9
+extern char t_temp[7];       // 6 bytes
+
+// examples
+// 1 hPA = 100 PA
+// 11 km (36,000 ft): 226 hPa
+// 20 km (65,000 ft): 54.7 hPa
+// 32 km (105,000 ft): 8.68 hPa
+// always positive float. assume we read hPA. clamped to 0 to 999.999
+// FIX! is it hPA?
+extern char t_pressure[8];   // 7 bytes
+
+// always positive float. clamped to 0, 99.99  volts
+extern char t_voltage[6];    // 5 bytes
+
+// always positive int. clamped to 0,99 
+extern char t_sat_count[3];  // 2 bytes
+// two letters, two digits, two letters
+// base 18, base 18, base 10, base 10, base 24, base 24
+// [A-R][A-R][0-9][0-9][A-X][A-X]
+// I guess clamp to AA00AA if illegal? (easy to find errors?)
+
+// lon float clamped to 0 if out of range
+// -180.0000000 to 180.0000000
+// -179.9999999 to 179.9999999
+extern char t_lat[13];       // 12 bytes
+// lat float clamped to 0 if out of range
+// -90.0000000 to 90.0000000
+// -89.9999999 to 89.9999999
+extern char t_lon[13];       // 12 bytes
+
+// assume it's legal grid6?
+// two letters, two digits, two letters
+// base 18, base 18, base 10, base 10, base 24, base 24
+// [A-R][A-R][0-9][0-9][A-X][A-X]
+// I guess clamp to AA00AA if illegal? (easy to find errors?)
+extern char t_grid[7];       // 6 bytes
+
+// The above clamping is guaranteed by the assigments to t_*
+// Further range clamping is done here, given restrictions of u4b-like telemetry
+// but the above can be assumed to be always true.
+
+// for normal telemetry
+void u4b_encode_type0() {
+    // input: t_callsign t_grid6 t_power
+    // output: modifies the global hf_callsign, hf_grid4, hf_power..which is 
+    // then encoded as 126 wspr symbols in tx_buffer, and set out as RF with 4-FSK (each symbol has 4 values?)
     // normal telemetry
-    _u8_txpower =10; //hardcoded at 10dbM when doing u4b MSG 1
-    if (DEVMODE && verbosity>=3) printf("creating U4B packet 1\n");
-    char _4_char_version_of_locator[5];
-    //only take first 4 chars of locator
-    strncpy(_4_char_version_of_locator,_pu8_locator, 4);  _4_char_version_of_locator[4]=0;  //add null terminator
+    if (DEVMODE && verbosity>=3) printf("creating U4B telemetry 0\n");
+    char grid4[5];
+    strncpy(grid_3_0, t_grid6, 4);
+    grid_3_0[4] = 0;
 
-    // done elsewhere
-    // wspr_encode(_pu8_callsign, _4_char_version_of_locator, _u8_txpower, _pu8_outbuf, verbosity);  
+    // not used 
+    // char grid_5 = t_grid6[4]
+    // char grid_6 = t_grid6[5]
 
-    //record the values of grid chars 5 and 6 now, but they won't be used until packet type 2 is created
-    grid5 = _pu8_locator[4];  
-    grid6 = _pu8_locator[5];
-
-    altitude_snapshot=_altitude;     
-
-    if (DEVMODE && verbosity>=3) printf("creating U4B packet 2 \n");
-    char CallsignU4B[7];
-    char Grid_U4B[7];
-    uint8_t power_U4B;
-
-    // record the values of grid chars 5 and 6 now, but they won't be used until packet type 2 is created
-    // grid5 = _pu8_locator[4];  
-    // grid6 = _pu8_locator[5];
-    // altitude_snapshot=_pGPStime->_altitude;
-            
-    // inputs:  
-    // _pu8_locator (6 char grid)
-    // _temp_in_Celsius
-    // _id13
-    // _voltage
-
-    // pick apart inputs
-    // char grid5 = _pu8_locator[4];  values of grid 5 and 6 were already set previously when packet 1 was created
-    // char grid6 = _pu8_locator[5];
-    // convert inputs into components of a big number
-    // upper case?
     uint8_t grid5Val = grid5 - 'A';
     uint8_t grid6Val = grid6 - 'A';
 
-    uint16_t altFracM =  round((double)altitude_snapshot/ 20);     
+    // modulo 20 for altitude. integer
+    // decimal
+    // this will be a floor divide: t_altitude is int
+    // there are only 1068 encodings for altitude..clamp to max
+    if (altitude >= (1068 * 20)) {
+        altitude = (1068 * 20) - 20; // 21340 meters?
+    }
+    uint16_t altitudeNum = t_altitude / 20);     
 
     // convert inputs into a big number
     uint32_t val = 0;
     val *=   24; val += grid5Val;
     val *=   24; val += grid6Val;
-    val *= 1068; val += altFracM;
+    val *= 1068; val += altitudeNum;
 
     // extract into altered dynamic base
     uint8_t id6Val = val % 26; val = val / 26;
     uint8_t id5Val = val % 26; val = val / 26;
     uint8_t id4Val = val % 26; val = val / 26;
     uint8_t id2Val = val % 36; val = val / 36;
-    uint8_t id2Val = val % 36; val = val / 36;
 
     // convert to encoded CallsignU4B
+    // remember <space> is not used for encoding..although legal for some wspr cases?
+    // alpha plus numeric (36)
     char id2 = EncodeBase36(id2Val);
+
+    // easy to encode to base 26 (alpha only)
     char id4 = 'A' + id4Val;
     char id5 = 'A' + id5Val;
     char id6 = 'A' + id6Val;
 
     //string{ id13[0], id2, id13[1], id4, id5, id6 };
-    CallsignU4B[0] =  _txSched.id13[0];   
-    CallsignU4B[1] =  id2;
-    CallsignU4B[2] =  _txSched.id13[1];
-    CallsignU4B[3] =  id4;
-    CallsignU4B[4] =  id5;
-    CallsignU4B[5] =  id6;
-    CallsignU4B[6] =  0;
+    callsignU4B[0] =  _id13[0];   
+    callsignU4B[1] =  id2;
+    callsignU4B[2] =  _id13[1];
+    callsignU4B[3] =  id4;
+    callsignU4B[4] =  id5;
+    callsignU4B[5] =  id6;
+    callsignU4B[6] =  0;
 
-    /* inputs:  
-        _pu8_locator (6 char grid)
-        _temp_in_Celsius
-        _id13
-        _voltage
-    */    
-    /* outputs :    
-            char CallsignU4B[6]; 
-            char Grid_U4B[7]; 
-            uint8_t  power_U4B;
-            */
-    // parse input presentations
-    double tempC   = _txSched.temp_in_Celsius;
-    double voltage = _txSched.voltage;
-    // map input presentations onto input radix (numbers within their stated range of possibilities)
+    // these are stored as float strings (so is pressure)
+    double tempC   = atof(t_temp);
+    double voltage = atof(t_voltage)
 
-    //**************
     // handle possible illegal range (double wrap on tempC?). or should it clamp at the bounds?
-    // uint8_t tempCNum      = tempC - -50;
-    uint8_t tempCNum      = ((uint8_t) tempC - -50) % 90;
-    uint8_t voltageNum    = ((uint8_t)round(((voltage * 100) - 300) / 5) + 20) % 40;
-    // FIX! encoding # of satelites into knots
-    uint8_t speedKnotsNum = _pTX->_p_oscillator->_pGPStime->_time_data.sat_count;   
-    // handle possible illegal (0-41 legal range). 
+    int tempCNum      = (int) tempC - -50) % 90;
+    int voltageNum    = (int) round(((voltage * 100) - 300) / 5) + 20) % 40;
+
+    // FIX! kl3cbr did encoding # of satelites into knots. 
+    // t_speed is integer
+    // max t_speed could be 999 ?
+    int speedKnotsNum = t_speed  / 2
+    // range clamp t_speed (0-41 legal range). 
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
     if (speedKnotsNum > 41) speedKnotsNum = 41;
     //****************
     
-    // kevin old code since this isn't 0 or 1 
-    // it should really check zero. don't want to say valid if dead reckoning fix? (6)
-    uint8_t gpsValidNum   = _pTX->_p_oscillator->_pGPStime->_time_data._u8_is_solution_active;
-    gpsValidNum=1; //changed sept 27 2024. because the traquito site won't show the 6 char grid if this bit is even momentarily off. Anyway, redundant cause sat count is sent as knots
+    gpsValidNum = 1; 
+    // traquito site won't show the 6 char grid if this bit is off. 
     // shift inputs into a big number
     val = 0;
     val *= 90; val += tempCNum;
@@ -290,19 +322,120 @@ void u4b_encode_1( char[6] callsign, char[4] grid4), char[2] dbm ) {
     uint8_t g3Val    = val % 10; val = val / 10;
     uint8_t g2Val    = val % 18; val = val / 18;
     uint8_t g1Val    = val % 18; val = val / 18;
+
     // map output radix to presentation
     char g1 = 'A' + g1Val;
     char g2 = 'A' + g2Val;
     char g3 = '0' + g3Val;
     char g4 = '0' + g4Val;
  
-    Grid_U4B[0] = g1; // = string{ g1, g2, g3, g4 };
-    Grid_U4B[1] = g2;
-    Grid_U4B[2] = g3;
-    Grid_U4B[3] = g4;
-    Grid_U4B[4] = 0;
+    char grid4[4];
+    grid4[0] = g1;
+    grid4[1] = g2;
+    grid4[2] = g3;
+    grid4[3] = g4;
+    grid4[4] = 0;
 
-    power_U4B=valid_dbm[powerVal];
+    int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
+    char power[3];
+    sprintf(power, "%s", legalPower[powerVal]);
 
-    wspr_encode(CallsignU4B, Grid_U4B, power_U4B, _pu8_outbuf,_txSched.verbosity); 
+    // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
+    wspr_encode(callsign, grid4, power, tx_buffer)
    }
+
+//**************************************************
+
+//********************************************************************
+void encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
+    uint32_t val = telen_val1;
+    // extract into altered dynamic base
+    uint8_t id6Val = val % 26; val = val / 26;
+    uint8_t id5Val = val % 26; val = val / 26;
+    uint8_t id4Val = val % 26; val = val / 26;
+    uint8_t id2Val = val % 36; val = val / 36;
+
+    // convert to encoded callsign
+    telen_chars[0] = EncodeBase36(id2Val);
+    telen_chars[1] = 'A' + id4Val;
+    telen_chars[2] = 'A' + id5Val;
+    telen_chars[3] = 'A' + id6Val;
+
+    val = telen_val2 * 4;  //(bitshift to the left twice to make room for gps bits at end)
+
+    // unshift big number into output radix values
+    uint8_t powerVal = val % 19; val = val / 19;
+    uint8_t g4Val    = val % 10; val = val / 10;
+    uint8_t g3Val    = val % 10; val = val / 10;
+    uint8_t g2Val    = val % 18; val = val / 18;
+    uint8_t g1Val    = val % 18; val = val / 18;
+
+    // map output radix to presentation
+    telen_chars[4] = 'A' + g1Val;
+    telen_chars[5] = 'A' + g2Val;
+    telen_chars[6] = '0' + g3Val;
+    telen_chars[7] = '0' + g4Val;
+    telen_chars[8] = 0; // null terminate
+
+    // identifies it as the 2nd extended TELEN packet.
+    // (this is the GPS-valid bit. note for extended TELEN we did NOT set the gps-sat bit)
+    // this is the old GPS-valid bit
+    if (for_telen2) powerVal = powerVal + 2;
+    // telen1
+    else powerVal = powerVal + 0;
+    // the last bit, the old GPS-sat bit, is always 0 now. 
+
+
+    printf("val1 %d val2 %d goes to tx_buffer as callsign %s grid %s power %d)\n",
+        telen_val1, telen_val2, callsign, grid4, power)
+
+    char callsign[7];
+    callsign[0] = _id13[0]
+    callsign[1] = telen_chars[0]
+    callsign[2] = _id13[1]
+    callsign[3] = telen_chars[1]
+    callsign[4] = telen_chars[2]
+    callsign[5] = telen_chars[3]
+    callsign[6] = 0
+
+    char grid4[5];
+    grid4[0] = telen_chars[4];
+    grid4[1] = telen_chars[5];
+    grid4[2] = telen_chars[6];
+    grid4[3] = telen_chars[7];
+    grid4[4] = 0;
+
+    int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
+    // telen_power was passed by reference?
+    char [3] power;
+    sprintf(power, "%s", legalPower[powerVal];
+
+    // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
+    wspr_encode(callsign, grid4, power, tx_buffer)
+    // we should just encode it into callsign, grid power and call wspr_encode() to 
+    // put it in the tx_buffer like normal stuff
+}
+
+//******************************
+void u4b_encode_type1(uint32_t telen_val1, uint32_t telen_val2) {
+    // 8 chars for callsign plus grid not counting _id13
+
+    // we should just encode it into callsign, grid power and call wspr_encode() to 
+    // put it in the tx_buffer like normal stuff
+    bool for_telen2 = false;
+    encode_telen(telen_val1, telen_val2, for_telen2);
+}
+
+//******************************
+void u4b_encode_type2(uint32_t telen_val1, uint32_t telen_val2) {
+    // 8 chars for callsign plus grid not counting _id13
+
+    // we should just encode it into callsign, grid power and call wspr_encode() to 
+    // put it in the tx_buffer like normal stuff
+    bool for_telen2 = true;
+    encode_telen(telen_val1, telen_val2, for_telen2);
+}
+
+void u4b_encode_type2() {
+{
+

@@ -1,4 +1,3 @@
-
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
 // Author: Kevin Normoyle AD6Z initial 11/2024
@@ -17,18 +16,18 @@
 // https://github.com/RPiks/pico-WSPR-tx
 
 // always positive. clamp to 0 I guess
-extern char t_course[4];     // 3 bytes, starts at 0
+extern char t_course[4];     // 3 bytes,
 // always positive? 0-250 knots. clamp to 0 I guess
-extern char t_speed[4];      // 3 bytes, starts at 4
+extern char t_speed[4];      // 3 bytes,
 // 60000 meters. plus 1 in case negative?
-extern char t_altitude[7];   // 6 bytes, starts at 10 .. guaranteed positive
+extern char t_altitude[7];   // 6 bytes,
 // 24 * 30 per hour = 720 per day if every two minutes 
 // reboot once per day? (starts at 0)
-extern char t_tx_count_0[4]; // 3 bytes starts at 17 ...stored tx_count_0 + 1
-extern char t_temp[7];       // 6 bytes starts at 24 (float)
-extern char t_pressure[8];   // 7 bytes starts at 31(float) Pa
-extern char t_voltage[6];    // 5 bytes starts at 43
-extern char t_sat_count[3];  // 2 bytes starts at 49
+extern char t_tx_count_0[4]; // 3 bytes
+extern char t_temp[7];       // 6 bytes
+extern char t_pressure[8];   // 7 bytes
+extern char t_voltage[6];    // 5 bytes
+extern char t_sat_count[3];  // 2 bytes
 
 // lat/lon precision: How much to store
 // https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
@@ -36,11 +35,15 @@ extern char t_sat_count[3];  // 2 bytes starts at 49
 // 7 decimal places for ~ 1 cm
 // The use of 6 digits should be enough. +/- is 1 more. decimal is one more. 0-180 is 3 more. 
 // so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
-extern char t_lat[12];       // 12 bytes starts at 52
-extern char t_lon[12];       // 12 bytes starts at 64
-extern char t_grid6[7];      // 6 bytes starts at 64
+extern char t_lat[12];       // 12 bytes
+extern char t_lon[12];       // 12 bytes
+extern char t_grid6[7];      // 6 bytes
 
-void updateTelemetryBuff() {
+// clamped to 0 if not in this list of legal
+// legalPower = [0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60]
+extern char t_power[3];      // 2 bytes
+
+void snapTelemetry() {
     // FIX! why does isUpdated() get us past here?
     if (! (gps.location.isValid() && (gps.location.age() < 1000 || gps.location.isUpdated())) ) {
         return
@@ -49,58 +52,119 @@ void updateTelemetryBuff() {
         return
     }
 
-    int deg = gps.course.isValid() gps.course.deg() : 0;
-    if (deg < 0)   deg = 0;
-    if (deg > 999) deg = 999;
-    sprintf(t_deg, "%3d", deg);
+    int course = gps.course.isValid() gps.course.deg() : 0;
+    if (course < 0)   course = 0;
+    if (course > 360) course = 360;
+    sprintf(t_course, "%3d", course);
 
     int speed = gps.speed.isValid() gps.speed.knots() : 0;
-    if (speed < 0)   deg = 0;
-    if (speed > 999) deg = 999;
+    if (speed < 0)   speed = 0;
+    if (speed > 999) speed = 999;
     sprintf(t_speed, "%3d", speed);
 
-    //fixing negative altitude values causing display bug on aprs.fi
-    float altitude = gps.altitude.feet();
-    // negative
-    if (altitude<0) altitude = 0;
-
-    // int will floor the float
-    sprintf(t_altitude, "%6d", (int) altitude);
+    // fixing negative altitude values causing display bug on aprs.fi
+    int altitude = (int) gps.altitude.meters();
+    if (altitude < 0) altitude = 0;
+    if (altitude > 999999) altitude = 999999;
+    sprintf(t_altitude, "%6d", altitude);
 
     // FIX! get temp from rp2040??
-    float tempC = 0;
+    float tempC = 0
     // turn floats into strings
     // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string)
-    if (tempC < 0) tempC = 0;
-    // FIX! okay to just have integer temp
-    sprintf(t_temp, "%3d", tempC)
+    if (tempC < -999.9) tempC = -999.9;
+    if (tempC > 999.9) tempC = 999.9;
+    sprintf(t_temp, "%6.1f", tempC)
 
-    float pressure = bmp_read_pressure() / 100.0; //Pa to hPa
+    // examples
+    // 1 hPA = 100 PA
+    // 11 km (36,000 ft): 226 hPa
+    // 20 km (65,000 ft): 54.7 hPa
+    // 32 km (105,000 ft): 8.68 hPa
+    // FIX! do we read hPA
+    float pressure = bmp_read_pressure();
+    if (pressure < 0) pressure = 0;
+    if (pressure > 999.999) pressure = 999.999;
     sprintf(t_pressure, "%7.2f", pressure)
-    sprintf(t_voltage, "%5.2f", readBatt())
+
+    float voltage = battRead();
+    if (voltage < 0) voltage = 0;
+    if (voltage > 99.99) voltage = 99.99;
+    sprintf(t_voltage, "%5.2f", voltage)
     
-    sat_count = gps.satellites.isValid() ? (int)gps.satellites.value() : 0);
+    sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0);
+    if (sat_count < 0) sat_count = 0;
+    if (sat_count > 99) sat_count = 99;
+    
     sprint(t_sat_count, "%2d", sat_count)
 
-    float lat = gps.location.lat();
+    double lat = gps.location.lat();
+    // FIX is both 90 and -90 legal for maidenhead translate?
+    if (lat < -90) lat = -90;
+    if (lat > 90) lat = 90;
     // 12 bytes max with - and . counted
+
     sprint(t_lat, "%12.7f", lat)
-    float lon = gps.location.lon()
+    double lon = gps.location.lon()
+    // FIX is both 180 and -180 legal for maidenhead translate?
+    if (lon < -180 lon = -180;
+    if (lon > 180 lon = 180;
     sprint(t_lon, "%12.7f", lon)
 
     char grid6[7]; // null term
     // FIX! are lat/lon double
     grid6 = get_mh_6(gps.location.lat(), gps.location.lon()
+    // two letters, two digits, two letters
+    // base 18, base 18, base 10, base 10, base 24, base 24
+    // [A-R][A-R][0-9][0-9][A-X][A-X]
+    // I guess clamp to AA00AA if illegal? (easy to find errors?)
+    bool bad_grid = false;
+    if (grid6[0] < "A" || grid6[0] > "R"]) bad_grid = true;
+    if (grid6[1] < "A" || grid6[1] > "R"]) bad_grid = true;
+    if (grid6[2] < "0" || grid6[2] > "9"]) bad_grid = true;
+    if (grid6[3] < "0" || grid6[3] > "9"]) bad_grid = true;
+    if (grid6[4] < "A" || grid6[4] > "X"]) bad_grid = true;
+    if (grid6[5] < "A" || grid6[5] > "X"]) bad_grid = true;
+    if (bad_grid) grid6 = "AA00AA";
     sprint(t_grid6, "%6s", grid6)
+
+
+    // string literals are null terminated
+    char power[3] = "3";
+    if (_tx_high[0] == '1') power = "5";
+    // we clamp to a legalPower when we snapTelemetry()
+    // basically we look at _tx_high[0] to decide our power level that will be used for rf
+    // we could use values that are unique for this tracker, for easy differentiation from u4b/traquito!!
+    // like 3 and 7!
+
+    // validity check the power. for 'same as everything else' checking
+    int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
+    int legalPowerSize = 19; 
+    bool found = false;
+    int power_int = atoi(power); 
+    for (int i = 0; i < size; i++)
+        if (legalPower[i] == power_int)) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) power = "0";
+
+    sprintf(t_power, "%2d", power);
     
-    if (DEVMODE) Serial.println(telemetry_buff);
+    if (DEVMODE) {
+        printf("t_* course %3d speed %3d altitude %6d tx_count_0 %3d temp %6.1f pressure %7.3f \
+            voltage %2.2f sat_count %2d lat %12.7 lon %12.7 grid6 %6s power %2d\n",
+            t_course, t_speed, t_altitude, t_tx_count_0, t_temp,
+            t_pressure, t_voltage, t_sat_count, t_lat, t_lon, t_grid6, t_power);
+    }
 
 }
 
 //****************************************************
-float readBatt() {
+float readVoltage() {
     int adc_val = 0;
-    adc_val = analogRead(BattPin);
+    adc_val += analogRead(BattPin);
     adc_val += analogRead(BattPin);
     adc_val += analogRead(BattPin);
 
@@ -128,7 +192,70 @@ float readBatt() {
     // if (solar_voltage < 0.0f) solar_voltage = 0.0f;
     // if (solar_voltage > 9.9f) solar_voltage = 9.9f;
     return solar_voltage;
+}
+
+
+static float onewire_values[10] = { 0 };
+
+//****************************************************
+void process_TELEN_data(void) {
+    // FIX! where do these com from
+    // minutes_since_boot
+    // minutes_since_GPS_acquistion (should this be last time to fix);
+    // we don't send stuff out if we don't get gps acquistion. so minutes since fix doesn't really matter?
+    const float conversionFactor = 3300.0f / (1 << 12);   
+    // 3.3 * 1000. the 3.3 is from vref, the 1000 is to convert to mV. the 12 bit shift is because thats resolution of ADC
+
+    for (int i=0;i < 4;i++) {    
+        switch(_TELEN_config[i])
+        {
+            case '-':  break; //do nothing, telen chan is disabled
+            case '0': 
+                    adc_select_input(0);   
+                    telen_values[i] = round((float)adc_read() * conversionFactor); 
+                    break;
+            case '1': 
+                    adc_select_input(1); 
+                    telen_values[i] = round((float)adc_read() * conversionFactor); 
+                    break;
+            case '2': 
+                    adc_select_input(2); 
+                    telen_values[i] = round((float)adc_read() * conversionFactor); 
+                    break;
+            case '3': 
+                    adc_select_input(3); 
+                    telen_values[i] = round((float)adc_read() * conversionFactor * 3.0f);  
+                    break;  
+                    //since ADC3 is hardwired to Battery via 3:1 voltage devider, make the conversion here
+            case '4': telen_values[i] = _txSched.minutes_since_boot; break;    
+            case '5': telen_values[i] = _txSched.minutes_since_GPS_aquisition break;   
+            case '6': 
+                    if (onewire_values[_TELEN_config[i]-'6']>0)   
+                        telen_values[i] = onewire_values[_TELEN_config[i]-'6']*100; 
+                    else telen_values[i] = 20000 + (-1*onewire_values[_TELEN_config[i]-'6'])*100;   
+                    break; 
+            case '7': 
+                    if (onewire_values[_TELEN_config[i]-'6']>0) 
+                        telen_values[i] = onewire_values[_TELEN_config[i]-'6']*100; 
+                    else telen_values[i] = 20000 + (-1*onewire_values[_TELEN_config[i]-'6'])*100;   
+                    break; 
+            case '8': 
+                    if (onewire_values[_TELEN_config[i]-'6']>0) 
+                        telen_values[i] = onewire_values[_TELEN_config[i]-'6']*100; 
+                    else telen_values[i] = 20000 + (-1*onewire_values[_TELEN_config[i]-'6'])*100;   
+                    break; 
+            case '9': 
+                    if (onewire_values[_TELEN_config[i]-'6']>0) 
+                        telen_values[i] = onewire_values[_TELEN_config[i]-'6']*100; 
+                    else telen_values[i] = 20000 + (-1*onewire_values[_TELEN_config[i]-'6'])*100;   
+                    break;    
+        } 
+    }
+
+    //onewire_values  
+    TELEN1_val1=telen_values[0]; // will get sent as TELEN #1 (extended Telemetry) (a third packet in the U4B protocol)
+    TELEN1_val2=telen_values[1]; // max values are 630k and 153k for val and val2
+    TELEN2_val1=telen_values[2];   //will get sent as TELEN #2 (extended Telemetry) (a 4th packet in the U4B protocol)
+    TELEN2_val2=telen_values[3]; // max values are 630k and 153k for val and val2
 
 }
-    
-
