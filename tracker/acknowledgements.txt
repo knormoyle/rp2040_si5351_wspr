@@ -2,7 +2,7 @@
 // Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
 // Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
 
-// Incorporates work by: Kazuhisa “Kazu” Terasaki AG6NS. Thank you.
+// Incorporates work by: Kazuhisa "Kazu" Terasaki AG6NS. Thank you.
 // https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
 // https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker
 
@@ -33,40 +33,4 @@
 // https://amateur.sondehub.org
 
 // Thanks for knowledge/support from everyone at https://groups.io/g/picoballoon
-
-//*******************************************
-// Open source c/c++/arduino ide with arduino-pico core allows customization if you have software skills
-// Especially useful for adding i2c/onewire sensors and sending results via u4b TELEN encoded telemetry.
-// lu7aa website can be enabled to report those. no extra u4b channel reservation needed.
-
-// No auto-calibration of Si5351 Tx frequency (yet?).
-// Manual config for passing 'correction" (parts per billion) to Si5351, 
-// in case Tx Frequency is outside of U4B channel bin.
-// Traquito website can fingerprint callsign/telemetry frequency even if out of bin.
-// LU7AA website not so well (although 'wide' helps).
-// SDR can be used to report actual TX freq and correction applied to adjust.
-
-// Any correction should be fixed: the same for all bands for a particular tracker.
-
-// No auto-calibration of RP2040 clock frequency
-// Manual config for setting rp2040 clock frequency, 115 to 250 Mhz. 115Mhz default
-// (could calibrate/adjust with GPS PPS and then calibrate the Si5351 Tx frequency (signals go to RP2040 input)
-
-//*******************************************
-// coding style:
-// although cpp features are used per arduino, strings are limited to char arrays like c
-// google cpplint is used to flag style issues (follows google c++ style rules..
-// some allowances like >80 chars/line)
-// naming convention for functions/variables is loose/inconsistent 
-// (underscore/camel case/capitalization etc)
-// There is a single tracker.ino
-// to avoid "one big blob" of code, multiple *_function.h and *_function.cpp are used to group
-// logical groups of functions. Liberal use of globals, to minimize overall typing. 
-// see externs in the *_functions.cpp
-// All char arrays have null terminators on values, so they can be easily printed for debug or other.
-// Flash is used to store configuration variables, to avoid recompiling firmware.
-// config to control whether printf's can send to stdout and verbosity levels to control amount of printing
-// flight will generally be set to no output to stdout (DEVMODE=0)
-// Only the pwm for wspr send is interrupt driven. Careful management of when uart data from gps is unloaded
-
 

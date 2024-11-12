@@ -1,59 +1,20 @@
-// Project: https://github.com/knormoyle/rp2040_si5351_wspr
-// Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
-// Author: Kevin Normoyle AD6Z initial 11/2024
-
-// tracker firmware:
-// Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
-// Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
-
-// Incorporates work by: Kazuhisa “Kazu” Terasaki AG6NS. Thank you.
-// https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
-// https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker
-
-// Incorporates work by: Rob Votin KC3LBR. Thank you.
-// https://github.com/EngineerGuy314/pico-WSPRer
-
-// Incorporates work by: Roman Piksaykin R2BDY. Thank you.
-// https://github.com/RPiks/pico-WSPR-tx
-
+//*******************************************
 // Open source c/c++/arduino ide with arduino-pico core allows customization if you have software skills
+// Especially useful for adding i2c/onewire sensors and sending results via u4b TELEN encoded telemetry.
+// lu7aa website can be enabled to report those. no extra u4b channel reservation needed.
 
-// No auto-calibration of Si5351 Tx frequency (yet?). 
-// Manual config for passing 'correction" (parts per billion) to Si5351, in case Tx Frequency is outside of U4B channel bin. 
-// Traquito website can fingerprint callsign/telemetry frequency even if out of bin. 
-// LU7AA website not so well (although 'wide' helps). 
+// No auto-calibration of Si5351 Tx frequency (yet?).
+// Manual config for passing 'correction" (parts per billion) to Si5351, 
+// in case Tx Frequency is outside of U4B channel bin.
+// Traquito website can fingerprint callsign/telemetry frequency even if out of bin.
+// LU7AA website not so well (although 'wide' helps).
 // SDR can be used to report actual TX freq and correction applied to adjust.
+
 // Any correction should be fixed: the same for all bands for a particular tracker.
 
-// No auto-calibration of RP2040 clock frequency (not needed)
+// No auto-calibration of RP2040 clock frequency
 // Manual config for setting rp2040 clock frequency, 115 to 250 Mhz. 115Mhz default
-
-//*******************************************
-// Arduino IDE created by many
-// Adafruit libraries created by many
-// arduino-pico core https://github.com/earlephilhower/arduino-pico
-// JTEncode library: https://github.com/etherkit/JTEncode
-// https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png// TinyGPSPlus library: //https://github.com/mikalhart/TinyGPSPlus 
-// Time library: //https://github.com/PaulStoffregen/Time
-// Si5351 programming: based on work by: Kazuhisa “Kazu” Terasaki AG6NS
-// U4B telemetry protocol defined by Hans Summers G0UPL
-// WSPR protocol defined by Joe Taylor K1JT
-
-// Thanks to all authors and contributors
-// Thanks to the entire WSPR RX ecosystem of spotters and database maintainers
-
-// Thanks to the tracker websites and authors/maintainers
-// http://lu7aa.org/wsprx.asp Pedro Converso LU7AA
-// https://traquito.github.io/channelmap/ Doug Malnati KD2KDD
-// https://amateur.sondehub.org
-
-// Thanks for knowledge/support from everyone at https://groups.io/g/picoballoonhttps://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png
-
-//*******************************************
-// tracker pcb: (fork from AG6NS rp2040_picoballoon_tracker_pcb_gen1j)
-// https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/tree/main/pcb/tracker/v0.4
-// schematic: https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/SCH_Schematic1_2023-09-11.pdf
-// jlcpcb parts placement with '_kbn' bom/cpl https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png
+// (could calibrate/adjust with GPS PPS and then calibrate the Si5351 Tx frequency (signals go to RP2040 input)
 
 // Uses unmodified AG6NS 0.4 pcb with alternate assembly bom/cpl (Manfuctured by https://jlcpcb.com)
 // that:
@@ -71,17 +32,22 @@
 // 10) clamping of speed/temp/voltage (3-4.95v) telemetry per traquito u4b-like definition.
 // 11) compared to traquito: no buck/boost, just LDO. pressure/external temp sensor. Configurable extra telemetry. 
 // 12) USB serial for config input and output. No need to modify software for callsign/band etc
-// 13) Uses MS5351M instead of Si5351a.  Hans Summers G0UPL did a review here: https://qrp-labs.com/synth/ms5351m.html 
+// 13) Uses MS5351M instead of Si5351a.  Hans Summers G0UPL did a review here: https://qrp-labs.com/synth/ms5351m.html
 
 /* key parts with jlpcb # (Cxxx)
-C90770   ATGM336H-5N31  https://jlcpcb.com/partdetail/Zhongkewei-ATGM336H5N31/C90770
+C90770   ATGM336H-5N31  https://jlcpcb.com/partdetail/Zhongkewei-ATGM336H5N31/C90770  'GNSS Module'
 C2040    RP2040         https://jlcpcb.com/partdetail/RaspberryPi-RP2040/C2040
 C5446    XC6206P332MR-G https://jlcpcb.com/partdetail/TorexSemicon-XC6206P332MRG/C5446 '200mA Fixed 3.3V 6V Low Drop Out (LDO) Regulator'
 C9965    MAX809STRG     https://jlcpcb.com/partdetail/Onsemi-MAX809STRG/C9965 '2.93v 140ms Active Low Supervisor and Reset'
 C132296  26Mhz          https://jlcpcb.com/partdetail/KdsDaishinku-1XXB26000MAA/C132296 '1.8V~2.8V ±1.5ppm 26MHz 4P Temperature Compensated Crystal Oscillators (TCXO)' 
+
 C83291   BMP280         https://jlcpcb.com/partdetail/BoschSensortec-BMP280/C83291 'Bosch Digital Pressure Sensor'
+or
+C92489   BME280         https://jlcpcb.com/partdetail/BoschSensortec-BME280/C92489 'Bosch Temp, Pressure, Humidity Sensor'
 C2843335 W25Q16JVUXIQ   https://jlcpcb.com/partdetail/WinbondElec-W25Q16JVUXIQ/C2843335 '3V 16Mbit Serial Flash Memory w Dual/Quad SPI'
+
 C1509083 MS5351M        https://jlcpcb.com/partdetail/Hangzhou_RuimengTech-MS5351M/C1509083 'I2C 200Mhz Clock Generator'
+could use si5351a on same footprint
 
 https://www.lcsc.com/datasheet/lcsc_datasheet_2404181014_Hangzhou-Ruimeng-Tech-MS5351M_C1509083.pdf
 datasheet above is Mandarin 2023.11.24 11 pages
@@ -91,3 +57,19 @@ short english datasheet 2021.03.08 10 pages
 https://www.qrp-labs.com/images/synth/ms5351m.pdf
 (does it draw 8mA more current?)
 */
+//*******************************************
+// coding style:
+// although cpp features are used per arduino, strings are limited to char arrays like c
+// google cpplint is used to flag style issues (follows google c++ style rules..
+// some allowances like >80 chars/line)
+// naming convention for functions/variables is loose/inconsistent 
+// (underscore/camel case/capitalization etc)
+// There is a single tracker.ino
+// to avoid "one big blob" of code, multiple *_function.h and *_function.cpp are used to group
+// logical groups of functions. Liberal use of globals, to minimize overall typing. 
+// see externs in the *_functions.cpp
+// All char arrays have null terminators on values, so they can be easily printed for debug or other.
+// Flash is used to store configuration variables, to avoid recompiling firmware.
+// config to control whether printf's can send to stdout and verbosity levels to control amount of printing
+// flight will generally be set to no output to stdout (DEVMODE=0)
+// Only the pwm for wspr send is interrupt driven. Careful management of when uart data from gps is unloaded
