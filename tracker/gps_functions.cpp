@@ -109,6 +109,11 @@ void GpsINIT() {
     // digitalWrite(GPS_ON_PIN, HIGH);
 }
 
+bool GpsIsOn = false
+// FIX! gonna need an include for this? maybe note
+// # include <TimeLib.h>
+extern absolute_time_t gps_us_start;
+
 void GpsON(bool GpsColdReset) {
     // could be off or on already
     // Assume GpsINIT was already done
@@ -120,7 +125,7 @@ void GpsON(bool GpsColdReset) {
     // Serial2.begin(9600);
 
     digitalWrite(GpsPwr, LOW);
-    sleep_ms(2000);
+    gps_us_start = get_absolute_time();
 
     // alternative GPS
     // SIM28ML
@@ -146,6 +151,7 @@ void GpsON(bool GpsColdReset) {
     // FIX! should we wait for ack or no?
     // have to toggle power off/on to get this effect? no?
     if (GpsColdReset) {
+        sleep_ms(2000);
         Serial2.print("$PMTK104*37\r\n");
         sleep_ms(2000);
         // don't worry about setting balloon mode (3) for ATGM336?

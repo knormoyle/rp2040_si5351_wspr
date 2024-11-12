@@ -231,10 +231,13 @@ extern char t_grid[7];       // 6 bytes
 // but the above can be assumed to be always true.
 
 // for normal telemetry
+
 void u4b_encode_type0() {
-    // input: t_callsign t_grid6 t_power
-    // output: modifies the global hf_callsign, hf_grid4, hf_power..which is 
-    // then encoded as 126 wspr symbols in tx_buffer, and set out as RF with 4-FSK (each symbol has 4 values?)
+    // input: uses t_callsign t_grid6 t_power
+    // output: modifies globals: hf_callsign, hf_grid4, hf_power
+
+    // ..which is then encoded as 126 wspr symbols in tx_buffer, 
+    // and set out as RF with 4-FSK (each symbol has 4 values?)
     // normal telemetry
     if (DEVMODE && verbosity>=3) printf("creating U4B telemetry 0\n");
     char grid4[5];
@@ -348,6 +351,7 @@ void u4b_encode_type0() {
 
 //********************************************************************
 void encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
+    // output: modifies globals: hf_callsign, hf_grid4, hf_power
     uint32_t val = telen_val1;
     // extract into altered dynamic base
     uint8_t id6Val = val % 26; val = val / 26;
@@ -415,27 +419,3 @@ void encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
     // we should just encode it into callsign, grid power and call wspr_encode() to 
     // put it in the tx_buffer like normal stuff
 }
-
-//******************************
-void u4b_encode_type1(uint32_t telen_val1, uint32_t telen_val2) {
-    // 8 chars for callsign plus grid not counting _id13
-
-    // we should just encode it into callsign, grid power and call wspr_encode() to 
-    // put it in the tx_buffer like normal stuff
-    bool for_telen2 = false;
-    encode_telen(telen_val1, telen_val2, for_telen2);
-}
-
-//******************************
-void u4b_encode_type2(uint32_t telen_val1, uint32_t telen_val2) {
-    // 8 chars for callsign plus grid not counting _id13
-
-    // we should just encode it into callsign, grid power and call wspr_encode() to 
-    // put it in the tx_buffer like normal stuff
-    bool for_telen2 = true;
-    encode_telen(telen_val1, telen_val2, for_telen2);
-}
-
-void u4b_encode_type2() {
-{
-

@@ -174,11 +174,13 @@ void StampPrintf(const char* pformat, ...) {
 // Direct output to UART is very slow so we will do it in CPU idle times
 // and not in time critical functions
 void DoLogPrint() {
+    Watchdog.reset()
     if (logBuffer[0] != '\0') {
         printf("%s", logBuffer);
         logBuffer[0] = '\0';  // Clear the buffer
     }
     // whenever something might have taken a long time like printing the big buffer
     updateStatusLED();
+    Watchdog.reset()
 
 }
