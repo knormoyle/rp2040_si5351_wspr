@@ -145,6 +145,7 @@ BMP280_U32_t bmp280_compensate_P_int64(BMP280_S32_t adc_P) {
 
 #define BMP280_I2C_INSTANCE i2c1
 #include "bmp_functions.h"
+#include <Wire.h>
 
 extern const int BMP280_I2C1_SDA_PIN = 2;
 extern const int BMP280_I2C1_SCL_PIN = 3;
@@ -172,19 +173,20 @@ void bmp_init(void) {
     gpio_set_function(BMP280_I2C1_SCL_PIN, GPIO_FUNC_I2C);
 }
 
-#include <Wire.h>
 
 // Default settings from datasheet
 // FIX! bme280? different sampling from default
 // should I do forced or continuous readings
 // might want the device to stay a little warm?
 // is power low enough to not care or ??
+/*
 bmp.setSampling(
     Adafruit_BMP280::MODE_NORMAL,
     Adafruit_BMP280::SAMPLING_X2,
     Adafruit_BMP280::SAMPLING_X16,
     Adafruit_BMP280::FILTER_X16,
     Adafruit_BMP280::STANDBY_MS_500);
+*/
 
 
 //*********************

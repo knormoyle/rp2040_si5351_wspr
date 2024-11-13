@@ -2,10 +2,26 @@
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
+#include <Arduino.h>
 #include <stdint.h>
 
 // any of this needed
 #include <stdio.h>
+// for isprint()
+#include <ctype.h>
+#include <stdlib.h>
+
+#include "defines.h"
+#include "led_functions.h"
+#include "config_functions.h"
+
+// FIX! is the program bigger than 256K
+#define FLASH_TARGET_OFFSET (256 * 1024) // leaves 256k of space for the program
+#define FLASH_SECTOR_SIZE = 4096
+#define  FLASH_PAGE_SIZE  = 256
+
+extern uint32_t XMIT_FREQUENCY;
+extern bool DEVMODE;
 
 extern char _callsign[7];
 extern char _id13[3];
@@ -500,10 +516,8 @@ int check_data_validity_and_set_defaults(void) {
         snprintf(_devmode, sizeof(_devmode), "0");
         write_FLASH();
         result = -1;
-
-        DEVMOD = false;
     }
-    if (atoi(_correction < -3000 || atoi(_correction) > 3000) {
+    if (atoi(_correction) < -3000 || atoi(_correction) > 3000) {
         printf("%s\n_correction %s is not supported/legal, initting to 0\n%s",
             RED, _correction, NORMAL);
         snprintf(_correction, sizeof(_correction), "0");
@@ -523,7 +537,7 @@ int check_data_validity_and_set_defaults(void) {
 
 // Function that writes out the current set values of parameters
 void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
-    printf("%s%s%s\n\nCurrent values:\n%s%s", CLEAR_SCREEN, UNDERLINE_ON, BRIGHT, UNDERLINE_OFF_NORMAL);
+    printf("%s%s%s\n\nCurrent values:\n%s%s", CLEAR_SCREEN, UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
 
     printf("\n\tcallsign:%s\n\t", _callsign);
     printf("U4B channel:%s", _U4B_chan);
@@ -534,14 +548,14 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     printf("TELEN config:%s\n\t", _TELEN_config);
     printf("clock speed:%sMhz\n\t", _clock_speed);
     printf("band:%s\n\t", _Band);
+    printf("DEVMODE:%s\n\t", _devmode);
+    printf("correction:%s\n\t", _correction);
+    printf("go_when_rdy:%s\n\t", _go_when_rdy);
     printf("XMIT_FREQUENCY:%d\n\t", XMIT_FREQUENCY);
-    printf("DEVMODE:%d\n\t", _devmode);
-    printf("correction:%d\n\t", _correction);
-    printf("go_when_rdy:%d\n\t", _go_when_rdy);
 
     printf("%s%sValid commands: %s%s", UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
 
-    printf("\n\n\tX: eXit configuration and reboot\n\t")
+    printf("\n\n\tX: eXit configuration and reboot\n\t");
     printf("C: change Callsign (6 char max)\n\t");
     printf("U: change U4b channel # (0-599)\n\t");
     printf("A: change band (10,12,15,17,20 default 20)\n\t");

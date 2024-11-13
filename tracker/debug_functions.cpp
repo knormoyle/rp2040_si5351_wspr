@@ -20,6 +20,7 @@
 
 extern bool DEVMODE;
 #include "debug_functions.h"
+#include "led_functions.h"
 
 // for TinyGPSDate definition
 #include <TinyGPS++.h>
@@ -161,9 +162,9 @@ void StampPrintf(const char* pformat, ...) {
     // make BUFFER_SIZE bigger or do more DoLogPrint() if we run into a problem realtime
     // FIX! should we detect when we're close to the logBuffer being full?
         printf("WARNING: with BUFFER_SIZE %d strlen(logBuffer) %d there is no room for timestamp %s message %s <newline>",
-            BUFFER_SIZE, strlen(logBuffer), timestamp, message)
-        printf("..flushing with DoLogPrint")
-        DoLogPrint()
+            BUFFER_SIZE, strlen(logBuffer), timestamp, message);
+        printf("..flushing with DoLogPrint");
+        DoLogPrint();
     }
     strncat(logBuffer, timestamp, BUFFER_SIZE - strlen(logBuffer) - 1);
     strncat(logBuffer, message, BUFFER_SIZE - strlen(logBuffer) - 1);

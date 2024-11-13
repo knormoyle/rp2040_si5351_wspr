@@ -16,7 +16,7 @@
 #define U4B_FUNCTIONS_H
 #include <stdint.h>
 
-void process_chan_num()
-uint32_t init_rf_freq(void)
+void process_chan_num();
+uint32_t init_rf_freq(void);
 
 #endif

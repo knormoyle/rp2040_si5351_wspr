@@ -3,12 +3,15 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
+#include <Arduino.h>
 #include <stdint.h>
-include "u4b_functions.h"
+#include <stdlib.h>
+#include "u4b_functions.h"
 
 //********************************
 // the key output that is used to pwm rf ..162 symbols that are 4-FSK
 extern uint8_t tx_buffer[255];  // is this bigger than WSPR_SYMBOL_COUNT?
+extern uint32_t XMIT_FREQUENCY;
 
 //********************************
 // t_* (was: telemetry_buff) is a snapshot of consistent-in-time data used to
@@ -76,6 +79,12 @@ extern char t_grid[7];  // 6 bytes
 // Further range clamping is done here, given restrictions of u4b-like telemetry
 // but the above can be assumed to be always true.
 
+extern char _Band[3];
+extern char _id13[3];
+extern char _U4B_chan[4];
+extern char _lane[2];
+extern char _clock_speed[4];
+
 //*******************************
 // use:
 //  uint32_t XMIT_FREQUENCY = init_rf_freq()
@@ -123,8 +132,8 @@ uint32_t init_rf_freq(void) {
             default: XMIT_FREQUENCY += 100UL;
         }
 
-        printf("\nrf_freq_init _Band %s BASE_FREQ_USED %d XMIT_FREQUENCY %d _Klock_speed %s\n",
-            _Band, BASE_FREQ_USED, XMIT_FREQUENCY, _Klock_speed);
+        printf("\nrf_freq_init _Band %s BASE_FREQ_USED %d XMIT_FREQUENCY %d _clock_speed %s\n",
+            _Band, BASE_FREQ_USED, XMIT_FREQUENCY, _clock_speed);
         return XMIT_FREQUENCY;
 }
 

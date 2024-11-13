@@ -7,7 +7,10 @@
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <avr/dtostrf.h>
+
+#include "defines.h"
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
@@ -129,7 +132,7 @@ char comment[] = "tracker 1.0";
 const int WSPR_TONE_SPACING = 146;  // ~1.46 Hz
 const int WSPR_DELAY = 683;         // Delay value for WSPR
 
-char telemetry_buff[100] = { 0 |;  // telemetry buffer
+char telemetry_buff[100] = { 0 };  // telemetry buffer
 uint16_t Tx_0_cnt = 0;  // increase +1 after every callsign tx
 uint16_t Tx_1_cnt = 0;  // increase +1 after every telemetry tx
 uint16_t Tx_2_cnt = 0;  // increase +1 after every telen1 tx
@@ -167,6 +170,7 @@ int16_t GpsInvalidCnt = 0;
 TinyGPSPlus gps;
 
 #include "debug_functions.h"
+#include "config_functions.h"
 
 //*********************************
 // in AdaFruit_I2CDevice.h
@@ -361,10 +365,6 @@ void setup() {
     Wire.begin();  // somehow this is necessary for Serial2 to work properly
     vfo_init();
 
-    Serial.print(F("WSPR (HF) CallSign: "));
-    Serial.println(hf_call);
-    Serial.println(F(""));
-
     // sets minute/lane/id from chan number.
     // FIX! is it redundant at this point?..remove?
     process_chan_num();
@@ -379,6 +379,7 @@ void setup() {
         user_interface();
     }
     //***************
+    const uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
         printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s",
             RED, PLL_SYS_MHZ, NORMAL);
@@ -444,12 +445,6 @@ int TELEN1_val1;
 int TELEN1_val2;
 int TELEN2_val1;
 int TELEN2_val2;
-
-// are these used as globals anymore?
-uint64_t hf_freq;
-char[7] hf_callsign;
-char[5] hf_grid4;
-uint8_t hf_power;
 
 void loop() {
     Watchdog.reset();
@@ -567,7 +562,7 @@ void loop() {
 
                     // GPS will stay off for all
                     char hf_grid6[7] = { 0 };
-                    hf_callsign = _callsign;
+                    char hf_callsign[7] = _callsign;
                     hf_grid6 = get_mh_6((double) t_lat, (double) t_lon);
                     hf_grid4 = hf_loc[0:3]
                     char hf_power[3]  = t_power;
@@ -731,7 +726,7 @@ void syncAndSendWspr(int txNum, char[7] hf_callsign, char[5] hf_grid4, char[2]  
     if (DEVMODE) {
         Serial.println("will start WSPR messageType %d when aligned zero secs, currently %d secs\n",
             messageType, seconds());
-        Serial.println(F("WSPR messageType %d Preparing", messageType));
+        Serial.println("WSPR messageType %d Preparing", messageType);
         Serial.print(F("Grid Locator: "));
         Serial.println(hf_loc);
     }
@@ -819,7 +814,7 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
 
 
     // FIX! use the u4b channel freq
-    hf_freq = XMIT_FREQUENCY;
+    uint64_t hf_freq = XMIT_FREQUENCY;
     if (atoi(_correction) != 0) {
         // this will be a floor divide
         hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL)
@@ -865,7 +860,7 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
 }
 
 //**********************
-void set_tx_buffer(const hf_callsign const char[7], const char[5] hf_loc, uint8_t hf_power, uint8_t * tx_buffer) {
+void set_tx_buffer(const char[7] hf_callsign, const char[5] hf_loc, uint8_t hf_power, uint8_t * tx_buffer) {
     // Clear out the transmit buffer
     memset(tx_buffer, 0, 255);  // is this bigger than WSPR_SYMBOL_COUNT ?
     // Set the proper frequency and timer CTC

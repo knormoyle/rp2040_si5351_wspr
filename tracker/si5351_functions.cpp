@@ -11,9 +11,12 @@
 // for busy_wait_us_32()
 #include <Arduino.h>
 #include "si5351_functions.h"
-// for memcpy
+#include <stdlib.h>
 #include <cstring>
 #include "hardware/gpio.h"
+
+extern uint32_t XMIT_FREQUENCY;
+extern bool DEVMODE;
 
 extern const int VFO_VDD_ON_N_PIN;
 extern const int VFO_I2C0_SDA_PIN;

@@ -3,6 +3,10 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
+#include <Arduino.h>
+
+#include <stdlib.h>
+
 extern char t_course[4];      // 3 bytes
 extern char t_speed[4];       // 3 bytes
 extern char t_altitude[7];    // 6 bytes
@@ -31,7 +35,13 @@ extern int TELEN1_val2;
 extern int TELEN2_val1;
 extern int TELEN2_val2;
 
-int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
+#include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
+
+
+extern TinyGPSPlus gps;
+extern bool DEVMODE;
+
+int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
 void snapTelemetry() {
     // FIX! didn't we already check this?

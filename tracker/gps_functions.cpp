@@ -57,7 +57,7 @@ extern bool GpsIsOn;
 
 // for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
 extern absolute_time_t GpsStartTime;  // usecs
-extern GpsTimeToLastFix;  // milliseconds
+extern uint64_t GpsTimeToLastFix;  // milliseconds
 
 void GpsINIT() {
     Serial2.setRX(GPS_UART1_RX_PIN);
