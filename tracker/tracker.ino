@@ -945,3 +945,6 @@ int InitPicoClock(int PLL_SYS_MHZ) {
 // string str; str = "gfg";
 
 //**********************
+// should I work on a local branch and commit to repo less often?
+// https://stackoverflow.com/questions/13276909/how-to-do-a-local-only-commit-in-git
+

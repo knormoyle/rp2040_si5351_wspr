@@ -1,20 +1,7 @@
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
-// Author: Kevin Normoyle AD6Z initial 11/2024
-
-// Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
-// Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
-
-// Incorporates work by: Kazuhisa “Kazu” Terasaki AG6NS. Thank you.
-// https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
-// https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker
-
-// Incorporates work by: Rob Votin KC3LBR. Thank you.
-// https://github.com/EngineerGuy314/pico-WSPRer
-
-// Incorporates work by: Roman Piksaykin R2BDY. Thank you.
-// https://github.com/RPiks/pico-WSPR-tx
-
+// Author/Gather: Kevin Normoyle AD6Z initially 11/2024
+// See acknowledgements.txt for the lengthy list of contributions/dependencies.
 #include <stdint.h>
 
 // any of this needed
@@ -29,8 +16,8 @@ extern char _verbosity[2];
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];
-extern char _Band[3]; // string with 10, 12, 15, 17, 20 legal. null at end
-extern char _tx_high[2]; // 0 is 2mA si5351. 1 is 8mA si5351
+extern char _Band[3];     // string with 10, 12, 15, 17, 20 legal. null at end
+extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _devmode[2];
 
 extern bool DEVMODE;
@@ -42,7 +29,7 @@ extern char _correction[6];  // parts per billion -3000 to 3000. default 0
 
 // test only: 1 means you don't wait for starting minute from _U4B_channel ;
 // does wait for any 2 minute alignment though
-extern char _go_when_rdy[2] ;
+extern char _go_when_rdy[2];
 
 /*
 Verbosity:
@@ -222,14 +209,14 @@ void user_interface(void) {
                 if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
                     printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s",
                         RED, _TELEN_config, NORMAL);
-                    strcpy(_clock_speed, "133");
+                    snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
                     result = -1;
                 }
                 if (!set_sys_clock_khz(clkhz / kHz, false)) {
                     printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s",
                         RED, PLL_SYS_MHZ, NORMAL);
-                    strcpy(_clock_speed, "133");
+                    snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
                     result = -1;
                 }
@@ -269,8 +256,6 @@ void user_interface(void) {
                 write_FLASH();
                 break;
 
-
-            //********************
             case 13:  break;
             case 10:  break;
             default:
@@ -374,6 +359,7 @@ int check_data_validity_and_set_defaults(void) {
     // 6 - can only be a letter or left blank <space>
 
     // when you send to wspr
+    // JTEncode handles this
     // A6ZZZ needs a leading space when you send it
     // 99 needs a leading space
     // 99A needs a leading space
@@ -416,7 +402,7 @@ int check_data_validity_and_set_defaults(void) {
     if (callsignBad) {
         printf("%s\n_callsign %s is not supported/legal, initting to AB1CDE\n%s",
             RED, _callsign, NORMAL);
-        strcpy(_callsign, "AB1CDE");
+        snprintf(_callsign, sizeof(_callsign), "AB1CDE");
         write_FLASH();
         result = -1;
     }
@@ -425,7 +411,7 @@ int check_data_validity_and_set_defaults(void) {
     if (_verbosity[0] < '0' || _verbosity[0] > '9') {
         printf("%s\n_verbosity %s is not supported/legal, initting to 1\n%s",
             RED, _verbosity, NORMAL);
-        strcpy(_verbosity, "1");
+        snprintf(_verbosity, sizeof(_verbosity), "1");
         write_FLASH();
         result = -1;
     }
@@ -434,10 +420,10 @@ int check_data_validity_and_set_defaults(void) {
     // make sure to null terminate
     int i;
     for (i = 1; i <= 3; ++i) {
-        if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i]!='-') {
+        if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i] != '-') {
             printf("%s\n_TELEN_config %s is not supported/legal, initting to ---\n%s",
                 RED, _TELEN_config, NORMAL);
-            strcpy(_TELEN_config, "----");
+            snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
             write_FLASH();
             result = -1;
         }
@@ -458,14 +444,14 @@ int check_data_validity_and_set_defaults(void) {
     // be sure to null terminate
     if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
         printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s", RED, _clock_speed, NORMAL);
-        strcpy(_clock_speed, "133");
+        snprintf(_clock_speed, sizeof(_clock_speed), "133");
         write_FLASH();
         result = -1;
     }
 
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
         printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s", RED, PLL_SYS_MHZ, NORMAL);
-        strcpy(_clock_speed, "133");
+        snprintf(_clock_speed, sizeof(_clock_speed), "133");
         write_FLASH();
         result = -1;
     }
@@ -474,7 +460,7 @@ int check_data_validity_and_set_defaults(void) {
     // be sure to null terminate
     if (atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
         printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s", RED, _U4B_chan, NORMAL);
-        strcpy(_U4B_chan, "599");
+        snprintf(_U4B_chan, sizeof(_U4B_chan), "599");
         write_FLASH();
         // this will set _lane, _id13, _start_minute
         process_chan_num();
@@ -491,7 +477,7 @@ int check_data_validity_and_set_defaults(void) {
         case 20: break;
         default:
             printf("%s\n_Band %s is not supported/legal, initting to 20\n%s", RED, _Band, NORMAL);
-            strcpy(_Band, "20");
+            snprintf(_Band, sizeof(_Band), "20");
             write_FLASH();
             // FIX! stop using _32_dialfreqhz
             // figure out the XMIT_FREQUENCY for new band, and set _32_dialfreqhz
@@ -504,14 +490,14 @@ int check_data_validity_and_set_defaults(void) {
     if (_tx_power[0] != '0' && _tx_power[0] > '1') {
         printf("%s\n_tx_power %s is not supported/legal, initting to 1\n%s",
             RED, _tx_power, NORMAL);
-        strcpy(_tx_power, "1");
+        snprintf(_tx_power, sizeof(_tx_power), "1");
         write_FLASH();
         result = -1;
     }
     if (_devmode[0] != '0' && _devmode[0] > '1') {
         printf("%s\n_devmode %s is not supported/legal, initting to 0\n%s",
             RED, _devmode, NORMAL);
-        strcpy(_devmode, "0");
+        snprintf(_devmode, sizeof(_devmode), "0");
         write_FLASH();
         result = -1;
 
@@ -520,14 +506,14 @@ int check_data_validity_and_set_defaults(void) {
     if (atoi(_correction < -3000 || atoi(_correction) > 3000) {
         printf("%s\n_correction %s is not supported/legal, initting to 0\n%s",
             RED, _correction, NORMAL);
-        strcpy(_correction, "0");
+        snprintf(_correction, sizeof(_correction), "0");
         write_FLASH();
         result = -1;
     }
     if (_go_when_rdy[0] != '0' && _go_when_rdy[0] > '1') {
         printf("%s\n_go_when_rdy %s is not supported/legal, initting to 0\n%s",
             RED, _go_when_rdy, NORMAL);
-        strcpy(_go_when_rdy, "0");
+        snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
         write_FLASH();
         result = -1;
     }
