@@ -18,5 +18,7 @@
 
 void process_chan_num();
 uint32_t init_rf_freq(void);
+void u4b_encode_std(void);
+void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2);
 
 #endif

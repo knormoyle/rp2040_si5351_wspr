@@ -313,10 +313,12 @@ void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength) {
 }
 
 bool vfo_is_on(void) {
-    // power off and completed successfully
-    if gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed)
     // power on and completed successfully
-    else return vfo_turn_on_completed)
+    return (!gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
+}
+bool vfo_is_off(void) {
+    // power on and completed successfully
+    return (gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
 }
 
 // what is vfo_clk2 ? is that another PLL? is that used for calibration?
@@ -326,7 +328,7 @@ static bool vfo_turn_off_completed = false;
 
 void vfo_turn_on(uint8_t clk_number) {
     // already on successfully
-    if (vfo_is_on() && vfo_turn_on_completed) return;
+    if (vfo_is_on()) return;
     vfo_turn_on_completed = false;
     vfo_turn_off_completed = false;
     // sets state to be used later
@@ -390,10 +392,10 @@ void vfo_turn_on(uint8_t clk_number) {
         // this will be a floor divide
         // _correction will be -3000 to 3000
         uint32_t orig_freq = freq;
-        freq = freq + (atoi(_correction) * freq / 1000000000UL)
+        freq = freq + (atoi(_correction) * freq / 1000000000UL);
         if (DEVMODE) {
             printf("correction shifts %d orig freq %d, to new freq, %d",
-                atoi(_correction), orig_freq, freq)
+                atoi(_correction), orig_freq, freq);
         }
     }
 
@@ -407,7 +409,7 @@ void vfo_turn_on(uint8_t clk_number) {
 
 void vfo_turn_off(void) {
     // already off successfully?
-    if (!vfo_is_on() && vfo_turn_off_completed) return;
+    if (vfo_is_off()) return;
     vfo_turn_on_completed = false;
     vfo_turn_off_completed = false;
 

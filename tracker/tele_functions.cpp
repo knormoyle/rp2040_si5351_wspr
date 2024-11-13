@@ -67,12 +67,12 @@ void snapTelemetry() {
     snprintf(t_altitude, sizeof(t_altitude), "%6d", altitude);
 
     // FIX! get temp from rp2040??
-    float tempC = 0
+    float tempC = 0;
     // turn floats into strings
-    // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string)
+    // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string);
     if (tempC < -999.9) tempC = -999.9;
     if (tempC > 999.9) tempC = 999.9;
-    snprintf(t_temp, sizeof(t_temp), "%6.1f", tempC)
+    snprintf(t_temp, sizeof(t_temp), "%6.1f", tempC);
 
     // examples
     // 1 hPA = 100 PA
@@ -83,34 +83,34 @@ void snapTelemetry() {
     float pressure = bmp_read_pressure();
     if (pressure < 0) pressure = 0;
     if (pressure > 999.999) pressure = 999.999;
-    snprintf(t_pressure, sizeof(t_pressure), "%7.2f", pressure)
+    snprintf(t_pressure, sizeof(t_pressure), "%7.2f", pressure);
 
     float voltage = battRead();
     if (voltage < 0) voltage = 0;
     if (voltage > 99.99) voltage = 99.99;
-    snprintf(t_voltage, sizeof(t_voltage), "%5.2f", voltage)
+    snprintf(t_voltage, sizeof(t_voltage), "%5.2f", voltage);
 
     sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
     if (sat_count < 0) sat_count = 0;
     if (sat_count > 99) sat_count = 99;
-    snprintf(t_sat, sizeof(t_sat)_count, "%2d", sat_count)
+    snprintf(t_sat, sizeof(t_sat)_count, "%2d", sat_count);
 
     double lat = gps.location.lat();
     // FIX is both 90 and -90 legal for maidenhead translate?
     if (lat < -90) lat = -90;
     if (lat > 90) lat = 90;
     // 12 bytes max with - and . counted
-    snprintf(t_lat, sizeof(t_lat), "%12.7f", lat)
+    snprintf(t_lat, sizeof(t_lat), "%12.7f", lat);
 
-    double lon = gps.location.lon()
+    double lon = gps.location.lon();
     // FIX is both 180 and -180 legal for maidenhead translate?
     if (lon < -180 lon = -180;
     if (lon > 180 lon = 180;
-    snprintf(t_lon, sizeof(t_lon), "%12.7f", lon)
+    snprintf(t_lon, sizeof(t_lon), "%12.7f", lon);
 
     char grid6[7];  // null term
     // FIX! are lat/lon double
-    grid6 = get_mh_6(gps.location.lat(), gps.location.lon()
+    grid6 = get_mh_6(gps.location.lat(), gps.location.lon();
     // two letters, two digits, two letters
     // base 18, base 18, base 10, base 10, base 24, base 24
     // [A-R][A-R][0-9][0-9][A-X][A-X]
@@ -123,7 +123,7 @@ void snapTelemetry() {
     if (grid6[4] < "A" || grid6[4] > "X"]) bad_grid = true;
     if (grid6[5] < "A" || grid6[5] > "X"]) bad_grid = true;
     if (bad_grid) grid6 = "AA00AA";
-    snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6)
+    snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
 
     // string literals are null terminated
     char power[3] = "3";
@@ -143,24 +143,23 @@ void snapTelemetry() {
             break;
         }
     }
-    if (!found) power = "0";
-
+    if (!found) power = 0;
     snprintf(t_power, sizeof(t_power), "%2d", power);
 
     if (DEVMODE) {
         printf("t_* ");
-        printf("course %3d ", t_course);
-        printf("speed %3d ", t_speed);
-        printf("altitude %6d ", t_altitude);
-        printf("tx_count_0 %3d ", t_tx_count_0);
-        printf("temp %6.1f ", t_temp);
-        printf("pressure %7.3f ", t_pressure);
-        printf("voltage %2.2f ", t_voltage);
-        printf("sat_count %2d ", t_sat_count);
-        printf("lat %12.7 ", t_lat);
-        printf("lon %12.7 ", t_lon);
+        printf("course %3s ", t_course);
+        printf("speed %3s ", t_speed);
+        printf("altitude %6s ", t_altitude);
+        printf("tx_count_0 %3s ", t_tx_count_0);
+        printf("temp %6s", t_temp);
+        printf("pressure %7s ", t_pressure);
+        printf("voltage %2s ", t_voltage);
+        printf("sat_count %2s ", t_sat_count);
+        printf("lat %12s ", t_lat);
+        printf("lon %12s ", t_lon);
         printf("grid6 %6s", t_grid6);
-        printf("power %2d\n", t_power):
+        printf("power %2s\n", t_power):
     }
 }
 

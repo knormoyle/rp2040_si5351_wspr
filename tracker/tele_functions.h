@@ -19,6 +19,7 @@
 #define TELE_FUNCTIONS_H
 #include <stdint.h>
 
-void updateTelemetryBuff() {
+void snapTelemetry() {
+void process_TELEN_data(void) {
 
 #endif

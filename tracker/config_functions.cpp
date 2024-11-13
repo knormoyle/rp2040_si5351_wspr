@@ -17,11 +17,13 @@
 
 // FIX! is the program bigger than 256K
 #define FLASH_TARGET_OFFSET (256 * 1024) // leaves 256k of space for the program
-#define FLASH_SECTOR_SIZE = 4096
-#define  FLASH_PAGE_SIZE  = 256
+#define FLASH_SECTOR_SIZE 4096
+#define FLASH_PAGE_SIZE 256
+#define kHz 1000U
 
 extern uint32_t XMIT_FREQUENCY;
 extern bool DEVMODE;
+extern uint32_t PLL_SYS_MHZ;
 
 extern char _callsign[7];
 extern char _id13[3];
@@ -138,13 +140,13 @@ void show_TELEN_msg() {
     printf("* There are 4 possible TELEN values, corresponding to TELEN 1 value 1,\n");
     printf("  TELEN 1 value 2, TELEN 2 value 1 and TELEN 2 value 2.\n");
     printf("* Enter 4 characters (legal 0-9 or -) in TELEN_config.\n");
-    printf("  use a '-' (minus) to disable one or more values.\n")
+    printf("  use a '-' (minus) to disable one or more values.\n");
     printf("  example:\n");
     printf("  '----' disables all telen \n");
     printf("* example:\n");
     printf("  '01--'\n");
-    printf("    Telen 1 value 1 to type 0\n")
-    printf("    Telen 1 value 2 to type 1\n")
+    printf("    Telen 1 value 1 to type 0\n");
+    printf("    Telen 1 value 2 to type 1\n");
     printf("    disables all of TELEN 2\n");
 
     printf("%s%s\nTelen Types:\n\n%s%s",
@@ -166,7 +168,7 @@ void user_interface(void) {
     char str[10];
 
     sleep_ms(100);
-    turnOnLED(true)
+    turnOnLED(true);
     display_intro();
     show_values();
 
@@ -220,21 +222,20 @@ void user_interface(void) {
                 // System clock of 205000 kHz cannot be exactly achieved
                 // should detect the failure and change the nvram, otherwise we're stuck even on reboot
                 // this is the only config where we don't let something bad get into flash
-                const uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
                 // don't change the pll, just check. change it on reboot
                 if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
                     printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s",
                         RED, _TELEN_config, NORMAL);
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
-                    result = -1;
                 }
+                uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
+
                 if (!set_sys_clock_khz(clkhz / kHz, false)) {
                     printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s",
                         RED, PLL_SYS_MHZ, NORMAL);
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
-                    result = -1;
                 }
                 break;
 
@@ -255,7 +256,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'R':
-                printf("Don't cause than approx. 43 hz 'correction' on a band. Effect varies per band?")
+                printf("Don't cause than approx. 43 hz 'correction' on a band. Effect varies per band?");
                 get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ", _correction, sizeof(_correction));
                 write_FLASH();
                 break;
@@ -265,8 +266,8 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'G':
-                printf("test only: 1 means you don't wait for starting minute from _U4B_channel")
-                printf("does wait for any 2 minute alignment though")
+                printf("test only: 1 means you don't wait for starting minute from _U4B_channel");
+                printf("does wait for any 2 minute alignment though");
                 get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ",
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
@@ -465,6 +466,7 @@ int check_data_validity_and_set_defaults(void) {
         result = -1;
     }
 
+    uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
         printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s", RED, PLL_SYS_MHZ, NORMAL);
         snprintf(_clock_speed, sizeof(_clock_speed), "133");

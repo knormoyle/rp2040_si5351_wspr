@@ -1,3 +1,7 @@
+
+// 13) Uses MS5351M instead of Si5351a.  Hans Summers G0UPL did a review here: https://qrp-labs.com/synth/ms5351m.html
+
+
 C1509083 MS5351M        https://jlcpcb.com/partdetail/Hangzhou_RuimengTech-MS5351M/C1509083 'I2C 200Mhz Clock Generator'
 https://www.lcsc.com/datasheet/lcsc_datasheet_2404181014_Hangzhou-Ruimeng-Tech-MS5351M_C1509083.pdf
 datasheet above is Mandarin 2023.11.24 11 pages

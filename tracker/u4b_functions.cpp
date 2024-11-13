@@ -7,11 +7,16 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "u4b_functions.h"
+#include <JTEncode.h>  // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
+
 
 //********************************
 // the key output that is used to pwm rf ..162 symbols that are 4-FSK
 extern uint8_t tx_buffer[255];  // is this bigger than WSPR_SYMBOL_COUNT?
 extern uint32_t XMIT_FREQUENCY;
+extern bool DEVMODE;
+extern JTEncode jtencode;
+
 
 //********************************
 // t_* (was: telemetry_buff) is a snapshot of consistent-in-time data used to
@@ -84,6 +89,16 @@ extern char _id13[3];
 extern char _U4B_chan[4];
 extern char _lane[2];
 extern char _clock_speed[4];
+
+
+    
+//*******************************
+char EncodeBase36(uint8_t val) {
+    char retVal;
+    if (val < 10) retVal = '0' + val;
+    else retVal = 'A' + (val - 10);
+    return retVal;
+}   
 
 //*******************************
 // use:
@@ -234,8 +249,8 @@ void u4b_encode_std() {
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
     // normal telemetry
-    if (DEVMODE && verbosity >= 3) printf("creating U4B telemetry 0\n");
-    char grid4[5];
+    if (DEVMODE && _verbosity >= 3) printf("creating U4B telemetry 0\n");
+    char grid_3_0[5];
     strncpy(grid_3_0, t_grid6, 4);
     grid_3_0[4] = 0;
 
@@ -278,17 +293,18 @@ void u4b_encode_std() {
     char id6 = 'A' + id6Val;
 
     // string{ id13[0], id2, id13[1], id4, id5, id6 };
-    callsignU4B[0] =  _id13[0];
-    callsignU4B[1] =  id2;
-    callsignU4B[2] =  _id13[1];
-    callsignU4B[3] =  id4;
-    callsignU4B[4] =  id5;
-    callsignU4B[5] =  id6;
-    callsignU4B[6] =  0;
+    char callsign[7];
+    callsign[0] =  _id13[0];
+    callsign[1] =  id2;
+    callsign[2] =  _id13[1];
+    callsign[3] =  id4;
+    callsign[4] =  id5;
+    callsign[5] =  id6;
+    callsign[6] =  0;
 
     // these are stored as float strings (so is pressure)
     double tempC   = atof(t_temp);
-    double voltage = atof(t_voltage)
+    double voltage = atof(t_voltage);
 
     // handle possible illegal range (double wrap on tempC?).
     // or should it clamp at the bounds?
@@ -298,7 +314,7 @@ void u4b_encode_std() {
     // FIX! kl3cbr did encoding # of satelites into knots.
     // t_speed is integer
     // max t_speed could be 999 ?
-    int speedKnotsNum = t_speed  / 2
+    int speedKnotsNum = t_speed  / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
     if (speedKnotsNum > 41) speedKnotsNum = 41;
@@ -328,7 +344,7 @@ void u4b_encode_std() {
     char g3 = '0' + g3Val;
     char g4 = '0' + g4Val;
 
-    char grid4[4];
+    char grid4[5];
     grid4[0] = g1;
     grid4[1] = g2;
     grid4[2] = g3;
@@ -343,11 +359,11 @@ void u4b_encode_std() {
     snprintf(power, sizeof(power), "%s", legalPower[powerVal]);
 
     // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
-    wspr_encode(callsign, grid4, power, tx_buffer)
+    jtencode.wspr_encode(callsign, grid4, power, tx_buffer);
 }
 
 //********************************************************************
-void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
+void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2) {
     // creates callsign, grid4, power
     // wspr_encode() then creates tx_buffer() which is the 162 wspr symbols
     // used by pwm handler to send 4-FSK rf thru si5351
@@ -390,8 +406,6 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
     else powerVal = powerVal + 0;
     // the last bit, the old GPS-sat bit, is always 0 now.
 
-    printf("val1 %d val2 %d goes to tx_buffer as callsign %s grid %s power %d)\n",
-        telen_val1, telen_val2, callsign, grid4, power)
 
     char callsign[7];
     callsign[0] = _id13[0];
@@ -410,13 +424,16 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
     grid4[4] = 0;  // null term
 
     int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
-    // telen_power was passed by reference?
     char[3] power;
     // n is max number of bytes used. generated string is at most n-1 bytes
     // (space for null term)
     // null term is appended after the generated string
-    snprintf(power, sizeof(power), "%s", legalPower[powerVal];
+    snprintf(power, sizeof(power), "%s", legalPower[powerVal]);
+
+    printf("val1 %d val2 %d goes to tx_buffer as callsign %s grid %s power %d)\n",
+        telen_val1, telen_val2, callsign, grid4, power);
 
     // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
-    wspr_encode(callsign, grid4, power, tx_buffer)
+    jtencode.wspr_encode(callsign, grid4, power, tx_buffer);
 }
+

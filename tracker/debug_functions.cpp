@@ -47,15 +47,15 @@ void printInt(uint64_t val, bool valid, int len) {
 void printDateTime(TinyGPSDate &d, TinyGPSTime &t) {
     if (!DEVMODE) return;
     char sz[32];
-    if {
-        (!d.isValid()) Serial.print(F("********** "));
+    if (!d.isValid()) {
+        Serial.print(F("********** "));
     } else {
         snprintf(sz, sizeof(sz), "%02d/%02d/%02d ", d.month(), d.day(), d.year());
         Serial.print(sz);
     }
 
-    if {
-        (!t.isValid()) Serial.print(F("******** "));
+    if (!t.isValid()) {
+        Serial.print(F("******** "));
     } else {
         snprintf(sz, sizeof(sz), "%02d:%02d:%02d ", t.hour(), t.minute(), t.second());
         Serial.print(sz);
@@ -175,13 +175,13 @@ void StampPrintf(const char* pformat, ...) {
 // Direct output to UART is very slow so we will do it in CPU idle times
 // and not in time critical functions
 void DoLogPrint() {
-    Watchdog.reset()
+    Watchdog.reset();
     if (logBuffer[0] != '\0') {
         printf("%s", logBuffer);
         logBuffer[0] = '\0';  // Clear the buffer
     }
     // whenever something might have taken a long time like printing the big buffer
     updateStatusLED();
-    Watchdog.reset()
+    Watchdog.reset();
 
 }
