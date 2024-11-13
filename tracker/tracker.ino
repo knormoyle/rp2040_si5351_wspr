@@ -318,7 +318,7 @@ bool DEVMODE = false;  // set when _devmode is set
 //*********************************
 absolute_time_t loop_us_start = 0;
 absolute_time_t loop_us_end = 0;
-absolute_time_t gps_us_start = 0;
+absolute_time_t GpsStartTime = 0;
 
 int64_t loop_us_elapsed;
 int64_t loop_ms_elapsed;
@@ -331,6 +331,19 @@ void setup() {
     Watchdog.reset();
     // While the energy rises slowly with the solar panel,
     // using the analog reference low solves the analog measurement errors.
+
+    // inits the serial port so you can use printf
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__pico__stdio__usb.html
+    // stdio_init_all();
+
+    // PICO_STDIO_USB_CONNECT_WAIT_TIME_MS ??
+    if (!stdio_usb_init()) {
+        Serial.println("ERROR: stdio_usb_init() failed)");
+    }
+
+    if (!stdio_usb_connected) {
+        Serial.println("ERROR: stdio_usb_connected() failed)");
+    }
 
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -458,7 +471,7 @@ void loop() {
     vfo_turn_off();
     // Gps may already be on
     // this loads the voltage
-    GpsON();  // doesn't send cold reset
+    GpsON(false);  // doesn't send cold reset
 
     // no need to have GpsFirstFix
     // if ( !(GpsFirstFix && (readVoltage() > BattMin)) || (!GpsFirstFix && (readVoltage() > GpsMinVolt)) )) {
@@ -518,12 +531,12 @@ void loop() {
                 sleepSeconds(BeaconWait);
                 // FIX! how much should we wait here?
             } else {
-                // gps_us_start is reset every time we turn the gps on
+                // GpsStartTime is reset every time we turn the gps on
                 // cleared every time we turn it off (don't care)
                 // Should this is also cleared when we turn gps off? no?
                 // floor divide to get milliseconds
                 GpsTimeToLastFix = (
-                    absolute_time_diff_us(gps_us_start, get_absolute_time()) ) / 1000ULL;
+                    absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
 
                 GpsInvalidCnt = 0;
                 // don't snapTelemetry buffer if there is an WSPR TX window soon (any if config)
@@ -648,7 +661,7 @@ void loop() {
                     }
 
                     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-                    GpsON();
+                    GpsON(false);  // no gps cold reset
                 }
             }
         }
@@ -667,7 +680,7 @@ void loop() {
                 "t_altitude: %0.0f "
                 "t_grid6: %s "
                 "t_sat_count: %d "
-                "GpsTimeToLastFix %d\n",
+                "GpsTimeToLastFix %lu\n",
                 t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, GpsTimeToLastFix);
         }
         if (_verbosity >= 5) {
@@ -817,13 +830,14 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
 
 
     // FIX! use the u4b channel freq
-    uint64_t hf_freq = XMIT_FREQUENCY;
+    uint32_t hf_freq = XMIT_FREQUENCY;
     if (atoi(_correction) != 0) {
         // this will be a floor divide
+        // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
         hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
     }
 
-    // if (DEVMODE) printf("WSPR desired freq: %lu used hf_freq %lu with correction %s\n",
+    // if (DEVMODE) printf("WSPR desired freq: %lu used hf_freq %u with correction %s\n",
     //    XMIT_FREQUENCY, hf_freq, _correction);
 
     symbol_count = WSPR_SYMBOL_COUNT;  // From the library defines
@@ -914,6 +928,10 @@ void freeMem() {
 // #include "hardware/clocks.h"
 // #include "hardware/gpio.h"
 // #include "hardware/adc.h"
+// #include "hardware/clocks.h"
+
+// so we can use stdio_usb
+#include "pico/stdio.h"
 
 int InitPicoClock(int PLL_SYS_MHZ) {
     const uint32_t clkhz = PLL_SYS_MHZ * 1000000L;

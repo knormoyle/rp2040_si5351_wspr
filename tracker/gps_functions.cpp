@@ -54,10 +54,12 @@ extern const int GPS_UART1_RX_PIN;
 extern const int GPS_UART1_TX_PIN;
 
 extern bool GpsIsOn;
-
 // for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
 extern absolute_time_t GpsStartTime;  // usecs
 extern uint64_t GpsTimeToLastFix;  // milliseconds
+
+// FIX! gonna need an include for this? maybe note
+// # include <TimeLib.h>
 
 void GpsINIT() {
     Serial2.setRX(GPS_UART1_RX_PIN);
@@ -83,12 +85,12 @@ void GpsINIT() {
     digitalWrite(GPS_ON_PIN, HIGH);
 }
 
-bool GpsIsOn = false
-// FIX! gonna need an include for this? maybe note
-// # include <TimeLib.h>
-extern absolute_time_t gps_us_start;
 
 void GpsON(bool GpsColdReset) {
+    if (DEVMODE) {
+        if (!GpsColdReset) printf("GpsON\n");
+        else printf("GpsON with full gps cold start\n");*
+    }
     // could be off or on already
     // Assume GpsINIT was already done
 
@@ -99,7 +101,7 @@ void GpsON(bool GpsColdReset) {
     // Serial2.begin(9600);
 
     digitalWrite(GpsPwr, LOW);
-    gps_us_start = get_absolute_time();
+    GpsStartTime = get_absolute_time();  // usecs
 
     // alternative GPS
     // SIM28ML
@@ -148,7 +150,6 @@ void GpsON(bool GpsColdReset) {
         // power saving mod on:
         // $PMTK320,1*2E\r\n"
 
-        /*printf("GpsON\n");*/
         // FIX! do we need any config of the ATGM336?
         // just leaving this in for now. don't need for ATGM336
         if (!ublox_high_alt_mode_enabled) {
@@ -162,28 +163,28 @@ void GpsON(bool GpsColdReset) {
             ublox_high_alt_mode_enabled = true;
         }
         GpsIsOn = true;
-        GpsStartTime = get_absolute_time();  // usecs
         GpsTimeToLastFix = 0;
     }
+}
 
 
-    /*
-    This used to be in the LightAPRS version of TinyGPSPlus-0.95
-    I instead updated TinyGPSPlus (latest) in libraries to make them public, not private
-    < #if defined(ARDUINO_ARCH_RP2040)
-    < void TinyGPSDate::clear()
-    < {
-    <    valid = updated = false;
-    <    date = 0;
-    < }
-    < #endif
-    */
+/*
+This used to be in the LightAPRS version of TinyGPSPlus-0.95
+instead updated TinyGPSPlus (latest) in libraries to make them public, not private
+< #if defined(ARDUINO_ARCH_RP2040)
+< void TinyGPSDate::clear()
+< {
+<    valid = updated = false;
+<    date = 0;
+< }
+< #endif
+*/
 
-    void GpsOFF() {
-        digitalWrite(GpsPwr, HIGH);
-        Serial2.end();
-        // gps.date.clear();
-        // are these declared private?
+void GpsOFF() {
+    digitalWrite(GpsPwr, HIGH);
+    Serial2.end();
+    // gps.date.clear(); // kazu had done this method
+    // are these declared private?
     // FIX! how can we clear these? Do we change the library to make them public?
 
     /* from TinyGPS++.h in libraries..modify it and move to public? (in struct TinyGPSDate
@@ -241,7 +242,7 @@ void updateGpsDataAndTime(int ms) {
             bekle = millis();
         }
         // did we wait more than 10 millis() good data read?
-        if (bekle != 0 && (millis() > bekle+10) break;
+        if ((bekle != 0) && (millis() > bekle+10)) break;
     } while ( (millis() - start) < (uint64_t) ms);
 
     if (DEVMODE) {

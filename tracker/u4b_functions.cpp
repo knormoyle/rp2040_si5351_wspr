@@ -78,7 +78,7 @@ extern char t_lon[13];  // 12 bytes
 // base 18, base 18, base 10, base 10, base 24, base 24
 // [A-R][A-R][0-9][0-9][A-X][A-X]
 // I guess clamp to AA00AA if illegal? (easy to find errors?)
-extern char t_grid[7];  // 6 bytes
+extern char t_grid6[7];  // 6 bytes
 
 // The above clamping is guaranteed by the assigments to t_*
 // Further range clamping is done here, given restrictions of u4b-like telemetry
@@ -89,7 +89,8 @@ extern char _id13[3];
 extern char _U4B_chan[4];
 extern char _lane[2];
 extern char _clock_speed[4];
-
+extern char _start_minute[2];
+extern char _verbosity[2];
 
     
 //*******************************
@@ -147,7 +148,8 @@ uint32_t init_rf_freq(void) {
             default: XMIT_FREQUENCY += 100UL;
         }
 
-        printf("\nrf_freq_init _Band %s BASE_FREQ_USED %d XMIT_FREQUENCY %d _clock_speed %s\n",
+        // printf uint32_t with %u
+        printf("\nrf_freq_init _Band %s BASE_FREQ_USED %lu XMIT_FREQUENCY %lu _clock_speed %s\n",
             _Band, BASE_FREQ_USED, XMIT_FREQUENCY, _clock_speed);
         return XMIT_FREQUENCY;
 }
@@ -263,18 +265,18 @@ void u4b_encode_std() {
 
     // modulo 20 for altitude. integer
     // decimal
-    // this will be a floor divide: t_altitude is int
-    // there are only 1068 encodings for altitude..clamp to max
-    if (altitude >= (1068 * 20)) {
-        altitude = (1068 * 20) - 20;  // 21340 meters?
+    int altitudeNum = (int) t_altitude / 20;
+    if (altitudeNum >= (1068 * 20)) {
+        // this will be a floor divide: t_altitude is int
+        // there are only 1068 encodings for altitude..clamp to max
+        altitudeNum = (1068 * 20) - 20;  // 21340 meters?
     }
-    uint16_t altitudeNum = t_altitude / 20);
 
     // convert inputs into a big number
     uint32_t val = 0;
     val *=   24; val += grid5Val;
     val *=   24; val += grid6Val;
-    val *= 1068; val += altitudeNum;
+    val *= 1068; val += altitudeVal;
 
     // extract into altered dynamic base
     uint8_t id6Val = val % 26; val = val / 26;
@@ -314,7 +316,7 @@ void u4b_encode_std() {
     // FIX! kl3cbr did encoding # of satelites into knots.
     // t_speed is integer
     // max t_speed could be 999 ?
-    int speedKnotsNum = t_speed  / 2;
+    int speedKnotsNum = (int() t_speed)  / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
     if (speedKnotsNum > 41) speedKnotsNum = 41;
@@ -352,12 +354,11 @@ void u4b_encode_std() {
     grid4[4] = 0;
 
     int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
-    char power[3];
     // n is max number of bytes used. generated string is at most n-1 bytes
     // (leaves room for null term)
     // null term is appended after the generated string
-    snprintf(power, sizeof(power), "%s", legalPower[powerVal]);
 
+    uint8_t power = (uint8_t) legalPower[powerVal]);
     // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
     jtencode.wspr_encode(callsign, grid4, power, tx_buffer);
 }

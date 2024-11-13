@@ -14,7 +14,13 @@
 #include <stdlib.h>
 #include <cstring>
 #include "hardware/gpio.h"
+#include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
+// for i2c0
+#include "hardware/i2c.h"
+#define VFO_I2C_INSTANCE i2c0
+
+const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 extern uint32_t XMIT_FREQUENCY;
 extern bool DEVMODE;
 
@@ -34,13 +40,6 @@ extern const int SI5351A_CLK_IDRV_4MA;
 extern const int SI5351A_CLK_IDRV_2MA;
 
 extern const int PLL_CALCULATION_PRECISION;
-
-const int VFO_I2C0_SCL_HZ = (1000 * 1000);
-
-// for i2c0
-#include "hardware/i2c.h"
-
-#define VFO_I2C_INSTANCE i2c0
 
 // removed static
 void vfo_init(void) {
@@ -67,16 +66,20 @@ void vfo_set_power_on(bool turn_on) {
     gpio_set_dir(VFO_VDD_ON_N_PIN, (turn_on ? GPIO_OUT : GPIO_IN));
 }
 
+//***************************************
 const int SI5351A_I2C_ADDR = 0x60;
 
-static uint8_t s_i2c_buf[16];
-
-int i2cWrite(uint8_t reg, uint8_t val) {    // write reg via i2c
+int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
+    // FIX! shouldn't this be local ? or does it setup data for i2cWriten
+    // moved here to be local, and not static (shared) anymore
+    // only need length 2!
+    uint8_t s_i2c_buf[2];
     s_i2c_buf[0] = reg;
     s_i2c_buf[1] = val;
 
     int res;
-    res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
+    res = i2c_write_timeout_us(VFO_I2C_INSTANCE, 
+        SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
 
     if (res < PICO_ERROR_NONE) {
         if (DEVMODE) printf("I2C error %d: reg:%02x val:%02x\n", res, reg, val);
@@ -86,18 +89,23 @@ int i2cWrite(uint8_t reg, uint8_t val) {    // write reg via i2c
 
 
 int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
+    // FIX! shouldn't this be local ? or does it use the data from i2cWrite
+    uint8_t s_i2c_buf[16];
+    // moved here to be local, and not static (shared) anymore
     s_i2c_buf[0] = reg;
+    // because of the large vcnt, the buf is length 16?
     memcpy(&s_i2c_buf[1], vals, vcnt);
 
     int res;
-    res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR,
-        s_i2c_buf, (vcnt + 1), false, 10000);
+    res = i2c_write_timeout_us(VFO_I2C_INSTANCE, 
+        SI5351A_I2C_ADDR, s_i2c_buf, (vcnt + 1), false, 10000);
 
     if (res < PICO_ERROR_NONE) {
     if (DEVMODE) printf("I2C error %d: reg:%02x\n", res, reg);
 
     return res;
 }
+//***************************************
 
 /*
     Si5351A related functions
@@ -150,8 +158,10 @@ static uint8_t s_regs[8];
 // updated with config _tx_high during vfo_turn_on()
 static uint8_t s_vfo_drive_strength[3];  // 0:2mA, 1:4mA, 2:6mA, 3:8mA
 
-// removed static
+// FIX! removed static. hmm maybe add back..should only call from this file?
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
+    static uint8_t s_regs_prev[8];
+
     uint32_t p1 = 128 * mult + ((128 * num) / denom) - 512;
     uint32_t p2 = 128 * num - denom * ((128 * num) / denom);
     uint32_t p3 = denom;
@@ -165,16 +175,25 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     s_regs[6] = (uint8_t)(p2 >> 8);
     s_regs[7] = (uint8_t)p2;
 
-    static uint8_t s_regs_prev[8];
+    // start and end are looked at below, if prev_ms_div = 0 
+    // so these are out of the for loops
     uint8_t start = 0;
     uint8_t end = 7;
+    // FIX! why always use the s_regs_prev buffer to copy to s_regs? (overwrite?)
+    // it means this is a one shot kind of deal? just one call?
+    // but what if we change bands?
+    // FIX! disabled this from original Kazu. not sure why you would restore from s_regs_prev
     if (prev_ms_div != 0) {
-    for (; start < 8; start++) {
-        if (s_regs[start] != s_regs_prev[start]) break;
-    }
-    if (start == 8) return;
-    for (; end > start; end--) {
-        if (s_regs[end] != s_regs_prev[end]) break;
+        for (; start < 8; start++) {
+            if (s_regs[start] != s_regs_prev[start]) break;
+        }
+        // FIX! is this detecting a non-change?
+        if (start == 8) return;
+
+        for (; end > start; end--) {
+            // is this so we just write the start to end that has changed?
+            if (s_regs[end] != s_regs_prev[end]) break;
+        }
     }
 
     uint8_t reg = SI5351A_PLLB_BASE + start;
@@ -266,6 +285,8 @@ void vfo_set_freq_x16(uint8_t clk_number, uint32_t freq) {
     uint32_t pll_mult   = pll_freq / tcxo_freq;
     uint32_t pll_remain = pll_freq - (pll_mult * tcxo_freq);
     uint32_t pll_num    = (uint64_t)pll_remain * PLL_DENOM_MAX / tcxo_freq;
+
+    // FIX! this has sticky s_regs_prev state that it uses if called multiple times?
     si5351a_setup_PLLB(pll_mult, pll_num, PLL_DENOM_MAX);
 
     // only if it changes

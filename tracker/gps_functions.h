@@ -23,13 +23,11 @@
 // what about the tiny gps library? already included in the .ino?
 
 void GpsINIT();
-void GpsON();
+void GpsON(bool GpsColdReset);
 void GpsOFF();
-// why was this static void before
-void updateGpsData(int ms);
-void setGPS_DynamicModel6();
+void updateGpsDataAndTime(int ms);
 void sendUBX(uint8_t *MSG, uint8_t len);
+void setGPS_DynamicModel6();
 void gpsDebug();
-void GridLocator(char *dst, float latt, float lon);
 
 #endif

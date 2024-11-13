@@ -31,7 +31,19 @@ void printInt(uint64_t val, bool valid, int len) {
     if (!DEVMODE) return;
     char sz[32] = "*****************";
     // FIX! should this really be %ld? why not %d
-    if (valid) snprintf(sz, sizeof(sz), "%ld", val);
+    // int64_t should use 
+    // printf("%" PRId64 "\n", t);
+    // uint64_t should use 
+    // printf("%" PRIu64 "\n", t);
+    // to print in hexadecimal
+    // printf("%" PRIx64 "\n", t);
+
+    //  https://stackoverflow.com/questions/9225567/how-to-portably-print-a-int64-t-type-in-c
+    // complete list of types and formats
+    // https://en.cppreference.com/w/cpp/types/integer
+
+
+    if (valid) snprintf(sz, sizeof(sz), "%" PRIu64, val);
     sz[len] = 0;
     // puts blanks after the null char for the rest of the buffer?
     for (int i = strlen(sz); i < len; ++i) sz[i] = ' ';
@@ -129,8 +141,6 @@ void StampPrintf(const char* pformat, ...) {
     // https://ceworkbench.wordpress.com/2023/01/04/using-the-raspberry-pi-pico-gpio-with-the-c-c-sdk/
 
     static uint32_t sTick = 0;
-    // inits the serial port so you can use printf
-    if (!sTick) stdio_init_all();
 
     uint64_t tm_us = to_us_since_boot(get_absolute_time());
     const uint32_t tm_day = (uint32_t)(tm_us / 86400000000ULL);
@@ -158,7 +168,7 @@ void StampPrintf(const char* pformat, ...) {
     va_end(argptr);
 
     // kevin. cheap enough check as long as timestamp + message <= 150 bytes?
-    if (strlen(timestamp) + strlen(message + 1) >= (BUFFER_SIZE - (strlen(logBuffer) + 1) {
+    if ( (strlen(timestamp) + strlen(message + 1)) >= (BUFFER_SIZE - (strlen(logBuffer) + 1)) ) {
     // make BUFFER_SIZE bigger or do more DoLogPrint() if we run into a problem realtime
     // FIX! should we detect when we're close to the logBuffer being full?
         printf("WARNING: with BUFFER_SIZE %d strlen(logBuffer) %d there is no room for timestamp %s message %s <newline>",
@@ -169,7 +179,7 @@ void StampPrintf(const char* pformat, ...) {
     strncat(logBuffer, timestamp, BUFFER_SIZE - strlen(logBuffer) - 1);
     strncat(logBuffer, message, BUFFER_SIZE - strlen(logBuffer) - 1);
     strncat(logBuffer, "\n", BUFFER_SIZE - strlen(logBuffer) - 1);
-
+}
 
 // Outputs the content of the log buffer to stdio (UART and/or USB)
 // Direct output to UART is very slow so we will do it in CPU idle times

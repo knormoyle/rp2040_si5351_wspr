@@ -147,8 +147,8 @@ BMP280_U32_t bmp280_compensate_P_int64(BMP280_S32_t adc_P) {
 #include "bmp_functions.h"
 #include <Wire.h>
 
-extern const int BMP280_I2C1_SDA_PIN = 2;
-extern const int BMP280_I2C1_SCL_PIN = 3;
+extern const int BMP280_I2C1_SDA_PIN;
+extern const int BMP280_I2C1_SCL_PIN;
 // extern Adafruit_BMP085 bmp;
 extern Adafruit_BMP280 bmp;
 

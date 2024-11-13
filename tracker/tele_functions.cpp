@@ -4,8 +4,12 @@
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
 #include <Arduino.h>
-
 #include <stdlib.h>
+#include "config_functions.h"
+
+extern const int BattPin;
+
+extern uint64_t GpsTimeToLastFix // milliseconds
 
 extern char t_course[4];      // 3 bytes
 extern char t_speed[4];       // 3 bytes
@@ -43,12 +47,13 @@ extern bool DEVMODE;
 
 int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
+
 void snapTelemetry() {
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
-    if (!gps.location.isValid()) return
-    else if (gps.location.age() >= 1000 && !gps.location.isUpdated()) return
-    else if (gps.satellites.value() <= 3) return
+    if (!gps.location.isValid()) return;
+    else if (gps.location.age() >= 1000 && !gps.location.isUpdated()) return;
+    else if (gps.satellites.value() <= 3) return;
 
     int course = gps.course.isValid() ? gps.course.deg() : 0;
     if (course < 0)   course = 0;
@@ -85,15 +90,15 @@ void snapTelemetry() {
     if (pressure > 999.999) pressure = 999.999;
     snprintf(t_pressure, sizeof(t_pressure), "%7.2f", pressure);
 
-    float voltage = battRead();
+    float voltage = readVoltage();
     if (voltage < 0) voltage = 0;
     if (voltage > 99.99) voltage = 99.99;
     snprintf(t_voltage, sizeof(t_voltage), "%5.2f", voltage);
 
-    sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
+    int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
     if (sat_count < 0) sat_count = 0;
     if (sat_count > 99) sat_count = 99;
-    snprintf(t_sat, sizeof(t_sat)_count, "%2d", sat_count);
+    snprintf(t_sat_count, sizeof(t_sat_count, "%2d", sat_count);
 
     double lat = gps.location.lat();
     // FIX is both 90 and -90 legal for maidenhead translate?
@@ -104,30 +109,33 @@ void snapTelemetry() {
 
     double lon = gps.location.lon();
     // FIX is both 180 and -180 legal for maidenhead translate?
-    if (lon < -180 lon = -180;
-    if (lon > 180 lon = 180;
+    if (lon < -180) lon = -180;
+    if (lon > 180) lon = 180;
     snprintf(t_lon, sizeof(t_lon), "%12.7f", lon);
 
     char grid6[7];  // null term
     // FIX! are lat/lon double
-    grid6 = get_mh_6(gps.location.lat(), gps.location.lon();
+    grid6 = get_mh_6(gps.location.lat(), gps.location.lng();
     // two letters, two digits, two letters
     // base 18, base 18, base 10, base 10, base 24, base 24
     // [A-R][A-R][0-9][0-9][A-X][A-X]
     // I guess clamp to AA00AA if illegal? (easy to find errors?)
     bool bad_grid = false;
-    if (grid6[0] < "A" || grid6[0] > "R"]) bad_grid = true;
-    if (grid6[1] < "A" || grid6[1] > "R"]) bad_grid = true;
-    if (grid6[2] < "0" || grid6[2] > "9"]) bad_grid = true;
-    if (grid6[3] < "0" || grid6[3] > "9"]) bad_grid = true;
-    if (grid6[4] < "A" || grid6[4] > "X"]) bad_grid = true;
-    if (grid6[5] < "A" || grid6[5] > "X"]) bad_grid = true;
-    if (bad_grid) grid6 = "AA00AA";
+    if (grid6[0] < 'A' || grid6[0] > 'R') bad_grid = true;
+    if (grid6[1] < 'A' || grid6[1] > 'R') bad_grid = true;
+    if (grid6[2] < '0' || grid6[2] > '9') bad_grid = true;
+    if (grid6[3] < '0' || grid6[3] > '9') bad_grid = true;
+    if (grid6[4] < 'A' || grid6[4] > 'X') bad_grid = true;
+    if (grid6[5] < 'A' || grid6[5] > 'X') bad_grid = true;
+    if (bad_grid) 
+        snprintf(grid6, sizeof(grid6), "%6s", "AA00AA";
+
     snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
 
     // string literals are null terminated
     char power[3] = "3";
-    if (_tx_high[0] == '1') power = "5";
+    if (_tx_high[0] == '1') 
+        snprintf(power, sizeof(power), "%1s", "5";
     // we clamp to a legalPower when we snapTelemetry()
     // basically we look at _tx_high[0] to decide our power level that will be used for rf
     // we could use values that are unique for this tracker,
@@ -137,14 +145,14 @@ void snapTelemetry() {
     // validity check the power. for 'same as everything else' checking
     bool found = false;
     int power_int = atoi(power);
-    for (int i = 0; i < size; i++) {
+    for (int i = 0; i < legalPowerSize; i++) {
         if (legalPower[i] == power_int) {
             found = true;
             break;
         }
     }
-    if (!found) power = 0;
-    snprintf(t_power, sizeof(t_power), "%2d", power);
+    if (!found) power_int = 0;
+    snprintf(t_power, sizeof(t_power), "%2d", power_int);
 
     if (DEVMODE) {
         printf("t_* ");
@@ -217,28 +225,27 @@ void process_TELEN_data(void) {
         switch (_TELEN_config[i]) {
             case '-':  break;  // do nothing, telen chan is disabled
             case '0':
-                adc_select_input(0);
-                telen_values[i] = round((float)adc_read() * conversionFactor);
+                telen_values[i] = round((float)analogRead(0) * conversionFactor);
                 break;
             case '1':
-                adc_select_input(1);
-                telen_values[i] = round((float)adc_read() * conversionFactor);
+                telen_values[i] = round((float)analogRead(1) * conversionFactor);
                 break;
             case '2':
-                adc_select_input(2);
-                telen_values[i] = round((float)adc_read() * conversionFactor);
+                telen_values[i] = round((float)analogRead(2) * conversionFactor);
                 break;
             case '3':
-                adc_select_input(3);
                 // ADC3 is hardwired to Battery via 3:1 voltage divider: make the conversion here
-                telen_values[i] = round((float)adc_read() * conversionFactor * 3.0f);
+                telen_values[i] = round((float)analogRead(3) * conversionFactor * 3.0f);
                 break;
-            case '4': telen_values[i] = minutes_since_boot; break;
-            case '5': telen_values[i] = minutes_since_GPS_aquisition break;
-            case '6':
-            case '7':
-            case '8':
-            case '9':
+            case '4': 
+                uint32_t timeSinceBoot_secs = millis() / 1000UL; // seconds
+                telen_values[i] = timeSinceBoot_secs; break; // seconds since running
+                break;
+            case '5': telen_values[i] = GpsTimeToLastFix; break;
+            case '6': {;}
+            case '7': {;}
+            case '8': {;}
+            case '9': {;}
                 if (onewire_values[_TELEN_config[i]-'6'] > 0)
                     telen_values[i] = onewire_values[_TELEN_config[i] -'6'] * 100;
                 else

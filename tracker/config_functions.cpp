@@ -13,10 +13,18 @@
 
 #include "defines.h"
 #include "led_functions.h"
+#include "u4b_functions.h"
 #include "config_functions.h"
 
+#include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
+
 // FIX! is the program bigger than 256K
-#define FLASH_TARGET_OFFSET (256 * 1024) // leaves 256k of space for the program
+
+// this is 256K from start of flash
+// #define FLASH_TARGET_OFFSET (256 * 1024) // leaves 256K of space for the program
+// this is 1M from start of flash
+
+#define FLASH_TARGET_OFFSET (4 * 256 * 1024) // leaves 1M of space for the program
 #define FLASH_SECTOR_SIZE 4096
 #define FLASH_PAGE_SIZE 256
 #define kHz 1000U
@@ -157,7 +165,6 @@ void show_TELEN_msg() {
     printf("6-9: OneWire temperature sensors 1 though 4 \n");
     printf("A: custom: OneWire temperature sensor 1 hourly low/high \n");
     printf("B-Z: reserved for future I2C devices etc \n");
-d
     printf("\n(ADC values are in units of mV)\n");
     printf("See the Wiki for more info.\n\n");
 }
@@ -186,6 +193,7 @@ void user_interface(void) {
             sleep_ms(100);
             Watchdog.enable(500);  // milliseconds
             for (;;) {}}
+        }
 
         // make char capital either way
         if (c > 90) c -= 32;
@@ -196,7 +204,8 @@ void user_interface(void) {
                 for (;;)    {}
             case 'C':
                 // FIX! will 1 char send wspr?
-                get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]", _callsign, sizeof(_callsign));
+                get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]", 
+                    _callsign, sizeof(_callsign));
                 convertToUpperCase(_callsign);
                 write_FLASH();
                 break;
@@ -229,10 +238,10 @@ void user_interface(void) {
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
                 }
-                uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
 
+                uint32_t clkhz = atoi(_clock_speed) * 1000000UL;
                 if (!set_sys_clock_khz(clkhz / kHz, false)) {
-                    printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s",
+                    printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
                         RED, PLL_SYS_MHZ, NORMAL);
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
@@ -252,12 +261,14 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'D':
-                get_user_input("Enter DEVMODE to enable messaging: (0 or 1) ", _devmode, sizeof(_devmode));
+                get_user_input("Enter DEVMODE to enable messaging: (0 or 1) ", 
+                    _devmode, sizeof(_devmode));
                 write_FLASH();
                 break;
             case 'R':
                 printf("Don't cause than approx. 43 hz 'correction' on a band. Effect varies per band?");
-                get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ", _correction, sizeof(_correction));
+                get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ", 
+                    _correction, sizeof(_correction));
                 write_FLASH();
                 break;
             case 'D':
@@ -286,31 +297,89 @@ void user_interface(void) {
     }
 }
 
+// Prints out hex listing of the settings NVRAM to stdio
+// buf: address of NVRAM to list <input>
+// len: bytes of NVRAM to list <input>
+
+void print_buf(const uint8_t *buf, size_t len) {
+    printf("%s%s%s%s\nNVRAM dump:\n%s%s", 
+        CLEAR_SCREEN, BRIGHT, BOLD_ON, UNDERLINE_ON, BOLD_OFF, UNDERLINE_OFF)
+    for (size_t i = 0; i < len; ++i) {
+        printf("%02x", buf[i]);
+        if (i % 16 == 15) printf("\n");
+        else printf(" ");
+    }
+    printf("%s", NORMAL);
+}
+
 // Reads flash where the user settings are saved
 // prints hexa listing of data
 // calls function which check data validity
-// background
-// https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
+
 void read_FLASH(void) {
-    // pointer to a safe place after the program memory
-    const uint8_t *flash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
-    printFLASH(flash_target_contents, FLASH_PAGE_SIZE);  // 256
+    // arduino makes it hard to write flash?
+    // there is no internal eeprom on rp2040
+    // While the Raspberry Pi Pico RP2040 does not come with an EEPROM onboard, 
+    // we could use simulated one by using a single 4K chunk of flash at the end of flash space.
+    // Therefore, do not frequently update the EEPROM or you may prematurely wear out the flash.
+    // https://arduino-pico.readthedocs.io/en/latest/eeprom.html
+
+    // but this seems more direct (writing to flash)
+    // April 13, 2023
+    // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
+
+    // PICO_FLASH_SIZE_BYTES # The total size of the RP2040 flash, in bytes
+    // FLASH_SECTOR_SIZE     # The size of one sector, in bytes (the minimum amount you can erase)
+    // FLASH_PAGE_SIZE       # The size of one page, in bytes (the mimimum amount you can write)
+
+    // expected:
+    // PICO_FLASH_SIZE_BYTES is 2MB or 2097152 bytes. 
+    // FLASH_SECTOR_SIZE is 4K or 4096 bytes. 
+    // FLASH_PAGE_SIZE is 256 bytes. 
+
+    // So 256 bytes will be one page? does my config fit in that? yes!
+
+    // pointer should be the last physical sector to eliminate the chance 
+    // that it will interfere with program code. 
+    // That sector starts at the address:
+    // PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE
+    // two functions to use 
+    // https://www.raspberrypi.com/documentation/pico-sdk/hardware.html
+    // https://www.raspberrypi.com/documentation/pico-sdk/hardware.html#group_hardware_flash
+
+    // flash_range_erase(uint32_t flash_offs, size_t count);
+    // flash_range_program(uint32_t flash_offs, const uint8_t *data, size_t count);
+
+    // https://www.raspberrypi.com/documentation/pico-sdk/hardware.html#group_hardware_flash
+
+    // https://stackoverflow.com/questions/890535/what-is-the-difference-between-char-const-and-const-char
+    // char * const is a constant pointer to a char. value can change. pointer can't change
+    // const char * is a pointer to a const char. value can't change. pointer can change
+    // const char * const is a const pointer to a const char
+    // these two are equivalent
+    // const char *
+    // char const *
+
+    // FIX! why is this weird, re above defs?
+    // const uint8_t *flash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
+    const char *flash_target_contents = (const char *) (XIP_BASE + FLASH_TARGET_OFFSET);
+    print_buf(flash_target_contents, FLASH_PAGE_SIZE);  // 256
 
     // null terminate in case it's printf'ed with %s
     // potentially has null also before the end?
-    // FIX! shouldn't all of these (all chars) have null terminate?
-    // FIX! left gaps (unused)
     // multichar that have room have a null in the flash?
-    strncpy(_callsign,     flash_target_contents+0,  6); _callsign[6] = 0;
-    strncpy(_verbosity,    flash_target_contents+6,  1); _verbosity[1] = 0;
-    strncpy(_TELEN_config, flash_target_contents+7,  4); _TELEN_config[4] = 0;
-    strncpy(_clock_speed,  flash_target_contents+11, 3); _clock_speed[3] = 0;
-    strncpy(_U4B_chan,     flash_target_contents+14, 3); _U4B_chan[3] = 0;
-    strncpy(_Band,         flash_target_contents+17, 2); _Band[2] = 0;
-    strncpy(_tx_power,     flash_target_contents+19, 1); _tx_power[1] = 0;
-    strncpy(_devmode,      flash_target_contents+20, 1); _devmode[1] = 0;
-    strncpy(_correction,   flash_target_contents+21, 6); _correction[6] = 0;
-    strncpy(_go_when_rdy,  flash_target_contents+27, 1); _go_when_rdy[1] = 0;
+
+    // BE SURE YOU ONLY USE ONE PAGE: i.e. 256 bytes total
+    strncpy(_callsign,     flash_target_contents + 0,  6); _callsign[6] = 0;
+    strncpy(_verbosity,    flash_target_contents + 6,  1); _verbosity[1] = 0;
+    strncpy(_TELEN_config, flash_target_contents + 7,  4); _TELEN_config[4] = 0;
+    strncpy(_clock_speed,  flash_target_contents + 11, 3); _clock_speed[3] = 0;
+    strncpy(_U4B_chan,     flash_target_contents + 14, 3); _U4B_chan[3] = 0;
+    strncpy(_Band,         flash_target_contents + 17, 2); _Band[2] = 0;
+    strncpy(_tx_power,     flash_target_contents + 19, 1); _tx_power[1] = 0;
+    strncpy(_devmode,      flash_target_contents + 20, 1); _devmode[1] = 0;
+    strncpy(_correction,   flash_target_contents + 21, 6); _correction[6] = 0;
+    strncpy(_go_when_rdy,  flash_target_contents + 27, 1); _go_when_rdy[1] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
 
@@ -330,16 +399,16 @@ void read_FLASH(void) {
 void write_FLASH(void) {
     // initializes all to zeroes
     uint8_t data_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
-
-    strncpy(data_chunk+0,  _callsign, 6);
-    strncpy(data_chunk+6,  _verbosity, 1);
-    strncpy(data_chunk+7,  _TELEN_config, 4);
-    strncpy(data_chunk+11, _clock_speed, 3);
-    strncpy(data_chunk+14, _U4B_chan, 3);
-    strncpy(data_chunk+17, _Band, 2);
-    strncpy(data_chunk+19, _tx_power, 1);
-    strncpy(data_chunk+20, _devmode, 1);
-    strncpy(data_chunk+21, _correction, 6);
+    strncpy(data_chunk + 0,  _callsign, 6);
+    strncpy(data_chunk + 6,  _verbosity, 1);
+    strncpy(data_chunk + 7,  _TELEN_config, 4);
+    strncpy(data_chunk + 11, _clock_speed, 3);
+    strncpy(data_chunk + 14, _U4B_chan, 3);
+    strncpy(data_chunk + 17, _Band, 2);
+    strncpy(data_chunk + 19, _tx_power, 1);
+    strncpy(data_chunk + 20, _devmode, 1);
+    strncpy(data_chunk + 21, _correction, 6);
+    strncpy(data_chunk + 21, _go_when_rdy, 2);
 
     // you could theoretically write 16 pages at once (a whole sector).
     // don't interrupt
@@ -391,13 +460,13 @@ int check_data_validity_and_set_defaults(void) {
     // don't allow <space> to be legal anywhere
     // ignore extra trailing nulls
     int clength = strlen(_callsign);
-    bool callsignBad = False;
+    bool callsignBad = false;
     if (clength < 3) {
-        callsignBad = true
+        callsignBad = true;
     }
 
     if (clength > 6) {
-        callsignBad = true
+        callsignBad = true;
     } else if (clength >= 3) {
         for (i = 0; i <= 2; i--) {
             if ((_callsign[i] < 'A' && _callsign[i] > 'Z') &&
@@ -435,8 +504,7 @@ int check_data_validity_and_set_defaults(void) {
 
     // 0-9 and - are legal. _
     // make sure to null terminate
-    int i;
-    for (i = 1; i <= 3; ++i) {
+    for (int i = 1; i <= 3; ++i) {
         if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i] != '-') {
             printf("%s\n_TELEN_config %s is not supported/legal, initting to ---\n%s",
                 RED, _TELEN_config, NORMAL);
@@ -460,15 +528,18 @@ int check_data_validity_and_set_defaults(void) {
     // clock gets fixed, then the defaults will get fixed (where errors exist)
     // be sure to null terminate
     if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
-        printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s", RED, _clock_speed, NORMAL);
+        printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s", 
+            RED, _clock_speed, NORMAL);
         snprintf(_clock_speed, sizeof(_clock_speed), "133");
         write_FLASH();
         result = -1;
     }
 
-    uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
+    uint32_t clkhz = atoi(_clock_speed) * 1000000UL;
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
-        printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s", RED, PLL_SYS_MHZ, NORMAL);
+        // http://jhshi.me/2014/07/11/print-uint64-t-properly-in-c/index.html
+        printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s", 
+            RED, PLL_SYS_MHZ, NORMAL);
         snprintf(_clock_speed, sizeof(_clock_speed), "133");
         write_FLASH();
         result = -1;
@@ -477,7 +548,8 @@ int check_data_validity_and_set_defaults(void) {
     //*********
     // be sure to null terminate
     if (atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
-        printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s", RED, _U4B_chan, NORMAL);
+        printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s", 
+            RED, _U4B_chan, NORMAL);
         snprintf(_U4B_chan, sizeof(_U4B_chan), "599");
         write_FLASH();
         // this will set _lane, _id13, _start_minute
