@@ -30,6 +30,9 @@ extern int TELEN1_val1;
 extern int TELEN1_val2;
 extern int TELEN2_val1;
 extern int TELEN2_val2;
+
+int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
+int legalPowerSize = 19;
 void snapTelemetry() {
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
@@ -123,8 +126,6 @@ void snapTelemetry() {
     // like 3 and 7!
 
     // validity check the power. for 'same as everything else' checking
-    int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
-    int legalPowerSize = 19;
     bool found = false;
     int power_int = atoi(power);
     for (int i = 0; i < size; i++)
@@ -224,7 +225,7 @@ void process_TELEN_data(void) {
                 if (onewire_values[_TELEN_config[i]-'6'] > 0)
                     telen_values[i] = onewire_values[_TELEN_config[i] -'6'] * 100;
                 else
-                    telen_values[i] = 20000 + (-1*onewire_values[_TELEN_config[i]-'6']) * 100;
+                    telen_values[i] = 20000 + (-1 * onewire_values[_TELEN_config[i] - '6']) * 100;
                 break;
         }
     }

@@ -1,0 +1,9 @@
+C1509083 MS5351M        https://jlcpcb.com/partdetail/Hangzhou_RuimengTech-MS5351M/C1509083 'I2C 200Mhz Clock Generator'
+https://www.lcsc.com/datasheet/lcsc_datasheet_2404181014_Hangzhou-Ruimeng-Tech-MS5351M_C1509083.pdf
+datasheet above is Mandarin 2023.11.24 11 pages
+https://xonstorage.blob.core.windows.net/pdf/ruimeng_ms5351m_apr22_xonlink.pdf
+datasheet above is Mandarin 2020.06.25 40 pages ..from http://www.relmon.com
+short english datasheet 2021.03.08 10 pages
+https://www.qrp-labs.com/images/synth/ms5351m.pdf
+(does it draw 8mA more current?)
+*/

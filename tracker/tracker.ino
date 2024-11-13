@@ -430,11 +430,13 @@ float     HighVolt = 9.9;   // GPS is always on if the voltage exceeds this valu
 
 uint64_t GpsTimeToLastFix; // milliseconds
 
+// these are used as globals
 int TELEN1_val1;
 int TELEN1_val2;
 int TELEN2_val1;
 int TELEN2_val2;
 
+// are these used as globals anymore?
 unsigned long hf_freq;
 char[7] hf_callsign;
 char[5] hf_grid4;
