@@ -23,11 +23,11 @@
 
 // in libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 // for setTime()
-#include <TimeLib.h> // https://github.com/PaulStoffregen/Time
+#include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 
 // need this file to be .cpp because this uses type class
 // for Watchdog.*
-#include <Adafruit_SleepyDog.h> // https://github.com/adafruit/Adafruit_SleepyDog
+#include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 // extern void updateStatusLED(void)
 // instead, should we have
@@ -56,15 +56,15 @@ extern const int GPS_UART1_TX_PIN;
 extern bool GpsIsOn;
 
 // for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
-extern absolute_time_t GpsStartTime; // usecs
-extern GpsTimeToLastFix; // milliseconds
+extern absolute_time_t GpsStartTime;  // usecs
+extern GpsTimeToLastFix;  // milliseconds
 
 void GpsINIT() {
     Serial2.setRX(GPS_UART1_RX_PIN);
     Serial2.setTX(GPS_UART1_TX_PIN);
     Serial2.setPollingMode(true);
     Serial2.setFIFOSize(512);
-    Serial2.begin(9600); //GPS
+    Serial2.begin(9600);  // GPS
 
     gpio_init(GpsPwr);
     gpio_pull_up(GpsPwr);
@@ -95,7 +95,7 @@ void GpsON(bool GpsColdReset) {
     // Just in case: wait for serial port to connect.
     // do we need these two each time?
 
-    // while (!Serial2) { delay(1); } 
+    // while (!Serial2) { delay(1); }
     // Serial2.begin(9600);
 
     digitalWrite(GpsPwr, LOW);
@@ -114,11 +114,11 @@ void GpsON(bool GpsColdReset) {
 
     // 6N-32 is gps + bd2/3. -74 has GLO. 115200baud
     // Ipeak = 100mA
-    // ATGM336H-6N-74 10.1x9.7mm https://www.lcsc.com/datasheet/lcsc_datasheet_2401121833_ZHONGKEWEI-ATGM336H-6N-74_C5804601.pdf 
+    // ATGM336H-6N-74 10.1x9.7mm https://www.lcsc.com/datasheet/lcsc_datasheet_2401121833_ZHONGKEWEI-ATGM336H-6N-74_C5804601.pdf
 
 
     // https://www.sparkfun.com/datasheets/GPS/Modules/PMTK_Protocol.pdf
-    // Cold Start. doesn't clear any system/user configs 
+    // Cold Start. doesn't clear any system/user configs
     // Serial2.print("$PMTK103*30\r\n");
 
     // Full Cold Start. any system/user configs (back to factory status)
@@ -162,7 +162,7 @@ void GpsON(bool GpsColdReset) {
             ublox_high_alt_mode_enabled = true;
         }
         GpsIsOn = true;
-        GpsStartTime = get_absolute_time(): // usecs
+        GpsStartTime = get_absolute_time();  // usecs
         GpsTimeToLastFix = 0;
     }
 
@@ -241,7 +241,7 @@ void updateGpsDataAndTime(int ms) {
             bekle = millis();
         }
         // did we wait more than 10 millis() good data read?
-        if (bekle!=0 && (millis() > bekle+10) break;
+        if (bekle != 0 && (millis() > bekle+10) break;
     } while ( (millis() - start) < (uint64_t) ms);
 
     if (DEVMODE) {
@@ -263,9 +263,7 @@ void updateGpsDataAndTime(int ms) {
 void sendUBX(uint8_t *MSG, uint8_t len) {
     Serial2.write(0xFF);
     delay(500);
-    for(int i=0; i<len; i++) {
-        Serial2.write(MSG[i]);
-    }
+    for (int i = 0; i < len; i++) Serial2.write(MSG[i];
 }
 
 boolean getUBX_ACK(uint8_t *MSG) {
@@ -276,19 +274,19 @@ boolean getUBX_ACK(uint8_t *MSG) {
     boolean status = false;
 
     // Construct the expected ACK packet
-    ackPacket[0] = 0xB5; // header
-    ackPacket[1] = 0x62; // header
-    ackPacket[2] = 0x05; // class
-    ackPacket[3] = 0x01; // id
-    ackPacket[4] = 0x02; // length
+    ackPacket[0] = 0xB5;  // header
+    ackPacket[1] = 0x62;  // header
+    ackPacket[2] = 0x05;  // class
+    ackPacket[3] = 0x01;  // id
+    ackPacket[4] = 0x02;  // length
     ackPacket[5] = 0x00;
-    ackPacket[6] = MSG[2]; // ACK class
-    ackPacket[7] = MSG[3]; // ACK id
-    ackPacket[8] = 0; // CK_A
-    ackPacket[9] = 0; // CK_B
+    ackPacket[6] = MSG[2];  // ACK class
+    ackPacket[7] = MSG[3];  // ACK id
+    ackPacket[8] = 0;  // CK_A
+    ackPacket[9] = 0;  // CK_B
 
     // Calculate the checksums
-    for (uint8_t ubxi=2; ubxi<8; ubxi++) {
+    for (uint8_t ubxi=2; ubxi < 8; ubxi++) {
     ackPacket[8] = ackPacket[8] + ackPacket[ubxi];
     ackPacket[9] = ackPacket[9] + ackPacket[8];
     }
@@ -297,13 +295,13 @@ boolean getUBX_ACK(uint8_t *MSG) {
         // Test for success
         if (ackByteID > 9) {
             // All packets in order!
-            status= true;
+            status = true;
             break;
         }
 
         // Timeout if no valid response in 3 seconds
         if (millis() - startTime > 3000) {
-            status= false;
+            status = false;
             break;
         }
 
@@ -312,15 +310,15 @@ boolean getUBX_ACK(uint8_t *MSG) {
             b = Serial2.read();
             // Check that bytes arrive in sequence as per expected ACK packet
             if (b == ackPacket[ackByteID]) ackByteID++;
-            else ackByteID = 0; // Reset and look again, invalid order
+            else ackByteID = 0;  // Reset and look again, invalid order
         }
     }
     return status;
 }
 
-//following GPS code from : https://github.com/HABduino/HABduino/blob/master/Software/habduino_v4/habduino_v4.ino
+// following GPS code from : https://github.com/HABduino/HABduino/blob/master/Software/habduino_v4/habduino_v4.ino
 void setGPS_DynamicModel6() {
-    int gps_set_success=0;
+    int gps_set_success = 0;
     uint8_t setdm6[] = {
     0xB5, 0x62, 0x06, 0x24, 0x24, 0x00, 0xFF, 0xFF, 0x06,
     0x03, 0x00, 0x00, 0x00, 0x00, 0x10, 0x27, 0x00, 0x00,
@@ -333,7 +331,7 @@ void setGPS_DynamicModel6() {
             Serial.println(F("ublox DynamicModel6 try..."));
         }
         sendUBX(setdm6, sizeof(setdm6)/sizeof(uint8_t));
-        gps_set_success=getUBX_ACK(setdm6);
+        gps_set_success = getUBX_ACK(setdm6);
     }
 }
 
@@ -347,7 +345,7 @@ void gpsDebug() {
 
     printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
     printInt(gps.hdop.value(), gps.hdop.isValid(), 5);
-    
+
     // printFloat(gps.location.lat(), gps.location.isValid(), 11, 6);
     // update to 12 to match
     printFloat(gps.location.lat(), gps.location.isValid(), 12, 6);
