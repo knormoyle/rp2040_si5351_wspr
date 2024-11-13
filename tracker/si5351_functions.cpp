@@ -1,16 +1,8 @@
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
-// Author: Kevin Normoyle AD6Z initial 11/2024
+// Author/Gather: Kevin Normoyle AD6Z initially 11/2024
+// See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-// Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
-// Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
-
-// Incorporates work by: Kazuhisa “Kazu” Terasaki AG6NS. Thank you.
-// https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
-// https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker
-
-// Incorporates work by: Rob Votin KC3LBR. Thank you.
-// https://github.com/EngineerGuy314/pico-WSPRer
 
 // besides comparing to the arduino library, can compare to:
 // "Multipurpose signal generator with SI5351"
@@ -46,7 +38,6 @@ const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 #include "hardware/i2c.h"
 
 #define VFO_I2C_INSTANCE i2c0
-
 
 // removed static
 void vfo_init(void) {
@@ -116,51 +107,6 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
     https://qrpguys.com/wp-content/uploads/2021/06/afp_fsk_061921.pdf
 
  */
-
-// The Si5351 consists of two main stages:
-// two PLLs which are locked to the reference oscillator (a 25/27 MHz crystal)
-// and which can be set from 600 to 900 MHz,
-// and the output (multisynth) clocks which are locked to a PLL of choice
-// and can be set from 500 kHz to 200 MHz (per the datasheet,
-// although it does seem to be possible to set an output up to 225 MHz).
-
-// Calibration
-// There will be some inherent error in the reference oscillator's actual frequency,
-// so we can account for this by measuring the difference between the uncalibrated
-// actual and nominal output frequencies, then using that difference as a correction
-// factor in the library.
-
-// The init() and set_correction() methods use a signed integer calibration constant
-// measured in parts-per-billion.
-// The easiest way to determine this correction factor is to measure a 14 MHz signal
-// from one of the clock outputs (in Hz, or better resolution if you can measure it),
-// scale it to parts-per-billion,
-// then use it in the set_correction() method in future use of this particular
-// reference oscillator.
-
-// Once this correction factor is determined, it should not need to be measured again
-// for the same reference oscillator/Si5351 pair unless you want to redo the
-// calibration.
-// With an accurate measurement at one frequency,
-// this calibration should be good across the entire tuning range.
-
-// The calibration method is called like this:
-// si5351.set_correction(-6190, SI5351_PLL_INPUT_XO);
-
-// However, you may use the third argument in the init() method to specify
-// the frequency correction and may not actually need to use the
-// explict set_correction() method in your code.
-
-// One thing to note: the library is set for a 25 MHz reference crystal
-
-// correction is parts per billion for the frequency used/measured
-// Could try a number of correction values and decide which to use
-// (try 10 WSPR with correction 10/20/50/100/500/1000?)
-
-// another source for programming comparison
-// https://dk7ih.de/a-simple-software-to-control-the-si5351a-generator-chip/
-// https://cdn-shop.adafruit.com/datasheets/Si5351.pdf
-
 
 const int SI5351_TCXO_FREQ =                26000000;
 
@@ -262,9 +208,7 @@ void si5351a_setup_multisynth0(uint32_t div) {
                                   SI5351A_CLK1_SRC_MULTISYNTH_1 |
                                   s_vfo_drive_strength[0]));
     // #endif
-
     if (DEVMODE) printf("VFO_DRIVE_STRENGTH: %d\n", (int)s_vfo_drive_strength[0]);
-
 }
 
 static void si5351a_setup_multisynth1(uint32_t div) {
@@ -475,3 +419,50 @@ void vfo_turn_off(void) {
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
     vfo_turn_off_completed = true;
 }
+
+//*****************************************************
+// random notes for reference, from other code
+
+// The Si5351 consists of two main stages:
+// two PLLs which are locked to the reference oscillator (a 25/27 MHz crystal)
+// and which can be set from 600 to 900 MHz,
+// and the output (multisynth) clocks which are locked to a PLL of choice
+// and can be set from 500 kHz to 200 MHz (per the datasheet,
+// although it does seem to be possible to set an output up to 225 MHz).
+
+// Calibration
+// There will be some inherent error in the reference oscillator's actual frequency,
+// so we can account for this by measuring the difference between the uncalibrated
+// actual and nominal output frequencies, then using that difference as a correction
+// factor in the library.
+
+// The init() and set_correction() methods use a signed integer calibration constant
+// measured in parts-per-billion.
+// The easiest way to determine this correction factor is to measure a 14 MHz signal
+// from one of the clock outputs (in Hz, or better resolution if you can measure it),
+// scale it to parts-per-billion,
+// then use it in the set_correction() method in future use of this particular
+// reference oscillator.
+
+// Once this correction factor is determined, it should not need to be measured again
+// for the same reference oscillator/Si5351 pair unless you want to redo the
+// calibration.
+// With an accurate measurement at one frequency,
+// this calibration should be good across the entire tuning range.
+
+// The calibration method is called like this:
+// si5351.set_correction(-6190, SI5351_PLL_INPUT_XO);
+
+// However, you may use the third argument in the init() method to specify
+// the frequency correction and may not actually need to use the
+// explict set_correction() method in your code.
+
+// One thing to note: the library is set for a 25 MHz reference crystal
+
+// correction is parts per billion for the frequency used/measured
+// Could try a number of correction values and decide which to use
+// (try 10 WSPR with correction 10/20/50/100/500/1000?)
+
+// another source for programming comparison
+// https://dk7ih.de/a-simple-software-to-control-the-si5351a-generator-chip/
+// https://cdn-shop.adafruit.com/datasheets/Si5351.pdf

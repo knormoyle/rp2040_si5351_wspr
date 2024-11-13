@@ -5,9 +5,9 @@
 
 
 // Bosch has stepped up their game with their new BME280 sensor, an environmental sensor with temperature, barometric pressure and humidity! This sensor is great for all sorts of indoor environmental sensing and can even be used in both I2C and SPI!
-// 
+//
 // This precision sensor from Bosch is the best low-cost sensing solution for measuring humidity with ±3% accuracy, barometric pressure with ±1 hPa absolute accuraccy, and temperature with ±1.0°C accuracy. Because pressure changes with altitude, and the pressure measurements are so good, you can also use it as an altimeter with  ±1 meter or better accuracy!
-// 
+//
 // The BME280 is the next-generation of sensors from Bosch, and is the upgrade to the BMP085/BMP180/BMP183 - with a low altitude noise of 0.25m and the same fast conversion time. It has the same specifications, but can use either I2C or SPI. For simple easy wiring, go with I2C. If you want to connect a bunch of sensors without worrying about I2C address collisions, go with SPI.
 
 // https://www.adafruit.com/product/2652
@@ -60,39 +60,39 @@
 
 // The BMP280 offers three power modes: sleep mode, forced mode and normal mode. These can be
 // selected using the mode[1:0] bits in control register 0xF4.
-// 
+//
 // 00 Sleep mode
 // 01 and 10 Forced mode
 // 11 Normal mode
-// 
+//
 // Sleep mode is set by default after power on reset. In sleep mode, no measurements are performed
 // and power consumption (IDDSM) is at a minimum. All registers are accessible; Chip-ID and
 // compensation coefficients can be read.
-// 
+//
 // In forced mode, a single measurement is performed according to selected measurement and filter
 // options. When the measurement is finished, the sensor returns to sleep mode and the measurement
 // results can be obtained from the data registers. For a next measurement, forced mode needs to be
 // selected again. This is similar to BMP180 operation. Forced mode is recommended for applications
 // which require low sampling rate or host-based synchronization.
-// 
+//
 // 3.11.3 Compensation formula
 // Please note that it is strongly advised to use the API available from Bosch Sensortec to perform
 // readout and compensation. If this is not wanted, the code below can be applied at the user’s risk. Both
 // pressure and temperature values are expected to be received in 20 bit format, positive, stored in a 32
 // bit signed integer.
-// 
+//
 // The variable t_fine (signed 32 bit) carries a fine resolution temperature value over to the pressure
 // compensation formula and could be implemented as a global variable.
-// 
+//
 // The data type “BMP280_S32_t” should define a 32 bit signed integer variable type and can usually be
 // defined as “long signed int”.
-// 
+//
 // The data type “BMP280_U32_t” should define a 32 bit unsigned integer variable type and can usually
 // be defined as “long unsigned int”.
-// 
+//
 // For best possible calculation accuracy, 64 bit integer support is needed. If this is not possible on your
 // platform, please see appendix 8.2 for a 32 bit alternative.
-// 
+//
 // The data type “BMP280_S64_t” should define a 64 bit signed integer variable type, which on most
 // supporting platforms can be defined as “long long signed int”. The revision of the code is rev.1.1.
 
@@ -135,7 +135,6 @@ BMP280_U32_t bmp280_compensate_P_int64(BMP280_S32_t adc_P) {
 }
 */
 
-
 // calculating pressure and temperature
 // page 22 of datasheet
 
@@ -174,8 +173,12 @@ void bmp_init(void) {
 }
 
 #include <Wire.h>
- 
+
 // Default settings from datasheet
+// FIX! bme280? different sampling from default
+// should I do forced or continuous readings
+// might want the device to stay a little warm?
+// is power low enough to not care or ??
 bmp.setSampling(
     Adafruit_BMP280::MODE_NORMAL,
     Adafruit_BMP280::SAMPLING_X2,
@@ -183,41 +186,35 @@ bmp.setSampling(
     Adafruit_BMP280::FILTER_X16,
     Adafruit_BMP280::STANDBY_MS_500);
 
- 
+
 //*********************
 void i2c_scan(void) {
-  uint8_t error, address;
-  int nDevices;
-  Serial.println("Scanning...");
-  nDevices = 0;
-  for(address = 1; address < 127; address++ ) {
-    Wire.beginTransmission(address);
-    error = Wire.endTransmission();
-    if (error == 0) {
-      Serial.print("I2C device found at address 0x");
-      if (address<16) {
-        Serial.print("0");
-      }
-      Serial.println(address,HEX);
-      nDevices++;
+    uint8_t error, address;
+    int nDevices;
+    Serial.println("Scanning...");
+    nDevices = 0;
+    for (address = 1; address < 127; address++) {
+        Wire.beginTransmission(address);
+        error = Wire.endTransmission();
+        if (error == 0) {
+            Serial.print("I2C device found at address 0x");
+            if (address < 16) Serial.print("0");
+            Serial.println(address, HEX);
+            nDevices++;
+        } else if (error == 4) {
+            Serial.print("Unknown error at address 0x");
+            if (address < 16) Serial.print("0");
+            Serial.println(address, HEX);
+        }
     }
-    else if (error==4) {
-      Serial.print("Unknow error at address 0x");
-      if (address<16) {
-        Serial.print("0");
-      }
-      Serial.println(address,HEX);
-    }    
-  }
-  if (nDevices == 0) {
-    Serial.println("No I2C devices found\n");
-  }
-  else {
-    Serial.println("done\n");
-  }
+    if (nDevices == 0) Serial.println("No I2C devices found\n");
+    else Serial.println("done\n");
 }
 
 //*********************
+// FIX! have to add compensation code
+// FIX! have to add humidity code
+// FIX! change this to bme_280?
 float bmp_read_temperature(void) {
     return bmp.readTemperature();
 }
