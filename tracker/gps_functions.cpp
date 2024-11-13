@@ -89,7 +89,7 @@ void GpsINIT() {
 void GpsON(bool GpsColdReset) {
     if (DEVMODE) {
         if (!GpsColdReset) printf("GpsON\n");
-        else printf("GpsON with full gps cold start\n");*
+        else printf("GpsON with full gps cold start\n");
     }
     // could be off or on already
     // Assume GpsINIT was already done
@@ -222,7 +222,7 @@ void updateGpsDataAndTime(int ms) {
     // grab data for no more than ms milliseconds
     // stop if no data for 10 milliseconds
     Watchdog.reset();
-    GpsON();
+    GpsON(false);
     // while (!Serial) {delay(1);} // wait for serial port to connect.
 
     uint64_t start = millis();
@@ -250,8 +250,6 @@ void updateGpsDataAndTime(int ms) {
     }
 
     if (gps.time.isValid()) {
-        // 11_6_24 0 instead of NULL (not pointer)
-        // causes problems with the routines declares?
         // setTime is in the Time library.
         setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
         if (DEVMODE) {
@@ -264,7 +262,7 @@ void updateGpsDataAndTime(int ms) {
 void sendUBX(uint8_t *MSG, uint8_t len) {
     Serial2.write(0xFF);
     delay(500);
-    for (int i = 0; i < len; i++) Serial2.write(MSG[i];
+    for (int i = 0; i < len; i++) Serial2.write(MSG[i]);
 }
 
 boolean getUBX_ACK(uint8_t *MSG) {

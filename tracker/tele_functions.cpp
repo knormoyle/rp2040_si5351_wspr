@@ -98,7 +98,7 @@ void snapTelemetry() {
     int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
     if (sat_count < 0) sat_count = 0;
     if (sat_count > 99) sat_count = 99;
-    snprintf(t_sat_count, sizeof(t_sat_count, "%2d", sat_count);
+    snprintf(t_sat_count, sizeof(t_sat_count, "%2d", sat_count));
 
     double lat = gps.location.lat();
     // FIX is both 90 and -90 legal for maidenhead translate?
@@ -115,7 +115,7 @@ void snapTelemetry() {
 
     char grid6[7];  // null term
     // FIX! are lat/lon double
-    grid6 = get_mh_6(gps.location.lat(), gps.location.lng();
+    grid6 = get_mh_6(gps.location.lat(), gps.location.lng());
     // two letters, two digits, two letters
     // base 18, base 18, base 10, base 10, base 24, base 24
     // [A-R][A-R][0-9][0-9][A-X][A-X]
@@ -127,15 +127,15 @@ void snapTelemetry() {
     if (grid6[3] < '0' || grid6[3] > '9') bad_grid = true;
     if (grid6[4] < 'A' || grid6[4] > 'X') bad_grid = true;
     if (grid6[5] < 'A' || grid6[5] > 'X') bad_grid = true;
-    if (bad_grid) 
-        snprintf(grid6, sizeof(grid6), "%6s", "AA00AA";
+    if (bad_grid)
+        snprintf(grid6, sizeof(grid6), "%6s", "AA00AA");
 
     snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
 
     // string literals are null terminated
     char power[3] = "3";
-    if (_tx_high[0] == '1') 
-        snprintf(power, sizeof(power), "%1s", "5";
+    if (_tx_high[0] == '1')
+        snprintf(power, sizeof(power), "%1s", "5");
     // we clamp to a legalPower when we snapTelemetry()
     // basically we look at _tx_high[0] to decide our power level that will be used for rf
     // we could use values that are unique for this tracker,
@@ -237,7 +237,7 @@ void process_TELEN_data(void) {
                 // ADC3 is hardwired to Battery via 3:1 voltage divider: make the conversion here
                 telen_values[i] = round((float)analogRead(3) * conversionFactor * 3.0f);
                 break;
-            case '4': 
+            case '4':
                 uint32_t timeSinceBoot_secs = millis() / 1000UL; // seconds
                 telen_values[i] = timeSinceBoot_secs; break; // seconds since running
                 break;

@@ -9,14 +9,12 @@
 #include "u4b_functions.h"
 #include <JTEncode.h>  // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
 
-
 //********************************
 // the key output that is used to pwm rf ..162 symbols that are 4-FSK
 extern uint8_t tx_buffer[255];  // is this bigger than WSPR_SYMBOL_COUNT?
 extern uint32_t XMIT_FREQUENCY;
 extern bool DEVMODE;
 extern JTEncode jtencode;
-
 
 //********************************
 // t_* (was: telemetry_buff) is a snapshot of consistent-in-time data used to
@@ -251,25 +249,21 @@ void u4b_encode_std() {
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
     // normal telemetry
-    if (DEVMODE && _verbosity >= 3) printf("creating U4B telemetry 0\n");
+    if (DEVMODE && _verbosity[0] >= '3') printf("creating U4B telemetry 0\n");
     char grid_3_0[5];
     strncpy(grid_3_0, t_grid6, 4);
     grid_3_0[4] = 0;
 
-    // not used
-    // char grid_5 = t_grid6[4]
-    // char grid_6 = t_grid6[5]
-
-    uint8_t grid5Val = grid5 - 'A';
-    uint8_t grid6Val = grid6 - 'A';
+    uint8_t grid5Val = t_grid6[4] - 'A';
+    uint8_t grid6Val = t_grid6[5] - 'A';
 
     // modulo 20 for altitude. integer
     // decimal
-    int altitudeNum = (int) t_altitude / 20;
-    if (altitudeNum >= (1068 * 20)) {
+    int altitudeVal = (int) t_altitude / 20;
+    if (altitudeVal >= (1068 * 20)) {
         // this will be a floor divide: t_altitude is int
         // there are only 1068 encodings for altitude..clamp to max
-        altitudeNum = (1068 * 20) - 20;  // 21340 meters?
+        altitudeVal = (1068 * 20) - 20;  // 21340 meters?
     }
 
     // convert inputs into a big number
@@ -316,13 +310,13 @@ void u4b_encode_std() {
     // FIX! kl3cbr did encoding # of satelites into knots.
     // t_speed is integer
     // max t_speed could be 999 ?
-    int speedKnotsNum = (int() t_speed)  / 2;
+    int speedKnotsNum = int() t_speed  / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
     if (speedKnotsNum > 41) speedKnotsNum = 41;
 
     //****************
-    gpsValidNum = 1;
+    int gpsValidNum = 1;
     // traquito site won't show the 6 char grid if this bit is off.
     // shift inputs into a big number
     val = 0;
@@ -358,7 +352,7 @@ void u4b_encode_std() {
     // (leaves room for null term)
     // null term is appended after the generated string
 
-    uint8_t power = (uint8_t) legalPower[powerVal]);
+    uint8_t power = (uint8_t) legalPower[powerVal];
     // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
     jtencode.wspr_encode(callsign, grid4, power, tx_buffer);
 }
@@ -374,6 +368,8 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2)
     uint8_t id5Val = val % 26; val = val / 26;
     uint8_t id4Val = val % 26; val = val / 26;
     uint8_t id2Val = val % 36; val = val / 36;
+
+    char telen_chars[9]; // 6 + 3, callsign and grid
 
     // convert to encoded callsign
     telen_chars[0] = EncodeBase36(id2Val);
@@ -425,11 +421,11 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2)
     grid4[4] = 0;  // null term
 
     int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
-    char[3] power;
+    char power[3];
     // n is max number of bytes used. generated string is at most n-1 bytes
     // (space for null term)
     // null term is appended after the generated string
-    snprintf(power, sizeof(power), "%s", legalPower[powerVal]);
+    snprintf(power, sizeof(power), "%d", legalPower[powerVal]);
 
     printf("val1 %d val2 %d goes to tx_buffer as callsign %s grid %s power %d)\n",
         telen_val1, telen_val2, callsign, grid4, power);

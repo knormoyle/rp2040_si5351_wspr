@@ -293,7 +293,7 @@ char _U4B_chan[4] = { 0 };
 char _Band[3] = { 0 };     // string with 10, 12, 15, 17, 20 legal. null at end
 char _tx_high[2] = { 0 };  // 0 is 2mA si5351. 1 is 8mA si5351
 char _devmode[2] = { 0 };
-char _correction[6] = { 0 };
+char _correction[7] = { 0 };
 char _go_when_rdy[2] = { 0 };
 
 bool DEVMODE = false;  // set when _devmode is set
@@ -369,7 +369,7 @@ void setup() {
     // startup messages on native USB boards (that do not reset when serial is opened).
 
     // FIX! should I do this?
-    while (!Serial)  // Serial is via USB; wait for enumeration
+    while (!Serial) {  // Serial is via USB; wait for enumeration
         // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();
     }
@@ -430,8 +430,7 @@ void setup() {
     i2c_scan();
 
     // Adafruit_BMP805 bmp;
-    if (!bmp.begin()) {
-        Serial.println("Could not find a valid BMP280 sensor");
+    if (!bmp.begin()) Serial.println("Could not find a valid BMP280 sensor");
 
     // Default settings from datasheet
     bmp.setSampling(
@@ -512,7 +511,8 @@ void loop() {
                 GpsON(true);  // also do gps cold reset
                 GpsInvalidCnt = 0;
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-                continue
+                // https://forum.arduino.cc/t/possible-to-continue-the-main-loop/95541/5
+                return;
             }
         }
         updateStatusLED();
@@ -673,7 +673,7 @@ void loop() {
     loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
     if (DEVMODE) {
-        if (_verbosity >= 1) {
+        if (_verbosity[0] >= '1') {
             // maybe show GpsInvalidCnt also? how old are they
             StampPrintf(
                 "t_temp: %0.2f "
@@ -683,7 +683,7 @@ void loop() {
                 "GpsTimeToLastFix %lu\n",
                 t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, GpsTimeToLastFix);
         }
-        if (_verbosity >= 5) {
+        if (_verbosity[0] >= '5') {
             StampPrintf(
                 "main/20: _Band %s "
                 "loop_ms_elapsed: %d millisecs "
@@ -849,7 +849,7 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
     zeroTimerSetPeriodMs(tone_delay);
 
     uint8_t i;
-    for i = 0; i < symbol_count; i++) {
+    for (i = 0; i < symbol_count; i++) {
         uint32_t freq_x16 =
             (hf_freq << PLL_CALCULATION_PRECISION) +
             (tx_buffer[i] * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
@@ -980,4 +980,9 @@ int InitPicoClock(int PLL_SYS_MHZ) {
 //**********************
 // should I work on a local branch and commit to repo less often?
 // https://stackoverflow.com/questions/13276909/how-to-do-a-local-only-commit-in-git
+
+
+// interesting old benchmark testing wiggling gpio
+// should run it on the pi pico and see
+// https://github.com/hzeller/rpi-gpio-dma-demo#direct-output-loop-to-gpio
 

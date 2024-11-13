@@ -3,14 +3,17 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 #include <Arduino.h>
-#include <stdint.h>
 
-// any of this needed
+#include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 // for isprint()
 #include <ctype.h>
-#include <stdlib.h>
 
+#include"pico/stdlib.h"
+#include"hardware/flash.h"
+
+// my stuff
 #include "defines.h"
 #include "led_functions.h"
 #include "u4b_functions.h"
@@ -49,7 +52,7 @@ extern char _devmode[2];
 extern bool DEVMODE;
 
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
-extern char _correction[6];  // parts per billion -3000 to 3000. default 0
+extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 // traquito: 500 correction does  ~7 hz lower on 20M (14095.600 base freq)
 // traquito: 500 correction does ~14 hz lower on 10M (28124.600 base freq)
 
@@ -192,7 +195,7 @@ void user_interface(void) {
             printf("%s\n\n Timeout waiting for input, ..rebooting\n", CLEAR_SCREEN);
             sleep_ms(100);
             Watchdog.enable(500);  // milliseconds
-            for (;;) {}}
+            for (;;) { ; }
         }
 
         // make char capital either way
@@ -201,7 +204,7 @@ void user_interface(void) {
             case 'X':
                 printf("%s\n\nGoodbye ..rebooting", CLEAR_SCREEN);
                 Watchdog.enable(500);  // milliseconds
-                for (;;)    {}
+                for (;;) { ; }
             case 'C':
                 // FIX! will 1 char send wspr?
                 get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]", 
@@ -238,7 +241,6 @@ void user_interface(void) {
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
                 }
-
                 uint32_t clkhz = atoi(_clock_speed) * 1000000UL;
                 if (!set_sys_clock_khz(clkhz / kHz, false)) {
                     printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
@@ -247,7 +249,6 @@ void user_interface(void) {
                     write_FLASH();
                 }
                 break;
-
             case 'A':
                 get_user_input("Enter Band (10,12,15,17,20): ", _Band, sizeof(_Band));
                 // redo channel selection if we change bands, since U4B definition changes per band
@@ -255,9 +256,8 @@ void user_interface(void) {
                 process_chan_num();
                 XMIT_FREQUENCY = init_rf_freq();
                 break;
-
             case 'P':
-                get_user_input("Enter Tx power: (0 or 1) ", _tx_power, sizeof(_tx_power));
+                get_user_input("Enter Tx high: (0 or 1) ", _tx_high, sizeof(_tx_high));
                 write_FLASH();
                 break;
             case 'D':
@@ -271,11 +271,6 @@ void user_interface(void) {
                     _correction, sizeof(_correction));
                 write_FLASH();
                 break;
-            case 'D':
-                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ",
-                    _go_when_rdy, sizeof(_go_when_rdy));
-                write_FLASH();
-                break;
             case 'G':
                 printf("test only: 1 means you don't wait for starting minute from _U4B_channel");
                 printf("does wait for any 2 minute alignment though");
@@ -283,12 +278,10 @@ void user_interface(void) {
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
                 break;
-
             case 13:  break;
             case 10:  break;
             default:
-                printf("%s\nYou pressed: %c - (0x%02x), invalid choice! ",
-                    CLEAR_SCREEN, c, c);
+                printf("%s\nYou pressed: %c - (0x%02x), invalid choice! ", CLEAR_SCREEN, c, c);
                 sleep_ms(1000);
                 break;
         }
@@ -376,7 +369,7 @@ void read_FLASH(void) {
     strncpy(_clock_speed,  flash_target_contents + 11, 3); _clock_speed[3] = 0;
     strncpy(_U4B_chan,     flash_target_contents + 14, 3); _U4B_chan[3] = 0;
     strncpy(_Band,         flash_target_contents + 17, 2); _Band[2] = 0;
-    strncpy(_tx_power,     flash_target_contents + 19, 1); _tx_power[1] = 0;
+    strncpy(_tx_high,      flash_target_contents + 19, 1); _tx_high[1] = 0;
     strncpy(_devmode,      flash_target_contents + 20, 1); _devmode[1] = 0;
     strncpy(_correction,   flash_target_contents + 21, 6); _correction[6] = 0;
     strncpy(_go_when_rdy,  flash_target_contents + 27, 1); _go_when_rdy[1] = 0;
@@ -405,7 +398,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 11, _clock_speed, 3);
     strncpy(data_chunk + 14, _U4B_chan, 3);
     strncpy(data_chunk + 17, _Band, 2);
-    strncpy(data_chunk + 19, _tx_power, 1);
+    strncpy(data_chunk + 19, _tx_high, 1);
     strncpy(data_chunk + 20, _devmode, 1);
     strncpy(data_chunk + 21, _correction, 6);
     strncpy(data_chunk + 21, _go_when_rdy, 2);
@@ -468,7 +461,7 @@ int check_data_validity_and_set_defaults(void) {
     if (clength > 6) {
         callsignBad = true;
     } else if (clength >= 3) {
-        for (i = 0; i <= 2; i--) {
+        for (int i = 0; i <= 2; i++) {
             if ((_callsign[i] < 'A' && _callsign[i] > 'Z') &&
                 (_callsign[i] < '0' && _callsign[i] > '9')) {
                 callsignBad = true;
@@ -577,10 +570,10 @@ int check_data_validity_and_set_defaults(void) {
             result = -1;
             break;
     }
-    if (_tx_power[0] != '0' && _tx_power[0] > '1') {
-        printf("%s\n_tx_power %s is not supported/legal, initting to 1\n%s",
-            RED, _tx_power, NORMAL);
-        snprintf(_tx_power, sizeof(_tx_power), "1");
+    if (_tx_high[0] != '0' && _tx_high[0] > '1') {
+        printf("%s\n_tx_high %s is not supported/legal, initting to 1\n%s",
+            RED, _tx_high, NORMAL);
+        snprintf(_tx_high, sizeof(_tx_high), "1");
         write_FLASH();
         result = -1;
     }
@@ -592,6 +585,7 @@ int check_data_validity_and_set_defaults(void) {
         result = -1;
     }
     if (atoi(_correction) < -3000 || atoi(_correction) > 3000) {
+        // left room for 6 bytes
         printf("%s\n_correction %s is not supported/legal, initting to 0\n%s",
             RED, _correction, NORMAL);
         snprintf(_correction, sizeof(_correction), "0");
@@ -625,7 +619,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     printf("DEVMODE:%s\n\t", _devmode);
     printf("correction:%s\n\t", _correction);
     printf("go_when_rdy:%s\n\t", _go_when_rdy);
-    printf("XMIT_FREQUENCY:%d\n\t", XMIT_FREQUENCY);
+    printf("XMIT_FREQUENCY:%lu\n\t", XMIT_FREQUENCY);
 
     printf("%s%sValid commands: %s%s", UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
 

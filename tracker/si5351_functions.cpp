@@ -20,6 +20,8 @@
 #include "hardware/i2c.h"
 #define VFO_I2C_INSTANCE i2c0
 
+const int SI5351A_I2C_ADDR = 0x60;
+
 const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 extern uint32_t XMIT_FREQUENCY;
 extern bool DEVMODE;
@@ -66,8 +68,6 @@ void vfo_set_power_on(bool turn_on) {
     gpio_set_dir(VFO_VDD_ON_N_PIN, (turn_on ? GPIO_OUT : GPIO_IN));
 }
 
-//***************************************
-const int SI5351A_I2C_ADDR = 0x60;
 
 int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
     // FIX! shouldn't this be local ? or does it setup data for i2cWriten
@@ -78,7 +78,7 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
     s_i2c_buf[1] = val;
 
     int res;
-    res = i2c_write_timeout_us(VFO_I2C_INSTANCE, 
+    res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
         SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
 
     if (res < PICO_ERROR_NONE) {
@@ -93,15 +93,17 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
     uint8_t s_i2c_buf[16];
     // moved here to be local, and not static (shared) anymore
     s_i2c_buf[0] = reg;
+
     // because of the large vcnt, the buf is length 16?
     memcpy(&s_i2c_buf[1], vals, vcnt);
 
     int res;
-    res = i2c_write_timeout_us(VFO_I2C_INSTANCE, 
+    res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
         SI5351A_I2C_ADDR, s_i2c_buf, (vcnt + 1), false, 10000);
 
     if (res < PICO_ERROR_NONE) {
-    if (DEVMODE) printf("I2C error %d: reg:%02x\n", res, reg);
+        if (DEVMODE) printf("I2C error %d: reg:%02x\n", res, reg);
+    }
 
     return res;
 }
@@ -156,7 +158,8 @@ const int SI5351A_PLL_RESET_PLLB_RST =      (1 << 7);
 static uint32_t prev_ms_div = 0;
 static uint8_t s_regs[8];
 // updated with config _tx_high during vfo_turn_on()
-static uint8_t s_vfo_drive_strength[3];  // 0:2mA, 1:4mA, 2:6mA, 3:8mA
+// 0:2mA, 1:4mA, 2:6mA, 3:8mA
+static uint8_t s_vfo_drive_strength[3];
 
 // FIX! removed static. hmm maybe add back..should only call from this file?
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
@@ -175,7 +178,7 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     s_regs[6] = (uint8_t)(p2 >> 8);
     s_regs[7] = (uint8_t)p2;
 
-    // start and end are looked at below, if prev_ms_div = 0 
+    // start and end are looked at below, if prev_ms_div = 0
     // so these are out of the for loops
     uint8_t start = 0;
     uint8_t end = 7;
@@ -221,15 +224,15 @@ void si5351a_setup_multisynth0(uint32_t div) {
                                   SI5351A_CLK0_SRC_MULTISYNTH_0 |
                                   s_vfo_drive_strength[0]));
 
-    // #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
-    // always
+
+    // old #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
     i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
     i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT |
                                   SI5351A_CLK1_MS1_SRC_PLLB |
                                   SI5351A_CLK1_CLK1_INV |
                                   SI5351A_CLK1_SRC_MULTISYNTH_1 |
                                   s_vfo_drive_strength[0]));
-    // #endif
+    // old #endif
     if (DEVMODE) printf("VFO_DRIVE_STRENGTH: %d\n", (int)s_vfo_drive_strength[0]);
 }
 
@@ -408,10 +411,10 @@ void vfo_turn_on(uint8_t clk_number) {
     prev_ms_div = 0;
 
     // do a parts per billion correction?
-    freq = XMIT_FREQUENCY;
+    uint32_t freq = XMIT_FREQUENCY;
     if (atoi(_correction[0]) != 0) {
         // this will be a floor divide
-        // _correction will be -3000 to 3000
+        // FIX! what range _correction will be ? -3000 to 3000
         uint32_t orig_freq = freq;
         freq = freq + (atoi(_correction) * freq / 1000000000UL);
         if (DEVMODE) {
@@ -420,7 +423,7 @@ void vfo_turn_on(uint8_t clk_number) {
         }
     }
 
-    uint32_t freq = (uint32_t) freq << PLL_CALCULATION_PRECISION;
+    freq = (uint32_t) freq << PLL_CALCULATION_PRECISION;
     vfo_set_freq_x16(clk_number, freq);
 
     si5351bx_clken = 0xff;
