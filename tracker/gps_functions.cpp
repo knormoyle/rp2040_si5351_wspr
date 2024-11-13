@@ -1,37 +1,21 @@
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
-// Author: Kevin Normoyle AD6Z initial 11/2024
+// Author/Gather: Kevin Normoyle AD6Z initially 11/2024
+// See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-// Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
-// Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
-
-// Incorporates work by: Kazuhisa “Kazu” Terasaki AG6NS. Thank you.
-// https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
-// https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker
-
-// Incorporates work by: Rob Votin KC3LBR. Thank you.
-// https://github.com/EngineerGuy314/pico-WSPRer
-
-// Got rid of this and use Serial everywhere
-#define Serial Serial
-
+// Watch out for:
 // In the Arduino IDE, to reference a variable declared within a function from another part of
 // your code, you need to declare the variable as "global" by defining it outside of any specific function,
 // allowing access to it from anywhere in your sketch
 
 // It is a special feature of the Arduino IDE that you can define functions after the point
 // at which they are used without needing an explicit function prototype before hand.
+
 // The Arduino build routine creates these prototypes but, unhappily, not always correctly,
 // leading to errors which are not obvious.
+
 // This is especially so if the function argument list contains user defined data types and
 // the automatically created function prototype is placed before the declaration of that data type.
-
-
-// A .cpp file isn't an Arduino file.
-// It doesn't know about anything Arduino-esque unless you tell it
-// The simplest way is to add to the top of the file:
-//  #include <Arduino.h>
-// need this for Serial2.* ?? otherwise says no type
 
 #include <Arduino.h>
 #include "gps_functions.h"
@@ -75,16 +59,6 @@ extern bool GpsIsOn;
 extern absolute_time_t GpsStartTime; // usecs
 extern GpsTimeToLastFix; // milliseconds
 
-// access library variables
-// it's declared in a class only if the library uses a class. 
-// if it is declared in a class, it must be public for you to access it.
-
-// inside your own sketch
-// if it's not inside a class, then you should be able to access it by using "extern" inside your sketch
-// for .c or .cpp
-
-// FIX! a bunch of things work because includes where done before gps_functions.h was included?
-
 void GpsINIT() {
     Serial2.setRX(GPS_UART1_RX_PIN);
     Serial2.setTX(GPS_UART1_TX_PIN);
@@ -104,9 +78,9 @@ void GpsINIT() {
     gpio_pull_up(GPS_ON_PIN);
     gpio_put(GPS_ON_PIN, 1);
 
-    // is digitalWrite necessary?
-    // digitalWrite(GPS_NRESET_PIN, HIGH);
-    // digitalWrite(GPS_ON_PIN, HIGH);
+    // FIX! is this necessary?
+    digitalWrite(GPS_NRESET_PIN, HIGH);
+    digitalWrite(GPS_ON_PIN, HIGH);
 }
 
 bool GpsIsOn = false
@@ -176,6 +150,7 @@ void GpsON(bool GpsColdReset) {
 
         /*printf("GpsON\n");*/
         // FIX! do we need any config of the ATGM336?
+        // just leaving this in for now. don't need for ATGM336
         if (!ublox_high_alt_mode_enabled) {
             // enable ublox high altitude mode if we have ublox
             /*

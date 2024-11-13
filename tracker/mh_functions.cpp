@@ -9,9 +9,11 @@
 #include <string.h>
 
 char letterize(int x) {
-    // KC3LBR 07/23/24 alternate/redundant fix (the increased resolution may preclude a need)
+    // KC3LBR 07/23/24 alternate/redundant fix 
+    // (the increased resolution may preclude a need)
     // this clamps the returned characters at 'X' or lower.
-    // Original code sometimes returned a invalid Y for 5th or 6 char, because of no bounds check.
+    // Original code sometimes returned a invalid Y for 5th or 6 char, 
+    // because of no bounds check.
     if (x < 24) return (char) x + 65;
     else return (char) 23 + 65;
 }
@@ -21,10 +23,10 @@ char letterize(int x) {
 // always return char[7] (null term)
 // will always return upper case
 
-//  tinyGPS returns doubles for lat long
+//  tinyGPS gives you doubles for lat long, so use doubles here
 char* get_mh_6(double lat, double lon) {
     static char locator[7];
-    double LON_F[] = {20, 2.0, 0.083333, 0.008333, 0.0003472083333333333};
+    double LON_F[] = {20, 2.0, 0.0833330, 0.008333, 0.0003472083333333333};
     double LAT_F[] = {10, 1.0, 0.0416665, 0.004166, 0.0001735833333333333};
     int i;
     lon += 180;
@@ -45,4 +47,3 @@ char* get_mh_6(double lat, double lon) {
     locator[6] = 0;
     return locator;
 }
-

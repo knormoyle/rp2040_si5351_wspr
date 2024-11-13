@@ -33,6 +33,16 @@
 // 11) compared to traquito: no buck/boost, just LDO. pressure/external temp sensor. Configurable extra telemetry. 
 // 12) USB serial for config input and output. No need to modify software for callsign/band etc
 // 13) Uses MS5351M instead of Si5351a.  Hans Summers G0UPL did a review here: https://qrp-labs.com/synth/ms5351m.html
+// 14) Like traquito will clamp voltage/temp/altitude telemetry to lower/upper bounds. no wraparound. 
+// 15) Voltage on tracker will be assumed to be 3.0-4.95 range. clamps to boundaries otherwise
+// Optional) enable the 3rd output of si5351 during a calibrate cycle, and use FreqCount library to measure and report frequency.
+//     Disable that output after reporting frequency. (one shot). I guess this would be the base HF freq for the band being enabled?
+//     Is it just easier/better/more complete to do wspr RF and look on sdr?
+
+      
+     
+
+    
 
 /* key parts with jlpcb # (Cxxx)
 C90770   ATGM336H-5N31  https://jlcpcb.com/partdetail/Zhongkewei-ATGM336H5N31/C90770  'GNSS Module'
@@ -73,3 +83,14 @@ https://www.qrp-labs.com/images/synth/ms5351m.pdf
 // config to control whether printf's can send to stdout and verbosity levels to control amount of printing
 // flight will generally be set to no output to stdout (DEVMODE=0)
 // Only the pwm for wspr send is interrupt driven. Careful management of when uart data from gps is unloaded
+
+
+// recommended .vimrc (or equivalent)
+// using tab on keyboard will translate to injecting <space> at 4 char boundaries
+// right and left shift to same 4 char boundaries
+// no <tab> in files
+// .vimrc I use:
+// set tabstop=4 softtabstop=0 expandtab shiftwidth=4 smarttab
+// set noerrorbells visualbell t_vb=
+// autocmd GUIEnter * set visualbell t_vb=
+

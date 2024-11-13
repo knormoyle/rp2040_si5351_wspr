@@ -11,6 +11,10 @@
 
 // Incorporates work by: Roman Piksaykin R2BDY. Thank you
 // https://github.com/RPiks/pico-WSPR-tx
+// https://github.com/RPiks/pico-WSPR-tx
+
+// Incorporates work by: PaulStoffregen. Thank you.
+// https://github.com/PaulStoffregen/FreqCount
 
 //*******************************************
 // Arduino IDE created by many
