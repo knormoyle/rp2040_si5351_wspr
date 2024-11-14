@@ -25,6 +25,9 @@ const int SI5351A_I2C_ADDR = 0x60;
 const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 extern uint32_t XMIT_FREQUENCY;
 extern bool DEVMODE;
+extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
+extern char _correction[7];  // parts per billion -3000 to 3000. default 0
+
 
 extern const int VFO_VDD_ON_N_PIN;
 extern const int VFO_I2C0_SDA_PIN;
@@ -42,6 +45,11 @@ extern const int SI5351A_CLK_IDRV_4MA;
 extern const int SI5351A_CLK_IDRV_2MA;
 
 extern const int PLL_CALCULATION_PRECISION;
+
+static bool vfo_turn_on_completed = false;
+static bool vfo_turn_off_completed = false;
+
+
 
 // removed static
 void vfo_init(void) {
@@ -236,7 +244,7 @@ void si5351a_setup_multisynth0(uint32_t div) {
     if (DEVMODE) printf("VFO_DRIVE_STRENGTH: %d\n", (int)s_vfo_drive_strength[0]);
 }
 
-static void si5351a_setup_multisynth1(uint32_t div) {
+void si5351a_setup_multisynth1(uint32_t div) {
     uint32_t p1 = 128 * div - 512;
 
     s_regs[0] = 0;
@@ -266,7 +274,7 @@ static void si5351a_setup_multisynth1(uint32_t div) {
 // Si5351 si5351;
 
 // we don't user PLLA ?
-static void si5351a_reset_PLLB(void) {
+void si5351a_reset_PLLB(void) {
   i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
 }
 
@@ -347,8 +355,6 @@ bool vfo_is_off(void) {
 
 // what is vfo_clk2 ? is that another PLL? is that used for calibration?
 
-static bool vfo_turn_on_completed = false;
-static bool vfo_turn_off_completed = false;
 
 void vfo_turn_on(uint8_t clk_number) {
     // already on successfully
@@ -412,13 +418,13 @@ void vfo_turn_on(uint8_t clk_number) {
 
     // do a parts per billion correction?
     uint32_t freq = XMIT_FREQUENCY;
-    if (atoi(_correction[0]) != 0) {
+    if (atoi(_correction) != 0) {
         // this will be a floor divide
         // FIX! what range _correction will be ? -3000 to 3000
         uint32_t orig_freq = freq;
         freq = freq + (atoi(_correction) * freq / 1000000000UL);
         if (DEVMODE) {
-            printf("correction shifts %d orig freq %d, to new freq, %d",
+            printf("correction shifts %lu orig freq %lu, to new freq, %lu",
                 atoi(_correction), orig_freq, freq);
         }
     }

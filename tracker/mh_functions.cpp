@@ -24,6 +24,7 @@ char letterize(int x) {
 // will always return upper case
 
 //  tinyGPS gives you doubles for lat long, so use doubles here
+// only place we return a pointer to a static char array ! (locator)
 char* get_mh_6(double lat, double lon) {
     static char locator[7];
     double LON_F[] = {20, 2.0, 0.0833330, 0.008333, 0.0003472083333333333};
@@ -44,6 +45,6 @@ char* get_mh_6(double lat, double lon) {
         lon = fmod(lon, LON_F[i]);
         lat = fmod(lat, LAT_F[i]);
     }
-    locator[6] = 0;
+    locator[6] = 0; // null term
     return locator;
 }

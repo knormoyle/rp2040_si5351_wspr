@@ -21,6 +21,7 @@
 extern bool DEVMODE;
 #include "debug_functions.h"
 #include "led_functions.h"
+#include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 // for TinyGPSDate definition
 #include <TinyGPS++.h>

@@ -23,6 +23,7 @@ void bmp_init(void);
 void i2c_scan(void);
 float bmp_read_temperature(void);
 float bmp_read_pressure(void);
+float bmp_read_humidity(void);
 
 // FIX! add temp and pressure reads?
 

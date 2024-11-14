@@ -20,7 +20,6 @@
 // static would mean you can only call it from within this translation unit
 void vfo_init(void);  // removed static
 void vfo_set_power_on(bool turn_on);  // removed static
-void si5351a_reset_PLLB(void);  // removed static
 
 bool vfo_is_on(void);
 void vfo_turn_on(uint8_t clk_number);

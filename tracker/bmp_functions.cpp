@@ -22,9 +22,6 @@
 // https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme680-ds001.pdf
 // https://www.bosch-sensortec.com/media/boschsensortec/downloads/application_notes_1/bst-bme680-an014.pdf
 
-
-
-
 // Like the BME280 & BMP280, this precision sensor from Bosch can measure humidity with ±3% accuracy, barometric pressure with ±1 hPa absolute accuracy, and temperature with ±1.0°C accuracy. Because pressure changes with altitude, and the pressure measurements are so good, you can also use it as an altimeter with  ±1 meter or better accuracy!
 
 // The BME680 is the first gas sensor that integrates high-linearity and high-accuracy gas, pressure, humidity and temperature sensors.
@@ -222,6 +219,12 @@ float bmp_read_temperature(void) {
 
 float bmp_read_pressure(void) {
     return bmp.readPressure();
+}
+
+float bmp_read_humidity(void) {
+    // FIX! need to switch to bme280
+    // return bmp.readHumidity();
+    return 0.0;
 }
 
 

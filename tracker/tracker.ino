@@ -8,6 +8,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <avr/dtostrf.h>
 
 #include "defines.h"
@@ -171,6 +172,7 @@ TinyGPSPlus gps;
 
 #include "debug_functions.h"
 #include "config_functions.h"
+#include "tele_functions.h"
 
 //*********************************
 // in AdaFruit_I2CDevice.h
@@ -264,6 +266,8 @@ char t_altitude[7] = { 0 };    // 6 bytes
 char t_tx_count_0[4] = { 0 };  // 3 bytes
 char t_temp[7] = { 0 };        // 6 bytes
 char t_pressure[8] = { 0 };    // 7 bytes
+char t_temp_ext[8] = { 0 };    // 7 bytes
+char t_humidity[8] = { 0 };    // 7 bytes
 char t_voltage[6] = { 0 };     // 5 bytes
 char t_sat_count[3] = { 0 };   // 2 bytes
 // lat/lon precision: How much to store
@@ -274,6 +278,8 @@ char t_sat_count[3] = { 0 };   // 2 bytes
 // so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
 char t_lat[13] = { 0 };        // 12 bytes
 char t_lon[13] = { 0 };        // 12 bytes
+
+char t_callsign[7] = { 0 };
 char t_grid6[7] = { 0 };       // 6 bytes
 char t_power[3] = { 0 };       // 2 bytes
 
@@ -337,13 +343,9 @@ void setup() {
     // stdio_init_all();
 
     // PICO_STDIO_USB_CONNECT_WAIT_TIME_MS ??
-    if (!stdio_usb_init()) {
-        Serial.println("ERROR: stdio_usb_init() failed)");
-    }
-
-    if (!stdio_usb_connected) {
-        Serial.println("ERROR: stdio_usb_connected() failed)");
-    }
+    // not needed/supported
+    // if (!stdio_usb_init()) {
+    // if (!stdio_init_all()) Serial.println("ERROR: stdio_init_all() failed)");
 
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -375,7 +377,7 @@ void setup() {
     }
 
     if (Serial.read() > 0) {  // read and discard data
-        Serial.println("Serial.read() detected input");
+        Serial.println(F("Serial.read() detected input"));
     }
 
     // should we only look at input when IDE is not connected
@@ -416,7 +418,7 @@ void setup() {
     //***************
     const uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
-        printf("%s\n RP2040 can't change clock to %dMhz. Using 133 instead\n%s",
+        printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
             RED, PLL_SYS_MHZ, NORMAL);
         snprintf(_clock_speed, sizeof(_clock_speed), "133");
         write_FLASH();
@@ -430,7 +432,7 @@ void setup() {
     i2c_scan();
 
     // Adafruit_BMP805 bmp;
-    if (!bmp.begin()) Serial.println("Could not find a valid BMP280 sensor");
+    if (!bmp.begin()) Serial.println(F("Could not find a valid BMP280 sensor"));
 
     // Default settings from datasheet
     bmp.setSampling(
@@ -460,6 +462,10 @@ int TELEN1_val2;
 int TELEN2_val1;
 int TELEN2_val2;
 
+int tx_cnt_0;
+int tx_cnt_1;
+int tx_cnt_2;
+int tx_cnt_3;
 void loop() {
     Watchdog.reset();
     // copied from loop_us_end while in the loop (at bottom)
@@ -497,12 +503,13 @@ void loop() {
             GpsInvalidCnt++;
             // FIX! instead of looking for not 2000, look for valid years
             // why doesn't this get included in valid gps fix?
-            if (gps.date.year() >= 2024 && gps.date.year <= 2034)
+            if (gps.date.year() >= 2024 && gps.date.year() <= 2034)
                 setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
             else
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
-            if (GpsInvalidCnt > GpsResetTime) {
+            // FIX! how fast this this get big?
+            if (GpsInvalidCnt > 1000) {
                 // FIX! have to send cold gps reset, in case ephemeris is corrupted? since vbat is always there
                 // otherwise this is a warm reset?
                 GpsOFF();
@@ -524,7 +531,6 @@ void loop() {
         // FIX! why does isUpdated() get us past here?
         if (!gps.location.isValid() || (gps.location.age() >=1000 && !gps.location.isUpdated())) {
             sleepSeconds(BeaconWait);
-        }
         } else {
             if (!gps.satellites.isValid() || gps.satellites.value() <= 3) {
                 if (DEVMODE) Serial.println(F("Not enough satelites"));
@@ -550,7 +556,6 @@ void loop() {
                 // sets all the t_* strings above
                 // voltage is captured when we write the buff? So it's before GPS is turned off?
                 // should we look at the live voltage instead?
-                TelemetryBuffInvalidCnt = 0;
                 if (DEVMODE)
                     StampPrintf("After snapTelemetry() timeStatus():%u minute():%u\n",
                         timeStatus(), minute());
@@ -568,7 +573,7 @@ void loop() {
                 // align to somewhere in the minute before the callsign starting minute
 
                 // so we can start the vfo 30 seconds before needed
-                if ( (readVoltage() > WsprBattMin) && alignMinute(-1) && seconds() > 30 ) {
+                if ( (readVoltage() > WsprBattMin) && alignMinute(-1) && second() > 30 ) {
                     // don't want gps power and tx power together
                     GpsOFF();
 
@@ -577,11 +582,25 @@ void loop() {
                     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
                     // GPS will stay off for all
-                    char hf_grid6[7] = { 0 };
-                    char hf_callsign[7] = _callsign;
-                    hf_grid6 = get_mh_6((double) t_lat, (double) t_lon);
-                    hf_grid4 = hf_loc[0:3]
-                    char hf_power[3]  = t_power;
+                    char hf_callsign[7];
+                    snprintf(hf_callsign, sizeof(hf_callsign), "%s", t_callsign);
+                    // same declared size, so could just strncpy
+                    // strncpy(hf_callsign, t_callsign, 6);
+
+                    double lat_double = atof(t_lat);
+                    double lon_double = atof(t_lon);
+
+                    char hf_grid6[7] = "AA00AA";
+                    char hf_grid4[5] = "AA00";
+                    hf_grid6 = get_mh_6(lat_double, lon_double);
+                    // not same declared size, so use snprintf)
+                    // just the first 4 chars
+                    snprintf(hf_grid4, sizeof(hf_grid4), "%s", t_grid6);
+
+                    char hf_power[3];
+                    snprintf(hf_power, sizeof(hf_power), "%s", t_power);
+                    // same declared size, so can just strncpy
+                    // strncpy(hf_power, t_power, 2);
 
                     // FIX! make the drive strength conditional on the config
                     // we could even make the differential dependent on the config
@@ -591,13 +610,13 @@ void loop() {
                     // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
                     // turns on both tx clk. The first time, has pll setup already?
 
-                    syncAndSendWspr(0, hf_callsign, hf_grid, hf_power);
+                    syncAndSendWspr(0, hf_callsign, hf_grid4, hf_power, false);
                     if (DEVMODE) {
-                        tx_0_cnt += 1;
+                        tx_cnt_0 += 1;
                         // we have 10 secs or so at the end of WSPR to get this off?
                         if (DEVMODE) {
                             StampPrintf("WSPR callsign Tx sent. minutes %d secs %d",
-                                minutes(), seconds());
+                                minute(), second());
                             DoLogPrint();  // we might have to delay this?
                         }
                     }
@@ -607,14 +626,14 @@ void loop() {
 
                     // input: uses t_callsign t_grid6 t_power
                     // output: modifies globals: hf_callsign, hf_grid4, hf_power
-                    u4b_encode_type0() {
-                    syncAndSendWspr(1, hf_callsign, hf_grid, hf_power);
+                    u4b_encode_std();
+                    syncAndSendWspr(1, hf_callsign, hf_grid4, hf_power, false);
                     if (DEVMODE) {
-                        tx_1_cnt += 1;
+                        tx_cnt_1 += 1;
                         // we have 10 secs or so at the end of WSPR to get this off?
                         if (DEVMODE) {
                             StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d",
-                                minutes(), seconds());
+                                minute(), second());
                             DoLogPrint();  // we might have to delay this?
                         }
                     }
@@ -629,13 +648,13 @@ void loop() {
                         // TELEN1_val1
                         // TELEN1_val2
                         encode_telen(TELEN1_val1, TELEN1_val2, false);
-                        syncAndSendWspr(1, hf_callsign, hf_grid, hf_power);
+                        syncAndSendWspr(2, hf_callsign, hf_grid4, hf_power, false);
                         if (DEVMODE) {
-                            tx_2_cnt += 1;
+                            tx_cnt_2 += 1;
                             // we have 10 secs or so at the end of WSPR to get this off?
                             if (DEVMODE) {
                                 StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d",
-                                    minutes(), seconds());
+                                    minute(), second());
                                 DoLogPrint();  // we might have to delay this?
                             }
                         }
@@ -648,13 +667,13 @@ void loop() {
                         // TELEN2_val1
                         // TELEN2_val2
                         encode_telen(TELEN1_val2, TELEN2_val2, true);
-                        syncAndSendWspr(1, hf_callsign, hf_grid, hf_power);
+                        syncAndSendWspr(3, hf_callsign, hf_grid4, hf_power, true);
                         if (DEVMODE) {
-                            tx_3_cnt += 1;
+                            tx_cnt_3 += 1;
                             // we have 10 secs or so at the end of WSPR to get this off?
                             if (DEVMODE) {
                                 StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d",
-                                    minutes(), seconds());
+                                    minute(), second());
                                 DoLogPrint();  // we might have to delay this?
                             }
                         }
@@ -676,12 +695,13 @@ void loop() {
         if (_verbosity[0] >= '1') {
             // maybe show GpsInvalidCnt also? how old are they
             StampPrintf(
+                "t_tx_count_0: %d "
                 "t_temp: %0.2f "
                 "t_altitude: %0.0f "
                 "t_grid6: %s "
                 "t_sat_count: %d "
                 "GpsTimeToLastFix %lu\n",
-                t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, GpsTimeToLastFix);
+                t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, GpsTimeToLastFix);
         }
         if (_verbosity[0] >= '5') {
             StampPrintf(
@@ -702,7 +722,8 @@ void loop() {
 
 // -1 is returned if anything illegal
 // FIX! should check what caller does if -1
-void alignMinute(int offset) {
+bool alignMinute(int offset) {
+    bool aligned = false;
     // need good time
     if (timeStatus() != timeSet) return false;
 
@@ -720,48 +741,22 @@ void alignMinute(int offset) {
         case 2: {;}
         case 4: {;}
         case 6: {;}
-        case 8: align_minute = (align_minute + offset) % 10;
+        case 8: align_minute = (align_minute + offset) % 10; break;
         default: align_minute = 0;
     }
 
     // FIX! update to look at u4b channel config
-    bool aligned = False;
-    aligned = (minutes() % 10) == align_minute;
+    aligned = (minute() % 10) == align_minute;
     if (_go_when_rdy[0] == '1') {
         // any odd minute
-        if (offset == -1) aligned = (minutes() % 2) == 1;
+        if (offset == -1) aligned = (minute() % 2) == 1;
         // any even minute
-        else aligned = (minutes() % 2) == 0;
+        else aligned = (minute() % 2) == 0;
         // telemetry buffer is also updated whenever if _go_when_ready
     }
+    return aligned;
 }
 
-void syncAndSendWspr(int txNum, char[7] hf_callsign, char[5] hf_grid4, char[2]  hf_power) {
-    // txNum is between 0 and 3
-
-    if (DEVMODE) {
-        Serial.println("will start WSPR messageType %d when aligned zero secs, currently %d secs\n",
-            messageType, seconds());
-        Serial.println("WSPR messageType %d Preparing", messageType);
-        Serial.print(F("Grid Locator: "));
-        Serial.println(hf_loc);
-    }
-    // this should be fine even if we wait a long time
-    int i = 2 * txNum;  // 0, 2, 4, 6
-    while (!alignMinute(i) || seconds() != 0) {
-        Watchdog.reset();
-        // FIX! delay 1 sec? change to pico busy_wait_us()?
-        sleep_ms(1000);
-        // delay(1);
-        // whenever we have spin loops we need to updateStatusLED()
-        updateStatusLED();
-    }
-
-    sendWspr(hf_callsign, hf_grid4, hf_power);
-    sendWSPR(messageType);
-    // HFSent=true;
-}
-//**********************************
 
 void sleepSeconds(int sec) {
     Serial.flush();
@@ -770,8 +765,8 @@ void sleepSeconds(int sec) {
         Watchdog.reset();
         // can power off gps depending on voltage
         // normally keep gps on, tracking after first fix. we are moving!
-        GpsOn();
-        uint32_t usec = time_us_32();
+        // uint32_t usec = time_us_32();
+        GpsON(false);
         float solar_voltage;
 
         solar_voltage = readVoltage();
@@ -793,7 +788,8 @@ void sleepSeconds(int sec) {
 }
 
 //*******************************************************
-static pwm_config wspr_pwm_config;
+extern const int WSPR_PWM_SLICE_NUM=4;
+
 void PWM4_Handler(void) {
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     static int cnt = 0;
@@ -804,7 +800,8 @@ void PWM4_Handler(void) {
 }
 
 void zeroTimerSetPeriodMs(float ms) {
-    wspr_pwm_config = pwm_get_default_config();
+    static pwm_config wspr_pwm_config = pwm_get_default_config();
+
     pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS
     pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)ms - 1));
     pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
@@ -819,15 +816,14 @@ void zeroTimerSetPeriodMs(float ms) {
 //********************************************
 // expected this is called at least 10 secs before starting minute
 // if not in the minute before starting minute,
-// it will wait until the right starting minute (depends on messageType)
-// messageType can be 0, 1, 2, 3
-void sendWSPR(int messageType, bool vfoOffWhenDone) {
+// it will wait until the right starting minute (depends on txNum)
+// txNum can be 0, 1, 2, 3
+void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
     Watchdog.reset();
-    if (messageType < 0 || messageType > 3) {
-        if (DEVMODE) printf("bad messageType %d ..ignoring", messageType);
+    if (txNum < 0 || txNum > 3) {
+        if (DEVMODE) printf("bad txNum %d ..ignoring", txNum);
         return;
     }
-
 
     // FIX! use the u4b channel freq
     uint32_t hf_freq = XMIT_FREQUENCY;
@@ -844,7 +840,10 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
     tone_spacing = WSPR_TONE_SPACING;
     tone_delay = WSPR_DELAY;
 
-    set_tx_buffer(hf_callsign, hf_grid4, hf_power, tx_buffer);
+    
+    // need uint8_t for power
+    uint8_t hf_power_val = (uint8_t)atoi(hf_power)
+    set_tx_buffer(hf_callsign, hf_grid4, hf_power_val, tx_buffer);
 
     zeroTimerSetPeriodMs(tone_delay);
 
@@ -876,8 +875,32 @@ void sendWSPR(int messageType, bool vfoOffWhenDone) {
     Watchdog.reset();
 }
 
-//**********************
-void set_tx_buffer(const char[7] hf_callsign, const char[5] hf_loc, uint8_t hf_power, uint8_t * tx_buffer) {
+void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
+    // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
+    // we turned the vfo on in the minute before 0, separately
+
+    if (DEVMODE) {
+        Serial.printf("will start WSPR txNum %d when aligned zero secs, currently %d secs\n",
+            txNum, second());
+        Serial.printf("WSPR txNum %d Preparing", txNum);
+        Serial.printf("hf_grid4: %s", hf_grid4);
+    }
+    // this should be fine even if we wait a long time
+    int i = 2 * txNum;  // 0, 2, 4, 6
+    while (!alignMinute(i) || (second() != 0)) {
+        Watchdog.reset();
+        // FIX! delay 1 sec? change to pico busy_wait_us()?
+        sleep_ms(1000);
+        // delay(1);
+        // whenever we have spin loops we need to updateStatusLED()
+        updateStatusLED();
+    }
+
+    sendWspr(txNum, hf_callsign,  hf_grid4, hf_power, vfoOffWhenDone);
+}
+
+//**********************************
+void set_tx_buffer(char *hf_callsign, char *hf_loc, uint8_t hf_power, uint8_t *tx_buffer) {
     // Clear out the transmit buffer
     memset(tx_buffer, 0, 255);  // is this bigger than WSPR_SYMBOL_COUNT ?
     // Set the proper frequency and timer CTC
@@ -898,7 +921,8 @@ void set_tx_buffer(const char[7] hf_callsign, const char[5] hf_loc, uint8_t hf_p
      *  Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT to the method.
      *
     */
-    jtencode.wspr_encode(hf_call, hf_loc, hf_power, tx_buffer);
+    // hf_power needs to be passed as uint8_t
+    jtencode.wspr_encode(hf_callsign, hf_loc, hf_power, tx_buffer);
     // maybe useful python for testing wspr encoding
     // https://github.com/robertostling/wspr-tools/blob/master/README.md
 }
@@ -916,7 +940,9 @@ void freeMem() {
     // compile your program: it says
     // how much program memory (stored in flash) and how much dynamic ram you are using.
     // rp2040: 264 KB ram (256 KB?), 2MB flash
-    Serial.print(F("Free RAM: ")); Serial.print(freeMemory(), DEC); Serial.println(F(" byte"));
+    Serial.print(F("Free RAM: ")); 
+    Serial.print(freeMemory(), DEC); 
+    Serial.println(F(" byte"));
 }
 
 // were any of these needed for InitPicoClock?

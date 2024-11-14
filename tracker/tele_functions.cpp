@@ -6,10 +6,12 @@
 #include <Arduino.h>
 #include <stdlib.h>
 #include "config_functions.h"
+#include "bmp_functions.h"
+#include "mh_functions.h"
 
 extern const int BattPin;
 
-extern uint64_t GpsTimeToLastFix // milliseconds
+extern uint64_t GpsTimeToLastFix; // milliseconds
 
 extern char t_course[4];      // 3 bytes
 extern char t_speed[4];       // 3 bytes
@@ -17,6 +19,8 @@ extern char t_altitude[7];    // 6 bytes
 extern char t_tx_count_0[4];  // 3 bytes
 extern char t_temp[7];        // 6 bytes
 extern char t_pressure[8];    // 7 bytes
+extern char t_temp_ext[8];    // 7 bytes
+extern char t_humidity[8];    // 7 bytes
 extern char t_voltage[6];     // 5 bytes
 extern char t_sat_count[3];   // 2 bytes
 
@@ -29,6 +33,8 @@ extern char t_sat_count[3];   // 2 bytes
 extern char t_lat[12];        // 12 bytes
 extern char t_lon[12];        // 12 bytes
 extern char t_grid6[7];       // 6 bytes
+extern char t_callsign[7];    // 6 bytes
+extern char t_power[3];       // 2 bytes
 
 // clamped to 0 if not in this list of legal
 // legalPower = [0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60]
@@ -38,141 +44,21 @@ extern int TELEN1_val1;
 extern int TELEN1_val2;
 extern int TELEN2_val1;
 extern int TELEN2_val2;
+extern char _TELEN_config[5];
+extern char _tx_high[2];      // 1 byte
+extern char _callsign[7];     // 6 bytes
 
 #include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
 
-
 extern TinyGPSPlus gps;
 extern bool DEVMODE;
+extern int tx_cnt_0;
 
 int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
 
-void snapTelemetry() {
-    // FIX! didn't we already check this?
-    // FIX! why does isUpdated() get us past here?
-    if (!gps.location.isValid()) return;
-    else if (gps.location.age() >= 1000 && !gps.location.isUpdated()) return;
-    else if (gps.satellites.value() <= 3) return;
-
-    int course = gps.course.isValid() ? gps.course.deg() : 0;
-    if (course < 0)   course = 0;
-    if (course > 360) course = 360;
-    snprintf(t_course, sizeof(t_course), "%3d", course);
-
-    int speed = gps.speed.isValid() ? gps.speed.knots() : 0;
-    if (speed < 0)   speed = 0;
-    if (speed > 999) speed = 999;
-    snprintf(t_speed, sizeof(t_speed), "%3d", speed);
-
-    // fixing negative altitude values causing display bug on aprs.fi
-    int altitude = (int) gps.altitude.meters();
-    if (altitude < 0) altitude = 0;
-    if (altitude > 999999) altitude = 999999;
-    snprintf(t_altitude, sizeof(t_altitude), "%6d", altitude);
-
-    // FIX! get temp from rp2040??
-    float tempC = 0;
-    // turn floats into strings
-    // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string);
-    if (tempC < -999.9) tempC = -999.9;
-    if (tempC > 999.9) tempC = 999.9;
-    snprintf(t_temp, sizeof(t_temp), "%6.1f", tempC);
-
-    // examples
-    // 1 hPA = 100 PA
-    // 11 km (36,000 ft): 226 hPa
-    // 20 km (65,000 ft): 54.7 hPa
-    // 32 km (105,000 ft): 8.68 hPa
-    // FIX! do we read hPA
-    float pressure = bmp_read_pressure();
-    if (pressure < 0) pressure = 0;
-    if (pressure > 999.999) pressure = 999.999;
-    snprintf(t_pressure, sizeof(t_pressure), "%7.2f", pressure);
-
-    float voltage = readVoltage();
-    if (voltage < 0) voltage = 0;
-    if (voltage > 99.99) voltage = 99.99;
-    snprintf(t_voltage, sizeof(t_voltage), "%5.2f", voltage);
-
-    int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
-    if (sat_count < 0) sat_count = 0;
-    if (sat_count > 99) sat_count = 99;
-    snprintf(t_sat_count, sizeof(t_sat_count, "%2d", sat_count));
-
-    double lat = gps.location.lat();
-    // FIX is both 90 and -90 legal for maidenhead translate?
-    if (lat < -90) lat = -90;
-    if (lat > 90) lat = 90;
-    // 12 bytes max with - and . counted
-    snprintf(t_lat, sizeof(t_lat), "%12.7f", lat);
-
-    double lon = gps.location.lon();
-    // FIX is both 180 and -180 legal for maidenhead translate?
-    if (lon < -180) lon = -180;
-    if (lon > 180) lon = 180;
-    snprintf(t_lon, sizeof(t_lon), "%12.7f", lon);
-
-    char grid6[7];  // null term
-    // FIX! are lat/lon double
-    grid6 = get_mh_6(gps.location.lat(), gps.location.lng());
-    // two letters, two digits, two letters
-    // base 18, base 18, base 10, base 10, base 24, base 24
-    // [A-R][A-R][0-9][0-9][A-X][A-X]
-    // I guess clamp to AA00AA if illegal? (easy to find errors?)
-    bool bad_grid = false;
-    if (grid6[0] < 'A' || grid6[0] > 'R') bad_grid = true;
-    if (grid6[1] < 'A' || grid6[1] > 'R') bad_grid = true;
-    if (grid6[2] < '0' || grid6[2] > '9') bad_grid = true;
-    if (grid6[3] < '0' || grid6[3] > '9') bad_grid = true;
-    if (grid6[4] < 'A' || grid6[4] > 'X') bad_grid = true;
-    if (grid6[5] < 'A' || grid6[5] > 'X') bad_grid = true;
-    if (bad_grid)
-        snprintf(grid6, sizeof(grid6), "%6s", "AA00AA");
-
-    snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
-
-    // string literals are null terminated
-    char power[3] = "3";
-    if (_tx_high[0] == '1')
-        snprintf(power, sizeof(power), "%1s", "5");
-    // we clamp to a legalPower when we snapTelemetry()
-    // basically we look at _tx_high[0] to decide our power level that will be used for rf
-    // we could use values that are unique for this tracker,
-    // for easy differentiation from u4b/traquito!!
-    // like 3 and 7!
-
-    // validity check the power. for 'same as everything else' checking
-    bool found = false;
-    int power_int = atoi(power);
-    for (int i = 0; i < legalPowerSize; i++) {
-        if (legalPower[i] == power_int) {
-            found = true;
-            break;
-        }
-    }
-    if (!found) power_int = 0;
-    snprintf(t_power, sizeof(t_power), "%2d", power_int);
-
-    if (DEVMODE) {
-        printf("t_* ");
-        printf("course %3s ", t_course);
-        printf("speed %3s ", t_speed);
-        printf("altitude %6s ", t_altitude);
-        printf("tx_count_0 %3s ", t_tx_count_0);
-        printf("temp %6s", t_temp);
-        printf("pressure %7s ", t_pressure);
-        printf("voltage %2s ", t_voltage);
-        printf("sat_count %2s ", t_sat_count);
-        printf("lat %12s ", t_lat);
-        printf("lon %12s ", t_lon);
-        printf("grid6 %6s", t_grid6);
-        printf("power %2s\n", t_power):
-    }
-}
-
 //****************************************************
-float readVoltage() {
+float readVoltage(void) {
     int adc_val = 0;
     adc_val += analogRead(BattPin);
     adc_val += analogRead(BattPin);
@@ -208,6 +94,155 @@ float readVoltage() {
     return solar_voltage;
 }
 
+void snapTelemetry(void) {
+    // FIX! didn't we already check this?
+    // FIX! why does isUpdated() get us past here?
+    if (!gps.location.isValid()) return;
+    else if (gps.location.age() >= 1000 && !gps.location.isUpdated()) return;
+    else if (gps.satellites.value() <= 3) return;
+
+    int course = gps.course.isValid() ? gps.course.deg() : 0;
+    if (course < 0)   course = 0;
+    if (course > 360) course = 360;
+    snprintf(t_course, sizeof(t_course), "%3d", course);
+
+    int speed = gps.speed.isValid() ? gps.speed.knots() : 0;
+    if (speed < 0)   speed = 0;
+    if (speed > 999) speed = 999;
+    snprintf(t_speed, sizeof(t_speed), "%3d", speed);
+
+    // fixing negative altitude values causing display bug on aprs.fi
+    int altitude = (int) gps.altitude.meters();
+    if (altitude < 0) altitude = 0;
+    if (altitude > 999999) altitude = 999999;
+    snprintf(t_altitude, sizeof(t_altitude), "%6d", altitude);
+
+    const float conversionFactor = 3.3f / (1 << 12); //read temperature
+    int adc_val = 0;
+    // FIX! is this the right gpio for temp
+    adc_val += analogRead(4);
+    adc_val += analogRead(4);
+    adc_val += analogRead(4);
+    float adc = (adc_val * conversionFactor) / 3;
+    float tempC = 27.0f - (adc - 0.706f) / 0.001721f;
+
+    // turn floats into strings
+    // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string);
+    if (tempC < -999.9) tempC = -999.9;
+    if (tempC > 999.9) tempC = 999.9;
+    snprintf(t_temp, sizeof(t_temp), "%6.1f", tempC);
+
+    // examples
+    // 1 hPA = 100 PA
+    // 11 km (36,000 ft): 226 hPa
+    // 20 km (65,000 ft): 54.7 hPa
+    // 32 km (105,000 ft): 8.68 hPa
+    // FIX! do we read hPA
+
+    float pressure = bmp_read_pressure();
+    if (pressure < 0) pressure = 0;
+    if (pressure > 999.99) pressure = 999.99;
+    snprintf(t_pressure, sizeof(t_pressure), "%7.2f", pressure);
+
+    float temp_ext = bmp_read_temperature();
+    if (temp_ext < 0) temp_ext = 0;
+    if (temp_ext > 999.99) temp_ext = 999.99;
+    snprintf(t_temp_ext, sizeof(t_temp_ext), "%7.2f", temp_ext);
+
+    float humidity = bmp_read_humidity();
+    if (humidity < 0) humidity = 0;
+    if (humidity > 999.99) humidity = 999.99;
+    snprintf(t_humidity, sizeof(t_humidity), "%7.2f", humidity);
+
+    float voltage = readVoltage();
+    if (voltage < 0) voltage = 0;
+    if (voltage > 99.99) voltage = 99.99;
+    snprintf(t_voltage, sizeof(t_voltage), "%5.2f", voltage);
+
+    int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
+    if (sat_count < 0) sat_count = 0;
+    if (sat_count > 99) sat_count = 99;
+    snprintf(t_sat_count, sizeof(t_sat_count), "%2d", sat_count);
+
+    double lat = gps.location.lat();
+    // FIX is both 90 and -90 legal for maidenhead translate?
+    if (lat < -90) lat = -90;
+    if (lat > 90) lat = 90;
+    // 12 bytes max with - and . counted
+    snprintf(t_lat, sizeof(t_lat), "%12.7f", lat);
+
+    double lon = gps.location.lng();
+    // FIX is both 180 and -180 legal for maidenhead translate?
+    if (lon < -180) lon = -180;
+    if (lon > 180) lon = 180;
+    snprintf(t_lon, sizeof(t_lon), "%12.7f", lon);
+
+    char grid6[7];  // null term
+    // FIX! are lat/lon double
+    grid6 = get_mh_6(gps.location.lat(), gps.location.lng());
+    // two letters, two digits, two letters
+    // base 18, base 18, base 10, base 10, base 24, base 24
+    // [A-R][A-R][0-9][0-9][A-X][A-X]
+    // I guess clamp to AA00AA if illegal? (easy to find errors?)
+    bool bad_grid = false;
+    if (grid6[0] < 'A' || grid6[0] > 'R') bad_grid = true;
+    if (grid6[1] < 'A' || grid6[1] > 'R') bad_grid = true;
+    if (grid6[2] < '0' || grid6[2] > '9') bad_grid = true;
+    if (grid6[3] < '0' || grid6[3] > '9') bad_grid = true;
+    if (grid6[4] < 'A' || grid6[4] > 'X') bad_grid = true;
+    if (grid6[5] < 'A' || grid6[5] > 'X') bad_grid = true;
+    if (bad_grid)
+        snprintf(grid6, sizeof(grid6), "%6s", "AA00AA");
+
+    snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
+    // just for consistency with everything else
+    snprintf(t_callsign, sizeof(t_callsign), "%6s", _callsign);
+
+    // string literals are null terminated
+    char power[3] = "3";
+    if (_tx_high[0] == '1')
+        snprintf(power, sizeof(power), "%1s", "5");
+    // we clamp to a legalPower when we snapTelemetry()
+    // basically we look at _tx_high[0] to decide our power level that will be used for rf
+    // we could use values that are unique for this tracker,
+    // for easy differentiation from u4b/traquito!!
+    // like 3 and 7!
+
+    // validity check the power. for 'same as everything else' checking
+    bool found = false;
+    int power_int = atoi(power);
+    for (int i = 0; i < legalPowerSize; i++) {
+        if (legalPower[i] == power_int) {
+            found = true;
+            break;
+        }
+    }
+    if (!found) power_int = 0;
+    snprintf(t_power, sizeof(t_power), "%2d", power_int);
+
+    int tx_cnt_0_val = tx_cnt_0;
+    if (tx_cnt_0 < 0) tx_cnt_0_val = 0;
+    if (tx_cnt_0 > 99) tx_cnt_0_val = 99;
+    snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%3d", tx_cnt_0_val);
+
+    if (DEVMODE) {
+        printf("t_* ");
+        printf("course %3s ", t_course);
+        printf("speed %3s ", t_speed);
+        printf("altitude %6s ", t_altitude);
+        printf("tx_count_0 %3s ", t_tx_count_0);
+        printf("temp %6s", t_temp);
+        printf("pressure %7s ", t_pressure);
+        printf("voltage %2s ", t_voltage);
+        printf("sat_count %2s ", t_sat_count);
+        printf("lat %12s ", t_lat);
+        printf("lon %12s ", t_lon);
+        printf("grid6 %6s", t_grid6);
+        printf("power %2s\n", t_power);
+    }
+}
+
+
 static float onewire_values[10] = { 0 };
 
 //****************************************************
@@ -221,6 +256,8 @@ void process_TELEN_data(void) {
     // the 12 bit shift is because thats resolution of ADC
     const float conversionFactor = 3300.0f / (1 << 12);
 
+    int telen_values[4] = { 0 };
+    uint32_t timeSinceBoot_secs = millis() / 1000UL;  // seconds
     for (int i=0; i < 4;i++) {
         switch (_TELEN_config[i]) {
             case '-':  break;  // do nothing, telen chan is disabled
@@ -238,14 +275,13 @@ void process_TELEN_data(void) {
                 telen_values[i] = round((float)analogRead(3) * conversionFactor * 3.0f);
                 break;
             case '4':
-                uint32_t timeSinceBoot_secs = millis() / 1000UL; // seconds
-                telen_values[i] = timeSinceBoot_secs; break; // seconds since running
+                telen_values[i] = timeSinceBoot_secs; break;  // seconds since running
                 break;
             case '5': telen_values[i] = GpsTimeToLastFix; break;
-            case '6': {;}
-            case '7': {;}
-            case '8': {;}
-            case '9': {;}
+            case '6': { ; }
+            case '7': { ; }
+            case '8': { ; }
+            case '9': { ; }
                 if (onewire_values[_TELEN_config[i]-'6'] > 0)
                     telen_values[i] = onewire_values[_TELEN_config[i] -'6'] * 100;
                 else

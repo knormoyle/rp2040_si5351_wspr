@@ -28,9 +28,10 @@
 // this is 1M from start of flash
 
 #define FLASH_TARGET_OFFSET (4 * 256 * 1024) // leaves 1M of space for the program
-#define FLASH_SECTOR_SIZE 4096
-#define FLASH_PAGE_SIZE 256
-#define kHz 1000U
+
+// already defined?
+// #define FLASH_SECTOR_SIZE 4096
+// #define FLASH_PAGE_SIZE 256
 
 extern uint32_t XMIT_FREQUENCY;
 extern bool DEVMODE;
@@ -140,8 +141,8 @@ void display_intro(void) {
     printf("\n===================================================\n");
     printf("%spress any key to continue%s", RED, NORMAL);
 
-    // wait
-    char c = getchar_timeout_us(60000000);
+    // wait..don't need the char user interrupted with 
+    getchar_timeout_us(60000000);
     printf("%s", CLEAR_SCREEN);
 }
 
@@ -175,8 +176,6 @@ void show_TELEN_msg() {
 // called if keystroke from terminal on USB detected during operation.
 void user_interface(void) {
     int c;
-    char str[10];
-
     sleep_ms(100);
     turnOnLED(true);
     display_intro();
@@ -199,6 +198,7 @@ void user_interface(void) {
         }
 
         // make char capital either way
+        uint32_t clkhz = atoi(_clock_speed) * 1000000UL;
         if (c > 90) c -= 32;
         switch (c) {
             case 'X':
@@ -241,7 +241,6 @@ void user_interface(void) {
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
                 }
-                uint32_t clkhz = atoi(_clock_speed) * 1000000UL;
                 if (!set_sys_clock_khz(clkhz / kHz, false)) {
                     printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
                         RED, PLL_SYS_MHZ, NORMAL);
@@ -285,7 +284,7 @@ void user_interface(void) {
                 sleep_ms(1000);
                 break;
         }
-        int result = check_data_validity_and_set_defaults();
+        check_data_validity_and_set_defaults();
         show_values();
     }
 }
@@ -294,10 +293,10 @@ void user_interface(void) {
 // buf: address of NVRAM to list <input>
 // len: bytes of NVRAM to list <input>
 
-void print_buf(const uint8_t *buf, size_t len) {
+void print_buf(const uint8_t *buf, int len) {
     printf("%s%s%s%s\nNVRAM dump:\n%s%s", 
-        CLEAR_SCREEN, BRIGHT, BOLD_ON, UNDERLINE_ON, BOLD_OFF, UNDERLINE_OFF)
-    for (size_t i = 0; i < len; ++i) {
+        CLEAR_SCREEN, BRIGHT, BOLD_ON, UNDERLINE_ON, BOLD_OFF, UNDERLINE_OFF);
+    for (int i = 0; i < len; ++i) {
         printf("%02x", buf[i]);
         if (i % 16 == 15) printf("\n");
         else printf(" ");
@@ -309,6 +308,8 @@ void print_buf(const uint8_t *buf, size_t len) {
 // prints hexa listing of data
 // calls function which check data validity
 
+
+#define FLASH_BYTES_USED 28
 void read_FLASH(void) {
     // arduino makes it hard to write flash?
     // there is no internal eeprom on rp2040
@@ -346,28 +347,32 @@ void read_FLASH(void) {
     // https://www.raspberrypi.com/documentation/pico-sdk/hardware.html#group_hardware_flash
 
     // https://stackoverflow.com/questions/890535/what-is-the-difference-between-char-const-and-const-char
-    // char * const is a constant pointer to a char. value can change. pointer can't change
     // const char * is a pointer to a const char. value can't change. pointer can change
-    // const char * const is a const pointer to a const char
     // these two are equivalent
     // const char *
     // char const *
 
+    // to avoid confusion always append the const qualifier ?
+    // char * const is a constant pointer to a char. value can change. pointer can't change
+    // const char * const is a const pointer to a const char
+
+
     // FIX! why is this weird, re above defs?
-    // const uint8_t *flash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
-    const char *flash_target_contents = (const char *) (XIP_BASE + FLASH_TARGET_OFFSET);
-    print_buf(flash_target_contents, FLASH_PAGE_SIZE);  // 256
+    const uint8_t *uflash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
+    print_buf(uflash_target_contents, (int) FLASH_PAGE_SIZE);  // 256
 
-    // null terminate in case it's printf'ed with %s
-    // potentially has null also before the end?
-    // multichar that have room have a null in the flash?
-
+    char flash_target_contents[FLASH_BYTES_USED] = { 0 };
+    for (int i = 0; i < FLASH_BYTES_USED ; i++) {
+        flash_target_contents[i] = (char) uflash_target_contents[i];
+    }
     // BE SURE YOU ONLY USE ONE PAGE: i.e. 256 bytes total
+    // FIX! should we just use snprintf?
     strncpy(_callsign,     flash_target_contents + 0,  6); _callsign[6] = 0;
     strncpy(_verbosity,    flash_target_contents + 6,  1); _verbosity[1] = 0;
     strncpy(_TELEN_config, flash_target_contents + 7,  4); _TELEN_config[4] = 0;
     strncpy(_clock_speed,  flash_target_contents + 11, 3); _clock_speed[3] = 0;
     strncpy(_U4B_chan,     flash_target_contents + 14, 3); _U4B_chan[3] = 0;
+    // FIX! change to _band everywhere?
     strncpy(_Band,         flash_target_contents + 17, 2); _Band[2] = 0;
     strncpy(_tx_high,      flash_target_contents + 19, 1); _tx_high[1] = 0;
     strncpy(_devmode,      flash_target_contents + 20, 1); _devmode[1] = 0;
@@ -376,22 +381,23 @@ void read_FLASH(void) {
 
     PLL_SYS_MHZ = atoi(_clock_speed);
 
-    // FIX! change to _band everywhere
-
     // FIX! we should decode the _Band/_U4B_chan and set any ancillary decode vars?
     // any XMIT_FREQUENCY ?
     process_chan_num();
     // _32_dialfreqhz not used any more
     // FIX! define this as extern?
     XMIT_FREQUENCY = init_rf_freq();
-    if (_devmode[0] == 1) DEVMODE = true;
+    if (_devmode[0] == '1') DEVMODE = true;
     else DEVMODE = false;
 }
 
 // Write the user entered data into FLASH
 void write_FLASH(void) {
     // initializes all to zeroes
-    uint8_t data_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
+    char data_chunk[FLASH_BYTES_USED] = { 0 };  // enough to cover what we use here
+    uint8_t udata_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
+
+    // don't take the extra null term (but _callsign might be short!)
     strncpy(data_chunk + 0,  _callsign, 6);
     strncpy(data_chunk + 6,  _verbosity, 1);
     strncpy(data_chunk + 7,  _TELEN_config, 4);
@@ -401,7 +407,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 19, _tx_high, 1);
     strncpy(data_chunk + 20, _devmode, 1);
     strncpy(data_chunk + 21, _correction, 6);
-    strncpy(data_chunk + 21, _go_when_rdy, 2);
+    strncpy(data_chunk + 27, _go_when_rdy, 1);
 
     // you could theoretically write 16 pages at once (a whole sector).
     // don't interrupt
@@ -409,9 +415,22 @@ void write_FLASH(void) {
 
     // a "Sector" is 4096 bytes
     // FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE, FLASH_PAGE_SIZE = 040000x, 4096, 256
+
     flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
     // writes 256 bytes (one "page") (16 pages per sector)
-    flash_range_program(FLASH_TARGET_OFFSET, data_chunk, FLASH_PAGE_SIZE);
+
+    // alternative for casting the array to uint8_t
+    // https://stackoverflow.com/questions/40579902/how-to-turn-a-character-array-into-uint8-t
+
+    // If you're on an architecture where uint8_t is a typedef to unsigned char,
+    // then simply take the first char and cast it to uint8_t:
+    // int length = (uint8_t)(udata_chunk[0]);
+
+    for (int i = 0; i < FLASH_BYTES_USED ; i++) {
+        udata_chunk[i] = (uint8_t) data_chunk[i];
+    }
+
+    flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
     restore_interrupts(ints);
 }
 
@@ -458,10 +477,11 @@ int check_data_validity_and_set_defaults(void) {
         callsignBad = true;
     }
 
+    int i;
     if (clength > 6) {
         callsignBad = true;
     } else if (clength >= 3) {
-        for (int i = 0; i <= 2; i++) {
+        for (i = 0; i <= 2; i++) {
             if ((_callsign[i] < 'A' && _callsign[i] > 'Z') &&
                 (_callsign[i] < '0' && _callsign[i] > '9')) {
                 callsignBad = true;

@@ -51,6 +51,8 @@ extern char t_temp[7];  // 6 bytes
 // always positive float. assume we read hPA. clamped to 0 to 999.999
 // FIX! is it hPA?
 extern char t_pressure[8];  // 7 bytes
+extern char t_temp_ext[8];  // 7 bytes
+extern char t_humidity[8];  // 7 bytes
 
 // always positive float. clamped to 0, 99.99  volts
 extern char t_voltage[6];  // 5 bytes
@@ -244,7 +246,7 @@ void process_chan_num() {
 //*******************************************
 void u4b_encode_std() {
     // input: uses t_callsign t_grid6 t_power
-    // output: modifies globals: hf_callsign, hf_grid4, hf_power
+    // output: tx_buffer
 
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
@@ -310,7 +312,7 @@ void u4b_encode_std() {
     // FIX! kl3cbr did encoding # of satelites into knots.
     // t_speed is integer
     // max t_speed could be 999 ?
-    int speedKnotsNum = int() t_speed  / 2;
+    int speedKnotsNum = (int)t_speed  / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
     if (speedKnotsNum > 41) speedKnotsNum = 41;
@@ -353,6 +355,9 @@ void u4b_encode_std() {
     // null term is appended after the generated string
 
     uint8_t power = (uint8_t) legalPower[powerVal];
+
+    printf("normal telemetry goes to tx_buffer as callsign %s grid %s power %u)\n",
+        callsign, grid4, power);
     // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
     jtencode.wspr_encode(callsign, grid4, power, tx_buffer);
 }
@@ -369,7 +374,7 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2)
     uint8_t id4Val = val % 26; val = val / 26;
     uint8_t id2Val = val % 36; val = val / 36;
 
-    char telen_chars[9]; // 6 + 3, callsign and grid
+    char telen_chars[9];  // 6 + 3, callsign and grid
 
     // convert to encoded callsign
     telen_chars[0] = EncodeBase36(id2Val);
@@ -421,13 +426,8 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2)
     grid4[4] = 0;  // null term
 
     int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
-    char power[3];
-    // n is max number of bytes used. generated string is at most n-1 bytes
-    // (space for null term)
-    // null term is appended after the generated string
-    snprintf(power, sizeof(power), "%d", legalPower[powerVal]);
-
-    printf("val1 %d val2 %d goes to tx_buffer as callsign %s grid %s power %d)\n",
+    uint8_t power = (uint8_t) legalPower[powerVal];
+    printf("val1 %lu val2 %lu goes to tx_buffer as callsign %s grid %s power %u)\n",
         telen_val1, telen_val2, callsign, grid4, power);
 
     // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
