@@ -150,21 +150,50 @@ void display_intro(void) {
     // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
     // int c = getchar_timeout_us(0);
 
-    char c;
     // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
     // FIX! is there a timeout on this?
 
     // FIX! create a spin loop, that breaks out of the spin loop after a timeout
     // FIX! short timeout? or no?
+    // Should I just do Serial.begin(9600):
+    // Serial.read() to read the serial port?
+
+    /*
+    int32_t c = 0;
     if (tud_cdc_connected() && tud_cdc_available() > 0) {
         // spin loop looking for tud_cdc_available()
         // no timeout? but there should be data?
+        // returns int32_t?
         c = tud_cdc_read_char();
     }
     else  {
-        c = '\0';
+        c = 0;
+        // snprintf(c, 2, "%s", "0");
     }
-    
+    char c_char = (char) c;
+    */
+
+    int i;
+    char incomingByte = { 0 };
+    for (i = 0; i < 10*5; i++) {
+        Watchdog.reset();
+        if (!Serial.available()) {
+            sleep_ms(200);
+        }
+        else {
+            incomingByte = Serial.read();
+            Serial.println(incomingByte);
+            if (incomingByte != 13) {
+                Serial.readStringUntil(13); // empty readbuffer after good data
+            }
+            break;
+        }
+    }
+    if (i == 10*5) {
+        Serial.println("(2) Must have timed out looking for input char(s) on Serial");
+    }
+    Watchdog.reset();
+    // char c_char = (char) incomingByte;
     printf("%s", CLEAR_SCREEN);
 }
 
@@ -197,7 +226,6 @@ void show_TELEN_msg() {
 
 // called if keystroke from terminal on USB detected during operation.
 void user_interface(void) {
-    int c;
     sleep_ms(100);
     turnOnLED(true);
     display_intro();
@@ -214,30 +242,61 @@ void user_interface(void) {
 
         // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
         // int c = getchar_timeout_us(0);
-        char c;
+        // char c[2] = "0";
         // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
         // FIX! spin loop with timeout? (check every 1 sec?)
+        /*
+        int32_t c = 0;
         if (tud_cdc_connected() && tud_cdc_available() > 0) {
             c = tud_cdc_read_char();
         }
         else  {
-            c = '\0';
+            // snprintf(c, 2, "%s", "0");
+            c = 0;
         }
-        // FIX! how does this timeout
+        char c_char = (char) c;
+        */
+        int i;
+        char incomingByte = '\0';
+        for (i = 0; i < 10*5; i++) {
+            Watchdog.reset();
+            if (!Serial.available()) {
+                sleep_ms(200);
+            }
+            else { 
+                incomingByte = Serial.read();
+                Serial.println(incomingByte);
+                if (incomingByte != 13) {
+                    Serial.readStringUntil(13); // empty readbuffer after good data
+                }
+                break;
+            }
+        }
+        if (i == 10*5) {
+            Serial.println("(2) Must have timed out looking for input char(s) on Serial");
+        }
+        Watchdog.reset();
+        char c_char = (char) incomingByte;
 
-        printf("%c\n", c);
+        // FIX! how does this timeout
+        // printf("%s\n", c_char);
+
         // if (c == PICO_ERROR_TIMEOUT) {
-        if (c == '\0') {
-            printf("%s\n\n Timeout waiting for input, ..rebooting\n", CLEAR_SCREEN);
+        if (c_char == 0) {
+            printf("%s\n\n (3) Timeout waiting for input, ..rebooting\n", CLEAR_SCREEN);
             sleep_ms(100);
             Watchdog.enable(500);  // milliseconds
             for (;;) { ; }
         }
 
         // make char capital either way
-        uint32_t clkhz = atoi(_clock_speed) * 1000000UL;
-        if (c > 90) c -= 32;
-        switch (c) {
+        if (c_char > 90) c_char -= 32;
+
+        // regenerated from _clock_speed below
+        uint32_t clkhz = 0;
+        // FIX! can we case the int32_t to char. we might lost data with the cast
+
+        switch ( c_char ) {
             case 'X':
                 printf("%s\n\nGoodbye ..rebooting", CLEAR_SCREEN);
                 Watchdog.enable(500);  // milliseconds
@@ -267,6 +326,7 @@ void user_interface(void) {
             case 'K':
                 get_user_input("Enter clock speed (100-250): ", _clock_speed, sizeof(_clock_speed));
                 write_FLASH();
+                clkhz = atoi(_clock_speed) * 1000000UL;
                 // frequencies like 205 mhz will PANIC,
                 // System clock of 205000 kHz cannot be exactly achieved
                 // should detect the failure and change the nvram, otherwise we're stuck even on reboot
@@ -277,12 +337,14 @@ void user_interface(void) {
                         RED, _TELEN_config, NORMAL);
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
+                    clkhz = atoi(_clock_speed) * 1000000UL;
                 }
                 if (!set_sys_clock_khz(clkhz / kHz, false)) {
                     printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
                         RED, PLL_SYS_MHZ, NORMAL);
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
+                    clkhz = atoi(_clock_speed) * 1000000UL;
                 }
                 break;
             case 'A':
@@ -317,7 +379,7 @@ void user_interface(void) {
             case 13:  break;
             case 10:  break;
             default:
-                printf("%s\nYou pressed: %c - (0x%02x), invalid choice! ", CLEAR_SCREEN, c, c);
+                printf("%s\nYou pressed: %c - (0x%02x), invalid choice! ", CLEAR_SCREEN, c_char, c_char);
                 sleep_ms(1000);
                 break;
         }

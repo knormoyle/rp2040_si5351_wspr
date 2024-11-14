@@ -386,8 +386,12 @@ void setup() {
         updateStatusLED();
     }
 
-    if (Serial.read() > 0) {  // read and discard data
-        Serial.println(F("Serial.read() detected input"));
+    // emptying the serial input buffer
+    while (Serial.available() > 0) {
+        Serial.read();
+        if (Serial.read() > 0) {  // read and discard data
+            Serial.println(F("Serial.read() detected input"));
+        }
     }
 
     // should we only look at input when IDE is not connected
@@ -422,22 +426,44 @@ void setup() {
     // https://github.com/earlephilhower/arduino-pico/discussions/2224
 
 
-
     // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
     // int c = getchar_timeout_us(0);
-    char c;
     // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
     // FIX! create a spin loop that looks for data?
     // no ..no spin loop here
     
+    /*
+    char c = '\0';
     if (tud_cdc_connected() && tud_cdc_available() > 0) {
         c = tud_cdc_read_char();
     }
     else  {
         c = '\0';
     }
+    */
 
-    if (c > '\0') {
+    int i;
+    char incomingByte = { 0 };
+    for (i = 0; i < 10*5; i++) {
+        Watchdog.reset();
+        if (!Serial.available()) {
+            sleep_ms(200);
+        }
+        else {
+            incomingByte = Serial.read(); 
+            Serial.println(incomingByte);
+            if (incomingByte != 13) {
+                Serial.readStringUntil(13); // empty readbuffer after good data
+            }
+            break;
+        }
+    }
+    if (i == 10*5) {
+        Serial.println("Must have timed out looking for input char(s) on Serial");
+    }
+    Watchdog.reset();
+
+    if (incomingByte  > '\0') {
         // looks for input on USB serial port only.
         // Note: getchar_timeout_us(0) returns a -2 (as of sdk 2) if no keypress.
         // Must do this check BEFORE setting Clock Speed in Case you bricked it
@@ -456,7 +482,8 @@ void setup() {
     }
 
     // This should work now
-    InitPicoClock(PLL_SYS_MHZ);
+    // FIX! don't do it for now
+    // InitPicoClock(PLL_SYS_MHZ);
 
     bmp_init();
     i2c_scan();
@@ -626,7 +653,7 @@ void loop() {
                     hf_grid6 = get_mh_6(lat_double, lon_double);
                     // not same declared size, so use snprintf)
                     // just the first 4 chars
-                    snprintf(hf_grid4, sizeof(hf_grid4), "%s", t_grid6);
+                    snprintf(hf_grid4, sizeof(hf_grid4), "%s", hf_grid6);
 
                     char hf_power[3];
                     snprintf(hf_power, sizeof(hf_power), "%s", t_power);
