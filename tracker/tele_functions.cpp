@@ -169,15 +169,16 @@ void snapTelemetry(void) {
     if (lat < -90) lat = -90;
     if (lat > 90) lat = 90;
     // 12 bytes max with - and . counted
-    snprintf(t_lat, sizeof(t_lat), "%12.7f", lat);
+    snprintf(t_lat, sizeof(t_lat), "%.7f", lat);
 
     double lon = gps.location.lng();
     // FIX is both 180 and -180 legal for maidenhead translate?
     if (lon < -180) lon = -180;
     if (lon > 180) lon = 180;
-    snprintf(t_lon, sizeof(t_lon), "%12.7f", lon);
+    snprintf(t_lon, sizeof(t_lon), "%.7f", lon);
 
-    char grid6[7];  // null term
+    // get_mh_6 returns a pointer
+    char *grid6;  // null term
     // FIX! are lat/lon double
     grid6 = get_mh_6(gps.location.lat(), gps.location.lng());
     // two letters, two digits, two letters
@@ -192,7 +193,8 @@ void snapTelemetry(void) {
     if (grid6[4] < 'A' || grid6[4] > 'X') bad_grid = true;
     if (grid6[5] < 'A' || grid6[5] > 'X') bad_grid = true;
     if (bad_grid)
-        snprintf(grid6, sizeof(grid6), "%6s", "AA00AA");
+        // can't use sizeof(grid6) here because it's a pointer
+        snprintf(grid6, 6, "%6s", "AA00AA");
 
     snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
     // just for consistency with everything else

@@ -39,7 +39,7 @@
 // refer to gps.* stuff?
 // doesn't work
 
-extern bool ublox_high_alt_mode_enabled;
+bool ublox_high_alt_mode_enabled = false;
 extern TinyGPSPlus gps;
 extern bool DEVMODE;
 
@@ -53,13 +53,18 @@ extern const int GPS_1PPS_PIN;
 extern const int GPS_UART1_RX_PIN;
 extern const int GPS_UART1_TX_PIN;
 
-extern bool GpsIsOn;
 // for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
 extern absolute_time_t GpsStartTime;  // usecs
 extern uint64_t GpsTimeToLastFix;  // milliseconds
 
 // FIX! gonna need an include for this? maybe note
 // # include <TimeLib.h>
+
+static bool GpsIsOn_state = false;
+
+bool GpsIsOn() {
+    return GpsIsOn_state;
+}
 
 void GpsINIT() {
     Serial2.setRX(GPS_UART1_RX_PIN);
@@ -162,7 +167,7 @@ void GpsON(bool GpsColdReset) {
             */
             ublox_high_alt_mode_enabled = true;
         }
-        GpsIsOn = true;
+        GpsIsOn_state = true;
         GpsTimeToLastFix = 0;
     }
 }
@@ -211,7 +216,7 @@ void GpsOFF() {
     ublox_high_alt_mode_enabled = false;
 
     /*printf("GpsOFF\n");*/
-    GpsIsOn = false;
+    GpsIsOn_state = false;
     GpsStartTime = 0;
     GpsTimeToLastFix = 0;
 }

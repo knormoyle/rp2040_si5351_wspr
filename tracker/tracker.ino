@@ -7,6 +7,12 @@
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
+// do we need these two for  getchar_timeout_us() (return type is int
+// #include "pico/stdlib.h"
+#include "pico/stdio.h"
+// what about this?
+#include "class/cdc/cdc_device.h" 
+
 #include <stdlib.h>
 #include <string.h>
 #include <avr/dtostrf.h>
@@ -123,15 +129,17 @@ Can extract arbitrary data from any of the myriad NMEA sentences out there.
 // use setPollingMode(true) before calling begin()
 //     Serial1.setPollingMode(true);
 
-const int Si5351Pwr = 4;
-const int BattPin = A3;
+// extern so it links okay?
+extern const int Si5351Pwr = 4;
+extern const int BattPin = A3;
 
 //******************************* CONFIG **********************************
 // FIX! are these used now? remnants of APRS messaging
 char comment[] = "tracker 1.0";
 
-const int WSPR_TONE_SPACING = 146;  // ~1.46 Hz
-const int WSPR_DELAY = 683;         // Delay value for WSPR
+// extern so it links okay if we move stuff
+extern const int WSPR_TONE_SPACING = 146;  // ~1.46 Hz
+extern const int WSPR_DELAY = 683;         // Delay value for WSPR
 
 char telemetry_buff[100] = { 0 };  // telemetry buffer
 uint16_t Tx_0_cnt = 0;  // increase +1 after every callsign tx
@@ -173,11 +181,13 @@ TinyGPSPlus gps;
 #include "debug_functions.h"
 #include "config_functions.h"
 #include "tele_functions.h"
+#include "mh_functions.h"
 
 //*********************************
 // in AdaFruit_I2CDevice.h
-const int BMP280_I2C1_SDA_PIN = 2;
-const int BMP280_I2C1_SCL_PIN = 3;
+// extern so it links okay
+extern const int BMP280_I2C1_SDA_PIN = 2;
+extern const int BMP280_I2C1_SCL_PIN = 3;
 #include "bmp_functions.h"
 
 Adafruit_BMP280 bmp;
@@ -406,11 +416,31 @@ void setup() {
     // FIX! is it redundant at this point?..remove?
     process_chan_num();
 
-    if (getchar_timeout_us(0) > 0) {
+    // "Arduino not support direct call to stdio getchar_timeout_us() is C function... but you call from CPP"
+    // https://forums.raspberrypi.com/viewtopic.php?t=331207
+
+    // https://github.com/earlephilhower/arduino-pico/discussions/2224
+
+
+
+    // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
+    // int c = getchar_timeout_us(0);
+    char c;
+    // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
+    // FIX! create a spin loop that looks for data?
+    // no ..no spin loop here
+    
+    if (tud_cdc_connected() && tud_cdc_available() > 0) {
+        c = tud_cdc_read_char();
+    }
+    else  {
+        c = '\0';
+    }
+
+    if (c > '\0') {
         // looks for input on USB serial port only.
         // Note: getchar_timeout_us(0) returns a -2 (as of sdk 2) if no keypress.
         // Must do this check BEFORE setting Clock Speed in Case you bricked it
-
         // FIX! is user_setup_menu_active used anywhere? (or cleared anywhere)
         user_setup_menu_active = true;
         user_interface();
@@ -590,7 +620,8 @@ void loop() {
                     double lat_double = atof(t_lat);
                     double lon_double = atof(t_lon);
 
-                    char hf_grid6[7] = "AA00AA";
+                    // get_mh_6 returns a pointer
+                    char *hf_grid6;
                     char hf_grid4[5] = "AA00";
                     hf_grid6 = get_mh_6(lat_double, lon_double);
                     // not same declared size, so use snprintf)
@@ -642,12 +673,12 @@ void loop() {
                          (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
                         setStatusLEDBlinkCount(LED_STATUS_TX_TELEN1);
 
-                        // void encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
+                        // void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
                         // output: modifies globals: hf_callsign, hf_grid4, hf_power
                         // unint32_t globals? could be just int? don't use full range
                         // TELEN1_val1
                         // TELEN1_val2
-                        encode_telen(TELEN1_val1, TELEN1_val2, false);
+                        u4b_encode_telen(TELEN1_val1, TELEN1_val2, false);
                         syncAndSendWspr(2, hf_callsign, hf_grid4, hf_power, false);
                         if (DEVMODE) {
                             tx_cnt_2 += 1;
@@ -666,7 +697,7 @@ void loop() {
                         // TELEN1_val1
                         // TELEN2_val1
                         // TELEN2_val2
-                        encode_telen(TELEN1_val2, TELEN2_val2, true);
+                        u4b_encode_telen(TELEN1_val2, TELEN2_val2, true);
                         syncAndSendWspr(3, hf_callsign, hf_grid4, hf_power, true);
                         if (DEVMODE) {
                             tx_cnt_3 += 1;
@@ -776,7 +807,7 @@ void sleepSeconds(int sec) {
         // gps could be on or off, so no?
         // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();
-        if (isGpsOn()) {
+        if (GpsIsOn()) {
             updateGpsDataAndTime(2000);  // milliseconds
             Serial.flush();
         } else {
@@ -842,7 +873,7 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
 
     
     // need uint8_t for power
-    uint8_t hf_power_val = (uint8_t)atoi(hf_power)
+    uint8_t hf_power_val = (uint8_t)atoi(hf_power);
     set_tx_buffer(hf_callsign, hf_grid4, hf_power_val, tx_buffer);
 
     zeroTimerSetPeriodMs(tone_delay);

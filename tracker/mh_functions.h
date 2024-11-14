@@ -23,6 +23,6 @@
 #include <stdint.h>
 
 char letterize(int x);
-char* get_mh(double lat, double lon, int size);
+char* get_mh_6(double lat, double lon);
 
 #endif

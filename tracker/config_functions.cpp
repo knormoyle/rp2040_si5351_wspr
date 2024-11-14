@@ -6,6 +6,10 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include "pico/stdio.h"
+// what about this?
+#include "class/cdc/cdc_device.h"
+
 #include <stdlib.h>
 // for isprint()
 #include <ctype.h>
@@ -142,7 +146,25 @@ void display_intro(void) {
     printf("%spress any key to continue%s", RED, NORMAL);
 
     // wait..don't need the char user interrupted with 
-    getchar_timeout_us(60000000);
+    // int c = getchar_timeout_us(60000000);
+    // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
+    // int c = getchar_timeout_us(0);
+
+    char c;
+    // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
+    // FIX! is there a timeout on this?
+
+    // FIX! create a spin loop, that breaks out of the spin loop after a timeout
+    // FIX! short timeout? or no?
+    if (tud_cdc_connected() && tud_cdc_available() > 0) {
+        // spin loop looking for tud_cdc_available()
+        // no timeout? but there should be data?
+        c = tud_cdc_read_char();
+    }
+    else  {
+        c = '\0';
+    }
+    
     printf("%s", CLEAR_SCREEN);
 }
 
@@ -188,9 +210,24 @@ void user_interface(void) {
             UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
         // in case user setup menu entered during flight,
         // this will reboot after 60 secs
-        c = getchar_timeout_us(60000000);
+        // int c = getchar_timeout_us(60000000);
+
+        // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
+        // int c = getchar_timeout_us(0);
+        char c;
+        // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
+        // FIX! spin loop with timeout? (check every 1 sec?)
+        if (tud_cdc_connected() && tud_cdc_available() > 0) {
+            c = tud_cdc_read_char();
+        }
+        else  {
+            c = '\0';
+        }
+        // FIX! how does this timeout
+
         printf("%c\n", c);
-        if (c == PICO_ERROR_TIMEOUT) {
+        // if (c == PICO_ERROR_TIMEOUT) {
+        if (c == '\0') {
             printf("%s\n\n Timeout waiting for input, ..rebooting\n", CLEAR_SCREEN);
             sleep_ms(100);
             Watchdog.enable(500);  // milliseconds

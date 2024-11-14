@@ -22,6 +22,7 @@
 #include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
 // what about the tiny gps library? already included in the .ino?
 
+bool GpsIsOn();
 void GpsINIT();
 void GpsON(bool GpsColdReset);
 void GpsOFF();
