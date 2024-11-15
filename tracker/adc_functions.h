@@ -3,13 +3,11 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-#ifndef U4B_FUNCTIONS_H
-#define U4B_FUNCTIONS_H
-#include <stdint.h>
+#ifndef ADC_FUNCTIONS_H
+#define ADC_FUNCTIONS_H
+// #include <stdint.h>
 
-void process_chan_num();
-uint32_t init_rf_freq(void);
-void u4b_encode_std(void);
-void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2);
+float readVoltage(void);
+void adc_init(void);
 
 #endif

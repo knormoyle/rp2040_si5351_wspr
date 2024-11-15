@@ -61,12 +61,24 @@ extern uint64_t GpsTimeToLastFix;  // milliseconds
 
 static bool GpsIsOn_state = false;
 
-bool GpsIsOn() {
+//************************************************
+bool GpsIsOn(void) {
     return GpsIsOn_state;
 }
 
+//************************************************
 void GpsINIT() {
     if (DEVMODE) Serial.println(F("GpsINIT START"));
+
+    if (DEVMODE) {
+        Serial.printf("GPS_UART1_RX_PIN %d" EOL, GPS_UART1_RX_PIN);
+        Serial.printf("GPS_UART1_TX_PIN %d" EOL, GPS_UART1_TX_PIN);
+        Serial.printf("(gpio) GpsPwr %d" EOL, GpsPwr);
+        Serial.printf("(gpio) GPS_NRESET_PIN %d" EOL, GPS_NRESET_PIN);
+        Serial.printf("(gpio) GPS_ON_PIN %d" EOL, GPS_ON_PIN);
+    }
+
+
     Serial2.setRX(GPS_UART1_RX_PIN);
     Serial2.setTX(GPS_UART1_TX_PIN);
     Serial2.setPollingMode(true);
@@ -74,24 +86,58 @@ void GpsINIT() {
     Serial2.begin(9600);  // GPS
 
     gpio_init(GpsPwr);
+    pinMode(GpsPwr, OUTPUT);
     gpio_pull_up(GpsPwr);
-    gpio_put(GpsPwr, 0);
+    gpio_put(GpsPwr, LOW);
 
+    //****************
+    // FIX! are these doing anything?
     gpio_init(GPS_NRESET_PIN);
+    pinMode(GPS_NRESET_PIN, OUTPUT);
     gpio_pull_up(GPS_NRESET_PIN);
-    gpio_put(GPS_NRESET_PIN, 1);
+    gpio_put(GPS_NRESET_PIN, HIGH);
 
     gpio_init(GPS_ON_PIN);
+    pinMode(GPS_ON_PIN, OUTPUT);
     gpio_pull_up(GPS_ON_PIN);
-    gpio_put(GPS_ON_PIN, 1);
+    gpio_put(GPS_ON_PIN, HIGH);
+    //****************
 
     // FIX! is this necessary?
     digitalWrite(GPS_NRESET_PIN, HIGH);
     digitalWrite(GPS_ON_PIN, HIGH);
+
+
+    // FIX! rely on watchdog reset in case we stay here
+    // forever?
+    if (DEVMODE) Serial.println(F("GpsINIT Will look for any Serial2 bytes"));
+    
+    // sleep 3 secs
+    sleep_ms(3000);
+    Watchdog.reset();
+
+
+    int i;
+    char incomingByte = { 0 };
+    for (i = 0; i < 10; i++) {
+        Watchdog.reset();
+        if (!Serial2.available()) {
+            Serial.println(F("Good: no Serial2.available() ..sleep and reverify"));
+            updateStatusLED();
+            sleep_ms(1000);
+        }
+        else {
+            incomingByte = Serial.read();
+            Serial.println(incomingByte);
+        }
+    }
+
+    Watchdog.reset();
     if (DEVMODE) Serial.println(F("GpsINIT END"));
 }
 
 
+//************************************************
 void GpsON(bool GpsColdReset) {
     if (DEVMODE) Serial.println(F(EOL "GpsON START"));
     if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
@@ -180,6 +226,7 @@ void GpsON(bool GpsColdReset) {
 }
 
 
+//************************************************
 /*
 This used to be in the LightAPRS version of TinyGPSPlus-0.95
 instead updated TinyGPSPlus (latest) in libraries to make them public, not private
@@ -192,6 +239,7 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 < #endif
 */
 
+//************************************************
 void GpsOFF() {
     if (DEVMODE) Serial.println(F("GpsOFF START"));
     if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
@@ -236,6 +284,7 @@ void GpsOFF() {
     if (DEVMODE) Serial.println(F("GpsOFF START"));
 }
 
+//************************************************
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
     if (DEVMODE) Serial.println(F("updateGpsDataAndTime START"));
@@ -250,10 +299,9 @@ void updateGpsDataAndTime(int ms) {
 
     uint64_t start_millis = millis();
     uint64_t current_millis = start_millis;
-
     uint64_t last_serial2_millis = 0;
 
-    Serial.printf("updateGpsDataAndTime started looking at %" PRIu64 "millis" EOL, current_millis);
+    Serial.printf("updateGpsDataAndTime started looking at %" PRIu64 " millis" EOL, current_millis);
     // this unloads each char as it arrives and prints it
     // so we can see NMEA sentences for a period of time. Should we do it for 2 secs?
     // assume 1 sec broadcast rate
@@ -264,9 +312,9 @@ void updateGpsDataAndTime(int ms) {
         current_millis = millis();
         if (DEVMODE) {
             if (Serial2.available()) 
-                Serial.println(F("updateGpsDataAndTime found Serial2.available (NMEA)"));
+                Serial.println(F("updateGpsDataAndTime found some Serial2.available() (NMEA)"));
             else
-                Serial.println(F("updateGpsDataAndTime did not find Serial2.available (NMEA)"));
+                Serial.println(F("updateGpsDataAndTime did not find any Serial2.available() (NMEA)"));
         }
 
         while (Serial2.available() > 0) {
@@ -284,7 +332,7 @@ void updateGpsDataAndTime(int ms) {
         }
         // did we wait more than 10 millis() since good data read?
         if ((last_serial2_millis != 0) && (current_millis > last_serial2_millis + 10)) {
-            Serial.printf("updateGpsDataAndTime stopped looking at %" PRIu64 "millis" EOL, current_millis);
+            Serial.printf("updateGpsDataAndTime stopped looking at %" PRIu64 " millis" EOL, current_millis);
             break;
         }
         updateStatusLED();
@@ -309,12 +357,21 @@ void updateGpsDataAndTime(int ms) {
 }
 
 
+//************************************************
+// don't use the UBX chip, so just leaving this in for potential 
+// issues like this in other gps chips (balloon mode or ?)
+// FIX!  I do send a full cold start NMEA request above, but 
+// don't look for an ACK..maybe long term will make it a full req/ack
+// so I know it's really doing something (like these two routines)
 void sendUBX(uint8_t *MSG, uint8_t len) {
     Serial2.write(0xFF);
     delay(500);
     for (int i = 0; i < len; i++) Serial2.write(MSG[i]);
 }
 
+//************************************************
+// don't use the UBX chip, so just leaving this in for potential 
+// issues like this in other gps chips (balloon mode or ?)
 boolean getUBX_ACK(uint8_t *MSG) {
     uint8_t b;
     uint8_t ackByteID = 0;
@@ -365,6 +422,7 @@ boolean getUBX_ACK(uint8_t *MSG) {
     return status;
 }
 
+//************************************************
 // following GPS code from : https://github.com/HABduino/HABduino/blob/master/Software/habduino_v4/habduino_v4.ino
 void setGPS_DynamicModel6() {
     int gps_set_success = 0;
@@ -384,6 +442,7 @@ void setGPS_DynamicModel6() {
     }
 }
 
+//************************************************
 void gpsDebug() {
     if (!DEVMODE) return;
     if (DEVMODE) Serial.println(F("GpsDebug START"));
@@ -413,5 +472,6 @@ void gpsDebug() {
     printInt(gps.failedChecksum(), true, 9);
     Serial.println();
     if (DEVMODE) Serial.println(F("GpsDebug END"));
+    if (DEVMODE) Serial.println(F("GpsINIT END"));
 }
 

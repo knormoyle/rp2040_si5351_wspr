@@ -8,6 +8,7 @@
 #include "config_functions.h"
 #include "bmp_functions.h"
 #include "mh_functions.h"
+#include "adc_functions.h"
 #include "defines.h"
 
 extern const int BattPin;
@@ -59,46 +60,6 @@ int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
 
 //****************************************************
-float readVoltage(void) {
-    if (DEVMODE) Serial.println(F("readVoltage START"));
-    int adc_val = 0;
-    adc_val += analogRead(BattPin);
-    adc_val += analogRead(BattPin);
-    adc_val += analogRead(BattPin);
-
-    // The Raspberry Pi Pico's analog to digital converter (ADC)
-    // can measure voltages between 0 and 3.3 volts.
-    // The ADC uses a 3.3V reference voltage,
-    // and a read operation returns a number between 0 and 4095.
-    // The ADC's resolution is 3.3/4096, or roughly 0.8 millivolts.
-    // is the precision set to 4096? (12 not 16 bits resolution)
-    // 4096/3.3 = 1241
-    // 1241 / 3 = 413.66
-
-    // FIX! this doesn't seem right. should I just multiply by the conversion factor
-    // he's got some special 1/3 voltage divider for VBUS to BATT_V
-    // you leave it open than the ADC converter voltage reference is the 3.3V .
-    // In reality it is the voltage of the pin 3V3
-    // - ( ~150uA * 200) which is roughly a 30mv drop. (0.8mv * 30 = 24 steps)
-
-    // this must be a calibrated linear equation? only need to calibrate between 2.8v and 5v?
-    float solar_voltage = ((float)adc_val / 3.0f - 27.0f) / 412.0f;
-
-    // there is a 200 ohm resistor between 3V3 and ADC_AVDD
-    // we did 3 reads above ..averaging?
-    // so don't need the 3x because of onboard voltage divider
-    // pico-WSPRer does this (no use of ADC_AVDD) ?
-    // const float conversionFactor = 3.3f / (1 << 12);
-    // float solar_voltage = 3 * (float)adc_read() * conversionFactor;
-
-    // if (solar_voltage < 0.0f) solar_voltage = 0.0f;
-    // if (solar_voltage > 9.9f) solar_voltage = 9.9f;
-    if (DEVMODE) Serial.printf("solar_voltage %.f adc_val %d" EOL, solar_voltage, adc_val);
-
-    if (DEVMODE) Serial.println(F("readVoltage END"));
-    return solar_voltage;
-}
-
 void snapTelemetry(void) {
     if (DEVMODE) Serial.println(F("snapTelemetry START"));
     // FIX! didn't we already check this?
@@ -252,9 +213,9 @@ void snapTelemetry(void) {
 }
 
 
+//****************************************************
 static float onewire_values[10] = { 0 };
 
-//****************************************************
 void process_TELEN_data(void) {
     if (DEVMODE) Serial.println(F("process_TELEN_data START"));
     // FIX! where do these come from

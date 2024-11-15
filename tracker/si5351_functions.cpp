@@ -21,15 +21,16 @@
 #include "hardware/i2c.h"
 #define VFO_I2C_INSTANCE i2c0
 
-const int SI5351A_I2C_ADDR = 0x60;
+// FIX! should these be in tracker.ino (for consistency?)
+extern const int SI5351A_I2C_ADDR;
+extern const int VFO_I2C0_SCL_HZ;
 
-const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 extern uint32_t XMIT_FREQUENCY;
 extern bool DEVMODE;
 extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 
-
+extern const int Si5351Pwr;
 extern const int VFO_VDD_ON_N_PIN;
 extern const int VFO_I2C0_SDA_PIN;
 extern const int VFO_I2C0_SCL_PIN;
@@ -56,6 +57,8 @@ static bool vfo_turn_off_completed = false;
 void vfo_init(void) {
     if (DEVMODE) Serial.println(F("vfo_init START"));
     // turn ON VFO VDD
+    pinMode(Si5351Pwr, OUTPUT);
+
     gpio_init(VFO_VDD_ON_N_PIN);
     gpio_pull_up(VFO_VDD_ON_N_PIN);
     gpio_put(VFO_VDD_ON_N_PIN, 0);
@@ -124,8 +127,8 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
         if (DEVMODE) Serial.printf("I2C error %d: reg:%02x" EOL, res, reg);
     }
 
-    return res;
     if (DEVMODE) Serial.println(F("i2cWriten END"));
+    return res;
 }
 
 //****************************************************

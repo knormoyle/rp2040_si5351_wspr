@@ -192,6 +192,7 @@ TinyGPSPlus gps;
 #include "config_functions.h"
 #include "tele_functions.h"
 #include "mh_functions.h"
+#include "adc_functions.h"
 
 //*********************************
 // in AdaFruit_I2CDevice.h
@@ -253,7 +254,6 @@ extern const int WSPR_TX_CLK_1_NUM = 1;
 extern const int WSPR_TX_CLK_0_NUM = 0;
 extern const int WSPR_TX_CLK_NUM = 0;
 
-//*********************************
 extern const int SI5351A_CLK_IDRV_8MA = (3 << 0);
 extern const int SI5351A_CLK_IDRV_6MA = (2 << 0);
 extern const int SI5351A_CLK_IDRV_4MA = (1 << 0);
@@ -264,6 +264,10 @@ extern const int PLL_CALCULATION_PRECISION = 4;
 extern const int VFO_VDD_ON_N_PIN = 4;
 extern const int VFO_I2C0_SDA_PIN = 12;
 extern const int VFO_I2C0_SCL_PIN = 13;
+
+// FIX! should these be in tracker.ino (for consistency?)
+extern const int SI5351A_I2C_ADDR = 0x60;
+extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 
 #include "si5351_functions.h"
 // 0 should never happen (init_rf_freq will always init from saved nvram/live state)
@@ -354,10 +358,27 @@ int64_t loop_ms_elapsed;
 
 //***********************************************************
 void setup() {
-    Serial.println(F("setup() START"));
+    //**********************
     Watchdog.enable(30000);
     Watchdog.reset();
+    // this is the usb serial. the baud rate doesn't really change usb data rates
+    Serial.begin(115200);
+    // Wait up to 5 seconds for serial to be opened, to allow catching
+    // startup messages on native USB boards (that do not reset when serial is opened).
 
+    initStatusLED();
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+
+    Watchdog.reset();
+    uint64_t serial_millis = millis();
+    // wait 10 secs looking for Serial
+    while (((millis() - serial_millis) < 10000) && !Serial) {
+        // whenever we have spin loops we need to updateStatusLED()
+        updateStatusLED();
+    }
+    Serial.println(F("setup() START"));
+
+    //**********************
     // Apparently I don't need to init the usb serial port?
     // Can't use printf for unknown reason. But Serial.printf() etc is fine?
     // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__pico__stdio__usb.html
@@ -368,44 +389,24 @@ void setup() {
     // if (!stdio_usb_init()) {
     // if (!stdio_init_all()) Serial.println("ERROR: stdio_init_all() failed)");
 
-    initStatusLED();
-    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-
-    // FIX! why was this commented out?
-    pinMode(Si5351Pwr, OUTPUT);
-    pinMode(GpsPwr, OUTPUT);
-
-    // While the energy rises slowly with the solar panel,
-    // using the analog reference low solves the analog measurement errors.
-    // FIX! why was this commented out?
-    pinMode(BattPin, INPUT);
-    analogReadResolution(12);
-
-    GpsOFF();
-    vfo_turn_off();
-    GpsINIT();
+    //**********************
+    adc_init();
 
     //**********************
-    // this is the usb serial. the baud rate doesn't really change usb data rates
-    Serial.begin(115200);
-    // Wait up to 5 seconds for serial to be opened, to allow catching
-    // startup messages on native USB boards (that do not reset when serial is opened).
+    vfo_init();
+    vfo_turn_off();
+    vfo_turn_on(WSPR_TX_CLK_NUM);
 
-    Watchdog.reset();
-    uint64_t serial_millis = millis();
-    // wait 10 secs looking for Serial
-    while (((millis() - serial_millis) < 10000) && !Serial) {
-        // whenever we have spin loops we need to updateStatusLED()
-        updateStatusLED();
-    }
+    //**********************
+    GpsINIT(); // also turns on and checks for output
+    GpsOFF();
+    GpsON(false); // no full cold gps reset
 
+    //**********************
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
     // FIX! assume this is the state it was in before config menu? 
     // not always right. but loop will self-correct?
-
-    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-    updateStatusLED();
 
     if (!Serial) {  
         setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
@@ -419,6 +420,7 @@ void setup() {
             updateStatusLED();
         }
     }
+
     //**********************
 
     Watchdog.reset();
@@ -522,6 +524,10 @@ void setup() {
             Adafruit_BMP280::FILTER_X16,
             Adafruit_BMP280::STANDBY_MS_500);
     }
+
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+    updateStatusLED();
+
     Watchdog.reset();
     Serial.println(F("setup() END"));
     sleep_ms(5000);
