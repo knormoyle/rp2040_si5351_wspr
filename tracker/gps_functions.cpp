@@ -258,6 +258,7 @@ void updateGpsDataAndTime(int ms) {
     // so we can see NMEA sentences for a period of time. Should we do it for 2 secs?
     // assume 1 sec broadcast rate
     // https://arduino.stackexchange.com/questions/13452/tinygps-plus-library
+    
     do {
         // FIX! what is this..unload gps sentences?
         current_millis = millis();
@@ -287,6 +288,9 @@ void updateGpsDataAndTime(int ms) {
             break;
         }
         updateStatusLED();
+        // sleep for 1 second? will we get buffer overflow?
+        sleep_ms(1000);
+
     } while ( (current_millis - start_millis) < (uint64_t) ms); // works if ms is 0
 
     if (DEVMODE) {
