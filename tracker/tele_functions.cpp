@@ -8,6 +8,7 @@
 #include "config_functions.h"
 #include "bmp_functions.h"
 #include "mh_functions.h"
+#include "defines.h"
 
 extern const int BattPin;
 
@@ -59,6 +60,7 @@ int legalPowerSize = 19;
 
 //****************************************************
 float readVoltage(void) {
+    if (DEVMODE) Serial.println(F("readVoltage START"));
     int adc_val = 0;
     adc_val += analogRead(BattPin);
     adc_val += analogRead(BattPin);
@@ -91,10 +93,14 @@ float readVoltage(void) {
 
     // if (solar_voltage < 0.0f) solar_voltage = 0.0f;
     // if (solar_voltage > 9.9f) solar_voltage = 9.9f;
+    if (DEVMODE) Serial.printf("solar_voltage %.f adc_val %d" EOL, solar_voltage, adc_val);
+
+    if (DEVMODE) Serial.println(F("readVoltage END"));
     return solar_voltage;
 }
 
 void snapTelemetry(void) {
+    if (DEVMODE) Serial.println(F("snapTelemetry START"));
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
     if (!gps.location.isValid()) return;
@@ -194,7 +200,7 @@ void snapTelemetry(void) {
     if (grid6[5] < 'A' || grid6[5] > 'X') bad_grid = true;
     if (bad_grid)
         // can't use sizeof(grid6) here because it's a pointer
-        snprintf(grid6, 6, "%6s", "AA00AA");
+        snprintf(grid6, 7, "%6s", "AA00AA");
 
     snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
     // just for consistency with everything else
@@ -228,20 +234,21 @@ void snapTelemetry(void) {
     snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%3d", tx_cnt_0_val);
 
     if (DEVMODE) {
-        printf("t_* ");
-        printf("course %3s ", t_course);
-        printf("speed %3s ", t_speed);
-        printf("altitude %6s ", t_altitude);
-        printf("tx_count_0 %3s ", t_tx_count_0);
-        printf("temp %6s", t_temp);
-        printf("pressure %7s ", t_pressure);
-        printf("voltage %2s ", t_voltage);
-        printf("sat_count %2s ", t_sat_count);
-        printf("lat %12s ", t_lat);
-        printf("lon %12s ", t_lon);
-        printf("grid6 %6s", t_grid6);
-        printf("power %2s\n", t_power);
+        Serial.printf("t_* " EOL);
+        Serial.printf("course %3s " EOL, t_course);
+        Serial.printf("speed %3s " EOL, t_speed);
+        Serial.printf("altitude %6s " EOL, t_altitude);
+        Serial.printf("tx_count_0 %3s " EOL, t_tx_count_0);
+        Serial.printf("temp %6s" EOL, t_temp);
+        Serial.printf("pressure %7s " EOL, t_pressure);
+        Serial.printf("voltage %2s " EOL, t_voltage);
+        Serial.printf("sat_count %2s " EOL, t_sat_count);
+        Serial.printf("lat %12s " EOL, t_lat);
+        Serial.printf("lon %12s " EOL, t_lon);
+        Serial.printf("grid6 %6s" EOL, t_grid6);
+        Serial.printf("power %2s\n" EOL, t_power);
     }
+    if (DEVMODE) Serial.println(F("snapTelemetry END"));
 }
 
 
@@ -249,6 +256,7 @@ static float onewire_values[10] = { 0 };
 
 //****************************************************
 void process_TELEN_data(void) {
+    if (DEVMODE) Serial.println(F("process_TELEN_data START"));
     // FIX! where do these come from
     // minutes_since_boot
     // minutes_since_GPS_acquistion (should this be last time to fix);
@@ -300,4 +308,5 @@ void process_TELEN_data(void) {
     TELEN2_val1 = telen_values[2];
     // max values are 630k and 153k for val and val2
     TELEN2_val2 = telen_values[3];
+    if (DEVMODE) Serial.println(F("process_TELEN_data END"));
 }

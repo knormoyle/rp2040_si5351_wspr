@@ -15,6 +15,7 @@
 #include <cstring>
 #include "hardware/gpio.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
+#include "defines.h"
 
 // for i2c0
 #include "hardware/i2c.h"
@@ -50,9 +51,10 @@ static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
 
 
-
+//****************************************************
 // removed static
 void vfo_init(void) {
+    if (DEVMODE) Serial.println(F("vfo_init START"));
     // turn ON VFO VDD
     gpio_init(VFO_VDD_ON_N_PIN);
     gpio_pull_up(VFO_VDD_ON_N_PIN);
@@ -66,18 +68,24 @@ void vfo_init(void) {
 
     gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+    if (DEVMODE) Serial.println(F("vfo_init END"));
 }
 
+//****************************************************
 // removed static
 void vfo_set_power_on(bool turn_on) {
+    if (DEVMODE) Serial.println(F("vfo_set_power_on START"));
     static bool s_is_on = false;
     if (turn_on == s_is_on) return;
     s_is_on = turn_on;
     gpio_set_dir(VFO_VDD_ON_N_PIN, (turn_on ? GPIO_OUT : GPIO_IN));
+    if (DEVMODE) Serial.println(F("vfo_set_power_on END"));
 }
 
 
+//****************************************************
 int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
+    if (DEVMODE) Serial.println(F("i2cWrite Start"));
     // FIX! shouldn't this be local ? or does it setup data for i2cWriten
     // moved here to be local, and not static (shared) anymore
     // only need length 2!
@@ -90,13 +98,16 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
         SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
 
     if (res < PICO_ERROR_NONE) {
-        if (DEVMODE) printf("I2C error %d: reg:%02x val:%02x\n", res, reg, val);
+        if (DEVMODE) Serial.printf("I2C error %d: reg:%02x val:%02x" EOL, res, reg, val);
     }
+    if (DEVMODE) Serial.println(F("i2cWrite END"));
     return res;
 }
 
 
+//****************************************************
 int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
+    if (DEVMODE) Serial.println(F("i2cWriten START"));
     // FIX! shouldn't this be local ? or does it use the data from i2cWrite
     uint8_t s_i2c_buf[16];
     // moved here to be local, and not static (shared) anymore
@@ -110,13 +121,14 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
         SI5351A_I2C_ADDR, s_i2c_buf, (vcnt + 1), false, 10000);
 
     if (res < PICO_ERROR_NONE) {
-        if (DEVMODE) printf("I2C error %d: reg:%02x\n", res, reg);
+        if (DEVMODE) Serial.printf("I2C error %d: reg:%02x" EOL, res, reg);
     }
 
     return res;
+    if (DEVMODE) Serial.println(F("i2cWriten END"));
 }
-//***************************************
 
+//****************************************************
 /*
     Si5351A related functions
     Developed by Kazuhisa "Kazu" Terasaki AG6NS
@@ -169,8 +181,10 @@ static uint8_t s_regs[8];
 // 0:2mA, 1:4mA, 2:6mA, 3:8mA
 static uint8_t s_vfo_drive_strength[3];
 
+//****************************************************
 // FIX! removed static. hmm maybe add back..should only call from this file?
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
+    if (DEVMODE) Serial.println(F("si5351a_setup_PLLB START"));
     static uint8_t s_regs_prev[8];
 
     uint32_t p1 = 128 * mult + ((128 * num) / denom) - 512;
@@ -211,11 +225,14 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     uint8_t len = end - start + 1;
     i2cWriten(reg, &s_regs[start], len);
     *((uint64_t *)s_regs_prev) = *((uint64_t *)s_regs);
+    if (DEVMODE) Serial.println(F("si5351a_setup_PLLB END"));
 }
 
+//****************************************************
 // div must be even number
 // removed static
 void si5351a_setup_multisynth0(uint32_t div) {
+    if (DEVMODE) Serial.println(F("si5351a_setup_multisynth0 START"));
     uint32_t p1 = 128 * div - 512;
 
     s_regs[0] = 0;
@@ -241,10 +258,13 @@ void si5351a_setup_multisynth0(uint32_t div) {
                                   SI5351A_CLK1_SRC_MULTISYNTH_1 |
                                   s_vfo_drive_strength[0]));
     // old #endif
-    if (DEVMODE) printf("VFO_DRIVE_STRENGTH: %d\n", (int)s_vfo_drive_strength[0]);
+    if (DEVMODE) Serial.printf("VFO_DRIVE_STRENGTH: %d" EOL, (int)s_vfo_drive_strength[0]);
+    if (DEVMODE) Serial.println(F("si5351a_setup_multisynth0 END"));
 }
 
+//****************************************************
 void si5351a_setup_multisynth1(uint32_t div) {
+    if (DEVMODE) Serial.println(F("si5351a_setup_multisynth1 START"));
     uint32_t p1 = 128 * div - 512;
 
     s_regs[0] = 0;
@@ -262,8 +282,9 @@ void si5351a_setup_multisynth1(uint32_t div) {
                                   SI5351A_CLK1_SRC_MULTISYNTH_1 |
                                   s_vfo_drive_strength[1]));
     if (DEVMODE) {
-        printf("VFO_DRIVE_STRENGTH: %d\n", (int)s_vfo_drive_strength[1]);
+        Serial.printf("VFO_DRIVE_STRENGTH: %d" EOL, (int)s_vfo_drive_strength[1]);
     }
+    if (DEVMODE) Serial.println(F("si5351a_setup_multisynth1 END"));
 }
 
 // FIX! compare to https://github.com/etherkit/Si5351Arduino
@@ -273,13 +294,18 @@ void si5351a_setup_multisynth1(uint32_t div) {
 // #include <Wire.h>
 // Si5351 si5351;
 
+//****************************************************
 // we don't user PLLA ?
 void si5351a_reset_PLLB(void) {
+  if (DEVMODE) Serial.println(F("si5351a_reset_PLLB START"));
   i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
+  if (DEVMODE) Serial.println(F("si5351a_reset_PLLB END"));
 }
 
+//****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x16(uint8_t clk_number, uint32_t freq) {
+  if (DEVMODE) Serial.println(F("vfo_set_freq_x16 START"));
     const int PLL_MAX_FREQ  = 900000000;
     const int PLL_MIN_FREQ  = 600000000;
 
@@ -308,11 +334,13 @@ void vfo_set_freq_x16(uint8_t clk_number, uint32_t freq) {
         else si5351a_setup_multisynth1(ms_div);
         si5351a_reset_PLLB();
     }
+    if (DEVMODE) Serial.println(F("vfo_set_freq_x16 END"));
 }
 
+//****************************************************
 static uint8_t  si5351bx_clken = 0xff;
-
 void vfo_turn_on_clk_out(uint8_t clk_number) {
+    if (DEVMODE) Serial.println(F("vfo_turn_on_clk_out START"));
     uint8_t enable_bit = 1 << clk_number;
 
     #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
@@ -322,9 +350,11 @@ void vfo_turn_on_clk_out(uint8_t clk_number) {
     #endif
     si5351bx_clken &= ~enable_bit;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+    if (DEVMODE) Serial.println(F("vfo_turn_on_clk_out END"));
 }
 
 void vfo_turn_off_clk_out(uint8_t clk_number) {
+    if (DEVMODE) Serial.println(F("vfo_turn_off_clk_out START"));
     uint8_t enable_bit = 1 << clk_number;
     // always now
     // #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
@@ -334,20 +364,27 @@ void vfo_turn_off_clk_out(uint8_t clk_number) {
     // #endif
     si5351bx_clken |= enable_bit;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+    if (DEVMODE) Serial.println(F("vfo_turn_off_clk_out END"));
 }
 
+//****************************************************
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength) {
-// only called during the initial vfo_turn_on()
+    if (DEVMODE) Serial.println(F("vfo_set_drive_strength START"));
+    // only called during the initial vfo_turn_on()
     s_vfo_drive_strength[clk_number] = strength;
     // reset the prev_ms_div to force vfo_set_freq_x16()
     // to call si5351a_setup_multisynth1() next time
     prev_ms_div = 0;
+    if (DEVMODE) Serial.println(F("vfo_set_drive_strength END"));
 }
 
+//****************************************************
 bool vfo_is_on(void) {
     // power on and completed successfully
     return (!gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
 }
+
+//****************************************************
 bool vfo_is_off(void) {
     // power on and completed successfully
     return (gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
@@ -356,7 +393,10 @@ bool vfo_is_off(void) {
 // what is vfo_clk2 ? is that another PLL? is that used for calibration?
 
 
+//****************************************************
 void vfo_turn_on(uint8_t clk_number) {
+    if (DEVMODE) Serial.println(F("vfo_turn_on START"));
+
     // already on successfully
     if (vfo_is_on()) return;
     vfo_turn_on_completed = false;
@@ -424,7 +464,7 @@ void vfo_turn_on(uint8_t clk_number) {
         uint32_t orig_freq = freq;
         freq = freq + (atoi(_correction) * freq / 1000000000UL);
         if (DEVMODE) {
-            printf("correction shifts %lu orig freq %lu, to new freq, %lu",
+            Serial.printf("correction shifts %d orig freq %lu, to new freq, %lu" EOL,
                 atoi(_correction), orig_freq, freq);
         }
     }
@@ -435,9 +475,12 @@ void vfo_turn_on(uint8_t clk_number) {
     si5351bx_clken = 0xff;
     vfo_turn_on_clk_out(clk_number);
     vfo_turn_on_completed = true;
+    if (DEVMODE) Serial.println(F("vfo_turn_on END"));
 }
 
+//****************************************************
 void vfo_turn_off(void) {
+    if (DEVMODE) Serial.println(F("vfo_turn_off START"));
     // already off successfully?
     if (vfo_is_off()) return;
     vfo_turn_on_completed = false;
@@ -453,6 +496,7 @@ void vfo_turn_off(void) {
     gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
     vfo_turn_off_completed = true;
+    if (DEVMODE) Serial.println(F("vfo_turn_off END"));
 }
 
 //*****************************************************

@@ -9,9 +9,11 @@
 #include <stdio.h>
 // do we need these two for  getchar_timeout_us() (return type is int
 // #include "pico/stdlib.h"
+// so we can use stdio_usb
 #include "pico/stdio.h"
+
 // what about this?
-#include "class/cdc/cdc_device.h" 
+// #include "class/cdc/cdc_device.h" 
 
 #include <stdlib.h>
 #include <string.h>
@@ -23,6 +25,14 @@
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
 #include <SPI.h>
 #include <Wire.h>
+
+// #include <ctype.h>
+// #include <defines.h>
+// #include "pico/stdlib.h"
+// #include "hardware/clocks.h"
+// #include "hardware/gpio.h"
+// #include "hardware/adc.h"
+// #include "hardware/clocks.h"
 
 //**************************
 // flash config
@@ -204,6 +214,8 @@ extern const int LED_STATUS_TX_WSPR = 4;
 extern const int LED_STATUS_TX_TELEMETRY = 5;
 extern const int LED_STATUS_TX_TELEN1 = 6;
 extern const int LED_STATUS_TX_TELEN2 = 7;
+extern const int LED_STATUS_REBOOT_NO_SERIAL = 8;
+extern const int LED_STATUS_USER_CONFIG = 9;
 
 #include "led_functions.h"
 
@@ -312,7 +324,8 @@ char _devmode[2] = { 0 };
 char _correction[7] = { 0 };
 char _go_when_rdy[2] = { 0 };
 
-bool DEVMODE = false;  // set when _devmode is set
+// FIX! always true now for debug
+bool DEVMODE = true;  // set when _devmode is set
 
 // t_power is clamped to string versions of these. use 0 if illegal
 // int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
@@ -340,28 +353,30 @@ int64_t loop_us_elapsed;
 int64_t loop_ms_elapsed;
 
 //***********************************************************
-bool user_setup_menu_active;
-
 void setup() {
+    Serial.println(F("setup() START"));
     Watchdog.enable(30000);
     Watchdog.reset();
-    // While the energy rises slowly with the solar panel,
-    // using the analog reference low solves the analog measurement errors.
 
-    // inits the serial port so you can use printf
+    // Apparently I don't need to init the usb serial port?
+    // Can't use printf for unknown reason. But Serial.printf() etc is fine?
     // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__pico__stdio__usb.html
-    // stdio_init_all();
 
     // PICO_STDIO_USB_CONNECT_WAIT_TIME_MS ??
-    // not needed/supported
+    // stdio_usb_init() not needed/supported
+    // stdio_init_all() not needed/supported
     // if (!stdio_usb_init()) {
     // if (!stdio_init_all()) Serial.println("ERROR: stdio_init_all() failed)");
 
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+
     // FIX! why was this commented out?
     pinMode(Si5351Pwr, OUTPUT);
     pinMode(GpsPwr, OUTPUT);
+
+    // While the energy rises slowly with the solar panel,
+    // using the analog reference low solves the analog measurement errors.
     // FIX! why was this commented out?
     pinMode(BattPin, INPUT);
     analogReadResolution(12);
@@ -370,48 +385,45 @@ void setup() {
     vfo_turn_off();
     GpsINIT();
 
-    // FIX! why is this commented out?
-    // pinMode(BattPin, INPUT);
-    analogReadResolution(12);
-
     //**********************
     // this is the usb serial. the baud rate doesn't really change usb data rates
     Serial.begin(115200);
     // Wait up to 5 seconds for serial to be opened, to allow catching
     // startup messages on native USB boards (that do not reset when serial is opened).
 
-    // FIX! should I do this?
-    while (!Serial) {  // Serial is via USB; wait for enumeration
+    Watchdog.reset();
+    uint64_t serial_millis = millis();
+    // wait 10 secs looking for Serial
+    while (((millis() - serial_millis) < 10000) && !Serial) {
         // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();
     }
 
-    // emptying the serial input buffer
-    while (Serial.available() > 0) {
-        Serial.read();
-        if (Serial.read() > 0) {  // read and discard data
-            Serial.println(F("Serial.read() detected input"));
+    setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
+    updateStatusLED();
+    // FIX! assume this is the state it was in before config menu? 
+    // not always right. but loop will self-correct?
+
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+    updateStatusLED();
+
+    if (!Serial) {  
+        setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
+        // we're going to have to reboot..even balloon needs Serial created?
+        // if serial data output buf is full, we just overflow it (on balloon)
+        // DEVMODE and verbosity used to limit output?
+        // reboot
+        Watchdog.enable(1000);  // milliseconds
+        for (;;) { 
+            // FIX! put a bad status in the leds
+            updateStatusLED();
         }
     }
-
-    // should we only look at input when IDE is not connected
-    // Waits for usb serial input?
-    // while (Serial.available() == 0 {
-    //   ;
-    // }
-    // to parse the data in the serial buffer
-    // Serial.parseInt();
-    // Serial.parseFloat();
+    //**********************
 
     Watchdog.reset();
-    uint64_t start = millis();
-    while (millis() - start < 5000 && !Serial) {
-        // whenever we have spin loops we need to updateStatusLED()
-        updateStatusLED();
-    }
-    Watchdog.reset();
 
-    Serial.println(F("Starting"));
+    Serial.println(F("Starting with println"));
 
     Wire.begin();  // somehow this is necessary for Serial2 to work properly
     vfo_init();
@@ -422,62 +434,70 @@ void setup() {
 
     // "Arduino not support direct call to stdio getchar_timeout_us() is C function... but you call from CPP"
     // https://forums.raspberrypi.com/viewtopic.php?t=331207
-
     // https://github.com/earlephilhower/arduino-pico/discussions/2224
-
-
     // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
     // int c = getchar_timeout_us(0);
-    // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
-    // FIX! create a spin loop that looks for data?
-    // no ..no spin loop here
-    
-    /*
-    char c = '\0';
-    if (tud_cdc_connected() && tud_cdc_available() > 0) {
-        c = tud_cdc_read_char();
-    }
-    else  {
-        c = '\0';
-    }
-    */
+    // shouldn't have to use the tud_cdc_connected() tud_cdc_available() hacks with ide
 
+    // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
+
+    // Support hitting enter frantically to get to config menu right away on boot
     int i;
     char incomingByte = { 0 };
-    for (i = 0; i < 10*5; i++) {
+    bool found_CR_or_NL = false;
+    for (i = 0; i < 3; i++) {
         Watchdog.reset();
         if (!Serial.available()) {
+            Serial.println(F("Good: no Serial.available() ..sleep and reverify"));
+            updateStatusLED();
             sleep_ms(200);
         }
         else {
             incomingByte = Serial.read(); 
             Serial.println(incomingByte);
-            if (incomingByte != 13) {
-                Serial.readStringUntil(13); // empty readbuffer after good data
+            // FIX! 13 is ascii CR \r.
+            // FIX! 10 is ascii LF \n.
+            // we don't drain past CR/LF. so if you hit enter, the stuff after that stays as input
+            if (incomingByte == 13) {
+                Serial.println(F("Uh-oh. Found Serial incomingByte == 13 (CR)..will not drain the rest"));
+                // what happens if there is \r\n...I guess it will go to the setup menu with the \n
+                found_CR_or_NL = true;
+                break;
             }
-            break;
+            if (incomingByte == 10) {
+                Serial.println(F("Uh-oh. Found Serial incomingByte == 10 (CR)..will not drain the rest"));
+                found_CR_or_NL = true;
+                break;
+            }
         }
-    }
-    if (i == 10*5) {
-        Serial.println("Must have timed out looking for input char(s) on Serial");
     }
     Watchdog.reset();
 
-    if (incomingByte  > '\0') {
-        // looks for input on USB serial port only.
-        // Note: getchar_timeout_us(0) returns a -2 (as of sdk 2) if no keypress.
-        // Must do this check BEFORE setting Clock Speed in Case you bricked it
-        // FIX! is user_setup_menu_active used anywhere? (or cleared anywhere)
-        user_setup_menu_active = true;
+    // FIX! this forces going to the user interface always on boot. don't want this 
+    // for balloon, although it will time out there eventually
+    // FIX! in case user is frantically trying to get to the config menu to avoid setting clock speed or ??
+    // if anything was found by incomingByte above, go to the config menu 
+    // (potentially a balloon weird case would timeout)
+
+    // how to compare char: ..== 'R' is the same as == 82 (ascii value)
+    if (found_CR_or_NL) {
+        // Old: getchar_timeout_us(0) returns a -2 (as of sdk 2) if no keypress.
+        // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
+        Serial.println(F("tracker.ino: Going to user_interface()"));
+        updateStatusLED();
+        sleep_ms(1000);
         user_interface();
     }
     //***************
     const uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
-        printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
-            RED, PLL_SYS_MHZ, NORMAL);
+        Serial.print(RED);
+        Serial.printf(" RP2040 can't change clock to %luMhz. Using 133 instead" EOL, PLL_SYS_MHZ);
+        Serial.print(NORMAL);
         snprintf(_clock_speed, sizeof(_clock_speed), "133");
         write_FLASH();
+        // FIX! should we have this in parallel to _clock_speed? have to maintain it
+        // should we call it _clock_speed_int ? or just always do atoi(_clock_speed)
         PLL_SYS_MHZ = 133;
     }
 
@@ -489,15 +509,22 @@ void setup() {
     i2c_scan();
 
     // Adafruit_BMP805 bmp;
-    if (!bmp.begin()) Serial.println(F("Could not find a valid BMP280 sensor"));
-
-    // Default settings from datasheet
-    bmp.setSampling(
-        Adafruit_BMP280::MODE_NORMAL,
-        Adafruit_BMP280::SAMPLING_X2,
-        Adafruit_BMP280::SAMPLING_X16,
-        Adafruit_BMP280::FILTER_X16,
-        Adafruit_BMP280::STANDBY_MS_500);
+    if (!bmp.begin()) {
+        Serial.println(F("Could not find a valid BMP280 sensor"));
+    }
+    else {
+        // Default settings from datasheet.. should we do forced sample
+        // like weather station recommendations (rather than free running)
+        bmp.setSampling(
+            Adafruit_BMP280::MODE_NORMAL,
+            Adafruit_BMP280::SAMPLING_X2,
+            Adafruit_BMP280::SAMPLING_X16,
+            Adafruit_BMP280::FILTER_X16,
+            Adafruit_BMP280::STANDBY_MS_500);
+    }
+    Watchdog.reset();
+    Serial.println(F("setup() END"));
+    sleep_ms(5000);
 }
 
 
@@ -525,7 +552,10 @@ int tx_cnt_2;
 int tx_cnt_3;
 void loop() {
     Watchdog.reset();
+    Serial.println(F("loop() START"));
+    // sleep_ms(5000);
     // copied from loop_us_end while in the loop (at bottom)
+
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
     updateStatusLED();
     // always make sure tx is off?
@@ -544,6 +574,7 @@ void loop() {
     if ( solar_voltage <= BattMin || solar_voltage <= GpsMinVolt ) {
         sleepSeconds(BattWait);
     } else {
+        Serial.println(F("loop() solar_voltage good"));
         //*********************
         // FIX! what does this do? can set time and unload NMEA sentences?
         // unload for 2 secs to make sure we get 1 sec broadcasts?
@@ -556,6 +587,7 @@ void loop() {
             GpsInvalidCnt = 0;
             setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
         } else {
+            Serial.println(F("loop() GpsInvalidCnt++"));
             // FIX! at what rate is this incremented? ..once per loop iteration (time varies)
             GpsInvalidCnt++;
             // FIX! instead of looking for not 2000, look for valid years
@@ -567,6 +599,7 @@ void loop() {
 
             // FIX! how fast this this get big?
             if (GpsInvalidCnt > 1000) {
+                Serial.println(F("loop() GpsInvalidCnt > 1000 ..gps full cold reset"));
                 // FIX! have to send cold gps reset, in case ephemeris is corrupted? since vbat is always there
                 // otherwise this is a warm reset?
                 GpsOFF();
@@ -590,10 +623,11 @@ void loop() {
             sleepSeconds(BeaconWait);
         } else {
             if (!gps.satellites.isValid() || gps.satellites.value() <= 3) {
-                if (DEVMODE) Serial.println(F("Not enough satelites"));
+                if (DEVMODE) Serial.println(F("loop() GPS not enough satelites"));
                 sleepSeconds(BeaconWait);
                 // FIX! how much should we wait here?
             } else {
+                if (DEVMODE) Serial.println(F("loop() GPS 3d fix good?"));
                 // GpsStartTime is reset every time we turn the gps on
                 // cleared every time we turn it off (don't care)
                 // Should this is also cleared when we turn gps off? no?
@@ -614,7 +648,7 @@ void loop() {
                 // voltage is captured when we write the buff? So it's before GPS is turned off?
                 // should we look at the live voltage instead?
                 if (DEVMODE)
-                    StampPrintf("After snapTelemetry() timeStatus():%u minute():%u\n",
+                    StampPrintf("loop() After snapTelemetry() timeStatus():%u minute():%u\n",
                         timeStatus(), minute());
                 // make sure the buffer of prints is empty to avoid overflow
                 DoLogPrint();
@@ -776,6 +810,7 @@ void loop() {
     // next start is this end
     loop_us_start = loop_us_end;
     // whenever we have spin loops we need to updateStatusLED()
+    Serial.println(F("loop() END"));
 }
 
 // -1 is returned if anything illegal
@@ -817,6 +852,7 @@ bool alignMinute(int offset) {
 
 
 void sleepSeconds(int sec) {
+    Serial.println(F("sleepSeconds() START"));
     Serial.flush();
     int s = sec / 2;  // roughly 2 secs per loop?
     for (int i = 0; i < s; i++) {
@@ -833,8 +869,10 @@ void sleepSeconds(int sec) {
         // FIX! should we unload/use GPS data during this?
         // gps could be on or off, so no?
         // whenever we have spin loops we need to updateStatusLED()
+
         updateStatusLED();
         if (GpsIsOn()) {
+            // does this have a updateStatusLED() ??
             updateGpsDataAndTime(2000);  // milliseconds
             Serial.flush();
         } else {
@@ -843,21 +881,25 @@ void sleepSeconds(int sec) {
     }
     Watchdog.reset();
     // Gps gets left off it the voltage was low at any point
+    Serial.println(F("sleepSeconds() END"));
 }
 
 //*******************************************************
 extern const int WSPR_PWM_SLICE_NUM=4;
 
 void PWM4_Handler(void) {
+    Serial.println(F("PWM4_Handler() START"));
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     static int cnt = 0;
     if (++cnt >= 500) {
         cnt = 0;
         proceed = true;
     }
+    Serial.println(F("PWM4_Handler() END"));
 }
 
 void zeroTimerSetPeriodMs(float ms) {
+    Serial.println(F("zeroTimerSetPeriodMs() START"));
     static pwm_config wspr_pwm_config = pwm_get_default_config();
 
     pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS
@@ -869,6 +911,7 @@ void zeroTimerSetPeriodMs(float ms) {
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
     pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
+    Serial.println(F("zeroTimerSetPeriodMs() END"));
 }
 
 //********************************************
@@ -877,9 +920,10 @@ void zeroTimerSetPeriodMs(float ms) {
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3
 void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
+    Serial.println(F("sendWSPR() START"));
     Watchdog.reset();
     if (txNum < 0 || txNum > 3) {
-        if (DEVMODE) printf("bad txNum %d ..ignoring", txNum);
+        if (DEVMODE) Serial.printf("bad txNum %d ..ignoring" EOL, txNum);
         return;
     }
 
@@ -891,7 +935,7 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
         hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
     }
 
-    // if (DEVMODE) printf("WSPR desired freq: %lu used hf_freq %u with correction %s\n",
+    // if (DEVMODE) Serial.printf("WSPR desired freq: %lu used hf_freq %u with correction %s" EOL,
     //    XMIT_FREQUENCY, hf_freq, _correction);
 
     symbol_count = WSPR_SYMBOL_COUNT;  // From the library defines
@@ -910,7 +954,7 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
         uint32_t freq_x16 =
             (hf_freq << PLL_CALCULATION_PRECISION) +
             (tx_buffer[i] * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
-        // printf("%s vfo_set_freq_x16(%u)\n", __func__, (freq_x16 >> PLL_CALCULATION_PRECISION));
+        // Serial.printf(__func__ " vfo_set_freq_x16(%u)" EOL, (freq_x16 >> PLL_CALCULATION_PRECISION));
         vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
         // PWM handler sets proceed?
         proceed = false;
@@ -931,9 +975,12 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
         vfo_turn_off();
     }
     Watchdog.reset();
+    Serial.println(F("sendWSPR() END"));
+    // Serial.println(F(__func__ " END"));
 }
 
 void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
+    Serial.println(F("syncAndSendWSPR() START"));
     // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
     // we turned the vfo on in the minute before 0, separately
 
@@ -955,10 +1002,12 @@ void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_powe
     }
 
     sendWspr(txNum, hf_callsign,  hf_grid4, hf_power, vfoOffWhenDone);
+    Serial.println(F("syncAndSendWSPR() END"));
 }
 
 //**********************************
 void set_tx_buffer(char *hf_callsign, char *hf_loc, uint8_t hf_power, uint8_t *tx_buffer) {
+    Serial.println(F("set_tx_buffer() START"));
     // Clear out the transmit buffer
     memset(tx_buffer, 0, 255);  // is this bigger than WSPR_SYMBOL_COUNT ?
     // Set the proper frequency and timer CTC
@@ -983,9 +1032,11 @@ void set_tx_buffer(char *hf_callsign, char *hf_loc, uint8_t hf_power, uint8_t *t
     jtencode.wspr_encode(hf_callsign, hf_loc, hf_power, tx_buffer);
     // maybe useful python for testing wspr encoding
     // https://github.com/robertostling/wspr-tools/blob/master/README.md
+    Serial.println(F("set_tx_buffer() END"));
 }
 
 void freeMem() {
+    Serial.println(F("freeMem() START"));
     if (DEVMODE) return;
 
     // Using F() for strings
@@ -1001,34 +1052,22 @@ void freeMem() {
     Serial.print(F("Free RAM: ")); 
     Serial.print(freeMemory(), DEC); 
     Serial.println(F(" byte"));
+    Serial.println(F("freeMem() END"));
 }
 
-// were any of these needed for InitPicoClock?
-// #include <stdio.h>
-// #include <string.h>
-// #include <ctype.h>
-// #include <defines.h>
-// #include "pico/stdlib.h"
-// #include "hardware/clocks.h"
-// #include "hardware/gpio.h"
-// #include "hardware/adc.h"
-// #include "hardware/clocks.h"
-
-// so we can use stdio_usb
-#include "pico/stdio.h"
-
 int InitPicoClock(int PLL_SYS_MHZ) {
+    Serial.println(F("InitPicoClock START"));
     const uint32_t clkhz = PLL_SYS_MHZ * 1000000L;
 
     // frequencies like 205 mhz will PANIC, System clock of 205000 kHz cannot be exactly achieved
     // should detect the failure and change the nvram, otherwise we're stuck even on reboot
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
       // won't work
-      printf("\nCan not set clock to %dMhz. 'pico 'Cannot be achieved''\n", PLL_SYS_MHZ);
+      Serial.printf("Can not set clock to %dMhz. 'pico 'Cannot be achieved''" EOL, PLL_SYS_MHZ);
       return -1;
     }
 
-    printf("\n Attempt to set rp2040 clock to %dMhz (legal)\n", PLL_SYS_MHZ);
+    Serial.printf("Attempt to set rp2040 clock to %dMhz (legal)" EOL, PLL_SYS_MHZ);
     // 2nd arg is "required"
     set_sys_clock_khz(clkhz / kHz, true);
     clock_configure(clk_peri, 0,
@@ -1037,6 +1076,7 @@ int InitPicoClock(int PLL_SYS_MHZ) {
       PLL_SYS_MHZ * MHZ);
 
     return 0;
+    Serial.println(F("InitPicoClock END"));
 }
 
 //**********************

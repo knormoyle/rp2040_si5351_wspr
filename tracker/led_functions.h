@@ -17,6 +17,7 @@
 #include <stdint.h>
 
 extern const int STATUS_LED_PIN;
+
 extern const int LED_STATUS_NO_GPS;
 extern const int LED_STATUS_GPS_TIME;
 extern const int LED_STATUS_GPS_FIX;
@@ -24,6 +25,8 @@ extern const int LED_STATUS_TX_WSPR;
 extern const int LED_STATUS_TX_TELEMETRY;
 extern const int LED_STATUS_TX_TELEN1;
 extern const int LED_STATUS_TX_TELEN2;
+extern const int LED_STATUS_REBOOT_NO_SERIAL;
+extern const int LED_STATUS_USER_CONFIG;
 
 void initStatusLED(void);
 void setStatusLEDBlinkCount(int cnt);

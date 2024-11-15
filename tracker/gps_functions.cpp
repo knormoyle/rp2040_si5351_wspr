@@ -20,6 +20,7 @@
 #include <Arduino.h>
 #include "gps_functions.h"
 #include "debug_functions.h"
+#include "defines.h"
 
 // in libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 // for setTime()
@@ -29,8 +30,6 @@
 // for Watchdog.*
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-// extern void updateStatusLED(void)
-// instead, should we have
 #include "led_functions.h"
 
 // in the *ino
@@ -67,6 +66,7 @@ bool GpsIsOn() {
 }
 
 void GpsINIT() {
+    if (DEVMODE) Serial.println(F("GpsINIT START"));
     Serial2.setRX(GPS_UART1_RX_PIN);
     Serial2.setTX(GPS_UART1_TX_PIN);
     Serial2.setPollingMode(true);
@@ -88,14 +88,14 @@ void GpsINIT() {
     // FIX! is this necessary?
     digitalWrite(GPS_NRESET_PIN, HIGH);
     digitalWrite(GPS_ON_PIN, HIGH);
+    if (DEVMODE) Serial.println(F("GpsINIT END"));
 }
 
 
 void GpsON(bool GpsColdReset) {
-    if (DEVMODE) {
-        if (!GpsColdReset) printf("GpsON\n");
-        else printf("GpsON with full gps cold start\n");
-    }
+    if (DEVMODE) Serial.println(F(EOL "GpsON START"));
+    if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
+            GpsIsOn_state, GpsTimeToLastFix);
     // could be off or on already
     // Assume GpsINIT was already done
 
@@ -132,6 +132,7 @@ void GpsON(bool GpsColdReset) {
     // FIX! should we wait for ack or no?
     // have to toggle power off/on to get this effect? no?
     if (GpsColdReset) {
+        if (DEVMODE) Serial.println(F("GpsON full cold reset START"));
         sleep_ms(2000);
         Serial2.print("$PMTK104*37\r\n");
         sleep_ms(2000);
@@ -167,9 +168,15 @@ void GpsON(bool GpsColdReset) {
             */
             ublox_high_alt_mode_enabled = true;
         }
-        GpsIsOn_state = true;
-        GpsTimeToLastFix = 0;
+        if (DEVMODE) Serial.println(F("GpsON full cold reset END"));
     }
+
+    GpsIsOn_state = true;
+    GpsTimeToLastFix = 0;
+
+    if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
+            GpsIsOn_state, GpsTimeToLastFix);
+    if (DEVMODE) Serial.println(F("GpsON END"));
 }
 
 
@@ -186,7 +193,12 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 */
 
 void GpsOFF() {
+    if (DEVMODE) Serial.println(F("GpsOFF START"));
+    if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
+            GpsIsOn_state, GpsTimeToLastFix);
+
     digitalWrite(GpsPwr, HIGH);
+    // FIX! do we really turn off Serial2?
     Serial2.end();
     // gps.date.clear(); // kazu had done this method
     // are these declared private?
@@ -215,52 +227,81 @@ void GpsOFF() {
 
     ublox_high_alt_mode_enabled = false;
 
-    /*printf("GpsOFF\n");*/
     GpsIsOn_state = false;
     GpsStartTime = 0;
     GpsTimeToLastFix = 0;
+
+    if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
+            GpsIsOn_state, GpsTimeToLastFix);
+    if (DEVMODE) Serial.println(F("GpsOFF START"));
 }
 
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
+    if (DEVMODE) Serial.println(F("updateGpsDataAndTime START"));
     // ms has to be positive?
     // grab data for no more than ms milliseconds
     // stop if no data for 10 milliseconds
     Watchdog.reset();
     GpsON(false);
-    // while (!Serial) {delay(1);} // wait for serial port to connect.
 
-    uint64_t start = millis();
-    uint64_t bekle = 0;
+    // don't need to wait for serial port to connect?
+    // while (!Serial) {delay(1);} 
+
+    uint64_t start_millis = millis();
+    uint64_t current_millis = start_millis;
+
+    uint64_t last_serial2_millis = 0;
+
+    Serial.printf("updateGpsDataAndTime started looking at %" PRIu64 "millis" EOL, current_millis);
     // this unloads each char as it arrives and prints it
     // so we can see NMEA sentences for a period of time. Should we do it for 2 secs?
     // assume 1 sec broadcast rate
     // https://arduino.stackexchange.com/questions/13452/tinygps-plus-library
     do {
         // FIX! what is this..unload gps sentences?
+        current_millis = millis();
+        if (DEVMODE) {
+            if (Serial2.available()) 
+                Serial.println(F("updateGpsDataAndTime found Serial2.available (NMEA)"));
+            else
+                Serial.println(F("updateGpsDataAndTime did not find Serial2.available (NMEA)"));
+        }
+
         while (Serial2.available() > 0) {
             // FIX! in DEVMODE can we print all the sentences?
             char c;
-            // should this be readln?
+            // should this be readln? Is this just one char at a time?
             c = Serial2.read();
+            if (DEVMODE) Serial.printf("%c" EOL, c);
             gps.encode(c);
-            bekle = millis();
+
+            current_millis = millis();
+            // could the LED blinking have gotten delayed?
+            updateStatusLED();
+            last_serial2_millis = current_millis;
         }
-        // did we wait more than 10 millis() good data read?
-        if ((bekle != 0) && (millis() > bekle+10)) break;
-    } while ( (millis() - start) < (uint64_t) ms);
+        // did we wait more than 10 millis() since good data read?
+        if ((last_serial2_millis != 0) && (current_millis > last_serial2_millis + 10)) {
+            Serial.printf("updateGpsDataAndTime stopped looking at %" PRIu64 "millis" EOL, current_millis);
+            break;
+        }
+        updateStatusLED();
+    } while ( (current_millis - start_millis) < (uint64_t) ms); // works if ms is 0
 
     if (DEVMODE) {
-        printf("gps.time.isValid():%u\n", gps.time.isValid());
+        Serial.printf("gps.time.isValid():%u" EOL, gps.time.isValid());
     }
 
     if (gps.time.isValid()) {
         // setTime is in the Time library.
         setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
-        if (DEVMODE) {
-            printf("setTime(%02u:%02u:%02u)\n", gps.time.hour(), gps.time.minute(), gps.time.second());
-        }
+        if (DEVMODE) Serial.printf("setTime(%02u:%02u:%02u)" EOL, 
+                gps.time.hour(), gps.time.minute(), gps.time.second());
     }
+
+    updateStatusLED();
+    if (DEVMODE) Serial.println(F("updateGpsDataAndTime END"));
 }
 
 
@@ -341,6 +382,7 @@ void setGPS_DynamicModel6() {
 
 void gpsDebug() {
     if (!DEVMODE) return;
+    if (DEVMODE) Serial.println(F("GpsDebug START"));
 
     Serial.println();
     Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars Sentences Checksum"));
@@ -366,5 +408,6 @@ void gpsDebug() {
     printInt(gps.sentencesWithFix(), true, 10);
     printInt(gps.failedChecksum(), true, 9);
     Serial.println();
+    if (DEVMODE) Serial.println(F("GpsDebug END"));
 }
 

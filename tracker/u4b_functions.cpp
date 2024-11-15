@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include "u4b_functions.h"
 #include <JTEncode.h>  // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
+#include "defines.h"
 
 //********************************
 // the key output that is used to pwm rf ..162 symbols that are 4-FSK
@@ -92,14 +93,13 @@ extern char _clock_speed[4];
 extern char _start_minute[2];
 extern char _verbosity[2];
 
-    
 //*******************************
 char EncodeBase36(uint8_t val) {
     char retVal;
     if (val < 10) retVal = '0' + val;
     else retVal = 'A' + (val - 10);
     return retVal;
-}   
+}
 
 //*******************************
 // use:
@@ -132,7 +132,7 @@ uint32_t init_rf_freq(void) {
         case 12: BASE_FREQ_USED = BF12M; break;
         case 10: BASE_FREQ_USED = BF10M; break;
         // default to 20M in case of error cases
-        default: BASE_FREQ_USED = BF20M;  
+        default: BASE_FREQ_USED = BF20M;
     }
 
     XMIT_FREQUENCY = BASE_FREQ_USED + 1400UL;
@@ -172,16 +172,16 @@ Frequency discrimination:
 Frequency sector is
 (channel % 20) / 5
 
-That indicates into the array of transmit audio frequencies: {1420, 1460, 1540, 1580};
+That indicates into the array of transmit audio frequencies: [1420, 1460, 1540, 1580];
 which are the target transmit frequencies, each in their 5 sectors.
 
 The actual transmit frequency is the standard WSPR USB dial frequency +
 the above mentioned audio frequency;
 
 USB dial frequencies:
-    {136000, 474200, 1836600, 3568600, 5364700, 7038600, 10138700,
+    [136000, 474200, 1836600, 3568600, 5364700, 7038600, 10138700,
     14095600, 18104600, 21094600, 24924600, 28124600,
-    50293000, 70091000, 144489000};
+    50293000, 70091000, 144489000];
 
 Transmit slot:
 The transmit slot (txSlot) is first calculated as (channel % 5).
@@ -290,7 +290,7 @@ void u4b_encode_std() {
     char id5 = 'A' + id5Val;
     char id6 = 'A' + id6Val;
 
-    // string{ id13[0], id2, id13[1], id4, id5, id6 };
+    // string id13[0], id2, id13[1], id4, id5, id6
     char callsign[7];
     callsign[0] =  _id13[0];
     callsign[1] =  id2;

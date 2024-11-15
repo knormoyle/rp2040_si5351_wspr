@@ -15,6 +15,7 @@
 #ifndef CONFIG_FUNCTIONS_H
 #define CONFIG_FUNCTIONS_H
 #include <stdint.h>
+#include "defines.h"
 
 // any of this needed
 // #include <stdio.h>
@@ -22,6 +23,7 @@
 // #include <ctype.h>
 // #include <defines.h>
 // #include "pico/stdlib.h"
+
 
 void user_interface(void);
 void get_user_input(const char *prompt, char *input_variable, int max_length);
