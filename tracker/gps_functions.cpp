@@ -68,7 +68,9 @@ bool GpsIsOn(void) {
 
 //************************************************
 void GpsINIT() {
-    if (DEVMODE) Serial.println(F("GpsINIT START"));
+    if (DEVMODE) Serial.println(F("GpsINIT START" EOL));
+    updateStatusLED();
+    Watchdog.reset();
 
     if (DEVMODE) {
         Serial.printf("GPS_UART1_RX_PIN %d" EOL, GPS_UART1_RX_PIN);
@@ -107,31 +109,35 @@ void GpsINIT() {
     digitalWrite(GPS_NRESET_PIN, HIGH);
     digitalWrite(GPS_ON_PIN, HIGH);
 
-
     // FIX! rely on watchdog reset in case we stay here
     // forever?
     if (DEVMODE) Serial.println(F("GpsINIT Will look for any Serial2 bytes"));
-    
-    // sleep 3 secs
-    sleep_ms(3000);
-    Watchdog.reset();
 
+    // sleep 3 secs
+    for (int i = 0; i < 6 ; i++) {
+        sleep_ms(500);
+        updateStatusLED();
+    }
 
     int i;
     char incomingByte = { 0 };
     for (i = 0; i < 10; i++) {
         Watchdog.reset();
         if (!Serial2.available()) {
-            Serial.println(F("Good: no Serial2.available() ..sleep and reverify"));
+            Serial.println(F("no Serial2.available() ..sleep and reverify"));
             updateStatusLED();
             sleep_ms(1000);
         }
         else {
-            incomingByte = Serial.read();
-            Serial.println(incomingByte);
+            while (Serial2.available()) {
+                incomingByte = Serial2.read();
+                Serial.println(incomingByte);
+            }
         }
+        sleep_ms(50);
     }
 
+    updateStatusLED();
     Watchdog.reset();
     if (DEVMODE) Serial.println(F("GpsINIT END"));
 }
@@ -139,9 +145,13 @@ void GpsINIT() {
 
 //************************************************
 void GpsON(bool GpsColdReset) {
-    if (DEVMODE) Serial.println(F(EOL "GpsON START"));
-    if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
-            GpsIsOn_state, GpsTimeToLastFix);
+    if (DEVMODE) Serial.println(F("GpsON START" EOL));
+    if (GpsColdReset) {
+        if (DEVMODE) Serial.printf("GpsON GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
+    }
+    else {
+        if (DEVMODE) Serial.printf("GpsOn GpsIsOn_state %u GpsColdReset false" EOL, GpsIsOn_state);
+    }
     // could be off or on already
     // Assume GpsINIT was already done
 
@@ -214,15 +224,17 @@ void GpsON(bool GpsColdReset) {
             */
             ublox_high_alt_mode_enabled = true;
         }
-        if (DEVMODE) Serial.println(F("GpsON full cold reset END"));
     }
 
     GpsIsOn_state = true;
     GpsTimeToLastFix = 0;
 
-    if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
-            GpsIsOn_state, GpsTimeToLastFix);
-    if (DEVMODE) Serial.println(F("GpsON END"));
+    if (GpsColdReset) { 
+        if (DEVMODE) Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
+    }
+    else {
+        if (DEVMODE) Serial.printf("GpsOn END GpsIsOn_state %u GpsColdReset false" EOL, GpsIsOn_state);
+    }
 }
 
 
@@ -235,15 +247,13 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 < {
 <    valid = updated = false;
 <    date = 0;
-< }
+< }b
 < #endif
 */
 
 //************************************************
 void GpsOFF() {
-    if (DEVMODE) Serial.println(F("GpsOFF START"));
-    if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
-            GpsIsOn_state, GpsTimeToLastFix);
+    if (DEVMODE) Serial.printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
 
     digitalWrite(GpsPwr, HIGH);
     // FIX! do we really turn off Serial2?
@@ -278,10 +288,10 @@ void GpsOFF() {
     GpsIsOn_state = false;
     GpsStartTime = 0;
     GpsTimeToLastFix = 0;
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+    updateStatusLED();
 
-    if (DEVMODE) Serial.printf("GpsIsOn_state %d GpsTimeToLastFix %" PRIu64 EOL, 
-            GpsIsOn_state, GpsTimeToLastFix);
-    if (DEVMODE) Serial.println(F("GpsOFF START"));
+    if (DEVMODE) Serial.printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
 }
 
 //************************************************
@@ -295,7 +305,7 @@ void updateGpsDataAndTime(int ms) {
     GpsON(false);
 
     // don't need to wait for serial port to connect?
-    // while (!Serial) {delay(1);} 
+    // while (!Serial) {delay(1);}
 
     uint64_t start_millis = millis();
     uint64_t current_millis = start_millis;
@@ -306,12 +316,12 @@ void updateGpsDataAndTime(int ms) {
     // so we can see NMEA sentences for a period of time. Should we do it for 2 secs?
     // assume 1 sec broadcast rate
     // https://arduino.stackexchange.com/questions/13452/tinygps-plus-library
-    
+
     do {
         // FIX! what is this..unload gps sentences?
         current_millis = millis();
         if (DEVMODE) {
-            if (Serial2.available()) 
+            if (Serial2.available())
                 Serial.println(F("updateGpsDataAndTime found some Serial2.available() (NMEA)"));
             else
                 Serial.println(F("updateGpsDataAndTime did not find any Serial2.available() (NMEA)"));
@@ -348,7 +358,7 @@ void updateGpsDataAndTime(int ms) {
     if (gps.time.isValid()) {
         // setTime is in the Time library.
         setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
-        if (DEVMODE) Serial.printf("setTime(%02u:%02u:%02u)" EOL, 
+        if (DEVMODE) Serial.printf("setTime(%02u:%02u:%02u)" EOL,
                 gps.time.hour(), gps.time.minute(), gps.time.second());
     }
 
@@ -358,9 +368,9 @@ void updateGpsDataAndTime(int ms) {
 
 
 //************************************************
-// don't use the UBX chip, so just leaving this in for potential 
+// don't use the UBX chip, so just leaving this in for potential
 // issues like this in other gps chips (balloon mode or ?)
-// FIX!  I do send a full cold start NMEA request above, but 
+// FIX!  I do send a full cold start NMEA request above, but
 // don't look for an ACK..maybe long term will make it a full req/ack
 // so I know it's really doing something (like these two routines)
 void sendUBX(uint8_t *MSG, uint8_t len) {
@@ -370,7 +380,7 @@ void sendUBX(uint8_t *MSG, uint8_t len) {
 }
 
 //************************************************
-// don't use the UBX chip, so just leaving this in for potential 
+// don't use the UBX chip, so just leaving this in for potential
 // issues like this in other gps chips (balloon mode or ?)
 boolean getUBX_ACK(uint8_t *MSG) {
     uint8_t b;
