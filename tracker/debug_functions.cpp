@@ -1,24 +1,24 @@
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
-// Author: Kevin Normoyle AD6Z initial 11/2024
+// Author/Gather: Kevin Normoyle AD6Z initially 11/2024
+// See acknowledgements.txt for the lengthy list of contributions/dependencies.
+//********************************************
+// what do we need ehre?
+#include <stdint.h>
+#include <stdarg.h>
 
-// Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
-// Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
+// do we need so we can slam in some printf?
+// #include <cstdio.h>
+// does stdio_init_all imply we want this
+#include <stdio.h>
 
-// Incorporates work by: Kazuhisa “Kazu” Terasaki AG6NS. Thank you.
-// https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
-// https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker
+// stdlib https://www.tutorialspoint.com/c_standard_library/stdlib_h.htm
+// #include <stdlib.h>
+// #include <string.h>
 
-// Incorporates work by: Rob Votin KC3LBR. Thank you.
-// https://github.com/EngineerGuy314/pico-WSPRer
+// #include "hardware/clocks.h"
+// #include "pico/stdlib.h"
 
-// Incorporates work by: Roman Piksaykin R2BDY. Thank you.
-// https://github.com/RPiks/pico-WSPR-tx
-
-// Got rid of this and use Serial everywhere
-// #define SerialUSB Serial
-
-extern bool DEVMODE;
 #include "debug_functions.h"
 #include "led_functions.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
@@ -27,20 +27,25 @@ extern bool DEVMODE;
 #include <TinyGPS++.h>
 #include <Wire.h>
 
+#include "defines.h"
+extern bool DEVMODE;
+
+//***********************************
 // why was this static?
 // is this used for signed or unsigned?
 void printInt(uint64_t val, bool valid, int len) {
     if (!DEVMODE) return;
     char sz[32] = "*****************";
+
     // FIX! should this really be %ld? why not %d
-    // int64_t should use 
+    // int64_t should use
     // printf("%" PRId64 "\n", t);
-    // uint64_t should use 
+    // uint64_t should use
     // printf("%" PRIu64 "\n", t);
     // to print in hexadecimal
     // printf("%" PRIx64 "\n", t);
 
-    //  https://stackoverflow.com/questions/9225567/how-to-portably-print-a-int64-t-type-in-c
+    // https://stackoverflow.com/questions/9225567/how-to-portably-print-a-int64-t-type-in-c
     // complete list of types and formats
     // https://en.cppreference.com/w/cpp/types/integer
 
@@ -107,31 +112,13 @@ void printFloat(float val, bool valid, int len, int prec) {
     }
     // whenever something might have taken a long time like printing
     updateStatusLED();
-
 }
 
-//********************************************
-// how many of these do we need here?
-
-#include <stdint.h>
-#include <stdarg.h>
-
-// do we need so we can slam in some printf?
-// #include <cstdio.h>
-// does stdio_init_all imply we want this
-#include <stdio.h>
-
-// stdlib https://www.tutorialspoint.com/c_standard_library/stdlib_h.htm
-// #include <stdlib.h>
-// #include <string.h>
-
-// #include "hardware/clocks.h"
-// #include "pico/stdlib.h"
-
+//***********************************
 // maybe 10 lines?
 #define BUFFER_SIZE 1024
 
-static char logBuffer[BUFFER_SIZE] = {0};
+static char logBuffer[BUFFER_SIZE] = { 0 };
 
 // Buffers the log information to the log buffer
 // it is much faster than direct UART output
@@ -163,24 +150,40 @@ void StampPrintf(const char* pformat, ...) {
     // va_start stdarg https://www.tutorialspoint.com/c_standard_library/c_macro_va_start.htm
     va_list argptr;
     va_start(argptr, pformat);
+    // message can be up to the full buffer size?
+    // FIX! should we check if it violates? somehow? Not possible?
     char message[BUFFER_SIZE];
     // vsnprintf https://cplusplus.com/reference/cstdio/vsnprintf/
     // format the message
     vsnprintf(message, sizeof(message), pformat, argptr);
     va_end(argptr);
 
-    // kevin. cheap enough check as long as timestamp + message <= 150 bytes?
-    if ( (strlen(timestamp) + strlen(message + 1)) >= (BUFFER_SIZE - (strlen(logBuffer) + 1)) ) {
+    if ( (strlen(logBuffer) + strlen(timestamp) + strlen(message + 1)) > BUFFER_SIZE ) {
     // make BUFFER_SIZE bigger or do more DoLogPrint() if we run into a problem realtime
     // FIX! should we detect when we're close to the logBuffer being full?
-        printf("WARNING: with BUFFER_SIZE %d strlen(logBuffer) %d there is no room for timestamp %s message %s <newline>",
+        Serial.printf(
+            "WARNING: BUFFER_SIZE %d strlen(logBuffer) %d, "
+            "has no room for timestamp %s message %s and EOL" EOL,
             BUFFER_SIZE, strlen(logBuffer), timestamp, message);
-        printf("..flushing with DoLogPrint");
+        Serial.println(F("..flushing first with DoLogPrint"));
         DoLogPrint();
     }
-    strncat(logBuffer, timestamp, BUFFER_SIZE - strlen(logBuffer) - 1);
-    strncat(logBuffer, message, BUFFER_SIZE - strlen(logBuffer) - 1);
-    strncat(logBuffer, "\n", BUFFER_SIZE - strlen(logBuffer) - 1);
+    // FIX! could put the 3 things in the logBuffer more efficiently
+    // than doing successive strlen()' and strncat?
+    int i = strlen(logBuffer);
+    int j = strlen(timestamp);
+    int j2 = strlen(message);
+    if ( (i + j + j2 + 1) > BUFFER_SIZE) {
+        Serial.printf(
+            "ERROR: BUFFER_SIZE %d, i %d, adding j + j2 + 1 = %d, "
+            "has no room for timestamp %s message %s and EOL" EOL,
+            BUFFER_SIZE, i, j + j2 + 1, timestamp, message);
+    }
+    else {
+        strncpy(logBuffer + i, timestamp, j);
+        strncpy(logBuffer + i + j, message, j2);
+        logBuffer[i + j + j2] = 0; // null term
+    }
 }
 
 // Outputs the content of the log buffer to stdio (UART and/or USB)
@@ -188,12 +191,11 @@ void StampPrintf(const char* pformat, ...) {
 // and not in time critical functions
 void DoLogPrint() {
     Watchdog.reset();
-    if (logBuffer[0] != '\0') {
-        printf("%s", logBuffer);
-        logBuffer[0] = '\0';  // Clear the buffer
+    if (logBuffer[0] != 0) {
+        Serial.println(logBuffer);
+        logBuffer[0] = 0;  // Clear the buffer. no need to zero the whole thing.
     }
     // whenever something might have taken a long time like printing the big buffer
     updateStatusLED();
     Watchdog.reset();
-
 }

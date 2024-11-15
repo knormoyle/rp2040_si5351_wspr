@@ -230,9 +230,10 @@ extern const int LED_STATUS_USER_CONFIG = 9;
 //*********************************
 // so it can be used in gps_functions.cpp
 // extern is needed or the linker doesn't find it. see https://forum.arduino.cc/t/linker-problems-with-extern-const-struct/647136/2
-extern const int GpsPwr = 16;
-// not used..GpsPwr is used
-// const int GPS_VCC_ON_N_PIN=16;     // output ..this cuts VCC, leaves VBAT
+extern const int GpsPwr = 16; // output ..this cuts VCC, leaves VBAT
+// define is not used..GpsPwr is used. 
+// const int GPS_VCC_ON_N_PIN=16;     
+
 
 // FIX! where are these used
 extern const int GPS_NRESET_PIN = 5;  // output ..active low..should be 1?
@@ -243,6 +244,11 @@ extern const int GPS_1PPS_PIN = 17;   // input
 
 extern const int GPS_UART1_TX_PIN = 8;
 extern const int GPS_UART1_RX_PIN = 9;
+
+// talks to gps
+extern const int SERIAL2_FIFO_SIZE = 4096;
+// choices: 9600 (default ATGM33651) 19200 38400
+extern const int SERIAL2_BAUD_RATE = 38400;
 
 // stuff moved to functions from this .ino (not libraries)
 #include "gps_functions.h"
