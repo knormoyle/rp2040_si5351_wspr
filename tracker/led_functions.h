@@ -24,7 +24,7 @@ void setStatusLEDBlinkCount(int cnt);
 void updateStatusLED(void);
 void turnOnLED(bool turn_on);
 bool isLEDOn(void);
-void flipLED(void)       ;
+void flipLED(void);
 
 #endif
 

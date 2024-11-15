@@ -25,6 +25,7 @@ extern bool DEVMODE;
 
 // for TinyGPSDate definition
 #include <TinyGPS++.h>
+#include <Wire.h>
 
 // why was this static?
 // is this used for signed or unsigned?

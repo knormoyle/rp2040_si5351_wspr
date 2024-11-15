@@ -356,6 +356,42 @@ absolute_time_t GpsStartTime = 0;
 int64_t loop_us_elapsed;
 int64_t loop_ms_elapsed;
 
+bool drainSerialTo_CRorNL (void) {
+    // Support hitting enter frantically to get to config menu right away on boot
+    int i;
+    char incomingByte = { 0 };
+    bool found_CRorNL = false;
+    bool found_any = false;
+    for (i = 0; i < 3; i++) {
+        Watchdog.reset();
+        if (!Serial.available()) {
+            Serial.println(F("Good: no Serial.available() ..sleep and reverify"));
+            updateStatusLED();
+            sleep_ms(200);
+        }
+        else {
+            found_any = true;
+            incomingByte = Serial.read(); 
+            Serial.println(incomingByte);
+            // FIX! 13 is ascii CR \r.
+            // FIX! 10 is ascii LF \n.
+            // we don't drain past CR/LF. so if you hit enter, the stuff after that stays as input
+            if (incomingByte == 13) {
+                Serial.println(F("Uh-oh. Found Serial incomingByte == 13 (CR)..will not drain the rest"));
+                // what happens if there is \r\n...I guess it will go to the setup menu with the \n
+                found_CRorNL = true;
+                break;
+            }
+            if (incomingByte == 10) {
+                Serial.println(F("Uh-oh. Found Serial incomingByte == 10 (CR)..will not drain the rest"));
+                found_CRorNL = true;
+                break;
+            }
+        }
+    }
+    return found_CRorNL | found_any;
+}
+
 //***********************************************************
 void setup() {
     //**********************
@@ -398,6 +434,11 @@ void setup() {
     vfo_turn_on(WSPR_TX_CLK_NUM);
 
     //**********************
+    // necessary for Serial2 to work properly
+    // we have only one i2c? what about the BMP280 ?
+    // probably don't even need this. the core may have already done it?
+    Wire.begin();  
+
     GpsINIT(); // also turns on and checks for output
     GpsOFF();
     GpsON(false); // no full cold gps reset
@@ -427,7 +468,6 @@ void setup() {
 
     Serial.println(F("Starting with println"));
 
-    Wire.begin();  // somehow this is necessary for Serial2 to work properly
     vfo_init();
 
     // sets minute/lane/id from chan number.
@@ -440,39 +480,8 @@ void setup() {
     // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
     // int c = getchar_timeout_us(0);
     // shouldn't have to use the tud_cdc_connected() tud_cdc_available() hacks with ide
-
     // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
 
-    // Support hitting enter frantically to get to config menu right away on boot
-    int i;
-    char incomingByte = { 0 };
-    bool found_CR_or_NL = false;
-    for (i = 0; i < 3; i++) {
-        Watchdog.reset();
-        if (!Serial.available()) {
-            Serial.println(F("Good: no Serial.available() ..sleep and reverify"));
-            updateStatusLED();
-            sleep_ms(200);
-        }
-        else {
-            incomingByte = Serial.read(); 
-            Serial.println(incomingByte);
-            // FIX! 13 is ascii CR \r.
-            // FIX! 10 is ascii LF \n.
-            // we don't drain past CR/LF. so if you hit enter, the stuff after that stays as input
-            if (incomingByte == 13) {
-                Serial.println(F("Uh-oh. Found Serial incomingByte == 13 (CR)..will not drain the rest"));
-                // what happens if there is \r\n...I guess it will go to the setup menu with the \n
-                found_CR_or_NL = true;
-                break;
-            }
-            if (incomingByte == 10) {
-                Serial.println(F("Uh-oh. Found Serial incomingByte == 10 (CR)..will not drain the rest"));
-                found_CR_or_NL = true;
-                break;
-            }
-        }
-    }
     Watchdog.reset();
 
     // FIX! this forces going to the user interface always on boot. don't want this 
@@ -481,11 +490,12 @@ void setup() {
     // if anything was found by incomingByte above, go to the config menu 
     // (potentially a balloon weird case would timeout)
 
+    bool found_any = drainSerialTo_CRorNL();
     // how to compare char: ..== 'R' is the same as == 82 (ascii value)
-    if (found_CR_or_NL) {
+    if (found_any) {
         // Old: getchar_timeout_us(0) returns a -2 (as of sdk 2) if no keypress.
         // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
-        Serial.println(F("tracker.ino: Going to user_interface()"));
+        Serial.println(F("tracker.ino: Going to user_interface() from setup()"));
         updateStatusLED();
         sleep_ms(1000);
         user_interface();
@@ -556,7 +566,17 @@ int tx_cnt_0;
 int tx_cnt_1;
 int tx_cnt_2;
 int tx_cnt_3;
+
+//*************************************************************************
 void loop() {
+    bool found_any = drainSerialTo_CRorNL();
+    if (found_any) {
+        Serial.println(F("tracker.ino: Going to user_interface() from loop()"));
+        updateStatusLED();
+        sleep_ms(1000);
+        user_interface();
+    }
+
     Watchdog.reset();
     Serial.println(F("loop() START"));
     // sleep_ms(5000);

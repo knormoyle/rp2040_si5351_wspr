@@ -140,6 +140,8 @@ BMP280_U32_t bmp280_compensate_P_int64(BMP280_S32_t adc_P) {
 // Sensortec and via its sales and distribution partners.
 
 
+// FIX! do we use Wire1 for this i2c ?
+// do we need a Wire1.begin() in tracker.ino
 #define BMP280_I2C_INSTANCE i2c1
 #include "bmp_functions.h"
 #include <Wire.h>

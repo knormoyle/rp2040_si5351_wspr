@@ -157,12 +157,21 @@ void GpsON(bool GpsColdReset) {
 
     // Just in case: wait for serial port to connect.
     // do we need these two each time?
+    // yes if we did a Serial2.end() when off
 
-    // while (!Serial2) { delay(1); }
-    // Serial2.begin(9600);
-
-    digitalWrite(GpsPwr, LOW);
-    GpsStartTime = get_absolute_time();  // usecs
+    if (!GpsIsOn()) {
+        // Only do this if it's currently off
+        while (!Serial2) { delay(1); }
+        Serial2.begin(9600);
+        // Serial2.end()
+        // Disables serial communication, allowing the RX and TX pins to be used for general input and output. 
+        // To re-enable serial communication, call Serial.begin().
+        GpsStartTime = get_absolute_time();  // usecs
+        // always do this just in case the GpsIsOn() got wrong?
+        // but we're relying on the Serial2.begin/end to be correct?
+        // might as well commit to being right!
+        digitalWrite(GpsPwr, LOW);
+    }
 
     // alternative GPS
     // SIM28ML
@@ -256,8 +265,13 @@ void GpsOFF() {
     if (DEVMODE) Serial.printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
 
     digitalWrite(GpsPwr, HIGH);
-    // FIX! do we really turn off Serial2?
+    // Serial2.end()
+    // Disables serial communication, allowing the RX and TX pins to be used for general input and output. 
+    // To re-enable serial communication, call Serial.begin().
+    // FIX! do we really need or want to turn off Serial2? Remember to Serial2.begin() when we turn it back on
+    // (only if it was off)
     Serial2.end();
+
     // gps.date.clear(); // kazu had done this method
     // are these declared private?
     // FIX! how can we clear these? Do we change the library to make them public?
