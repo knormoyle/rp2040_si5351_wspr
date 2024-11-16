@@ -566,6 +566,9 @@ void read_FLASH(void) {
     // FIX! define this as extern?
     XMIT_FREQUENCY = init_rf_freq();
 
+    // fix anything bad! both in _* variables and FLASH (defaults)
+    check_data_validity_and_set_defaults(); 
+
     // hack _devmode _verbosity DEVMODE
     forceHACK();
 

@@ -200,7 +200,7 @@ void snapForTelemetry(void) {
         Serial.printf("t_tx_count_0 %3s " EOL, t_tx_count_0);
         Serial.printf("t_callsign %6s" EOL, t_callsign);
         Serial.printf("t_grid6 %6s" EOL, t_grid6);
-        Serial.printf("t_power %2s\n" EOL, t_power);
+        Serial.printf("t_power %2s" EOL, t_power);
         Serial.printf("t_sat_count %2s " EOL, t_sat_count);
         Serial.printf("t_lat %12s " EOL, t_lat);
         Serial.printf("t_lon %12s " EOL, t_lon);
