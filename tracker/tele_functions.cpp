@@ -85,14 +85,42 @@ void snapForTelemetry(void) {
     if (altitude > 999999) altitude = 999999;
     snprintf(t_altitude, sizeof(t_altitude), "%6d", altitude);
 
-    const float conversionFactor = 3.3f / (1 << 12); //read temperature
-    int adc_val = 0;
+    //*********************************
+    const float conversionFactor_a = 3.3f / (1 << 12); //read temperature
+    int adc_val_a = 0;
     // FIX! is this the right gpio for temp
-    adc_val += analogRead(4);
-    adc_val += analogRead(4);
-    adc_val += analogRead(4);
-    float adc = (adc_val * conversionFactor) / 3;
-    float tempC = 27.0f - (adc - 0.706f) / 0.001721f;
+    // FIX! how do I have to setup this pin?
+    adc_val_a += analogRead(4);
+    adc_val_a += analogRead(4);
+    adc_val_a += analogRead(4);
+
+    float adc_a = ((float) adc_val_a * conversionFactor_a) / 3;
+    float tempC_a = 27.0f - (adc_a - 0.706f) / 0.001721f;
+
+    //*********************************
+    float vref = 3.3f;
+    float tempC_b = 0.0;
+    tempC_b += analogReadTemp(vref);
+    tempC_b += analogReadTemp(vref);
+    tempC_b += analogReadTemp(vref);
+    tempC_b = tempC_b / 3.0;
+    // https://github.com/NuclearPhoenixx/Arduino-Pico-Analog-Correction
+
+    // library PicoAnalogCorrection
+    // linear calibration and arithmetic mean of an analog pin
+
+    //*********************************
+    float tempC_c = 0.0;
+    for (int i = 0 ; i < 10 ; i++) {
+        tempC_c += readTemp();
+    }
+    tempC_c = tempC_c / 10;
+
+    //*********************************
+    if (DEVMODE) Serial.printf("tempC_a %.f tempC_b %.f tempC_c %.f" EOL,
+        tempC_a, tempC_b, tempC_c);
+    float tempC = tempC_c;
+    //*********************************
 
     // turn floats into strings
     // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string);

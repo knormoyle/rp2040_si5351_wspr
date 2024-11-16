@@ -8,6 +8,7 @@
 // #include <stdint.h>
 
 float readVoltage(void);
-void adc_init(void);
+float readTemp(void);
+void adc_INIT(void);
 
 #endif

@@ -6,24 +6,63 @@
 #include <Arduino.h>
 #include <stdlib.h>
 #include "defines.h"
+#include "adc_functions.h"
+
+#include "hardware/adc.h"
+#include "hardware/gpio.h"
+#include "pico/stdlib.h"
+
+// per https://github.com/DeimosHall/RP2040_CPU_Temperature/blob/main/src/CPU.cpp
 
 extern const int BattPin;
 extern bool DEVMODE;
 
 //****************************************************
-void adc_init() {
+void adc_INIT() {
     if (DEVMODE) Serial.println(F("adc_init START"));
     // FIX! why was this commented out?
     // FIX! move this into an adc_init() in adc_functions.cpp? and move readBatt in there?
     pinMode(BattPin, INPUT);
     // using the analog reference low solves the analog measurement errors.
     analogReadResolution(12);
-    if (DEVMODE) Serial.println(F("adc_init END"));
 
+    adc_init();
+    adc_set_temp_sensor_enabled(true);
+
+    if (DEVMODE) Serial.println(F("adc_init END"));
 }
+
+float readTemp(void) {
+    if (DEVMODE) Serial.println(F("readTemp START"));
+    // 12-bit conversion, assume max value == ADC_VREF == 3.3 V
+    const float CONVERSION_FACTOR = 3.3f / (1 << 12);
+
+    float adc_voltage;
+    // Select ADC input 4 for internal temperature sensor
+    adc_select_input(4);
+    delay(100); // milliseconds
+
+    adc_voltage =  adc_read();
+    adc_voltage += adc_read();
+    adc_voltage += adc_read();
+
+    adc_voltage = ((float) adc_voltage / 3) * CONVERSION_FACTOR;
+    // formula found on page 71 (section 4.1.1. hardware_adc) of
+    // the Raspberry Pi Pico C/C++ SDK documentation
+    float tempC_a = 27 - (adc_voltage - 0.706) / 0.001721;
+    float tempC_b = analogReadTemp();
+
+    if (DEVMODE) Serial.printf("readTemp END tempC_a %.f tempC_b %.f" EOL, tempC_a, tempC_b);
+    return tempC_b;
+}
+
+
 //****************************************************
 float readVoltage(void) {
     if (DEVMODE) Serial.println(F("readVoltage START"));
+    adc_select_input(BattPin);
+    delay(100); // milliseconds
+
     int adc_val = 0;
     adc_val += analogRead(BattPin);
     adc_val += analogRead(BattPin);
@@ -45,20 +84,19 @@ float readVoltage(void) {
     // - ( ~150uA * 200) which is roughly a 30mv drop. (0.8mv * 30 = 24 steps)
 
     // this must be a calibrated linear equation? only need to calibrate between 2.8v and 5v?
-    float solar_voltage = ((float)adc_val / 3.0f - 27.0f) / 412.0f;
+    float voltage = ((float)adc_val / 3.0f - 27.0f) / 412.0f;
 
     // there is a 200 ohm resistor between 3V3 and ADC_AVDD
     // we did 3 reads above ..averaging?
     // so don't need the 3x because of onboard voltage divider
     // pico-WSPRer does this (no use of ADC_AVDD) ?
+
     // const float conversionFactor = 3.3f / (1 << 12);
-    // float solar_voltage = 3 * (float)adc_read() * conversionFactor;
-
-    // if (solar_voltage < 0.0f) solar_voltage = 0.0f;
-    // if (solar_voltage > 9.9f) solar_voltage = 9.9f;
-    if (DEVMODE) Serial.printf("solar_voltage %.f adc_val %d" EOL, solar_voltage, adc_val);
-
-    if (DEVMODE) Serial.println(F("readVoltage END"));
-    return solar_voltage;
+    // float voltage = 3 * (float)adc_read() * conversionFactor;
+    // if (voltage < 0.0f) voltage = 0.0f;
+    // if (voltage > 9.9f) voltage = 9.9f;
+    if (DEVMODE) Serial.printf("voltage %.f adc_val %d" EOL, voltage, adc_val);
+    if (DEVMODE) Serial.printf("readVoltage END voltage %.f" EOL, voltage);
+    return voltage;
 }
 

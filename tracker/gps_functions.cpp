@@ -95,7 +95,7 @@ extern TinyGPSPlus gps;
 extern bool DEVMODE;
 
 extern const int GpsPwr;
-extern const int GPS_NRESET_PIN;
+extern const int GPS_NRESET_PIN; // connected!
 extern const int GPS_ON_PIN;
 
 // input..not used..calibration?
@@ -199,9 +199,12 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
 int checkGpsBaudRate(int desiredBaud) {
     int usedBaud = desiredBaud;
     switch (desiredBaud) {
+        case 4800: break;
         case 9600: break;
         case 19200: break;
         case 39400: break;
+        case 57600: break; 
+        case 115200: break;
         default: usedBaud = 9600;
     }
     return usedBaud;
@@ -253,7 +256,8 @@ void setGpsBalloonMode(void) {
 }
 
 void setGpsBaud(int desiredBaud) {
-    // FIX! works 9600. doesn't work any other baud rate?
+    // Assumes we can talk to gps already at some existing agreed
+    // on Serial2/gps chip setup (setup by int/warm reset/full cold reset)
     if (DEVMODE) Serial.printf("setGpsBaud START %d" EOL, desiredBaud);
     updateStatusLED();
     Watchdog.reset();
@@ -267,37 +271,64 @@ void setGpsBaud(int desiredBaud) {
     // should just get legal ones here
     int usedBaud = checkGpsBaudRate(desiredBaud);
     char nmeaBaudSentence[21] = { 0 };
+    // BAUD
     switch (usedBaud) {
         // this is default. must be 9600?
         // should it be the p
         // weird: what is this case gonna do?
         // case 0:      strncpy(nmeaBaudSentence, "$PMTK251,0*28" CR LF, 21); break;
-        /*
-        case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
-        case 19200:  strncpy(nmeaBaudSentence, "$PMTK251,19200*22" CR LF, 21); break;
-        case 39400:  strncpy(nmeaBaudSentence, "$PMTK251,38400*27" CR LF, 21); break;
-        case 57600:  strncpy(nmeaBaudSentence, "$PMTK251,57600*2C" CR LF, 21); break;
-        case 115200: strncpy(nmeaBaudSentence, "$PMTK251,115200*1F" CR LF, 21); break;
-        */
+        // case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
+        // case 19200:  strncpy(nmeaBaudSentence, "$PMTK251,19200*22" CR LF, 21); break;
+        // case 38400:  strncpy(nmeaBaudSentence, "$PMTK251,38400*27" CR LF, 21); break;
+        // case 57600:  strncpy(nmeaBaudSentence, "$PMTK251,57600*2C" CR LF, 21); break;
+        // case 115200: strncpy(nmeaBaudSentence, "$PMTK251,115200*1F" CR LF, 21); break;
+
+        // PMTK_SET_NMEA_BAUDRATE per SIM28 manual: 
+        // Set NMEA port baudrate. 
+        // Using PMTK251 command to setup baud rate setting, the setting will be back
+        // to default value in the two conditions.
+        // 1. Full cold start command is issued !! reverts to 9600?
+        // 2. Enter standby mode (is this when vcc off, vbat on?
+        // PMTK_CMD_STANDY_MODE enters standby mode (one of two SLEEP stages)
 
         case 4800:   strncpy(nmeaBaudSentence, "$PCAS01,0*1C" CR LF, 21); break;
-        // this worked
-        case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
-        // this worked
+
+        // didn't work . now it worked?
+        // case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
+        // worked.. hmm broken? had to restart arduino to get it to work
+        case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
+
+        // worked
         case 19200:  strncpy(nmeaBaudSentence, "$PCAS01,2*1E" CR LF, 21); break;
-        // this didn't work?
+        // didn't work
+        // case 19200:  strncpy(nmeaBaudSentence, "$PMTK251,19200*22" CR LF, 21); break;
+
+        // worked
         case 38400:  strncpy(nmeaBaudSentence, "$PCAS01,3*1F" CR LF, 21); break;
+        // didn't work
+        // case 38400:  strncpy(nmeaBaudSentence, "$PMTK251,38400*27" CR LF, 21); break;
+
+        // didn't work
         case 57600:  strncpy(nmeaBaudSentence, "$PCAS01,4*18" CR LF, 21); break;
+        // ?
+        // case 57600:  strncpy(nmeaBaudSentence, "$PMTK251,57600*2C" CR LF, 21); break;
+        // worked (prints). but lots of buffer overrun ERRORs overflowing Rx buffer
         case 115200: strncpy(nmeaBaudSentence, "$PCAS01,5*19" CR LF, 21); break;
+        // ?
+        // case 115200: strncpy(nmeaBaudSentence, "$PMTK251,115200*1F" CR LF, 21); break;
 
         default:
             usedBaud = 9600;
             // strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21);
             strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21);
     }
+
+    // https://forum.arduino.cc/t/solved-proper-way-to-change-baud-rate-after-initial-setup/419860/5
+    // get rid of anything still in the cpu output buffer
+    Serial2.flush();
+    delay(1000);
     Serial2.print(nmeaBaudSentence);
     if (DEVMODE) Serial.printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
-
     // have to wait for the sentence to get out and complete at the GPS
     delay(3000);
 
@@ -343,9 +374,12 @@ void GpsINIT(void) {
     gpio_pull_up(GPS_ON_PIN);
     gpio_put(GPS_ON_PIN, HIGH);
 
-    // FIX! is this necessary?
+    // Updated: Do a full reset since vbat may have kept old settings
+    // don't know if that includes baud rate..maybe?
     digitalWrite(GPS_NRESET_PIN, HIGH);
+    Serial.printf("set GPS_NRESET_PIN%d HIGH" EOL, GpsPwr);
     digitalWrite(GPS_ON_PIN, HIGH);
+    Serial.printf("set GPS_ON_PIN%d HIGH" EOL, GpsPwr);
     //****************
 
     if (DEVMODE) {
@@ -358,40 +392,179 @@ void GpsINIT(void) {
 
     Serial2.setRX(GPS_UART1_RX_PIN);
     Serial2.setTX(GPS_UART1_TX_PIN);
-    Serial2.setPollingMode(true);
 
     //****************
-    Serial2.end();
-    // try making bigger (see tracker.ino)
+    Serial2.setPollingMode(true);
+    // try making bigger (see tracker.ino)..seems like 32 is the reality?
     Serial2.setFIFOSize(SERIAL2_FIFO_SIZE);
+    Serial2.flush();
+    Serial2.end();
     // first talk at 9600
     Serial2.begin(9600);
     sleepForMilliSecs(500, false);
+    //****************
+
+    // full cold reset, plus set baud to target baud rate, and setGpsBalloonMode done
+    GpsFullColdReset();
+    // gps is powered up now
+
+    //****************
     // drain the rx buffer. GPS is off, but shouldn't keep
     while (Serial2.available()) Serial2.read();
-    gpio_put(GpsPwr, LOW); // leave INIT with gps power on
     // sleep 3 secs
     sleepForMilliSecs(3000, false);
 
     //****************
     checkInitialGpsOutput();
-    setGpsBalloonMode();
 
     // FIFO is big enough to hold output while we send more input here
     int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
     // then up the speed to desired (both gps chip and then Serial2
     setGpsBaud(desiredBaud);
-    Serial.println(F("Should get some GPS output now at the new baud rate"));
+    Serial.println(F("Should get some GPS output now at the target baud rate"));
     checkInitialGpsOutput();
 
     if (DEVMODE) Serial.println(F("GpsINIT END"));
 }
 
 //************************************************
+void GpsFullColdReset(void) {
+    // a full cold reset reverts to 9600 baud
+    // as does standby modes? (don't use)
+    if (DEVMODE) Serial.println(F("GpsFullColdReset START"));
+    GpsIsOn_state = false;
+    GpsStartTime = 0;
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+    updateStatusLED();
+
+    // turn it off first. may be off or on currently
+    // turn off the serial
+    Serial.flush();
+    Serial.end();
+
+    // assert reset during power off
+    digitalWrite(GPS_NRESET_PIN, LOW);
+    digitalWrite(GPS_ON_PIN, HIGH);
+    digitalWrite(GpsPwr, HIGH);
+    sleepForMilliSecs(1000, false);
+
+    // Cold Start. doesn't clear any system/user configs
+    // Serial2.print("$PMTK103*30\r\n");
+    // Full Cold Start. any system/user configs (back to factory status)
+    // FIX! should we wait for ack or no?
+    // have to toggle power off/on to get this effect? no?
+
+    // always do this just in case the GpsIsOn() got wrong?
+    // but we're relying on the Serial2.begin/end to be correct?
+    // might as well commit to being right!
+    //******************
+    // now power on with reset
+    digitalWrite(GPS_NRESET_PIN, LOW);
+    digitalWrite(GPS_ON_PIN, HIGH);
+    digitalWrite(GpsPwr, LOW);
+    sleepForMilliSecs(1000, false);
+
+    // deassert reset after power on
+    digitalWrite(GPS_NRESET_PIN, HIGH);
+    // wait for 2 secs before sending commands
+    sleepForMilliSecs(2000, false);
+
+    GpsIsOn_state = true;
+    GpsStartTime = get_absolute_time();  // usecs
+
+    // gps comes up at 9600. so match that
+    Serial.begin(9600);
+    sleepForMilliSecs(1000, false);
+
+    // Try the full cold reset command now, after we can talk to it at 9600
+    if (false) {
+        Serial.print("$PMTK104*37" CR LF);
+        sleepForMilliSecs(1000, false);
+        Serial.flush();
+        Serial.end();
+        sleepForMilliSecs(1000, false);
+        // FIX! do we have to toggle power off/on to get the cold reset?
+        // vbat is kept on when we toggle vcc
+        if (false) {
+            digitalWrite(GpsPwr, HIGH);
+            sleepForMilliSecs(1000, false);
+            digitalWrite(GpsPwr, LOW);
+            sleepForMilliSecs(1000, false);
+        }
+
+    }
+    //******************
+    // FIX! we don't need to toggle power to get the effect?
+    setGpsBalloonMode();
+    GpsStartTime = get_absolute_time();  // usecs
+
+    //******************
+    // resets to 9600. set to new baud rate
+    // FIFO is big enough to hold output while we send more input here
+    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+    // then up the speed to desired (both gps chip and then Serial2
+    setGpsBaud(desiredBaud);
+    checkInitialGpsOutput();
+    //******************
+    if (DEVMODE) Serial.println(F("GpsFullColdReset END"));
+}
+
+//************************************************
+void GpsWarmReset(void) {
+    if (DEVMODE) Serial.println(F("GpsWarmReset START"));
+    GpsIsOn_state = false;
+    GpsStartTime = 0;
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+    updateStatusLED();
+    // warm reset doesn't change baud rate from prior config?
+
+    // turn it off first. may be off or on currently
+    // turn off the serial
+    Serial.flush();
+    Serial.end();
+
+    // don't assert reset during power off
+    digitalWrite(GPS_NRESET_PIN, HIGH);
+    digitalWrite(GPS_ON_PIN, HIGH);
+    digitalWrite(GpsPwr, HIGH);
+    sleepForMilliSecs(1000, false);
+
+    // now power on with reset still off
+    // digitalWrite(GPS_NRESET_PIN, HIGH);
+    // digitalWrite(GPS_ON_PIN, HIGH);
+    digitalWrite(GpsPwr, LOW);
+    sleepForMilliSecs(1000, false);
+
+    GpsIsOn_state = true;
+    GpsStartTime = get_absolute_time();  // usecs
+    // don't know what baud rate it was at. gps comes up at 9600
+    // maybe just assume it's the same as whatever setup was agreed on before
+    // Serial.end();
+    // Serial.begin(9600);
+
+    // wait 2 seconds for normal power before sending more commands
+    sleepForMilliSecs(2000, false);
+    setGpsBalloonMode();
+
+    // hmm.. just leave it like it was? vbat will keep the old baud rate?
+    // resets to 9600. set to new baud rate
+    // FIFO is big enough to hold output while we send more input here
+    // the old reset if you want to change baud rate  
+    // should be the same from init, so this should work? (unecessary ?)
+    if (true) {
+        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+        // then up the speed to desired (both gps chip and then Serial2
+        setGpsBaud(desiredBaud);
+    }
+    GpsIsOn_state = true;
+    GpsStartTime = get_absolute_time();  // usecs
+    checkInitialGpsOutput();
+    if (DEVMODE) Serial.println(F("GpsWarmReset END"));
+}
+
+//************************************************
 void GpsON(bool GpsColdReset) {
-    // FIX! do the cold reset regardless of current state? I think no?
-    // so cold reset is only done if the GPS is currently off?..for the off/on transition?
-    if (DEVMODE) Serial.println(F("GpsON START"));
+    if (DEVMODE) Serial.printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
 
     if (GpsColdReset) {
         if (DEVMODE) Serial.printf("GpsON GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
@@ -400,100 +573,16 @@ void GpsON(bool GpsColdReset) {
         if (DEVMODE) Serial.printf("GpsOn GpsIsOn_state %u GpsColdReset false" EOL, GpsIsOn_state);
     }
     // could be off or on already
-    // Assume GpsINIT was already done
-
-    // Just in case: wait for serial port to connect.
-    // do we need these two each time?
-    // yes if we did a Serial2.end() when off
+    // Assume GpsINIT was already done (pins etc)
 
     Watchdog.reset();
-    updateStatusLED();
-    if (!GpsColdReset && !GpsIsOn()) {
-        setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-        GpsStartTime = get_absolute_time();  // usecs
-        // always do this just in case the GpsIsOn() got wrong?
-        // but we're relying on the Serial2.begin/end to be correct?
-        // might as well commit to being right!
-        digitalWrite(GpsPwr, LOW);
-        // don't know what baud rate it was at. gps comes up at 9600
-        Serial.end();
-        Serial.begin(9600);
-        // wait 2 seconds for normal power before sending more commands
-        sleepForMilliSecs(2000, false);
-        setGpsBalloonMode();
-        // resets to 9600. set to new baud rate
-        // FIFO is big enough to hold output while we send more input here
-        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
-        // then up the speed to desired (both gps chip and then Serial2
-        setGpsBaud(desiredBaud);
-        checkInitialGpsOutput();
-    }
+    // don't care what the initial state is, for cold reset
+    if (GpsColdReset) GpsFullColdReset();
+    // does nothing if already on
+    else if (!GpsIsOn()) GpsWarmReset();
 
-
-    if (GpsColdReset) {
-        if (DEVMODE) Serial.println(F("GpsON full cold reset START"));
-        // turn it off first. may be off or on currently
-        // turn off the serial
-        Serial.end();
-        Serial.flush();
-
-        digitalWrite(GpsPwr, HIGH);
-        setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-        sleepForMilliSecs(1000, false);
-        // Cold Start. doesn't clear any system/user configs
-        // Serial2.print("$PMTK103*30\r\n");
-        // Full Cold Start. any system/user configs (back to factory status)
-        // FIX! should we wait for ack or no?
-        // have to toggle power off/on to get this effect? no?
-
-        // always do this just in case the GpsIsOn() got wrong?
-        // but we're relying on the Serial2.begin/end to be correct?
-        // might as well commit to being right!
-        //******************
-        digitalWrite(GpsPwr, LOW);
-        sleepForMilliSecs(1000, false);
-
-        // don't know what baud rate it was at. gps comes up at 9600
-        Serial.begin(9600);
-        sleepForMilliSecs(1000, false);
-
-        // send it twice??
-        Serial.print("$PMTK104*37" CR LF);
-        Serial.print("$PMTK104*37" CR LF);
-        sleepForMilliSecs(1000, false);
-
-        // FIX! do we have to toggle power off/on to get the cold reset?
-        digitalWrite(GpsPwr, HIGH);
-        sleepForMilliSecs(1000, false);
-        digitalWrite(GpsPwr, LOW);
-        sleepForMilliSecs(1000, false);
-
-        // FIX! we don't need to toggle power to get the effect?
-        setGpsBalloonMode();
-        GpsStartTime = get_absolute_time();  // usecs
-
-        //******************
-        // resets to 9600. set to new baud rate
-        // FIFO is big enough to hold output while we send more input here
-        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
-        // then up the speed to desired (both gps chip and then Serial2
-        setGpsBaud(desiredBaud);
-        checkInitialGpsOutput();
-        //******************
-        // resets to 9600. set to new baud rate
-        if (DEVMODE) Serial.println(F("GpsON full cold reset END"));
-    }
-
-    GpsIsOn_state = true;
-
-    if (GpsColdReset) {
-        if (DEVMODE) Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
-    }
-    else {
-        if (DEVMODE) Serial.printf("GpsOn END GpsIsOn_state %u GpsColdReset false" EOL, GpsIsOn_state);
-    }
+    if (DEVMODE) Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
 }
-
 
 //************************************************
 /*
@@ -509,7 +598,7 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 */
 
 //************************************************
-void GpsOFF() {
+void GpsOFF(void) {
     if (DEVMODE) Serial.printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
 
     digitalWrite(GpsPwr, HIGH);

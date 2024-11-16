@@ -13,12 +13,13 @@
 
 //************************************************
 bool GpsIsOn(void);
-void GpsINIT();
+void GpsINIT(void);
+void GpsFullColdReset(void);
 void GpsON(bool GpsColdReset);
-void GpsOFF();
+void GpsOFF(void);
 void updateGpsDataAndTime(int ms);
 void sendUBX(uint8_t *MSG, uint8_t len);
 void setGPS_DynamicModel6();
-void gpsDebug();
+void gpsDebug(void);
 
 #endif

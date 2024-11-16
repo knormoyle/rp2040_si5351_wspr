@@ -235,10 +235,8 @@ extern const int GpsPwr = 16; // output ..this cuts VCC, leaves VBAT
 // define is not used..GpsPwr is used. 
 // const int GPS_VCC_ON_N_PIN=16;     
 
-
-// FIX! where are these used
-extern const int GPS_NRESET_PIN = 5;  // output ..active low..should be 1?
-extern const int GPS_ON_PIN = 6;      // output ..this puts in sleep mode? should be 1?
+extern const int GPS_NRESET_PIN = 5;  
+extern const int GPS_ON_PIN = 6;     
 
 // FIX! where is this used (calibration maybe)
 extern const int GPS_1PPS_PIN = 17;   // input
@@ -252,18 +250,21 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // earlephilhower says the hw serial units use the hardware rx fifo
 // so only 32?
 
-// choices: 9600 (default ATGM33651) 19200 38400
+// legal choices? 9600 (default ATGM33651) 19200 38400
 // is in receive fifo 12-bit wide default 32 deep ??
 // https://arduino-pico.readthedocs.io/en/latest/serial.html
 
-// can't have fast baud rate? because buffer will overrun?
+// hmm sometimes have to restart Arduino IDE when it gets stuck in
+// bad state after changing baud rates
+// is my full cold reset not working to gps and vbat is remembering the baud?
+// so I can't talk to him without a full power off (vcc and vbat?)
+// AG6NS board can't turn off VBAT under progam control
+extern const int SERIAL2_BAUD_RATE = 9600;
+// extern const int SERIAL2_BAUD_RATE = 19200;
 // extern const int SERIAL2_BAUD_RATE = 38400;
-// didn't work?
-// extern const int SERIAL2_BAUD_RATE = 9600;
-// worked
-extern const int SERIAL2_BAUD_RATE = 19200;
-// didn't work?
-// extern const int SERIAL2_BAUD_RATE = 38400;
+// extern const int SERIAL2_BAUD_RATE = 57600;
+// don't use. rx buffer overruns
+// extern const int SERIAL2_BAUD_RATE = 115200;
 
 // stuff moved to functions from this .ino (not libraries)
 #include "gps_functions.h"
@@ -466,7 +467,7 @@ void setup() {
     // if (!stdio_init_all()) Serial.println("ERROR: stdio_init_all() failed)");
 
     //**********************
-    adc_init();
+    adc_INIT();
 
     //**********************
     vfo_init();
