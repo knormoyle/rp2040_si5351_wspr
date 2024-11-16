@@ -246,9 +246,18 @@ extern const int GPS_UART1_TX_PIN = 8;
 extern const int GPS_UART1_RX_PIN = 9;
 
 // talks to gps
-extern const int SERIAL2_FIFO_SIZE = 4096;
+// extern const int SERIAL2_FIFO_SIZE = 4096;
+extern const int SERIAL2_FIFO_SIZE = 32;
+// earlephilhower says the hw serial units use the hardware rx fifo
+// so only 32?
+
 // choices: 9600 (default ATGM33651) 19200 38400
-extern const int SERIAL2_BAUD_RATE = 38400;
+// is in receive fifo 12-bit wide default 32 deep ??
+// https://arduino-pico.readthedocs.io/en/latest/serial.html
+
+// can't have fast baud rate? because buffer will overrun?
+// extern const int SERIAL2_BAUD_RATE = 38400;
+extern const int SERIAL2_BAUD_RATE = 9600;
 
 // stuff moved to functions from this .ino (not libraries)
 #include "gps_functions.h"

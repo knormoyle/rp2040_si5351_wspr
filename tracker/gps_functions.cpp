@@ -11,6 +11,19 @@
 // SIM28ML
 // can download all from https://simcom.ee/documents/?sort_by=size&sort_as=desc&dir=SIM28ML/
 
+// my local copy
+// xdg-open /home/kevin/Downloads/'SIM28@SIM68R@SIM68V_NMEA Messages Specification_V1.00.pdf'
+// according to
+// https://forum.arduino.cc/t/configuration-of-chinese-atgm336-gnss/1265640
+
+//*******************************************
+// ATGM336H uses AT6558 silicon ??
+// AT6558 BDS/GNSS Full Constellation SOC Chip Data Sheet Version 1.14
+// AT6558-5N-3X is GPS + BDS
+// QFN package 40 pin 5x5x0.8mm
+// https://www.icofchina.com/d/file/xiazai/2016-12-05/b1be6f481cdf9d773b963ab30a2d11d8.pdf
+
+
 //*******************************************
 // 'SIM28_Hardware Design_V1.07.pdf'
 // https://simcom.ee/documents/SIM28/SIM28_Hardware%20Design_V1.07.pdf
@@ -36,12 +49,25 @@
 // 'SIM28SIM68V_SMT_Application Note_V1.00.pdf'
 // 'https://simcom.ee/documents/SIM28/SIM28SIM68V_SMT_Application%20Note_V1.00.pdf'
 
-
 // Others:
+// old: MTK NMEA Packet User Manual Revision 0.3 2006/05/02
 // https://www.sparkfun.com/datasheets/GPS/Modules/PMTK_Protocol.pdf
 
+// 2016.05.30 revision 1.2 GlobalTop Tech Inc
+// has GPS and GLONASS BEIDOU GALILEO
+// https://cdn.sparkfun.com/assets/parts/1/2/2/8/0/PMTK_Packet_User_Manual.pdf
+
+// 2017-07-11 specification v1.03
+// SIM868_NME_Message_Specification_V1.03
+// https://simcom.ee/documents/SIM868E/SIM868_NMEA%20Message%20Specification_V1.03.pdf
 
 //*******************************************
+// Printing too much
+// Many programmers run into trouble because they try to print too much debug info. The Arduino Serial.print function will "block" until those output characters can be stored in a buffer. While the sketch is blocked at Serial.print, the GPS device is probably still sending data. The input buffer on an Arduino is only 64 bytes, about the size of one NMEA sentence. After 64 bytes have been received stored, all other data is dropped! Depending on the GPS baud rate and the Serial Monitor baud rate, it may be very easy to lose GPS characters.
+
+// It is crucial to call gps.available( gps_port ) or serial.read() frequently, and never to call a blocking function that takes more than (64*11/baud) seconds. If the GPS is running at 9600, you cannot block for more than 70ms. If your debug Serial is also running at 9600, you cannot write more than 64 bytes consecutively (i.e., in less than 70ms).
+
+
 
 #include <Arduino.h>
 #include "gps_functions.h"
@@ -97,7 +123,7 @@ bool GpsIsOn(void) {
 
 // ************************************************
 // Is the maximum length of any in or out packet = 255 bytes?
-#define NMEA_BUFFER_SIZE 4 * 255
+#define NMEA_BUFFER_SIZE 8 * 255
 static char nmeaBuffer[NMEA_BUFFER_SIZE] = { 0 };
 
 // Outputs the content of the nmea buffer to stdio (UART and/or USB)
@@ -130,7 +156,7 @@ void nmeaBufferAndPrint(const char charToAdd) {
 
     int n = strlen(nmeaBuffer);
     if (charToAdd == '$') {
-        // put a EOL in first!
+        // put a EOL in first (at the start of every NMEA sentence)
         // https://subethasoftware.com/2024/08/26/in-c-you-can-sizeof-a-string-constant/
         // sizeof EOL will have the null term, so keeping nmeaBuffer always good
         // doing the extra + 1 will put the 0 null term in, also
@@ -142,17 +168,27 @@ void nmeaBufferAndPrint(const char charToAdd) {
 }
 
 // ************************************************
-void sleepForSecs(int n) {
-    if (n < 0 || n > 10) {
-        Serial.printf("ERROR: sleep_for_n_secs() n %d too big. Using 2" EOL, n);
-        n = 2;
-    }
-    // sleep approx. n secs
-    for (int i = 0; i < n * 2; i++) {
-        sleep_ms(500); // 1/2 sec per iteration
-        updateStatusLED();
-    }
+void sleepForMilliSecs(int n, bool enableEarlyOut) {
+    // FIX! should we do this here or where?
     Watchdog.reset();
+    if (n < 0 || n > 5000) {
+        Serial.printf("ERROR: sleepForMilliSecs() n %d too big. Using 1000" EOL, n);
+        n = 1000;
+    }
+    int milliDiv = n / 10;
+    
+    // sleep approx. n secs
+    for (int i = 0; i < milliDiv ; i++) {
+        if (enableEarlyOut) {
+            if (Serial2.available()) break;
+        }
+        // https://docs.arduino.cc/language-reference/en/functions/time/delay/
+        // check for update every 10 milliseconds
+        if ((milliDiv % 10) == 0) updateStatusLED();
+
+        // faster recovery with delay?
+        delay(10); 
+    }
 }
 
 //************************************************
@@ -177,7 +213,6 @@ void checkInitialGpsOutput(void) {
         Watchdog.reset();
         if (!Serial2.available()) {
             Serial.println(F("no Serial2.available() ..sleep and reverify"));
-            sleepForSecs(2);
         }
         else {
             while (Serial2.available()) {
@@ -186,7 +221,7 @@ void checkInitialGpsOutput(void) {
                 nmeaBufferAndPrint(incomingChar);
             }
         }
-        sleep_ms(50);
+        sleepForMilliSecs(2000, true); // return early if Serial2.available()
     }
     nmeaBufferPrintAndClear();
     updateStatusLED();
@@ -201,7 +236,7 @@ void setGpsBalloonMode(void) {
     // normal mode
     // Serial2.print("$PSIMNAV,W,0*39\r\n");
     Serial2.print("$PMTK104*37" CR LF);
-    sleepForSecs(1);
+    sleepForMilliSecs(1000, false);
     if (DEVMODE) Serial.println(F("setGpsBalloonMode END"));
 }
 
@@ -238,7 +273,7 @@ void setGpsBaud(int desiredBaud) {
     // To re-enable serial communication, call Serial.begin().
     Serial2.begin(usedBaud);
     // then have to change Serial2.begin() to agree
-    sleepForSecs(1);
+    sleepForMilliSecs(1000, false);
     if (DEVMODE) Serial.printf("setGpsBaud END %d" EOL, usedBaud);
 }
 
@@ -286,7 +321,7 @@ void GpsINIT(void) {
     digitalWrite(GPS_NRESET_PIN, HIGH);
     digitalWrite(GPS_ON_PIN, HIGH);
     // sleep 3 secs
-    sleepForSecs(3);
+    sleepForMilliSecs(3000, false);
     //****************
 
     checkInitialGpsOutput();
@@ -327,7 +362,7 @@ void GpsON(bool GpsColdReset) {
         // but we're relying on the Serial2.begin/end to be correct?
         // might as well commit to being right!
         digitalWrite(GpsPwr, LOW);
-        sleepForSecs(2);
+        sleepForMilliSecs(2000, false);
         setGpsBalloonMode();
         // resets to 9600. set to new baud rate
         // FIFO is big enough to hold output while we send more input here
@@ -405,9 +440,9 @@ void GpsON(bool GpsColdReset) {
         // but we're relying on the Serial2.begin/end to be correct?
         // might as well commit to being right!
         digitalWrite(GpsPwr, LOW);
-        sleepForSecs(2);
+        sleepForMilliSecs(2000, false);
         Serial.print("$PMTK104*37" CR LF);
-        sleepForSecs(2);
+        sleepForMilliSecs(2000, false);
 
         // FIX! we don't need to toggle power to get the effect?
         setGpsBalloonMode();
@@ -497,6 +532,12 @@ void GpsOFF() {
 //************************************************
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
+    // FIX! we could leave here after we get N sentences?
+    // we could keep track of how many sentences we get?
+    // ideally we'd synchronize on the currently uknown start/end sentences?
+    // we could exit when we get two of the same sentence?
+    // two of what?
+
     if (DEVMODE) Serial.println(F("updateGpsDataAndTime START"));
     // ms has to be positive?
     // grab data for no more than ms milliseconds
@@ -511,51 +552,87 @@ void updateGpsDataAndTime(int ms) {
     uint64_t current_millis = start_millis;
     uint64_t last_serial2_millis = 0;
 
-    Serial.printf("updateGpsDataAndTime started looking at %" PRIu64 " millis" EOL, current_millis);
+    Serial.printf("updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL, current_millis);
     // unload each char as it arrives and prints it (with buffering, now)
     // so we can see NMEA sentences for a period of time.
     // assume 1 sec broadcast rate
     // https://arduino.stackexchange.com/questions/13452/tinygps-plus-library
 
+    // inc on '$'
+    int sentenceStartCnt = 0;
+    // inc on '*' (comes before the checksum)
+    int sentenceEndCnt = 0;
+
+    // clear the StampPrintf buffer, in case it had anything.
+    DoLogPrint();
     do {
         // FIX! what is this..unload gps sentences?
+        // are we looking at millis too much? how slow is it?
         current_millis = millis();
-        // FIX! too much printing? lose GPS?
-        if (false and DEVMODE) {
-            if (Serial2.available())
-                Serial.println(F("found some Serial2.available() (NMEA)"));
-            else
-                Serial.println(F("did not find any Serial2.available() (NMEA)"));
-        }
-
+        char incomingChar;
         while (Serial2.available() > 0) {
-            // FIX! in DEVMODE can we print all the sentences?
-            char incomingChar = Serial2.read();
+            // can't have the logBuffer fill up, because the unload is delayed
+            if (DEVMODE) {
+                int charsAvailable = (int) Serial2.available();
+                if (charsAvailable > 12)
+                    // might lose some if we can't keep up
+                    StampPrintf("WARN: NMEA too many chars buffered:%d)" EOL, (int) charsAvailable);
+            }
+
+            incomingChar = Serial2.read();
             gps.encode(incomingChar);
+            switch (incomingChar) {
+                case '$': sentenceStartCnt++; break;
+                case '*': sentenceEndCnt++; break;
+            }
+            // make the buffer big enough so that we never print while getting data?
             if (DEVMODE) nmeaBufferAndPrint(incomingChar);
+
             current_millis = millis();
-            // could the LED blinking have gotten delayed?
-            updateStatusLED();
             last_serial2_millis = current_millis;
         }
-        // did we wait more than 10 millis() since good data read?
         // did we wait more than 50 millis() since good data read?
         // did we wait more than 100 millis() since good data read?
         // early out (so we don't wait for the long ms time)
+        // do we get gaps like 100 millis between data bursts?
+
+        // did we wait more than 10 millis() since good data read?
+
+        // we wait until we get at least one char or go past the ms total wait
+        // break out when we don't get 2nd char right away
+        updateStatusLED();
         if ((last_serial2_millis != 0) && (current_millis > last_serial2_millis + 100)) {
-            Serial.printf("updateGpsDataAndTime stopped looking at %" PRIu64 " millis" EOL, current_millis);
+            // FIX! could the LED blinking have gotten delayed? ..we don't check in the available loop above.
+            // save the info in the StampPrintf buffer..don't print it yet
+            if (DEVMODE) StampPrintf(
+                "updateGpsDataAndTime early out: ms while loop break at %" PRIu64 " millis" EOL, 
+                current_millis);
             break;
         }
-        // sleep for 1 second? will we get buffer overflow?
-        sleepForSecs(1);
+
+        // sleep for 50 milliseconds? will we get buffer overflow? 
+        // 32 symbols at 9600 baud = 33 milliseconds?
+        // shouldn't sleep here..faster to just delay
+        // I guess here we're trying to sync with a burst? but how long to wait?
+        // if we just completed a burst, we should wait for 1 sec - total burst delay?
+        sleepForMilliSecs(50, true); // enable early out if symbols arrive
 
     } while ( (current_millis - start_millis) < (uint64_t) ms); // works if ms is 0
 
+
     // print/clear any accumulated NMEA sentence stuff
     if (DEVMODE) {
+        // print should only get dumped here?
         nmeaBufferPrintAndClear(); // print and clear
         Serial.print(F(EOL));
     }
+
+    if (DEVMODE) StampPrintf(
+        "start_millis %" PRIu64 " current_millis %" PRIu64 " sentenceStartCnt %d sentenceEndCnt %d" EOL,
+        start_millis, current_millis, sentenceStartCnt, sentenceEndCnt);
+
+    // dump the StampPrintf buffer
+    DoLogPrint();
 
     if (DEVMODE) {
         Serial.printf("gps.time.isValid():%u" EOL, gps.time.isValid());

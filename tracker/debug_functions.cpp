@@ -158,28 +158,35 @@ void StampPrintf(const char* pformat, ...) {
     vsnprintf(message, sizeof(message), pformat, argptr);
     va_end(argptr);
 
-    if ( (strlen(logBuffer) + strlen(timestamp) + strlen(message + 1)) > BUFFER_SIZE ) {
-    // make BUFFER_SIZE bigger or do more DoLogPrint() if we run into a problem realtime
-    // FIX! should we detect when we're close to the logBuffer being full?
-        Serial.printf(
-            "WARNING: BUFFER_SIZE %d strlen(logBuffer) %d, "
-            "has no room for timestamp %s message %s and EOL" EOL,
-            BUFFER_SIZE, strlen(logBuffer), timestamp, message);
-        Serial.println(F("..flushing first with DoLogPrint"));
-        DoLogPrint();
-    }
-    // FIX! could put the 3 things in the logBuffer more efficiently
-    // than doing successive strlen()' and strncat?
+    // make BUFFER_SIZE bigger and recompile or do more DoLogPrint() if we run into a problem realtime
+
+    // I put the 3 things in the logBuffer more efficiently than doing
+    // successive strlen()' and strncat?
     int i = strlen(logBuffer);
     int j = strlen(timestamp);
     int j2 = strlen(message);
-    if ( (i + j + j2 + 1) > BUFFER_SIZE) {
+    // will the message fit even and empty buffer?
+    bool ignore = false;
+    if ((j + j2 + 1) > BUFFER_SIZE) {
+        Serial.printf(
+            "ERROR: BUFFER_SIZE %d, is too small for j + j2 + 1 = %d, "
+            "timestamp %s message %s and EOL. ..ignoring" EOL,
+            BUFFER_SIZE, j + j2 + 1, timestamp, message);
+        ignore = true;
+    }
+
+    // will the message fit without dumping the existing buffer?
+    else if ( (i + j + j2 + 1) > BUFFER_SIZE) {
         Serial.printf(
             "ERROR: BUFFER_SIZE %d, i %d, adding j + j2 + 1 = %d, "
             "has no room for timestamp %s message %s and EOL" EOL,
             BUFFER_SIZE, i, j + j2 + 1, timestamp, message);
+            Serial.println(F("..flushing by discarding all of logBuffer first"));
+            logBuffer[0] = 0;
+            i = 0;
     }
-    else {
+
+    if (!ignore) {
         strncpy(logBuffer + i, timestamp, j);
         strncpy(logBuffer + i + j, message, j2);
         logBuffer[i + j + j2] = 0; // null term
