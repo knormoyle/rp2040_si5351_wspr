@@ -572,6 +572,19 @@ void updateGpsDataAndTime(int ms) {
     uint64_t duration_millis = 0;
 
 
+    // drain the buffer, so we start with empty, so we aren't behind below
+    // i.e as long as we keep up, we'll be okay
+    // the rx buffer only has 32 entries! So we should never have to drain more than 32
+    // it's key that we can drain here faster than uart can fill!
+    // this is to avoid the ERROR msgs about the rx buffer below
+    int drainCnt = 0;
+    while (Serial2.available() > 0) { 
+        drainCnt++;
+        Serial2.read();
+        if (drainCnt >= 32) { break; }
+    }
+
+
     if (DEVMODE) Serial.println(F("updateGpsDataAndTime START"));
     if (DEVMODE & (_verbosity[0] >= '8'))
         Serial.printf("updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL, current_millis);
@@ -621,7 +634,7 @@ void updateGpsDataAndTime(int ms) {
                     // might lose some if we can't keep up
                     // we were under 12 here for 9600 baud
                     // at 19200 baud, we hit 20 chars here with no checksum errors
-                    StampPrintf("WARN: NMEA too many chars backing up uart rx buffer:%d)" EOL,
+                    StampPrintf("ERROR: NMEA incoming chars are backing up: 32 deep uart rx buffer has %d)" EOL,
                         (int) charsAvailable);
             }
 
@@ -629,7 +642,6 @@ void updateGpsDataAndTime(int ms) {
             // always send everything to TinyGPS++ ??
             // does it expect the CR LF ?
             gps.encode(incomingChar);
-
             // we count all chars, even CR LF etc
             incomingCharCnt++;
             // do we get any null chars?

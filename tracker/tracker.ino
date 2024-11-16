@@ -987,10 +987,12 @@ void sleepSeconds(int secs) {
         if (GpsIsOn()) {
             // does this have a updateStatusLED() ??
             // long enough to be sure to catch all NMEA during the broadcast interval of 1 sec
-            updateGpsDataAndTime(1050);  // milliseconds
+            // 1050: was this causing rx buffer overrun (21 to 32)
+            updateGpsDataAndTime(1500);  // milliseconds
+
             Serial.flush();
         } else {
-            sleep_ms(1000);
+            sleep_ms(1500);
         }
         current_millis = millis();
     } while ((current_millis - start_millis) < duration_millis);
