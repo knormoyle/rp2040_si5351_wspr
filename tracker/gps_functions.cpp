@@ -415,20 +415,25 @@ void GpsINIT(void) {
     sleepForMilliSecs(3000, false);
 
     //****************
-    checkInitialGpsOutput();
-
-    // FIFO is big enough to hold output while we send more input here
-    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
-    // then up the speed to desired (both gps chip and then Serial2
-    setGpsBaud(desiredBaud);
-    Serial.println(F("Should get some GPS output now at the target baud rate"));
-    checkInitialGpsOutput();
+    // already did in the GpsFullColdReset()
+    if (false) {
+        checkInitialGpsOutput();
+        // FIFO is big enough to hold output while we send more input here
+        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+        // then up the speed to desired (both gps chip and then Serial2
+        setGpsBaud(desiredBaud);
+        Serial.println(F("Should get some GPS output now at the target baud rate"));
+        checkInitialGpsOutput();
+    }
 
     if (DEVMODE) Serial.println(F("GpsINIT END"));
 }
 
 //************************************************
 void GpsFullColdReset(void) {
+    // BUG: can't seem to reset the baud rate to 9600 when
+    // the GPS chip has a non-working baud rate?
+
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
     if (DEVMODE) Serial.println(F("GpsFullColdReset START"));
@@ -460,7 +465,6 @@ void GpsFullColdReset(void) {
     //******************
     // now power on with reset
     digitalWrite(GPS_NRESET_PIN, LOW);
-    digitalWrite(GPS_ON_PIN, HIGH);
     digitalWrite(GpsPwr, LOW);
     sleepForMilliSecs(1000, false);
 
@@ -476,8 +480,11 @@ void GpsFullColdReset(void) {
     Serial.begin(9600);
     sleepForMilliSecs(1000, false);
 
+    Serial.println(F("any output at 9600 after reset?"));
+    checkInitialGpsOutput();
+
     // Try the full cold reset command now, after we can talk to it at 9600
-    if (false) {
+    if (true) {
         Serial.print("$PMTK104*37" CR LF);
         sleepForMilliSecs(1000, false);
         Serial.flush();
@@ -485,7 +492,7 @@ void GpsFullColdReset(void) {
         sleepForMilliSecs(1000, false);
         // FIX! do we have to toggle power off/on to get the cold reset?
         // vbat is kept on when we toggle vcc
-        if (false) {
+        if (true) {
             digitalWrite(GpsPwr, HIGH);
             sleepForMilliSecs(1000, false);
             digitalWrite(GpsPwr, LOW);
@@ -533,31 +540,30 @@ void GpsWarmReset(void) {
     // digitalWrite(GPS_NRESET_PIN, HIGH);
     // digitalWrite(GPS_ON_PIN, HIGH);
     digitalWrite(GpsPwr, LOW);
-    sleepForMilliSecs(1000, false);
+    sleepForMilliSecs(2000, false);
 
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
+
     // don't know what baud rate it was at. gps comes up at 9600
     // maybe just assume it's the same as whatever setup was agreed on before
     // Serial.end();
     // Serial.begin(9600);
-
-    // wait 2 seconds for normal power before sending more commands
-    sleepForMilliSecs(2000, false);
-    setGpsBalloonMode();
 
     // hmm.. just leave it like it was? vbat will keep the old baud rate?
     // resets to 9600. set to new baud rate
     // FIFO is big enough to hold output while we send more input here
     // the old reset if you want to change baud rate  
     // should be the same from init, so this should work? (unecessary ?)
+    // don't change or ?? should be don't care?
     if (true) {
         int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
         // then up the speed to desired (both gps chip and then Serial2
         setGpsBaud(desiredBaud);
     }
-    GpsIsOn_state = true;
-    GpsStartTime = get_absolute_time();  // usecs
+    // wait 2 seconds for normal power before sending more commands
+    setGpsBalloonMode();
+
     checkInitialGpsOutput();
     if (DEVMODE) Serial.println(F("GpsWarmReset END"));
 }

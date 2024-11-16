@@ -259,8 +259,18 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // is my full cold reset not working to gps and vbat is remembering the baud?
 // so I can't talk to him without a full power off (vcc and vbat?)
 // AG6NS board can't turn off VBAT under progam control
+
+// Update: we use the gps resetn pin now, for full cold reset to revert
+// baud to 9600 ALWAYS at init (then set desired baud rate
+// created GpsWarmReset() and GpsColdReset()
+// GpsWarmReset is the normal "just power" on/off management that keeps vbat on
+
+// works
 extern const int SERIAL2_BAUD_RATE = 9600;
+// works
 // extern const int SERIAL2_BAUD_RATE = 19200;
+// ?
+// doesn't work now?
 // extern const int SERIAL2_BAUD_RATE = 38400;
 // extern const int SERIAL2_BAUD_RATE = 57600;
 // don't use. rx buffer overruns
@@ -651,8 +661,11 @@ void loop() {
     // just full cold gps reset
     // this means we get a full cold result on the aruduino IDE with usb power
     // otherwise usb power means vbat is always on. so a hot reset!
-    if (loopCnt == 1) GpsON(true); 
-    else GpsON(false); 
+
+    // we do a full cold reset in setup() now (part of the GpsInit()?)
+    // if (loopCnt == 1) GpsON(true); 
+    // else GpsON(false); 
+    GpsON(false);
 
     //******************
     // no need to have GpsFirstFix
