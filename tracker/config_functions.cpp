@@ -95,6 +95,30 @@ void convertToUpperCase(char *str) {
     }
 }
 
+
+//***************************************
+// HACK for debug (force config)
+void forceHACK(void) {
+    static bool HACK = true;
+    if (HACK) {
+        // HACK FIX! always true now for debug
+        Serial.println(F("Forcing DEVMODE true, _devmode 1 (always for now)"));
+        strncpy(_devmode, "1", sizeof(_devmode));
+        DEVMODE = true;  // set when _devmode is set
+        // HACK FIX! always 9 now for debug
+        Serial.println(F("Forcing _verbosity to 9 (always for now)"));
+        // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
+        // recommends to always
+        // snprintf(buffer, sizeof(buffer), "%s", string);
+        strncpy(_verbosity, "9", sizeof(_verbosity));
+    }
+    else {
+        if (_devmode[0] == '1') DEVMODE = true;
+        else DEVMODE = true;
+    }
+}
+
+
 //***************************************
 // Echo user input to stdout and set input_variable
 // prompt: Prompt to display to user <input>
@@ -366,6 +390,10 @@ void user_interface(void) {
                 if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
                     Serial.printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s",
                         RED, _TELEN_config, NORMAL);
+                    // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
+                    // recommends to always
+                    // snprintf(buffer, sizeof(buffer), "%s", string);
+                    // I guess this is okay for when we source from fixed size string literals
                     snprintf(_clock_speed, sizeof(_clock_speed), "133");
                     write_FLASH();
                     clkhz = atoi(_clock_speed) * 1000000UL;
@@ -523,11 +551,9 @@ void read_FLASH(void) {
     // FIX! define this as extern?
     XMIT_FREQUENCY = init_rf_freq();
 
-    // if (_devmode[0] == '1') DEVMODE = true;
-    // else DEVMODE = false;
-    Serial.println(F("Forcing DEVMODE true (always for now)"));
-    DEVMODE = true;
-    
+    // hack _devmode _verbosity DEVMODE
+    forceHACK();
+
 }
 
 //***************************************

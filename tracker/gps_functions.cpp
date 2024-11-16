@@ -111,6 +111,9 @@ extern const int SERIAL2_BAUD_RATE;
 extern absolute_time_t GpsStartTime;  // usecs
 extern uint64_t GpsTimeToLastFix;  // milliseconds
 
+extern char _verbosity[2];
+
+
 // FIX! gonna need an include for this? maybe note
 // # include <TimeLib.h>
 
@@ -205,8 +208,13 @@ int checkGpsBaudRate(int desiredBaud) {
 
 //************************************************
 void checkInitialGpsOutput(void) {
+    if (DEVMODE) Serial.println(F("checkInitialGpsOutput START"));
     // FIX! rely on watchdog reset in case we stay here  forever?
-    if (DEVMODE) Serial.println(F("look for some Serial2 bytes"));
+    if (DEVMODE) Serial.println(F("drain any Serial2 garbage first"));
+    // drain any initial garbage
+    while (Serial2.available()) {Serial2.read();}
+    if (DEVMODE) Serial.println(F("now look for some Serial2 bytes"));
+
     int i;
     char incomingChar = { 0 };
     for (i = 0; i < 10; i++) {
@@ -226,6 +234,7 @@ void checkInitialGpsOutput(void) {
     nmeaBufferPrintAndClear();
     updateStatusLED();
     Watchdog.reset();
+    if (DEVMODE) Serial.println(F("checkInitialGpsOutput END"));
 }
 
 //************************************************
@@ -532,6 +541,13 @@ void GpsOFF() {
 //************************************************
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
+    // inc on '$'
+    // keep the count since the first time we start doing this function
+    // can visually compare these in the stdout...should always be the same
+    static int sentenceStartCnt = 0;
+    // inc on '*' (comes before the checksum)
+    static int sentenceEndCnt = 0;
+
     // FIX! we could leave here after we get N sentences?
     // we could keep track of how many sentences we get?
     // ideally we'd synchronize on the currently uknown start/end sentences?
@@ -552,16 +568,16 @@ void updateGpsDataAndTime(int ms) {
     uint64_t current_millis = start_millis;
     uint64_t last_serial2_millis = 0;
 
-    Serial.printf("updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL, current_millis);
+    if (DEVMODE & (_verbosity[0] >= '8'))
+        Serial.printf("updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL, current_millis);
     // unload each char as it arrives and prints it (with buffering, now)
     // so we can see NMEA sentences for a period of time.
     // assume 1 sec broadcast rate
     // https://arduino.stackexchange.com/questions/13452/tinygps-plus-library
 
-    // inc on '$'
-    int sentenceStartCnt = 0;
-    // inc on '*' (comes before the checksum)
-    int sentenceEndCnt = 0;
+    // we could sum this between calls, and track total busy time
+    // but I think better not to average..just track this call
+    int incomingCharCnt = 0; // so we can do arrival rate here?
 
     // clear the StampPrintf buffer, in case it had anything.
     DoLogPrint();
@@ -572,21 +588,24 @@ void updateGpsDataAndTime(int ms) {
         char incomingChar;
         while (Serial2.available() > 0) {
             // can't have the logBuffer fill up, because the unload is delayed
+            int charsAvailable = (int) Serial2.available();
             if (DEVMODE) {
-                int charsAvailable = (int) Serial2.available();
                 if (charsAvailable > 12)
                     // might lose some if we can't keep up
-                    StampPrintf("WARN: NMEA too many chars buffered:%d)" EOL, (int) charsAvailable);
+                    StampPrintf("WARN: NMEA too many chars backing up uart rx buffer:%d)" EOL, 
+                        (int) charsAvailable);
             }
 
             incomingChar = Serial2.read();
+            incomingCharCnt++;
             gps.encode(incomingChar);
             switch (incomingChar) {
                 case '$': sentenceStartCnt++; break;
                 case '*': sentenceEndCnt++; break;
             }
             // make the buffer big enough so that we never print while getting data?
-            if (DEVMODE) nmeaBufferAndPrint(incomingChar);
+            if (DEVMODE & (_verbosity[0] >= '8'))
+                nmeaBufferAndPrint(incomingChar);
 
             current_millis = millis();
             last_serial2_millis = current_millis;
@@ -605,8 +624,8 @@ void updateGpsDataAndTime(int ms) {
             // FIX! could the LED blinking have gotten delayed? ..we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
             if (DEVMODE) StampPrintf(
-                "updateGpsDataAndTime early out: ms while loop break at %" PRIu64 " millis" EOL, 
-                current_millis);
+                "updateGpsDataAndTime early out: ms %d while loop break at %" PRIu64 " millis" EOL, 
+                ms, current_millis);
             break;
         }
 
@@ -620,29 +639,42 @@ void updateGpsDataAndTime(int ms) {
     } while ( (current_millis - start_millis) < (uint64_t) ms); // works if ms is 0
 
 
+    // FIX! condition some of these with verbosityj
     // print/clear any accumulated NMEA sentence stuff
-    if (DEVMODE) {
+    if (DEVMODE & (_verbosity[0] >= '8')) {
         // print should only get dumped here?
         nmeaBufferPrintAndClear(); // print and clear
         Serial.print(F(EOL));
+
+        // dump/flush the StampPrintf log_buffer
+        DoLogPrint();
     }
 
-    if (DEVMODE) StampPrintf(
-        "start_millis %" PRIu64 " current_millis %" PRIu64 " sentenceStartCnt %d sentenceEndCnt %d" EOL,
-        start_millis, current_millis, sentenceStartCnt, sentenceEndCnt);
+    if (DEVMODE & (_verbosity[0] >= '8')) {
+        // seems like we get 12 sentences every time we call this function
+        Serial.printf(
+            "start_millis %" PRIu64 " current_millis %" PRIu64 " sentenceStartCnt %d sentenceEndCnt %d" EOL,
+            start_millis, current_millis, sentenceStartCnt, sentenceEndCnt);
+        // we can round up or down by adding 500 before the floor divide
+        int timePeriodMillis = current_millis - start_millis;
+        // this will be off from a peak rate
+        // because it includes dead time at start, dead time at end
+        // with some constant rate in the middle? but sentences could be split
+        // so it's some kind of avg over the period
+        int AvgCharRateSec = incomingCharCnt / ((500 + timePeriodMillis) / 1000UL);
+        Serial.printf("NMEA AvgCharRateSec %d timePeriodMillis %d" EOL,  AvgCharRateSec, timePeriodMillis);
+    }
 
-    // dump the StampPrintf buffer
-    DoLogPrint();
-
-    if (DEVMODE) {
+    if (DEVMODE & (_verbosity[0] >= '8')) {
         Serial.printf("gps.time.isValid():%u" EOL, gps.time.isValid());
     }
 
     if (gps.time.isValid()) {
         // setTime is in the Time library.
         setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
-        if (DEVMODE) Serial.printf("setTime(%02u:%02u:%02u)" EOL,
-                gps.time.hour(), gps.time.minute(), gps.time.second());
+        if (DEVMODE & (_verbosity[0] >= '8'))
+                Serial.printf("setTime(%02u:%02u:%02u)" EOL,
+                    gps.time.hour(), gps.time.minute(), gps.time.second());
     }
 
     updateStatusLED();

@@ -15,7 +15,7 @@
 // #include <defines.h>
 // #include "pico/stdlib.h"
 
-
+void forceHACK(void);
 void user_interface(void);
 void get_user_input(const char *prompt, char *input_variable, int max_length);
 void display_intro(void);

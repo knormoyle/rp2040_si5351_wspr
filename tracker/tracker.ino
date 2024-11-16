@@ -343,8 +343,7 @@ char _devmode[2] = { 0 };
 char _correction[7] = { 0 };
 char _go_when_rdy[2] = { 0 };
 
-// FIX! always true now for debug
-bool DEVMODE = true;  // set when _devmode is set
+bool DEVMODE = false;
 
 // t_power is clamped to string versions of these. use 0 if illegal
 // int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
@@ -371,6 +370,10 @@ absolute_time_t GpsStartTime = 0;
 int64_t loop_us_elapsed;
 int64_t loop_ms_elapsed;
 
+uint64_t GpsFixMillis = 0;
+uint64_t GpsStartMillis = 0;
+
+//***********************************************************
 bool drainSerialTo_CRorNL (void) {
     // Support hitting enter frantically to get to config menu right away on boot
     int i;
@@ -408,7 +411,22 @@ bool drainSerialTo_CRorNL (void) {
 }
 
 //***********************************************************
+uint16_t  BeaconWait = 50;    // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
+uint16_t  BattWait = 1;       // seconds sleep if super capacitors/batteries are below BattMin
+
+// FIX! should this be non-zero?
+float     GpsMinVolt = 0.0;   // min Volts for GPS to wake up.
+float     BattMin = 0.0;      // min Volts to wake up.
+float     WsprBattMin = 0.0;  // min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
+// GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
+float     HighVolt = 9.9;     
+
+
+//***********************************************************
 void setup() {
+    // temp hack to force DEVMODE and verbosity 9
+    forceHACK();
+
     //**********************
     Watchdog.enable(30000);
     Watchdog.reset();
@@ -456,6 +474,9 @@ void setup() {
 
     GpsINIT(); // also turns on and checks for output
     GpsOFF();
+
+    GpsFixMillis = 0;
+    GpsStartMillis = millis();
     GpsON(false); // no full cold gps reset
 
     //**********************
@@ -560,15 +581,6 @@ void setup() {
 
 
 //*************************************************************************
-uint16_t  BeaconWait = 50;    // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
-uint16_t  BattWait = 1;       // seconds sleep if super capacitors/batteries are below BattMin
-
-// FIX! should this be non-zero?
-float     GpsMinVolt = 0.0;   // min Volts for GPS to wake up.
-float     BattMin = 0.0;      // min Volts to wake up.
-float     WsprBattMin = 0.0;  // min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
-float     HighVolt = 9.9;     // GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
-
 uint64_t GpsTimeToLastFix;    // milliseconds
 
 // these are used as globals
@@ -602,11 +614,19 @@ void loop() {
     // always make sure tx is off?
     // does nothing if already off
     vfo_turn_off();
+
+    //******************
     // Gps may already be on
     // this loads the voltage
+    if (!GpsIsOn()) {
+        GpsFixMillis = 0;
+        GpsStartMillis = millis();
+    }
     GpsON(false);  // doesn't send cold reset
+    //******************
 
     // no need to have GpsFirstFix
+    // maybe nice to report it?
     // if ( !(GpsFirstFix && (readVoltage() > BattMin)) || (!GpsFirstFix && (readVoltage() > GpsMinVolt)) )) {
     //     sleepSeconds(BattWait);
 
@@ -669,6 +689,15 @@ void loop() {
                 // FIX! how much should we wait here?
             } else {
                 if (DEVMODE) Serial.println(F("loop() GPS 3d fix good?"));
+
+                // Just print this the first time we have a good fix
+                if (GpsFixMillis==0) {
+                    GpsFixMillis = millis() - GpsStartMillis;
+                    if (DEVMODE) 
+                            Serial.printf("loop() first good gps Fix, after off->on! GpsFixMillis %" PRIu64 EOL, 
+                            GpsFixMillis);
+                }
+
                 // GpsStartTime is reset every time we turn the gps on
                 // cleared every time we turn it off (don't care)
                 // Should this is also cleared when we turn gps off? no?
@@ -854,6 +883,72 @@ void loop() {
     Serial.println(F("loop() END"));
 }
 
+
+//*******************************************************
+extern const int WSPR_PWM_SLICE_NUM=4;
+
+void PWM4_Handler(void) {
+    Serial.println(F("PWM4_Handler() START"));
+    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
+    static int cnt = 0;
+    if (++cnt >= 500) {
+        cnt = 0;
+        proceed = true;
+    }
+    Serial.println(F("PWM4_Handler() END"));
+}
+
+void zeroTimerSetPeriodMs(float ms) {
+    Serial.println(F("zeroTimerSetPeriodMs() START"));
+    static pwm_config wspr_pwm_config = pwm_get_default_config();
+
+    pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS
+    pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)ms - 1));
+    pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
+
+    irq_set_exclusive_handler(PWM_IRQ_WRAP, PWM4_Handler);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
+    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
+    pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
+    Serial.println(F("zeroTimerSetPeriodMs() END"));
+}
+
+//***********************************************************
+void sleepSeconds(int sec) {
+    Serial.println(F("sleepSeconds() START"));
+    Serial.flush();
+    int s = sec / 2;  // roughly 2 secs per loop?
+    for (int i = 0; i < s; i++) {
+        Watchdog.reset();
+        // can power off gps depending on voltage
+        // normally keep gps on, tracking after first fix. we are moving!
+        // uint32_t usec = time_us_32();
+        GpsON(false);
+        float solar_voltage;
+
+        solar_voltage = readVoltage();
+        if (solar_voltage < BattMin) GpsOFF();
+        if (solar_voltage < GpsMinVolt) GpsOFF();
+        // FIX! should we unload/use GPS data during this?
+        // gps could be on or off, so no?
+        // whenever we have spin loops we need to updateStatusLED()
+
+        updateStatusLED();
+        if (GpsIsOn()) {
+            // does this have a updateStatusLED() ??
+            updateGpsDataAndTime(2000);  // milliseconds
+            Serial.flush();
+        } else {
+            sleep_ms(2000);
+        }
+    }
+    Watchdog.reset();
+    // Gps gets left off it the voltage was low at any point
+    Serial.println(F("sleepSeconds() END"));
+}
+
+//***********************************************************
 // -1 is returned if anything illegal
 // FIX! should check what caller does if -1
 bool alignMinute(int offset) {
@@ -889,70 +984,6 @@ bool alignMinute(int offset) {
         // telemetry buffer is also updated whenever if _go_when_ready
     }
     return aligned;
-}
-
-
-void sleepSeconds(int sec) {
-    Serial.println(F("sleepSeconds() START"));
-    Serial.flush();
-    int s = sec / 2;  // roughly 2 secs per loop?
-    for (int i = 0; i < s; i++) {
-        Watchdog.reset();
-        // can power off gps depending on voltage
-        // normally keep gps on, tracking after first fix. we are moving!
-        // uint32_t usec = time_us_32();
-        GpsON(false);
-        float solar_voltage;
-
-        solar_voltage = readVoltage();
-        if (solar_voltage < BattMin) GpsOFF();
-        if (solar_voltage < GpsMinVolt) GpsOFF();
-        // FIX! should we unload/use GPS data during this?
-        // gps could be on or off, so no?
-        // whenever we have spin loops we need to updateStatusLED()
-
-        updateStatusLED();
-        if (GpsIsOn()) {
-            // does this have a updateStatusLED() ??
-            updateGpsDataAndTime(2000);  // milliseconds
-            Serial.flush();
-        } else {
-            sleep_ms(2000);
-        }
-    }
-    Watchdog.reset();
-    // Gps gets left off it the voltage was low at any point
-    Serial.println(F("sleepSeconds() END"));
-}
-
-//*******************************************************
-extern const int WSPR_PWM_SLICE_NUM=4;
-
-void PWM4_Handler(void) {
-    Serial.println(F("PWM4_Handler() START"));
-    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
-    static int cnt = 0;
-    if (++cnt >= 500) {
-        cnt = 0;
-        proceed = true;
-    }
-    Serial.println(F("PWM4_Handler() END"));
-}
-
-void zeroTimerSetPeriodMs(float ms) {
-    Serial.println(F("zeroTimerSetPeriodMs() START"));
-    static pwm_config wspr_pwm_config = pwm_get_default_config();
-
-    pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS
-    pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)ms - 1));
-    pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
-
-    irq_set_exclusive_handler(PWM_IRQ_WRAP, PWM4_Handler);
-    irq_set_enabled(PWM_IRQ_WRAP, true);
-    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
-    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
-    pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
-    Serial.println(F("zeroTimerSetPeriodMs() END"));
 }
 
 //********************************************
