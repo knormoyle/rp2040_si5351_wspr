@@ -290,6 +290,7 @@ void setGpsBaud(int desiredBaud) {
             // strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21);
             strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21);
     }
+    if (DEVMODE) Serial.printf("setGpsBaud sent %s for usedBaud %d" EOL, nmeaBaudSentence, usedBaud);
     Serial2.print(nmeaBaudSentence);
 
     // have to wait for the sentence to get out and complete at the GPS
@@ -301,6 +302,7 @@ void setGpsBaud(int desiredBaud) {
     // To re-enable serial communication, call Serial.begin().
     Serial2.end();
     Serial2.begin(usedBaud);
+    if (DEVMODE) Serial.printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
     // then have to change Serial2.begin() to agree
     sleepForMilliSecs(1000, false);
     if (DEVMODE) Serial.printf("setGpsBaud END %d" EOL, usedBaud);
