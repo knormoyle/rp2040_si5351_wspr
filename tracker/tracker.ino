@@ -257,8 +257,8 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 
 // can't have fast baud rate? because buffer will overrun?
 // extern const int SERIAL2_BAUD_RATE = 38400;
-extern const int SERIAL2_BAUD_RATE = 9600;
-// extern const int SERIAL2_BAUD_RATE = 19200;
+// extern const int SERIAL2_BAUD_RATE = 9600;
+extern const int SERIAL2_BAUD_RATE = 19200;
 
 
 // stuff moved to functions from this .ino (not libraries)

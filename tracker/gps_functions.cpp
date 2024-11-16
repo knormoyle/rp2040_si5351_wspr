@@ -245,6 +245,7 @@ void setGpsBalloonMode(void) {
     // Serial2.print("$PSIMNAV,W,3*3A\r\n");
     // normal mode
     // Serial2.print("$PSIMNAV,W,0*39\r\n");
+    // have to wait for the sentence to get out, and also complete
     // sleepForMilliSecs(1000, false);
     if (DEVMODE) Serial.println(F("setGpsBalloonMode END"));
 }
@@ -266,24 +267,39 @@ void setGpsBaud(int desiredBaud) {
     char nmeaBaudSentence[21] = { 0 };
     switch (usedBaud) {
         // this is default. must be 9600?
-        case 0:      strncpy(nmeaBaudSentence, "$PMTK251,0*28" CR LF, 21); break;
+        // should it be the p
+        // weird: what is this case gonna do?
+        // case 0:      strncpy(nmeaBaudSentence, "$PMTK251,0*28" CR LF, 21); break;
+        /*
         case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
         case 19200:  strncpy(nmeaBaudSentence, "$PMTK251,19200*22" CR LF, 21); break;
         case 39400:  strncpy(nmeaBaudSentence, "$PMTK251,38400*27" CR LF, 21); break;
         case 57600:  strncpy(nmeaBaudSentence, "$PMTK251,57600*2C" CR LF, 21); break;
         case 115200: strncpy(nmeaBaudSentence, "$PMTK251,115200*1F" CR LF, 21); break;
+        */
+
+        case 4800:   strncpy(nmeaBaudSentence, "$PCAS01,0*1C" CR LF, 21); break;
+        case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
+        case 19200:  strncpy(nmeaBaudSentence, "$PCAS01,2*1E" CR LF, 21); break;
+        case 38400:  strncpy(nmeaBaudSentence, "$PCAS01,3*1F" CR LF, 21); break;
+        case 57600:  strncpy(nmeaBaudSentence, "$PCAS01,4*18" CR LF, 21); break;
+        case 115200: strncpy(nmeaBaudSentence, "$PCAS01,5*19" CR LF, 21); break;
+
         default:
             usedBaud = 9600;
-            strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21);
+            // strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21);
+            strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21);
     }
     Serial2.print(nmeaBaudSentence);
+
+    // have to wait for the sentence to get out and complete at the GPS
+    delay(3000);
 
     // Note:
     // Serial2.end() Disables serial communication,
     // allowing the RX and TX pins to be used for general input and output.
     // To re-enable serial communication, call Serial.begin().
     Serial2.end();
-    delay(1000);
     Serial2.begin(usedBaud);
     // then have to change Serial2.begin() to agree
     sleepForMilliSecs(1000, false);
