@@ -11,8 +11,9 @@
 #include "adc_functions.h"
 #include "defines.h"
 
-extern const int BattPin;
+#include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
 
+extern const int BattPin;
 extern uint64_t GpsTimeToLastFix; // milliseconds
 
 extern char t_course[4];      // 3 bytes
@@ -50,18 +51,18 @@ extern char _TELEN_config[5];
 extern char _tx_high[2];      // 1 byte
 extern char _callsign[7];     // 6 bytes
 
-#include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
-
 extern TinyGPSPlus gps;
 extern bool DEVMODE;
 extern int tx_cnt_0;
+
+//****************************************************
 
 int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
 
 //****************************************************
-void snapTelemetry(void) {
-    if (DEVMODE) Serial.println(F("snapTelemetry START"));
+void snapForTelemetry(void) {
+    if (DEVMODE) Serial.println(F("snapForTelemetry START"));
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
     if (!gps.location.isValid()) return;
@@ -171,7 +172,7 @@ void snapTelemetry(void) {
     char power[3] = "3";
     if (_tx_high[0] == '1')
         snprintf(power, sizeof(power), "%1s", "5");
-    // we clamp to a legalPower when we snapTelemetry()
+    // we clamp to a legalPower when we snapForTelemetry()
     // basically we look at _tx_high[0] to decide our power level that will be used for rf
     // we could use values that are unique for this tracker,
     // for easy differentiation from u4b/traquito!!
@@ -195,21 +196,24 @@ void snapTelemetry(void) {
     snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%3d", tx_cnt_0_val);
 
     if (DEVMODE) {
-        Serial.printf("t_* " EOL);
-        Serial.printf("course %3s " EOL, t_course);
-        Serial.printf("speed %3s " EOL, t_speed);
-        Serial.printf("altitude %6s " EOL, t_altitude);
-        Serial.printf("tx_count_0 %3s " EOL, t_tx_count_0);
-        Serial.printf("temp %6s" EOL, t_temp);
-        Serial.printf("pressure %7s " EOL, t_pressure);
-        Serial.printf("voltage %2s " EOL, t_voltage);
-        Serial.printf("sat_count %2s " EOL, t_sat_count);
-        Serial.printf("lat %12s " EOL, t_lat);
-        Serial.printf("lon %12s " EOL, t_lon);
-        Serial.printf("grid6 %6s" EOL, t_grid6);
-        Serial.printf("power %2s\n" EOL, t_power);
+        Serial.printf("t_************" EOL);
+        Serial.printf("t_tx_count_0 %3s " EOL, t_tx_count_0);
+        Serial.printf("t_callsign %6s" EOL, t_callsign);
+        Serial.printf("t_grid6 %6s" EOL, t_grid6);
+        Serial.printf("t_power %2s\n" EOL, t_power);
+        Serial.printf("t_sat_count %2s " EOL, t_sat_count);
+        Serial.printf("t_lat %12s " EOL, t_lat);
+        Serial.printf("t_lon %12s " EOL, t_lon);
+        Serial.printf("t_altitude %6s " EOL, t_altitude);
+        Serial.printf("t_voltage %5s " EOL, t_voltage);
+        Serial.printf("t_temp %6s" EOL, t_temp);
+        Serial.printf("t_course %3s " EOL, t_course);
+        Serial.printf("t_speed %3s " EOL, t_speed);
+        Serial.printf("t_temp_ext %7s" EOL, t_temp);
+        Serial.printf("t_pressure %7s " EOL, t_pressure);
+        Serial.printf("t_************" EOL);
     }
-    if (DEVMODE) Serial.println(F("snapTelemetry END"));
+    if (DEVMODE) Serial.println(F("snapForTelemetry END"));
 }
 
 

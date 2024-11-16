@@ -210,6 +210,7 @@ int checkGpsBaudRate(int desiredBaud) {
 //************************************************
 void checkInitialGpsOutput(void) {
     if (DEVMODE) Serial.println(F("checkInitialGpsOutput START"));
+
     // FIX! rely on watchdog reset in case we stay here  forever?
     if (DEVMODE) Serial.println(F("drain any Serial2 garbage first"));
     // drain any initial garbage
@@ -218,7 +219,8 @@ void checkInitialGpsOutput(void) {
 
     int i;
     char incomingChar = { 0 };
-    for (i = 0; i < 10; i++) {
+    // we drain during the GpsINIT now, oh. we should leave Gps ON so we get chars
+    for (i = 0; i < 5; i++) {
         Watchdog.reset();
         if (!Serial2.available()) {
             Serial.println(F("no Serial2.available() ..sleep and reverify"));
@@ -279,8 +281,11 @@ void setGpsBaud(int desiredBaud) {
         */
 
         case 4800:   strncpy(nmeaBaudSentence, "$PCAS01,0*1C" CR LF, 21); break;
+        // this worked
         case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
+        // this worked
         case 19200:  strncpy(nmeaBaudSentence, "$PCAS01,2*1E" CR LF, 21); break;
+        // this didn't work?
         case 38400:  strncpy(nmeaBaudSentence, "$PCAS01,3*1F" CR LF, 21); break;
         case 57600:  strncpy(nmeaBaudSentence, "$PCAS01,4*18" CR LF, 21); break;
         case 115200: strncpy(nmeaBaudSentence, "$PCAS01,5*19" CR LF, 21); break;
@@ -290,8 +295,8 @@ void setGpsBaud(int desiredBaud) {
             // strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21);
             strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21);
     }
-    if (DEVMODE) Serial.printf("setGpsBaud sent %s for usedBaud %d" EOL, nmeaBaudSentence, usedBaud);
     Serial2.print(nmeaBaudSentence);
+    if (DEVMODE) Serial.printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
 
     // have to wait for the sentence to get out and complete at the GPS
     delay(3000);
@@ -314,30 +319,20 @@ void GpsINIT(void) {
     updateStatusLED();
     Watchdog.reset();
 
-    if (DEVMODE) {
-        Serial.printf("GPS_UART1_RX_PIN %d" EOL, GPS_UART1_RX_PIN);
-        Serial.printf("GPS_UART1_TX_PIN %d" EOL, GPS_UART1_TX_PIN);
-        Serial.printf("(gpio) GpsPwr %d" EOL, GpsPwr);
-        Serial.printf("(gpio) GPS_NRESET_PIN %d" EOL, GPS_NRESET_PIN);
-        Serial.printf("(gpio) GPS_ON_PIN %d" EOL, GPS_ON_PIN);
-    }
-
-    Serial2.setRX(GPS_UART1_RX_PIN);
-    Serial2.setTX(GPS_UART1_TX_PIN);
-    Serial2.setPollingMode(true);
-
-    // try making bigger
-    Serial2.setFIFOSize(SERIAL2_FIFO_SIZE);
-    // first talk at 9600
-    Serial2.begin(9600);
+    //****************
+    // The gps power pin is floating? likely GPS is off but unknown
+    // Should turn gps off before doing init if you know it's been
+    // initted already? 
 
     gpio_init(GpsPwr);
     pinMode(GpsPwr, OUTPUT);
     gpio_pull_up(GpsPwr);
-    gpio_put(GpsPwr, LOW);
+    gpio_put(GpsPwr, HIGH); // init with gps power on?
+    Serial.printf("GpsPwr %d (power off)" EOL, GpsPwr);
 
     //****************
     // FIX! are these doing anything?
+    // can you turn 'run' off for lower power mode? don't use, rely on vbat for gps hot reset
     gpio_init(GPS_NRESET_PIN);
     pinMode(GPS_NRESET_PIN, OUTPUT);
     gpio_pull_up(GPS_NRESET_PIN);
@@ -351,10 +346,34 @@ void GpsINIT(void) {
     // FIX! is this necessary?
     digitalWrite(GPS_NRESET_PIN, HIGH);
     digitalWrite(GPS_ON_PIN, HIGH);
-    // sleep 3 secs
-    sleepForMilliSecs(3000, false);
     //****************
 
+    if (DEVMODE) {
+        Serial.printf("GPS_UART1_RX_PIN %d" EOL, GPS_UART1_RX_PIN);
+        Serial.printf("GPS_UART1_TX_PIN %d" EOL, GPS_UART1_TX_PIN);
+        Serial.printf("(gpio) GpsPwr %d" EOL, GpsPwr);
+        Serial.printf("(gpio) GPS_NRESET_PIN %d" EOL, GPS_NRESET_PIN);
+        Serial.printf("(gpio) GPS_ON_PIN %d" EOL, GPS_ON_PIN);
+    }
+
+    Serial2.setRX(GPS_UART1_RX_PIN);
+    Serial2.setTX(GPS_UART1_TX_PIN);
+    Serial2.setPollingMode(true);
+
+    //****************
+    Serial2.end();
+    // try making bigger (see tracker.ino)
+    Serial2.setFIFOSize(SERIAL2_FIFO_SIZE);
+    // first talk at 9600
+    Serial2.begin(9600);
+    sleepForMilliSecs(500, false);
+    // drain the rx buffer. GPS is off, but shouldn't keep
+    while (Serial2.available()) Serial2.read();
+    gpio_put(GpsPwr, LOW); // leave INIT with gps power on
+    // sleep 3 secs
+    sleepForMilliSecs(3000, false);
+
+    //****************
     checkInitialGpsOutput();
     setGpsBalloonMode();
 
@@ -539,64 +558,69 @@ void GpsOFF() {
 //************************************************
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
-    // inc on '$'
-    // keep the count since the first time we start doing this function
-    // can visually compare these in the stdout...should always be the same
-    static int sentenceStartCnt = 0;
-    // inc on '*' (comes before the checksum)
-    static int sentenceEndCnt = 0;
+    uint64_t current_millis = millis();
+    uint64_t entry_millis = current_millis;
+
+    Watchdog.reset();
+    // ms has to be positive?
+    // grab data for no more than ms milliseconds
+    // stop if no data for 50 milliseconds
+    // all the durations below won't start counting until we get the first char (sets start_millis())
+    uint64_t start_millis = 0;
+    uint64_t last_serial2_millis = 0;
+    uint64_t timeSinceLastChar_millis = 0;
+    uint64_t duration_millis = 0;
+
+
+    if (DEVMODE) Serial.println(F("updateGpsDataAndTime START"));
+    if (DEVMODE & (_verbosity[0] >= '8'))
+        Serial.printf("updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL, current_millis);
+
+    // clear the StampPrintf buffer, in case it had anything.
+    DoLogPrint();
 
     // FIX! we could leave here after we get N sentences?
     // we could keep track of how many sentences we get?
     // ideally we'd synchronize on the currently uknown start/end sentences?
-    // we could exit when we get two of the same sentence?
-    // two of what?
+    // Or we could exit when we get two of the same sentence? two of what?
 
-    if (DEVMODE) Serial.println(F("updateGpsDataAndTime START"));
-    // ms has to be positive?
-    // grab data for no more than ms milliseconds
-    // stop if no data for 10 milliseconds
-    Watchdog.reset();
     GpsON(false);
 
-    // don't need to wait for serial port to connect?
-    // while (!Serial) {delay(1);}
+    // inc on '$'
+    // static: keep the count since the first time we start doing this function
+    // can visually compare these in the stdout...ideally should always be the same
+    static int sentenceStartCnt = 0;
+    // inc on '*' (comes before the checksum)
+    static int sentenceEndCnt = 0;
 
-    uint64_t start_millis = millis();
-    uint64_t current_millis = start_millis;
-    uint64_t last_serial2_millis = 0;
-
-    if (DEVMODE & (_verbosity[0] >= '8'))
-        Serial.printf("updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL, current_millis);
-    // unload each char as it arrives and prints it (with buffering, now)
+    // unload each char to TinyGps++ object as it arrives and print it (actually into nmeaBuffer)
     // so we can see NMEA sentences for a period of time.
     // assume 1 sec broadcast rate
     // https://arduino.stackexchange.com/questions/13452/tinygps-plus-library
 
-    // we could sum this between calls, and track total busy time
-    // but I think better not to average..just track this call
-    int incomingCharCnt = 0; // so we can do arrival rate here?
+    // Could keep the sum for all time, and track total busy time..
+    // but I think better not to average..just track this particular call.
+    int incomingCharCnt = 0; 
 
-    // clear the StampPrintf buffer, in case it had anything.
-    DoLogPrint();
     bool stopPrinting = false;
     bool last_stopPrinting = false;
     bool nullChar = false;
     bool spaceChar = false;
     bool notprintable = false;
     do {
-        // FIX! what is this..unload gps sentences?
-        // are we looking at millis too much? how slow is it?
         current_millis = millis();
         char incomingChar;
         while (Serial2.available() > 0) {
+            // start the duration timing when we get the first char
+            if (start_millis==0) start_millis = current_millis;
+
             // can't have the logBuffer fill up, because the unload is delayed
             int charsAvailable = (int) Serial2.available();
             if (DEVMODE) {
                 if (charsAvailable > 20)
                     // might lose some if we can't keep up
-                    // we were under 12 for 9600 baud
-                    // at 19200 baud, we hit 20 chars with no checksum errors
+                    // we were under 12 here for 9600 baud
+                    // at 19200 baud, we hit 20 chars here with no checksum errors
                     StampPrintf("WARN: NMEA too many chars backing up uart rx buffer:%d)" EOL,
                         (int) charsAvailable);
             }
@@ -624,7 +648,7 @@ void updateGpsDataAndTime(int ms) {
                 case ' ':  spaceChar = true; break;
                 default: { ; }
             }
-            // always strip these
+            // always strip these here
             bool enableStripping = true;
             if (enableStripping && (spaceChar || nullChar || notprintable)) continue;
 
@@ -672,22 +696,24 @@ void updateGpsDataAndTime(int ms) {
             last_serial2_millis = current_millis;
             last_stopPrinting = stopPrinting;
         }
+
         // did we wait more than 50 millis() since good data read?
-        // did we wait more than 100 millis() since good data read?
-        // early out (so we don't wait for the long ms time)
-        // do we get gaps like 100 millis between data bursts?
-
-        // did we wait more than 10 millis() since good data read?
-
         // we wait until we get at least one char or go past the ms total wait
-        // break out when we don't get 2nd char right away
+        // break out when we don't the next char right away 
         updateStatusLED();
-        if ((last_serial2_millis != 0) && (current_millis > last_serial2_millis + 100)) {
+
+        if (last_serial2_millis == 0) timeSinceLastChar_millis = 0;
+        else timeSinceLastChar_millis = current_millis - last_serial2_millis;
+
+        // FIX! should the two delays used be dependent on baud rate?
+        if (timeSinceLastChar_millis >= 25) {
             // FIX! could the LED blinking have gotten delayed? ..we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
+            duration_millis = current_millis - start_millis;
             if (DEVMODE) StampPrintf(
-                "updateGpsDataAndTime early out: ms %d while loop break at %" PRIu64 " millis" EOL,
-                ms, current_millis);
+                "updateGpsDataAndTime early out: ms %d " 
+                "loop break at %" PRIu64 " millis,  duration %" PRIu64  EOL,
+                 ms, current_millis, duration_millis);
             break;
         }
 
@@ -696,9 +722,9 @@ void updateGpsDataAndTime(int ms) {
         // shouldn't sleep here..faster to just delay
         // I guess here we're trying to sync with a burst? but how long to wait?
         // if we just completed a burst, we should wait for 1 sec - total burst delay?
-        sleepForMilliSecs(50, true); // enable early out if symbols arrive
+        sleepForMilliSecs(25, true); // stop the wait early if symbols arrive
 
-    } while ( (current_millis - start_millis) < (uint64_t) ms); // works if ms is 0
+    } while ( (current_millis - entry_millis) < (uint64_t) ms); // works if ms is 0
 
 
     // FIX! condition some of these with verbosityj
@@ -719,16 +745,22 @@ void updateGpsDataAndTime(int ms) {
             "start_millis %" PRIu64 " current_millis %" PRIu64 
             " sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
             start_millis, current_millis, sentenceStartCnt, sentenceEndCnt, diff);
+
         // we can round up or down by adding 500 before the floor divide
-        int timePeriodMillis = current_millis - start_millis;
-        // this will be off from a peak rate
-        // because it includes dead time at start, dead time at end
-        // with some constant rate in the middle? but sentences could be split
-        // so it's some kind of avg over the period
-        int AvgCharRateSec;
-        if ( timePeriodMillis == 0) AvgCharRateSec = 0; 
-        else AvgCharRateSec = incomingCharCnt / ((500 + timePeriodMillis) / 1000UL);
-        Serial.printf("NMEA AvgCharRateSec %d timePeriodMillis %d" EOL,  AvgCharRateSec, timePeriodMillis);
+        duration_millis = current_millis - start_millis;
+
+        // This will be lower than a peak rate
+        // It includes dead time at start, dead time at end...
+        // With some constant rate in the middle? but sentences could be split..
+        // fixed: entry_millis is the entrance to the function
+        // star_millis is the first char. so duration_millis will include the end stall detect (25 millis)
+        // So it's an average over that period.
+        float AvgCharRateSec;
+        if (duration_millis == 0) AvgCharRateSec = 0; 
+        else AvgCharRateSec = 1000.0 * (((float) incomingCharCnt / (float) duration_millis));
+        Serial.printf(
+            "NMEA AvgCharRateSec %.1f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,  
+            AvgCharRateSec, duration_millis, incomingCharCnt);
     }
 
     if (DEVMODE & (_verbosity[0] >= '8')) {
@@ -736,7 +768,7 @@ void updateGpsDataAndTime(int ms) {
     }
 
     if (gps.time.isValid()) {
-        // setTime is in the Time library.
+        // Update the arduino (cpu) time. setTime is in the Time library.
         setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
         if (DEVMODE & (_verbosity[0] >= '8'))
             Serial.printf("setTime(%02u:%02u:%02u)" EOL,
@@ -744,7 +776,9 @@ void updateGpsDataAndTime(int ms) {
     }
 
     updateStatusLED();
-    if (DEVMODE) Serial.println(F("updateGpsDataAndTime END"));
+    uint64_t total_millis = millis() - entry_millis;
+    // will be interesting to see how much bigger this is compared to the duration_millis
+    if (DEVMODE) Serial.printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL, total_millis);
 }
 
 
@@ -840,16 +874,13 @@ void gpsDebug() {
     if (!DEVMODE) return;
     if (DEVMODE) Serial.println(F("GpsDebug START"));
 
-    Serial.println();
-    Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars FixStncs. Checksum"));
+    Serial.print(F(EOL EOL));
+    Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars FixSents Checksum"));
     Serial.println(F("          (deg)      (deg)       Age                      Age  (m)    --- from GPS ----  RX    RX        Fail"));
     Serial.println(F("-----------------------------------------------------------------------------------------------------------------"));
 
     printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
     printInt(gps.hdop.value(), gps.hdop.isValid(), 5);
-
-    // printFloat(gps.location.lat(), gps.location.isValid(), 11, 6);
-    // update to 12 to match
     printFloat(gps.location.lat(), gps.location.isValid(), 12, 6);
     printFloat(gps.location.lng(), gps.location.isValid(), 12, 6);
 
@@ -859,11 +890,12 @@ void gpsDebug() {
     printFloat(gps.course.deg(), gps.course.isValid(), 7, 2);
     printFloat(gps.speed.kmph(), gps.speed.isValid(), 6, 2);
     printStr(gps.course.isValid() ? TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
-
-    printInt(gps.charsProcessed(), true, 6); // does this just wrap wround if it's more than 6 digits?
-    printInt(gps.sentencesWithFix(), true, 10); // does this just wrap wround if it's more than 10 digits?
+    printInt(gps.charsProcessed(), true, 6); // FIX! does this just wrap wround if it's more than 6 digits?
+    printInt(gps.sentencesWithFix(), true, 10); // FIX! does this just wrap wround if it's more than 10 digits?
     printInt(gps.failedChecksum(), true, 9);
-    Serial.println();
+
+    Serial.print(F(EOL EOL));
+
     if (DEVMODE) Serial.println(F("GpsDebug END"));
     if (DEVMODE) Serial.println(F("GpsINIT END"));
 }

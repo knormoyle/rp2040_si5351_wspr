@@ -7,7 +7,7 @@
 #define TELE_FUNCTIONS_H
 #include <stdint.h>
 
-void snapTelemetry(void);
+void snapForTelemetry(void);
 float readVoltage(void);
 void process_TELEN_data(void);
 

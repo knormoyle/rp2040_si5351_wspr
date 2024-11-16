@@ -180,10 +180,11 @@ uint8_t symbol_count;  // is this less than 256? probaby the real max?
 
 uint8_t tx_buffer[255];  // is this bigger than WSPR_SYMBOL_COUNT?
 uint16_t tone_delay, tone_spacing;
+// FIX! why is this volatile?
 volatile bool proceed = false;
 
 //******************************  GPS SETTINGS   *********************************
-int16_t GpsInvalidCnt = 0;
+int GpsInvalidCnt = 0;
 
 // gps_functions.cpp refers to this
 TinyGPSPlus gps;
@@ -257,9 +258,12 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 
 // can't have fast baud rate? because buffer will overrun?
 // extern const int SERIAL2_BAUD_RATE = 38400;
+// didn't work?
 // extern const int SERIAL2_BAUD_RATE = 9600;
+// worked
 extern const int SERIAL2_BAUD_RATE = 19200;
-
+// didn't work?
+// extern const int SERIAL2_BAUD_RATE = 38400;
 
 // stuff moved to functions from this .ino (not libraries)
 #include "gps_functions.h"
@@ -506,11 +510,7 @@ void setup() {
     }
 
     //**********************
-
     Watchdog.reset();
-
-    Serial.println(F("Starting with println"));
-
     vfo_init();
 
     // sets minute/lane/id from chan number.
@@ -525,14 +525,13 @@ void setup() {
     // shouldn't have to use the tud_cdc_connected() tud_cdc_available() hacks with ide
     // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
 
-    Watchdog.reset();
-
     // FIX! this forces going to the user interface always on boot. don't want this 
     // for balloon, although it will time out there eventually
     // FIX! in case user is frantically trying to get to the config menu to avoid setting clock speed or ??
     // if anything was found by incomingByte above, go to the config menu 
     // (potentially a balloon weird case would timeout)
 
+    Watchdog.reset();
     bool found_any = drainSerialTo_CRorNL();
     // how to compare char: ..== 'R' is the same as == 82 (ascii value)
     if (found_any) {
@@ -543,6 +542,12 @@ void setup() {
         sleep_ms(1000);
         user_interface();
     }
+
+    //***************
+    Watchdog.reset();
+    // get all the _* config state set and fix any bad values (to defaults)
+    read_FLASH();
+
     //***************
     const uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
@@ -560,6 +565,7 @@ void setup() {
     // FIX! don't do it for now
     // InitPicoClock(PLL_SYS_MHZ);
 
+    Watchdog.reset();
     bmp_init();
     i2c_scan();
 
@@ -583,12 +589,12 @@ void setup() {
 
     Watchdog.reset();
     Serial.println(F("setup() END"));
-    sleep_ms(5000);
+    sleep_ms(1000);
 }
 
 
 //*************************************************************************
-uint64_t GpsTimeToLastFix;    // milliseconds
+uint64_t GpsTimeToLastFix = 0;    // milliseconds
 
 // these are used as globals
 int TELEN1_val1;
@@ -603,7 +609,15 @@ int tx_cnt_3;
 
 //*************************************************************************
 void loop() {
+    // getting 25 to 35 sec loop times from the BattWait/BeaconWait ?? (baud 19200)
+    // some loops were 775 millis
+
+    // FIX! should change baud back to 9600 (lower power?) only gettin 1800 baud during 300-400ms
+    // when looking for data for slight >1 sec time period (all broadcasts are at 1 sec intervals)
+    // they all go in a burst together? so all within one sec, and actually a tighter burst.
     loopCnt++;
+    if (DEVMODE) Serial.printf(EOL "loop() loopCnt %" PRIu64 EOL, loopCnt);
+    
     // temp hack to force DEVMODE and verbosity 9
     forceHACK();
 
@@ -617,9 +631,8 @@ void loop() {
 
     Watchdog.reset();
     Serial.println(F("loop() START"));
-    // sleep_ms(5000);
-    // copied from loop_us_end while in the loop (at bottom)
 
+    // copied from loop_us_end while in the loop (at bottom)
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
     updateStatusLED();
     // always make sure tx is off?
@@ -631,6 +644,7 @@ void loop() {
     // this loads the voltage
     if (!GpsIsOn()) {
         GpsFixMillis = 0;
+        GpsTimeToLastFix = 0;
         GpsStartMillis = millis();
     }
     // just full cold gps reset
@@ -638,8 +652,8 @@ void loop() {
     // otherwise usb power means vbat is always on. so a hot reset!
     if (loopCnt == 1) GpsON(true); 
     else GpsON(false); 
-    //******************
 
+    //******************
     // no need to have GpsFirstFix
     // maybe nice to report it?
     // if ( !(GpsFirstFix && (readVoltage() > BattMin)) || (!GpsFirstFix && (readVoltage() > GpsMinVolt)) )) {
@@ -652,11 +666,12 @@ void loop() {
     } else {
         Serial.println(F("loop() solar_voltage good"));
         //*********************
-        // FIX! what does this do? can set time and unload NMEA sentences?
+        // FIX! this can set time and unload NMEA sentences?
         // unload for 2 secs to make sure we get 1 sec broadcasts?
-        // (also: what about corruption if buffer overrun?)
-        // does CRC check cover that? so okay if we have overrun?)
-        updateGpsDataAndTime(2000);
+        // actually just need a little over 1 sec.
+        // Also: what about corruption if buffer overrun?)
+        // does CRC check cover that? so okay if we have overrun?
+        updateGpsDataAndTime(1100);
         gpsDebug();
 
         if (gps.location.isValid() && gps.location.age() < 1000) {
@@ -673,9 +688,9 @@ void loop() {
             else
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
-            // FIX! how fast this this get big?
-            if (GpsInvalidCnt > 1000) {
-                Serial.println(F("loop() GpsInvalidCnt > 1000 ..gps full cold reset"));
+            // FIX! this is loop iterations? could be 60 * 30 secs per loop (30 minutes)
+            if (GpsInvalidCnt > 60 ) {
+                Serial.println(F("ERROR: loop() GpsInvalidCnt > 60 ..gps full cold reset"));
                 // FIX! have to send cold gps reset, in case ephemeris is corrupted? since vbat is always there
                 // otherwise this is a warm reset?
                 GpsOFF();
@@ -697,14 +712,25 @@ void loop() {
 
         // FIX! why does isUpdated() get us past here?
         if (!gps.location.isValid() || (gps.location.age() >=1000 && !gps.location.isUpdated())) {
+            // these are the waits that give us 25-30 sec loop times?
             sleepSeconds(BeaconWait);
         } else {
             if (!gps.satellites.isValid() || gps.satellites.value() <= 3) {
                 if (DEVMODE) Serial.println(F("loop() GPS not enough satelites"));
+                // these are the waits that give us 25-30 sec loop times?
                 sleepSeconds(BeaconWait);
                 // FIX! how much should we wait here?
             } else {
-                if (DEVMODE) Serial.println(F("loop() GPS 3d fix good?"));
+                // snapForTelemetry (all the t_* state) right before we do all the WSPRing
+                // we can update the telemetry buffer any minute we're not tx'ing
+
+                // we know we have a good 3d fix at this point
+                // we don't check the valid bits again? they could have changed
+                // at any time (async) ..so can't really be an atomic grab anyhow?
+                // keep the snap close to the valid checks above
+                snapForTelemetry();
+                if (DEVMODE) Serial.println(F("loop() Gps Fix (3d) good?"));
+                GpsInvalidCnt = 0;
 
                 // GpsStartTime is reset every time we turn the gps on
                 // cleared every time we turn it off (don't care)
@@ -713,29 +739,24 @@ void loop() {
                 /// FIX! is this the same as GpsFixMillis ?
 
                 // GpsStartTime is set by gps_functions.cpp 
-                if(GpsTimeToLastFix==0) {
+                if (GpsTimeToLastFix==0) {
                     GpsTimeToLastFix = (
                         absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
+                    if (DEVMODE) 
+                            Serial.printf("loop() (a) first Gps Fix, after off->on! "
+                            "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL, 
+                            GpsFixMillis, GpsTimeToLastFix);
                 }
 
                 // Just print this the first time we have a good fix
                 if (GpsFixMillis==0) {
                     GpsFixMillis = millis() - GpsStartMillis;
                     if (DEVMODE) 
-                            Serial.printf("loop() first good gps Fix, after off->on! "
+                            Serial.printf("loop() (b) first Gps Fix, after off->on! "
                             "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL, 
                             GpsFixMillis, GpsTimeToLastFix);
                 }
 
-                GpsInvalidCnt = 0;
-                // don't snapTelemetry buffer if there is an WSPR TX window soon (any if config)
-                // since we'll grab info from that buffer in sendWSPR ??
-                // maybe make it less than 50
-
-                // we can update the telemetry buffer any minute we're not tx'ing
-
-                // FIX! this should check if gps is valid before updating?
-                snapTelemetry();
                 // sets all the t_* strings above
                 // voltage is captured when we write the buff? So it's before GPS is turned off?
                 // should we look at the live voltage instead?
@@ -884,8 +905,10 @@ void loop() {
                 "t_altitude: %0.0f "
                 "t_grid6: %s "
                 "t_sat_count: %d "
-                "GpsTimeToLastFix %lu\n",
-                t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, GpsTimeToLastFix);
+                "GpsTimeToLastFix %" PRIu64 " "
+                "GpsInvalidCnt %d" EOL,
+                t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, 
+                GpsTimeToLastFix, GpsInvalidCnt);
         }
         if (_verbosity[0] >= '5') {
             StampPrintf(
@@ -937,17 +960,21 @@ void zeroTimerSetPeriodMs(float ms) {
 }
 
 //***********************************************************
-void sleepSeconds(int sec) {
+void sleepSeconds(int secs) {
+    // this doesn't have an early out (although the updateGpsDataAndTime() can
+    // so the delay will be >= secs
     Serial.println(F("sleepSeconds() START"));
     Serial.flush();
-    int s = sec / 2;  // roughly 2 secs per loop?
-    for (int i = 0; i < s; i++) {
+    uint64_t start_millis = millis();
+    uint64_t current_millis = start_millis;
+    uint64_t duration_millis = (uint64_t) secs * 1000;
+    float solar_voltage;
+    do {
         Watchdog.reset();
         // can power off gps depending on voltage
         // normally keep gps on, tracking after first fix. we are moving!
         // uint32_t usec = time_us_32();
         GpsON(false);
-        float solar_voltage;
 
         solar_voltage = readVoltage();
         if (solar_voltage < BattMin) GpsOFF();
@@ -959,12 +986,15 @@ void sleepSeconds(int sec) {
         updateStatusLED();
         if (GpsIsOn()) {
             // does this have a updateStatusLED() ??
-            updateGpsDataAndTime(2000);  // milliseconds
+            // long enough to be sure to catch all NMEA during the broadcast interval of 1 sec
+            updateGpsDataAndTime(1050);  // milliseconds
             Serial.flush();
         } else {
-            sleep_ms(2000);
+            sleep_ms(1000);
         }
-    }
+        current_millis = millis();
+    } while ((current_millis - start_millis) < duration_millis);
+    
     Watchdog.reset();
     // Gps gets left off it the voltage was low at any point
     Serial.println(F("sleepSeconds() END"));

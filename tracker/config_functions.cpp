@@ -127,6 +127,9 @@ void forceHACK(void) {
 // input_variable: Variable to which we want to read input <output>
 // max_length: Maximum length of input string <input>
 void get_user_input(const char *prompt, char *input_variable, int max_length) {
+    Watchdog.reset();
+    updateStatusLED();
+
     int index = 0;
     int ch;
 
@@ -137,7 +140,21 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
     Serial.flush();
 
     while (1) {
-        ch = getchar();
+        
+        int timeout_ms = 0;
+        while (!Serial.available()) { 
+            sleep_ms(250);
+            timeout_ms += 250;
+            // this will eventually watchdog reset timeout if no character?
+            updateStatusLED();
+            if (timeout_ms > 15 * 1000) {
+                Serial.println(F("ERROR: timeout waiting for input, rebooting" EOL));
+                Watchdog.enable(50);  // milliseconds
+                while (1) { ; }
+            }
+         }
+        ch = Serial.read();
+        
         if (ch == '\n' || ch == '\r') {  // Enter key pressed
             break;
         // Backspace key pressed (127 for most Unix, 8 for Windows)
@@ -451,12 +468,12 @@ void user_interface(void) {
 }
 
 //***************************************
-// Prints out hex listing of the settings NVRAM to stdio
-// buf: address of NVRAM to list <input>
-// len: bytes of NVRAM to list <input>
+// Prints out hex listing of the settings FLASH to stdio
+// buf: address of FLASH to list <input>
+// len: bytes of FLASH to list <input>
 void print_buf(const uint8_t *buf, int len) {
     Serial.println(F("print_buf()"));
-    Serial.printf("%s%s%s%s\nNVRAM dump:\n%s%s", 
+    Serial.printf("%s%s%s%s\nFLASH dump:\n%s%s", 
         CLEAR_SCREEN, BRIGHT, BOLD_ON, UNDERLINE_ON, BOLD_OFF, UNDERLINE_OFF);
     for (int i = 0; i < len; ++i) {
         Serial.printf("%02x", buf[i]);
@@ -476,14 +493,13 @@ void print_buf(const uint8_t *buf, int len) {
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 #define FLASH_BYTES_USED 28
 void read_FLASH(void) {
-    // arduino makes it hard to write flash?
+
     // there is no internal eeprom on rp2040
-    // While the Raspberry Pi Pico RP2040 does not come with an EEPROM onboard, 
-    // we could use simulated one by using a single 4K chunk of flash at the end of flash space.
     // Therefore, do not frequently update the EEPROM or you may prematurely wear out the flash.
     // https://arduino-pico.readthedocs.io/en/latest/eeprom.html
 
-    // but this seems more direct (writing to flash)
+    // While the Raspberry Pi Pico RP2040 does not come with an EEPROM onboard, 
+    // we could use a simulated one by using a single 4K chunk of flash at the end of flash space.
     // April 13, 2023
     // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 
@@ -516,11 +532,8 @@ void read_FLASH(void) {
     // these two are equivalent
     // const char *
     // char const *
-
-    // to avoid confusion always append the const qualifier ?
     // char * const is a constant pointer to a char. value can change. pointer can't change
     // const char * const is a const pointer to a const char
-
 
     // FIX! why is this weird, re above defs?
     const uint8_t *uflash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);

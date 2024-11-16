@@ -115,10 +115,11 @@ void printFloat(float val, bool valid, int len, int prec) {
 }
 
 //***********************************
-// maybe 10 lines?
-#define BUFFER_SIZE 1024
+// got a "full" with 1024..had 996 things in it
+// from updateGpsDataAndTime()
+#define LOG_BUFFER_SIZE 2048
 
-static char logBuffer[BUFFER_SIZE] = { 0 };
+static char logBuffer[LOG_BUFFER_SIZE] = { 0 };
 
 // Buffers the log information to the log buffer
 // it is much faster than direct UART output
@@ -152,13 +153,13 @@ void StampPrintf(const char* pformat, ...) {
     va_start(argptr, pformat);
     // message can be up to the full buffer size?
     // FIX! should we check if it violates? somehow? Not possible?
-    char message[BUFFER_SIZE];
+    char message[LOG_BUFFER_SIZE];
     // vsnprintf https://cplusplus.com/reference/cstdio/vsnprintf/
     // format the message
     vsnprintf(message, sizeof(message), pformat, argptr);
     va_end(argptr);
 
-    // make BUFFER_SIZE bigger and recompile or do more DoLogPrint() if we run into a problem realtime
+    // make LOG_BUFFER_SIZE bigger and recompile or do more DoLogPrint() if we run into a problem realtime
 
     // I put the 3 things in the logBuffer more efficiently than doing
     // successive strlen()' and strncat?
@@ -167,23 +168,23 @@ void StampPrintf(const char* pformat, ...) {
     int j2 = strlen(message);
     // will the message fit even and empty buffer?
     bool ignore = false;
-    if ((j + j2 + 1) > BUFFER_SIZE) {
+    if ((j + j2 + 1) > LOG_BUFFER_SIZE) {
         Serial.printf(
-            "ERROR: BUFFER_SIZE %d, is too small for j + j2 + 1 = %d, "
-            "timestamp %s message %s and EOL. ..ignoring" EOL,
-            BUFFER_SIZE, j + j2 + 1, timestamp, message);
+            EOL "ERROR: LOG_BUFFER_SIZE %d, is too small for j + j2 + 1 = %d, "
+            "timestamp %s message %s and EOL. ..ignoring" EOL EOL,
+            LOG_BUFFER_SIZE, j + j2 + 1, timestamp, message);
         ignore = true;
     }
 
     // will the message fit without dumping the existing buffer?
-    else if ( (i + j + j2 + 1) > BUFFER_SIZE) {
+    else if ( (i + j + j2 + 1) > LOG_BUFFER_SIZE) {
         Serial.printf(
-            "ERROR: BUFFER_SIZE %d, i %d, adding j + j2 + 1 = %d, "
-            "has no room for timestamp %s message %s and EOL" EOL,
-            BUFFER_SIZE, i, j + j2 + 1, timestamp, message);
-            Serial.println(F("..flushing by discarding all of logBuffer first"));
-            logBuffer[0] = 0;
-            i = 0;
+            EOL "ERROR: LOG_BUFFER_SIZE %d, i %d, adding j + j2 + 1 = %d, "
+            "has no room for timestamp %s message %s (+ EOL)" EOL EOL,
+            LOG_BUFFER_SIZE, i, j + j2 + 1, timestamp, message);
+        Serial.println(F("..flushing by discarding all of logBuffer first"));
+        logBuffer[0] = 0;
+        i = 0;
     }
 
     if (!ignore) {
