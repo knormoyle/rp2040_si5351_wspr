@@ -67,9 +67,9 @@
 
 // It is crucial to call gps.available( gps_port ) or serial.read() frequently, and never to call a blocking function that takes more than (64*11/baud) seconds. If the GPS is running at 9600, you cannot block for more than 70ms. If your debug Serial is also running at 9600, you cannot write more than 64 bytes consecutively (i.e., in less than 70ms).
 
-
-
 #include <Arduino.h>
+// for isprint()
+#include <ctype.h>
 #include "gps_functions.h"
 #include "debug_functions.h"
 #include "defines.h"
@@ -109,22 +109,19 @@ extern const int SERIAL2_BAUD_RATE;
 
 // for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
 extern absolute_time_t GpsStartTime;  // usecs
-extern uint64_t GpsTimeToLastFix;  // milliseconds
 
 extern char _verbosity[2];
-
 
 // FIX! gonna need an include for this? maybe note
 // # include <TimeLib.h>
 
 // ************************************************
 static bool GpsIsOn_state = false;
-
 bool GpsIsOn(void) {
     return GpsIsOn_state;
 }
 
-// ************************************************
+//************************************************
 // Is the maximum length of any in or out packet = 255 bytes?
 #define NMEA_BUFFER_SIZE 8 * 255
 static char nmeaBuffer[NMEA_BUFFER_SIZE] = { 0 };
@@ -133,7 +130,8 @@ static char nmeaBuffer[NMEA_BUFFER_SIZE] = { 0 };
 void nmeaBufferPrintAndClear(void) {
     if (nmeaBuffer[0] != 0) {
         // don't add an EOL to the print since we can accumulate multiple to look good?
-        Serial.print(nmeaBuffer);
+        // Might have been missing a EOL. Add one
+        Serial.println(nmeaBuffer);
         nmeaBuffer[0] = 0;  // Clear the buffer
     }
     // whenever something might have taken a long time like printing the big buffer
@@ -142,19 +140,22 @@ void nmeaBufferPrintAndClear(void) {
 }
 
 // add one char at a time
-void nmeaBufferAndPrint(const char charToAdd) {
+void nmeaBufferAndPrint(const char charToAdd, bool printIfFull) {
     // we might add a EOL before a '$' that begins a sentence. so check for +2
     // EOL might be /r /n or /r/n (two chars). so check for 3.
     // possible 2 in front. 0 null term at end
     if ( (strlen(nmeaBuffer) + 3) >= NMEA_BUFFER_SIZE) {
         // make NMEA_BUFFER_SIZE bigger or
         // can just do more nmeaBufferPrint() if we run into a problem realtime
+        // we shouldn't have to add EOL to the sentences. they come with CR LF ?
         Serial.printf(
             "WARNING: with NMEA_BUFFER_SIZE %d strlen(nmeaBuffer) %d "
-            "there is no room for char %c <newline>" EOL,
+            "there is no room for char %c <newline>",
             NMEA_BUFFER_SIZE, strlen(nmeaBuffer), charToAdd);
-        Serial.println(F("..flushing with nmeaBufferPrint first"));
-        nmeaBufferPrintAndClear();
+        Serial.println(F("..flushing by emptying first (no print)"));
+        // we can't afford to print it before flushing..we'll drop NMEA incoming in the UART
+        if (printIfFull) nmeaBufferPrintAndClear();
+        else nmeaBuffer[0] = 0;
     }
 
     int n = strlen(nmeaBuffer);
@@ -179,7 +180,7 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
         n = 1000;
     }
     int milliDiv = n / 10;
-    
+
     // sleep approx. n secs
     for (int i = 0; i < milliDiv ; i++) {
         if (enableEarlyOut) {
@@ -190,7 +191,7 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
         if ((milliDiv % 10) == 0) updateStatusLED();
 
         // faster recovery with delay?
-        delay(10); 
+        delay(10);
     }
 }
 
@@ -226,7 +227,7 @@ void checkInitialGpsOutput(void) {
             while (Serial2.available()) {
                 incomingChar = Serial2.read();
                 // buffer it up like we do normally below, so we can see sentences
-                nmeaBufferAndPrint(incomingChar);
+                nmeaBufferAndPrint(incomingChar, true); // print if full
             }
         }
         sleepForMilliSecs(2000, true); // return early if Serial2.available()
@@ -244,13 +245,15 @@ void setGpsBalloonMode(void) {
     // Serial2.print("$PSIMNAV,W,3*3A\r\n");
     // normal mode
     // Serial2.print("$PSIMNAV,W,0*39\r\n");
-    Serial2.print("$PMTK104*37" CR LF);
-    sleepForMilliSecs(1000, false);
+    // sleepForMilliSecs(1000, false);
     if (DEVMODE) Serial.println(F("setGpsBalloonMode END"));
 }
 
 void setGpsBaud(int desiredBaud) {
+    // FIX! works 9600. doesn't work any other baud rate?
     if (DEVMODE) Serial.printf("setGpsBaud START %d" EOL, desiredBaud);
+    updateStatusLED();
+    Watchdog.reset();
     // after power on, start off talking at 9600 baud. when we change it
 
     // have to send CR and LF and correct checksum
@@ -275,11 +278,12 @@ void setGpsBaud(int desiredBaud) {
     }
     Serial2.print(nmeaBaudSentence);
 
-
     // Note:
     // Serial2.end() Disables serial communication,
     // allowing the RX and TX pins to be used for general input and output.
     // To re-enable serial communication, call Serial.begin().
+    Serial2.end();
+    delay(1000);
     Serial2.begin(usedBaud);
     // then have to change Serial2.begin() to agree
     sleepForMilliSecs(1000, false);
@@ -343,12 +347,15 @@ void GpsINIT(void) {
     Serial.println(F("Should get some GPS output now at the new baud rate"));
     checkInitialGpsOutput();
 
-    if (DEVMODE) Serial.println(F("GpsINIT END" EOL));
+    if (DEVMODE) Serial.println(F("GpsINIT END"));
 }
 
 //************************************************
 void GpsON(bool GpsColdReset) {
-    if (DEVMODE) Serial.println(F("GpsON START" EOL));
+    // FIX! do the cold reset regardless of current state? I think no?
+    // so cold reset is only done if the GPS is currently off?..for the off/on transition?
+    if (DEVMODE) Serial.println(F("GpsON START"));
+
     if (GpsColdReset) {
         if (DEVMODE) Serial.printf("GpsON GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
     }
@@ -371,6 +378,10 @@ void GpsON(bool GpsColdReset) {
         // but we're relying on the Serial2.begin/end to be correct?
         // might as well commit to being right!
         digitalWrite(GpsPwr, LOW);
+        // don't know what baud rate it was at. gps comes up at 9600
+        Serial.end();
+        Serial.begin(9600);
+        // wait 2 seconds for normal power before sending more commands
         sleepForMilliSecs(2000, false);
         setGpsBalloonMode();
         // resets to 9600. set to new baud rate
@@ -381,92 +392,62 @@ void GpsON(bool GpsColdReset) {
         checkInitialGpsOutput();
     }
 
-    // alternative GPS
-    // SIM28ML
-    // SIM28ML/9600 9.7x10.1mm
 
-    // ATGM336H-5N11 9.7x10.1mm
-    // https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_ZHONGKEWEI-ATGM336H-5N11_C90769.pdf
-    // 5N-1X is gps only. saw + lnda
-    // Ipeak = 100mA
-    // ATGM336H-5N31 9.7x10.1mm
-    // https://www.lcsc.com/datasheet/lcsc_datasheet_1810261521_ZHONGKEWEI-ATGM336H-5N31_C90770.pdf
-    // 5N-3X is gps + bda. saw + lna
-
-    // Ipeak = 100mA
-    // ATGM336H-5NR32 10.1x9.7mm
-    // https://www.lcsc.com/datasheet/lcsc_datasheet_2411041759_ZHONGKEWEI-ATGM336H-5NR32_C5117921.pdf
-    // gps + bds. lna + saw
-
-    // 6N-32 is gps + bd2/3. -74 has GLO. 115200baud
-    // Ipeak = 100mA
-    // ATGM336H-6N-74 10.1x9.7mm
-    // https://www.lcsc.com/datasheet/lcsc_datasheet_2401121833_ZHONGKEWEI-ATGM336H-6N-74_C5804601.pdf
-
-    // Quectel L70-RL 10.1x9.7x2.5mm
-    // 18ma tracking compare to max-6x
-    // 18 pin lcc
-    // # protocol 2016 https://auroraevernet.ru/upload/iblock/6e6/6e624183292772f8dad0a6c327153eff.pdf
-    // # presentation
-    // https://auroraevernet.ru/upload/iblock/4bd/4bd89e299765c46248256cf6d9b8e0a7.pdf
-    // 5H Quectel L70 GP* only?
-
-    // L70B-M39 C6072279 SMD-18P
-    // hard to find the datasheets. need user account
-    // https://jlcpcb.com/partdetail/QUECTEL-L70BM39/C6072279
-    // L70REL-M37 C5745045 SMD-18P End of Life but L70REL-M37-EIT 10.1x9.7x2.5mm is not EOL?
-    // https://jlcpcb.com/partdetail/Quectel-L70RELM37/C5745045
-    // mouser uses this datasheet (for the L70_R)
-    // https://www.mouser.com/datasheet/2/1052/Quectel_L70_R_GPS_Specification_V2_2-1829911.pdf
-    // L70RE-M37 L70REL-M37 L70REL-M37-EIT
-    // https://www.quectel.com/gnss-iot-modules/
-    /// L76 L76G single band
-
-    //*******************
-    // ATGM336 might not support this:
-    // could use as PMTK_API_SET_PWR_SAV_MODE (elsewhere) rather than powering off?
-    // would have to wait for ack or time, after changing
-    // https://www.meme.au/nmea-checksum.html
-    // power saving mod off: (should this really be checksum 2F?)
-    // $PMTK320,0*26\r\n" manual has wrong checksum here?
-    // power saving mod on:
-    // $PMTK320,1*2E\r\n"
-    //*******************
-
-
-    // Do the cold reset regardless of current state?
     if (GpsColdReset) {
         if (DEVMODE) Serial.println(F("GpsON full cold reset START"));
+        // turn it off first. may be off or on currently
+        // turn off the serial
+        Serial.end();
+        Serial.flush();
+
+        digitalWrite(GpsPwr, HIGH);
         setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+        sleepForMilliSecs(1000, false);
         // Cold Start. doesn't clear any system/user configs
         // Serial2.print("$PMTK103*30\r\n");
         // Full Cold Start. any system/user configs (back to factory status)
         // FIX! should we wait for ack or no?
         // have to toggle power off/on to get this effect? no?
 
-        GpsStartTime = get_absolute_time();  // usecs
         // always do this just in case the GpsIsOn() got wrong?
         // but we're relying on the Serial2.begin/end to be correct?
         // might as well commit to being right!
+        //******************
         digitalWrite(GpsPwr, LOW);
-        sleepForMilliSecs(2000, false);
+        sleepForMilliSecs(1000, false);
+
+        // don't know what baud rate it was at. gps comes up at 9600
+        Serial.begin(9600);
+        sleepForMilliSecs(1000, false);
+
+        // send it twice??
         Serial.print("$PMTK104*37" CR LF);
-        sleepForMilliSecs(2000, false);
+        Serial.print("$PMTK104*37" CR LF);
+        sleepForMilliSecs(1000, false);
+
+        // FIX! do we have to toggle power off/on to get the cold reset?
+        digitalWrite(GpsPwr, HIGH);
+        sleepForMilliSecs(1000, false);
+        digitalWrite(GpsPwr, LOW);
+        sleepForMilliSecs(1000, false);
 
         // FIX! we don't need to toggle power to get the effect?
         setGpsBalloonMode();
+        GpsStartTime = get_absolute_time();  // usecs
 
+        //******************
         // resets to 9600. set to new baud rate
         // FIFO is big enough to hold output while we send more input here
         int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
         // then up the speed to desired (both gps chip and then Serial2
         setGpsBaud(desiredBaud);
         checkInitialGpsOutput();
+        //******************
+        // resets to 9600. set to new baud rate
         if (DEVMODE) Serial.println(F("GpsON full cold reset END"));
     }
 
     GpsIsOn_state = true;
-    GpsTimeToLastFix = 0;
 
     if (GpsColdReset) {
         if (DEVMODE) Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
@@ -531,7 +512,6 @@ void GpsOFF() {
 
     GpsIsOn_state = false;
     GpsStartTime = 0;
-    GpsTimeToLastFix = 0;
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
 
@@ -581,6 +561,11 @@ void updateGpsDataAndTime(int ms) {
 
     // clear the StampPrintf buffer, in case it had anything.
     DoLogPrint();
+    bool stopPrinting = false;
+    bool last_stopPrinting = false;
+    bool nullChar = false;
+    bool spaceChar = false;
+    bool notprintable = false;
     do {
         // FIX! what is this..unload gps sentences?
         // are we looking at millis too much? how slow is it?
@@ -590,25 +575,84 @@ void updateGpsDataAndTime(int ms) {
             // can't have the logBuffer fill up, because the unload is delayed
             int charsAvailable = (int) Serial2.available();
             if (DEVMODE) {
-                if (charsAvailable > 12)
+                if (charsAvailable > 20)
                     // might lose some if we can't keep up
-                    StampPrintf("WARN: NMEA too many chars backing up uart rx buffer:%d)" EOL, 
+                    // we were under 12 for 9600 baud
+                    // at 19200 baud, we hit 20 chars with no checksum errors
+                    StampPrintf("WARN: NMEA too many chars backing up uart rx buffer:%d)" EOL,
                         (int) charsAvailable);
             }
 
             incomingChar = Serial2.read();
-            incomingCharCnt++;
+            // always send everything to TinyGPS++ ??
+            // does it expect the CR LF ?
             gps.encode(incomingChar);
+
+            // we count all chars, even CR LF etc
+            incomingCharCnt++;
+            // do we get any null chars?
+            // are CR LF unprintable?
+            stopPrinting = last_stopPrinting;
+            spaceChar = false;
+            nullChar = false;
+            notprintable = !isprint(incomingChar);
             switch (incomingChar) {
-                case '$': sentenceStartCnt++; break;
-                case '*': sentenceEndCnt++; break;
+                case '$':  sentenceStartCnt++; stopPrinting = false; break;
+                case '*':  sentenceEndCnt++; stopPrinting = false; break;
+                case '\n': stopPrinting = true; break;
+                case '\r': stopPrinting = true; break;
+                // don't change the stopPrinting flow if get a unprintable or these
+                case '\0': nullChar = true; break;
+                case ' ':  spaceChar = true; break;
+                default: { ; }
             }
-            // make the buffer big enough so that we never print while getting data?
-            if (DEVMODE & (_verbosity[0] >= '8'))
-                nmeaBufferAndPrint(incomingChar);
+            // always strip these
+            bool enableStripping = true;
+            if (enableStripping && (spaceChar || nullChar || notprintable)) continue;
+
+            // stopPrinting: don't put CR LF in the nmeaBuffer. will add one on the transition
+            // FIX! ignoring unprintables. Do we even get any? maybe in error?
+            // either a number (0123456789), 
+            // an uppercase letter ABCDEFGHIJKLMNOPQRSTUVWXYZ
+            // a lowercase letter  abcdefghijklmnopqrstuvwxyz
+            // a punctuation character !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ,   
+            // or <space>, 
+            // or any character classified as printable by the current C locale.
+            
+            // hmm are we getting any space chars?
+            // FIX! we even send the CR and LF to the TinyGPS++ ??
+            // is it necessary?
+
+            // FIX! could disable the GPTXT broadcase to reduce data broadcast
+
+            // make the nmeaBuffer big enough so that we never print while getting data?
+            // and we never throw it away (lose data) ?? (for debug only though)
+            // this should eliminate duplicate CR LF sequences and just put one in the stream
+            // FIX! might be odd if a stop is spread over two different calls here?
+            // always start printing again on inital call to this function (see inital state)
+            if (DEVMODE & (_verbosity[0] >= '8')) {
+                if (enableStripping && 
+                        (last_stopPrinting && !stopPrinting && !notprintable && !nullChar && !spaceChar)) {
+                    // false: don't print if full, just empty
+                    nmeaBufferAndPrint('\r', false); 
+                    nmeaBufferAndPrint('\n', false);
+                }
+            }
+
+            // FIX! do we get any unprintable? ignore unprintable chars. 
+            if (!enableStripping || 
+                (!stopPrinting && !notprintable && !nullChar && !spaceChar)) {
+                // FIX! can we not send CR LF? don't care. but performance-wise, might be good?
+                // moved above
+                // gps.encode(incomingChar);
+                if (DEVMODE & (_verbosity[0] >= '8')) {
+                    nmeaBufferAndPrint(incomingChar, false); 
+                }
+            }
 
             current_millis = millis();
             last_serial2_millis = current_millis;
+            last_stopPrinting = stopPrinting;
         }
         // did we wait more than 50 millis() since good data read?
         // did we wait more than 100 millis() since good data read?
@@ -624,12 +668,12 @@ void updateGpsDataAndTime(int ms) {
             // FIX! could the LED blinking have gotten delayed? ..we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
             if (DEVMODE) StampPrintf(
-                "updateGpsDataAndTime early out: ms %d while loop break at %" PRIu64 " millis" EOL, 
+                "updateGpsDataAndTime early out: ms %d while loop break at %" PRIu64 " millis" EOL,
                 ms, current_millis);
             break;
         }
 
-        // sleep for 50 milliseconds? will we get buffer overflow? 
+        // sleep for 50 milliseconds? will we get buffer overflow?
         // 32 symbols at 9600 baud = 33 milliseconds?
         // shouldn't sleep here..faster to just delay
         // I guess here we're trying to sync with a burst? but how long to wait?
@@ -645,23 +689,27 @@ void updateGpsDataAndTime(int ms) {
         // print should only get dumped here?
         nmeaBufferPrintAndClear(); // print and clear
         Serial.print(F(EOL));
-
         // dump/flush the StampPrintf log_buffer
         DoLogPrint();
     }
 
     if (DEVMODE & (_verbosity[0] >= '8')) {
         // seems like we get 12 sentences every time we call this function
+        // should stay steady
+        int diff = sentenceStartCnt - sentenceEndCnt;
         Serial.printf(
-            "start_millis %" PRIu64 " current_millis %" PRIu64 " sentenceStartCnt %d sentenceEndCnt %d" EOL,
-            start_millis, current_millis, sentenceStartCnt, sentenceEndCnt);
+            "start_millis %" PRIu64 " current_millis %" PRIu64 
+            " sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
+            start_millis, current_millis, sentenceStartCnt, sentenceEndCnt, diff);
         // we can round up or down by adding 500 before the floor divide
         int timePeriodMillis = current_millis - start_millis;
         // this will be off from a peak rate
         // because it includes dead time at start, dead time at end
         // with some constant rate in the middle? but sentences could be split
         // so it's some kind of avg over the period
-        int AvgCharRateSec = incomingCharCnt / ((500 + timePeriodMillis) / 1000UL);
+        int AvgCharRateSec;
+        if ( timePeriodMillis == 0) AvgCharRateSec = 0; 
+        else AvgCharRateSec = incomingCharCnt / ((500 + timePeriodMillis) / 1000UL);
         Serial.printf("NMEA AvgCharRateSec %d timePeriodMillis %d" EOL,  AvgCharRateSec, timePeriodMillis);
     }
 
@@ -673,8 +721,8 @@ void updateGpsDataAndTime(int ms) {
         // setTime is in the Time library.
         setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
         if (DEVMODE & (_verbosity[0] >= '8'))
-                Serial.printf("setTime(%02u:%02u:%02u)" EOL,
-                    gps.time.hour(), gps.time.minute(), gps.time.second());
+            Serial.printf("setTime(%02u:%02u:%02u)" EOL,
+                gps.time.hour(), gps.time.minute(), gps.time.second());
     }
 
     updateStatusLED();
@@ -803,6 +851,7 @@ void gpsDebug() {
 }
 
 
+//*****************
 // Notes:
 // Arduino IDE allows function definitions after the point they are used
 // used without needing an explicit function prototype before hand.
@@ -812,3 +861,56 @@ void gpsDebug() {
 
 // Example: if the function argument list contains user defined data types and
 // the automatically created function prototype is placed before the declaration of that data type.
+
+//*****************
+// alternative GPS
+// SIM28ML
+// SIM28ML/9600 9.7x10.1mm
+
+// ATGM336H-5N11 9.7x10.1mm
+// https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_ZHONGKEWEI-ATGM336H-5N11_C90769.pdf
+// 5N-1X is gps only. saw + lnda
+// Ipeak = 100mA
+// ATGM336H-5N31 9.7x10.1mm
+// https://www.lcsc.com/datasheet/lcsc_datasheet_1810261521_ZHONGKEWEI-ATGM336H-5N31_C90770.pdf
+// 5N-3X is gps + bda. saw + lna
+
+// Ipeak = 100mA
+// ATGM336H-5NR32 10.1x9.7mm
+// https://www.lcsc.com/datasheet/lcsc_datasheet_2411041759_ZHONGKEWEI-ATGM336H-5NR32_C5117921.pdf
+// gps + bds. lna + saw
+
+// 6N-32 is gps + bd2/3. -74 has GLO. 115200baud
+// Ipeak = 100mA
+// ATGM336H-6N-74 10.1x9.7mm
+// https://www.lcsc.com/datasheet/lcsc_datasheet_2401121833_ZHONGKEWEI-ATGM336H-6N-74_C5804601.pdf
+
+// Quectel L70-RL 10.1x9.7x2.5mm
+// 18ma tracking compare to max-6x
+// 18 pin lcc
+// # protocol 2016 https://auroraevernet.ru/upload/iblock/6e6/6e624183292772f8dad0a6c327153eff.pdf
+// # presentation
+// https://auroraevernet.ru/upload/iblock/4bd/4bd89e299765c46248256cf6d9b8e0a7.pdf
+// 5H Quectel L70 GP* only?
+
+// L70B-M39 C6072279 SMD-18P
+// hard to find the datasheets. need user account
+// https://jlcpcb.com/partdetail/QUECTEL-L70BM39/C6072279
+// L70REL-M37 C5745045 SMD-18P End of Life but L70REL-M37-EIT 10.1x9.7x2.5mm is not EOL?
+// https://jlcpcb.com/partdetail/Quectel-L70RELM37/C5745045
+// mouser uses this datasheet (for the L70_R)
+// https://www.mouser.com/datasheet/2/1052/Quectel_L70_R_GPS_Specification_V2_2-1829911.pdf
+// L70RE-M37 L70REL-M37 L70REL-M37-EIT
+// https://www.quectel.com/gnss-iot-modules/
+/// L76 L76G single band
+
+//*******************
+// ATGM336 might not support this:
+// could use as PMTK_API_SET_PWR_SAV_MODE (elsewhere) rather than powering off?
+// would have to wait for ack or time, after changing
+// https://www.meme.au/nmea-checksum.html
+// power saving mod off: (should this really be checksum 2F?)
+// $PMTK320,0*26\r\n" manual has wrong checksum here?
+// power saving mod on:
+// $PMTK320,1*2E\r\n"
+//*******************

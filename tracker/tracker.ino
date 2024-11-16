@@ -258,6 +258,8 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // can't have fast baud rate? because buffer will overrun?
 // extern const int SERIAL2_BAUD_RATE = 38400;
 extern const int SERIAL2_BAUD_RATE = 9600;
+// extern const int SERIAL2_BAUD_RATE = 19200;
+
 
 // stuff moved to functions from this .ino (not libraries)
 #include "gps_functions.h"
@@ -383,7 +385,7 @@ bool drainSerialTo_CRorNL (void) {
     for (i = 0; i < 3; i++) {
         Watchdog.reset();
         if (!Serial.available()) {
-            Serial.println(F("Good: no Serial.available() ..sleep and reverify"));
+            Serial.println(F("Good! no Serial.available() ..sleep and reverify"));
             updateStatusLED();
             sleep_ms(200);
         }
@@ -421,6 +423,7 @@ float     WsprBattMin = 0.0;  // min Volts for HF (WSPR) radio module to transmi
 // GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
 float     HighVolt = 9.9;     
 
+uint64_t  loopCnt = 0;
 
 //***********************************************************
 void setup() {
@@ -477,11 +480,15 @@ void setup() {
 
     GpsFixMillis = 0;
     GpsStartMillis = millis();
-    GpsON(false); // no full cold gps reset
 
-    //**********************
+    // just full cold gps reset
+    // this means we get a full cold result on the aruduino IDE with usb power
+    // otherwise usb power means vbat is always on. so a hot reset!
+    GpsON(true); 
+
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
+
     // FIX! assume this is the state it was in before config menu? 
     // not always right. but loop will self-correct?
 
@@ -596,6 +603,10 @@ int tx_cnt_3;
 
 //*************************************************************************
 void loop() {
+    loopCnt++;
+    // temp hack to force DEVMODE and verbosity 9
+    forceHACK();
+
     bool found_any = drainSerialTo_CRorNL();
     if (found_any) {
         Serial.println(F("tracker.ino: Going to user_interface() from loop()"));
@@ -622,7 +633,11 @@ void loop() {
         GpsFixMillis = 0;
         GpsStartMillis = millis();
     }
-    GpsON(false);  // doesn't send cold reset
+    // just full cold gps reset
+    // this means we get a full cold result on the aruduino IDE with usb power
+    // otherwise usb power means vbat is always on. so a hot reset!
+    if (loopCnt == 1) GpsON(true); 
+    else GpsON(false); 
     //******************
 
     // no need to have GpsFirstFix
@@ -666,7 +681,8 @@ void loop() {
                 GpsOFF();
                 Watchdog.reset();
                 sleep_ms(1000);
-                GpsON(true);  // also do gps cold reset
+                // also do gps cold reset.
+                GpsON(true);  
                 GpsInvalidCnt = 0;
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
                 // https://forum.arduino.cc/t/possible-to-continue-the-main-loop/95541/5
@@ -690,20 +706,26 @@ void loop() {
             } else {
                 if (DEVMODE) Serial.println(F("loop() GPS 3d fix good?"));
 
-                // Just print this the first time we have a good fix
-                if (GpsFixMillis==0) {
-                    GpsFixMillis = millis() - GpsStartMillis;
-                    if (DEVMODE) 
-                            Serial.printf("loop() first good gps Fix, after off->on! GpsFixMillis %" PRIu64 EOL, 
-                            GpsFixMillis);
-                }
-
                 // GpsStartTime is reset every time we turn the gps on
                 // cleared every time we turn it off (don't care)
                 // Should this is also cleared when we turn gps off? no?
                 // floor divide to get milliseconds
-                GpsTimeToLastFix = (
-                    absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
+                /// FIX! is this the same as GpsFixMillis ?
+
+                // GpsStartTime is set by gps_functions.cpp 
+                if(GpsTimeToLastFix==0) {
+                    GpsTimeToLastFix = (
+                        absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
+                }
+
+                // Just print this the first time we have a good fix
+                if (GpsFixMillis==0) {
+                    GpsFixMillis = millis() - GpsStartMillis;
+                    if (DEVMODE) 
+                            Serial.printf("loop() first good gps Fix, after off->on! "
+                            "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL, 
+                            GpsFixMillis, GpsTimeToLastFix);
+                }
 
                 GpsInvalidCnt = 0;
                 // don't snapTelemetry buffer if there is an WSPR TX window soon (any if config)

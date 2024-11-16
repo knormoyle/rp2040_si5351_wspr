@@ -102,14 +102,16 @@ void forceHACK(void) {
     static bool HACK = true;
     if (HACK) {
         // HACK FIX! always true now for debug
+        // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
+        // recommends to always
+        // snprintf(buffer, sizeof(buffer), "%s", string);
+
         Serial.println(F("Forcing DEVMODE true, _devmode 1 (always for now)"));
         strncpy(_devmode, "1", sizeof(_devmode));
         DEVMODE = true;  // set when _devmode is set
         // HACK FIX! always 9 now for debug
+
         Serial.println(F("Forcing _verbosity to 9 (always for now)"));
-        // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
-        // recommends to always
-        // snprintf(buffer, sizeof(buffer), "%s", string);
         strncpy(_verbosity, "9", sizeof(_verbosity));
     }
     else {
