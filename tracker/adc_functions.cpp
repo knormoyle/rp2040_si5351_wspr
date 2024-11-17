@@ -49,8 +49,18 @@ float readTemp(void) {
     adc_voltage = ((float) adc_voltage / 3) * CONVERSION_FACTOR;
     // formula found on page 71 (section 4.1.1. hardware_adc) of
     // the Raspberry Pi Pico C/C++ SDK documentation
+    // bogus
     float tempC_a = 27 - (adc_voltage - 0.706) / 0.001721;
+
+    // okay
     float tempC_b = analogReadTemp();
+    tempC_b += analogReadTemp();
+    tempC_b += analogReadTemp();
+    tempC_b = tempC_b / 3;
+
+    // readTemp END tempC_a 82 tempC_b 25
+    // readTemp END tempC_a 82 tempC_b 24
+    //  tempC_a 437 tempC_b 24 tempC_c 24
 
     if (DEVMODE) Serial.printf("readTemp END tempC_a %.f tempC_b %.f" EOL, tempC_a, tempC_b);
     return tempC_b;

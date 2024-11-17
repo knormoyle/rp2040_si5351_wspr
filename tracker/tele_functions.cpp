@@ -86,18 +86,27 @@ void snapForTelemetry(void) {
     snprintf(t_altitude, sizeof(t_altitude), "%6d", altitude);
 
     //*********************************
+    // FIX! remove. this result is bogus. does it not work for temp? does temp have a /3 divider
     const float conversionFactor_a = 3.3f / (1 << 12); //read temperature
     int adc_val_a = 0;
-    // FIX! is this the right gpio for temp
-    // FIX! how do I have to setup this pin?
+
+    // FIX! does this not apply to pi pico?
+    // Reads the value from the specified analog pin. 
+    // The input range can be changed using analogReference(), 
+    // While the resolution can be changed analogReadResolution().
+    // takes 100usec
+
+    // pin is the analog input pint
     adc_val_a += analogRead(4);
     adc_val_a += analogRead(4);
     adc_val_a += analogRead(4);
 
-    float adc_a = ((float) adc_val_a * conversionFactor_a) / 3;
+    float adc_a = (conversionFactor_a * (float) adc_val_a) / 3;
     float tempC_a = 27.0f - (adc_a - 0.706f) / 0.001721f;
+    // does it need a divide by 3?
 
     //*********************************
+    // okay
     float vref = 3.3f;
     float tempC_b = 0.0;
     tempC_b += analogReadTemp(vref);
@@ -110,11 +119,16 @@ void snapForTelemetry(void) {
     // linear calibration and arithmetic mean of an analog pin
 
     //*********************************
+    // okay (it's getting analogReadTemp() from readTemp())
     float tempC_c = 0.0;
     for (int i = 0 ; i < 10 ; i++) {
         tempC_c += readTemp();
     }
     tempC_c = tempC_c / 10;
+
+    // readTemp END tempC_a 82 tempC_b 25
+    // readTemp END tempC_a 82 tempC_b 24
+    //  tempC_a 437 tempC_b 24 tempC_c 24
 
     //*********************************
     if (DEVMODE) Serial.printf("tempC_a %.f tempC_b %.f tempC_c %.f" EOL,
@@ -122,6 +136,7 @@ void snapForTelemetry(void) {
     float tempC = tempC_c;
     //*********************************
 
+    // tempC_c is best? 10*3 = 30 reads though ..tempC_b is just 3 reads
     // turn floats into strings
     // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string);
     if (tempC < -999.9) tempC = -999.9;

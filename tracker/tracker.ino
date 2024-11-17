@@ -310,9 +310,6 @@ extern const int SI5351A_I2C_ADDR = 0x60;
 extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 
 #include "si5351_functions.h"
-// 0 should never happen (init_rf_freq will always init from saved nvram/live state)
-uint32_t XMIT_FREQUENCY = 0;
-uint32_t PLL_SYS_MHZ = 133;
 
 //*********************************
 #include "u4b_functions.h"
@@ -354,11 +351,8 @@ char t_power[3] = { 0 };       // 2 bytes
 // these get set via terminal, and then from NVRAM on boot
 // init with all null
 char _callsign[7] = { 0 };
-char _id13[3] = { 0 };
-char _start_minute[2] = { 0 };
-char _lane[2] = { 0 };
 char _suffix[2] = { 0 };
-char _verbosity[2] = { 0 };
+char _verbose[2] = { 0 };
 char _TELEN_config[5] = { 0 };
 char _clock_speed[4] = { 0 };
 char _U4B_chan[4] = { 0 };
@@ -368,7 +362,22 @@ char _devmode[2] = { 0 };
 char _correction[7] = { 0 };
 char _go_when_rdy[2] = { 0 };
 
+//*****************************
+// decodes from _Band _U4B_chan
+// 0 should never happen for XMIT_FREQUENCY
+uint32_t XMIT_FREQUENCY = 0;
+char _id13[3] = { 0 };
+char _start_minute[2] = { 0 };
+char _lane[2] = { 0 };
+
+// decode of _clock_speed
+uint32_t PLL_SYS_MHZ = 133;
+
+// decode of _devmode
 bool DEVMODE = false;
+// decode of _verbose 0-9
+bool VERBY[10] = { false };
+//*****************************
 
 // t_power is clamped to string versions of these. use 0 if illegal
 // int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
@@ -450,7 +459,7 @@ uint64_t  loopCnt = 0;
 
 //***********************************************************
 void setup() {
-    // temp hack to force DEVMODE and verbosity 9
+    // temp hack to force DEVMODE and verbose 9
     forceHACK();
 
     //**********************
@@ -519,7 +528,7 @@ void setup() {
         setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
         // we're going to have to reboot..even balloon needs Serial created?
         // if serial data output buf is full, we just overflow it (on balloon)
-        // DEVMODE and verbosity used to limit output?
+        // DEVMODE and verbose used to limit output?
         // reboot
         Watchdog.enable(1000);  // milliseconds
         for (;;) { 
@@ -637,7 +646,7 @@ void loop() {
     loopCnt++;
     if (DEVMODE) Serial.printf(EOL "loop() loopCnt %" PRIu64 EOL, loopCnt);
     
-    // temp hack to force DEVMODE and verbosity 9
+    // temp hack to force DEVMODE and verbose 9
     forceHACK();
 
     bool found_any = drainSerialTo_CRorNL();
@@ -919,7 +928,7 @@ void loop() {
     loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
     if (DEVMODE) {
-        if (_verbosity[0] >= '1') {
+        if (_verbose[0] >= '1') {
             // maybe show GpsInvalidCnt also? how old are they
             StampPrintf(
                 "t_tx_count_0: %d "
@@ -932,7 +941,7 @@ void loop() {
                 t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, 
                 GpsTimeToLastFix, GpsInvalidCnt);
         }
-        if (_verbosity[0] >= '5') {
+        if (_verbose[0] >= '5') {
             StampPrintf(
                 "main/20: _Band %s "
                 "loop_ms_elapsed: %d millisecs "

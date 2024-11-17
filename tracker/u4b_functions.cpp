@@ -91,7 +91,7 @@ extern char _U4B_chan[4];
 extern char _lane[2];
 extern char _clock_speed[4];
 extern char _start_minute[2];
-extern char _verbosity[2];
+extern char _verbose[2];
 
 //*******************************
 char EncodeBase36(uint8_t val) {
@@ -251,7 +251,7 @@ void u4b_encode_std() {
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
     // normal telemetry
-    if (DEVMODE && _verbosity[0] >= '3') printf("creating U4B telemetry 0\n");
+    if (DEVMODE && _verbose[0] >= '3') printf("creating U4B telemetry 0\n");
     char grid_3_0[5];
     strncpy(grid_3_0, t_grid6, 4);
     grid_3_0[4] = 0;

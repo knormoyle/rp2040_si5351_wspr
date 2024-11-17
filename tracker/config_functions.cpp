@@ -37,24 +37,17 @@
 // #define FLASH_SECTOR_SIZE 4096
 // #define FLASH_PAGE_SIZE 256
 
-extern uint32_t XMIT_FREQUENCY;
-extern bool DEVMODE;
-extern uint32_t PLL_SYS_MHZ;
 
+//**************************************
 extern char _callsign[7];
-extern char _id13[3];
-extern char _start_minute[2];
-extern char _lane[2];
 extern char _suffix[2];
-extern char _verbosity[2];
+extern char _verbose[2];
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];
 extern char _Band[3];     // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _devmode[2];
-
-
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
 extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 // traquito: 500 correction does  ~7 hz lower on 20M (14095.600 base freq)
@@ -63,6 +56,23 @@ extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 // test only: 1 means you don't wait for starting minute from _U4B_channel ;
 // does wait for any 2 minute alignment though
 extern char _go_when_rdy[2];
+
+//**************************************
+// decodes from _Band _U4B_chan
+extern uint32_t XMIT_FREQUENCY;
+extern char _id13[3];
+extern char _start_minute[2];
+extern char _lane[2];
+
+// decode of _clock_speed
+extern uint32_t PLL_SYS_MHZ;
+// decode of _devmode
+extern bool DEVMODE;
+// decode of verbose 0-9
+extern bool VERBY[10]; 
+
+//**************************************
+
 
 /*
 Verbosity:
@@ -111,8 +121,8 @@ void forceHACK(void) {
         DEVMODE = true;  // set when _devmode is set
         // HACK FIX! always 9 now for debug
 
-        Serial.println(F("Forcing _verbosity to 9 (always for now)"));
-        strncpy(_verbosity, "9", sizeof(_verbosity));
+        Serial.println(F("Forcing _verbose to 9 (always for now)"));
+        strncpy(_verbose, "9", sizeof(_verbose));
     }
     else {
         if (_devmode[0] == '1') DEVMODE = true;
@@ -388,7 +398,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'V':
-                get_user_input("Enter Verbosity level (0-9): ", _verbosity, sizeof(_verbosity));
+                get_user_input("Enter Verbosity level (0-9): ", _verbose, sizeof(_verbose));
                 write_FLASH();
                 break;
             case 'T':
@@ -546,7 +556,7 @@ void read_FLASH(void) {
     // BE SURE YOU ONLY USE ONE PAGE: i.e. 256 bytes total
     // FIX! should we just use snprintf?
     strncpy(_callsign,     flash_target_contents + 0,  6); _callsign[6] = 0;
-    strncpy(_verbosity,    flash_target_contents + 6,  1); _verbosity[1] = 0;
+    strncpy(_verbose,    flash_target_contents + 6,  1); _verbose[1] = 0;
     strncpy(_TELEN_config, flash_target_contents + 7,  4); _TELEN_config[4] = 0;
     strncpy(_clock_speed,  flash_target_contents + 11, 3); _clock_speed[3] = 0;
     strncpy(_U4B_chan,     flash_target_contents + 14, 3); _U4B_chan[3] = 0;
@@ -569,8 +579,17 @@ void read_FLASH(void) {
     // fix anything bad! both in _* variables and FLASH (defaults)
     check_data_validity_and_set_defaults(); 
 
-    // hack _devmode _verbosity DEVMODE
+    // hack _devmode _verbose DEVMODE
+    // forces DEVMODE and _verbose == '9'
     forceHACK();
+
+    // additional decodes from the base nvram state variables
+    if (_verbose[0] >= '0' && _verbose[0] <= '9') {
+        for (int i = 0; i < 10 ; i++) VERBY[i] = false;
+        // 0 is ascii 48
+        int j = _verbose[0] - '0' ; // '0' is 48
+        VERBY[j] = true;
+    }
 
 }
 
@@ -583,7 +602,7 @@ void write_FLASH(void) {
 
     // don't take the extra null term (but _callsign might be short!)
     strncpy(data_chunk + 0,  _callsign, 6);
-    strncpy(data_chunk + 6,  _verbosity, 1);
+    strncpy(data_chunk + 6,  _verbose, 1);
     strncpy(data_chunk + 7,  _TELEN_config, 4);
     strncpy(data_chunk + 11, _clock_speed, 3);
     strncpy(data_chunk + 14, _U4B_chan, 3);
@@ -691,10 +710,10 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     // change to strcpy for null terminate
-    if (_verbosity[0] < '0' || _verbosity[0] > '9') {
-        Serial.printf("%s\n_verbosity %s is not supported/legal, initting to 1\n%s",
-            RED, _verbosity, NORMAL);
-        snprintf(_verbosity, sizeof(_verbosity), "1");
+    if (_verbose[0] < '0' || _verbose[0] > '9') {
+        Serial.printf("%s\n_verbose %s is not supported/legal, initting to 1\n%s",
+            RED, _verbose, NORMAL);
+        snprintf(_verbose, sizeof(_verbose), "1");
         write_FLASH();
         result = -1;
     }
@@ -826,7 +845,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     Serial.printf(" (id13:%s", _id13);
     Serial.printf(" start Minute:%s", _start_minute);
     Serial.printf(" lane:%s)\r\n", _lane);
-    Serial.printf("verbosity:%s\r\n", _verbosity);
+    Serial.printf("verbose:%s\r\n", _verbose);
     Serial.printf("TELEN config:%s\r\n", _TELEN_config);
     Serial.printf("clock speed:%sMhz\r\n", _clock_speed);
     Serial.printf("band:%s\r\n", _Band);
@@ -843,7 +862,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     Serial.print(F("C: change Callsign (6 char max)\r\n"));
     Serial.print(F("U: change U4b channel # (0-599)\r\n"));
     Serial.print(F("A: change band (10,12,15,17,20 default 20)\r\n"));
-    Serial.print(F("V: verbosity (0 for no messages, 9 for all) \r\n"));
+    Serial.print(F("V: verbose (0 for no messages, 9 for all) \r\n"));
     Serial.print(F("T: TELEN config\r\n"));
     Serial.print(F("K: clock speed  (default: 133)\r\n"));
     Serial.print(F("D: DEVMODE to enable messaging (default: 0)\r\n"));

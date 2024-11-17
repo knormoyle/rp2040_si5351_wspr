@@ -95,9 +95,7 @@
 // refer to gps.* stuff?
 // doesn't work
 
-bool ublox_high_alt_mode_enabled = false;
 extern TinyGPSPlus gps;
-extern bool DEVMODE;
 
 extern const int GpsPwr;
 extern const int GPS_NRESET_PIN; // connected!
@@ -115,7 +113,11 @@ extern const int SERIAL2_BAUD_RATE;
 // for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
 extern absolute_time_t GpsStartTime;  // usecs
 
-extern char _verbosity[2];
+// extern char _verbose[2];
+// decode of _devmode
+extern bool DEVMODE;
+// decode of verbose 0-9
+extern bool VERBY[10];
 
 // FIX! gonna need an include for this? maybe note
 // # include <TimeLib.h>
@@ -217,13 +219,13 @@ int checkGpsBaudRate(int desiredBaud) {
 
 //************************************************
 void checkInitialGpsOutput(void) {
-    if (DEVMODE) Serial.println(F("checkInitialGpsOutput START"));
+    if (VERBY[0]) Serial.println(F("checkInitialGpsOutput START"));
 
     // FIX! rely on watchdog reset in case we stay here  forever?
-    if (DEVMODE) Serial.println(F("drain any Serial2 garbage first"));
+    if (VERBY[9]) Serial.println(F("drain any Serial2 garbage first"));
     // drain any initial garbage
     while (Serial2.available()) {Serial2.read();}
-    if (DEVMODE) Serial.println(F("now look for some Serial2 bytes"));
+    if (VERBY[9]) Serial.println(F("now look for some Serial2 bytes"));
 
     int i;
     char incomingChar = { 0 };
@@ -245,25 +247,25 @@ void checkInitialGpsOutput(void) {
     nmeaBufferPrintAndClear();
     updateStatusLED();
     Watchdog.reset();
-    if (DEVMODE) Serial.println(F("checkInitialGpsOutput END"));
+    if (VERBY[0]) Serial.println(F("checkInitialGpsOutput END"));
 }
 
 //************************************************
 void setGpsBalloonMode(void) {
-    if (DEVMODE) Serial.println(F("setGpsBalloonMode START"));
+    if (VERBY[0]) Serial.println(F("setGpsBalloonMode START"));
     // FIX! should we not worry about setting balloon mode (3) for ATGM336?
     // Serial2.print("$PSIMNAV,W,3*3A\r\n");
     // normal mode
     // Serial2.print("$PSIMNAV,W,0*39\r\n");
     // have to wait for the sentence to get out, and also complete
     // sleepForMilliSecs(1000, false);
-    if (DEVMODE) Serial.println(F("setGpsBalloonMode END"));
+    if (VERBY[0]) Serial.println(F("setGpsBalloonMode END"));
 }
 
 void setGpsBaud(int desiredBaud) {
     // Assumes we can talk to gps already at some existing agreed
     // on Serial2/gps chip setup (setup by int/warm reset/full cold reset)
-    if (DEVMODE) Serial.printf("setGpsBaud START %d" EOL, desiredBaud);
+    if (VERBY[0]) Serial.printf("setGpsBaud START %d" EOL, desiredBaud);
     updateStatusLED();
     Watchdog.reset();
     // after power on, start off talking at 9600 baud. when we change it
@@ -336,7 +338,7 @@ void setGpsBaud(int desiredBaud) {
     Serial2.flush();
     delay(1000);
     Serial2.print(nmeaBaudSentence);
-    if (DEVMODE) Serial.printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
+    if (VERBY[9]) Serial.printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
     // have to wait for the sentence to get out and complete at the GPS
     delay(3000);
 
@@ -351,15 +353,15 @@ void setGpsBaud(int desiredBaud) {
     // makes it dangerous to use anything other than 9600 baud.
     Serial2.end();
     Serial2.begin(usedBaud);
-    if (DEVMODE) Serial.printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
+    if (VERBY[9]) Serial.printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
     // then have to change Serial2.begin() to agree
     sleepForMilliSecs(1000, false);
-    if (DEVMODE) Serial.printf("setGpsBaud END %d" EOL, usedBaud);
+    if (VERBY[0]) Serial.printf("setGpsBaud END %d" EOL, usedBaud);
 }
 
 //************************************************
 void GpsINIT(void) {
-    if (DEVMODE) Serial.println(F("GpsINIT START"));
+    if (VERBY[0]) Serial.println(F("GpsINIT START"));
     updateStatusLED();
     Watchdog.reset();
 
@@ -396,7 +398,7 @@ void GpsINIT(void) {
     Serial.printf("set GPS_ON_PIN%d HIGH" EOL, GPS_ON_PIN);
     //****************
 
-    if (DEVMODE) {
+    if (VERBY[9]) {
         Serial.printf("GPS_UART1_RX_PIN %d" EOL, GPS_UART1_RX_PIN);
         Serial.printf("GPS_UART1_TX_PIN %d" EOL, GPS_UART1_TX_PIN);
         Serial.printf("(gpio) GpsPwr %d" EOL, GpsPwr);
@@ -441,7 +443,7 @@ void GpsINIT(void) {
         checkInitialGpsOutput();
     }
 
-    if (DEVMODE) Serial.println(F("GpsINIT END"));
+    if (VERBY[0]) Serial.println(F("GpsINIT END"));
 }
 
 //************************************************
@@ -451,7 +453,7 @@ void GpsFullColdReset(void) {
 
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
-    if (DEVMODE) Serial.println(F("GpsFullColdReset START"));
+    if (VERBY[0]) Serial.println(F("GpsFullColdReset START"));
     GpsIsOn_state = false;
     GpsStartTime = 0;
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -541,12 +543,12 @@ void GpsFullColdReset(void) {
     setGpsBaud(desiredBaud);
     checkInitialGpsOutput();
     //******************
-    if (DEVMODE) Serial.println(F("GpsFullColdReset END"));
+    if (VERBY[0]) Serial.println(F("GpsFullColdReset END"));
 }
 
 //************************************************
 void GpsWarmReset(void) {
-    if (DEVMODE) Serial.println(F("GpsWarmReset START"));
+    if (VERBY[0]) Serial.println(F("GpsWarmReset START"));
     GpsIsOn_state = false;
     GpsStartTime = 0;
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -593,18 +595,18 @@ void GpsWarmReset(void) {
     setGpsBalloonMode();
 
     checkInitialGpsOutput();
-    if (DEVMODE) Serial.println(F("GpsWarmReset END"));
+    if (VERBY[0]) Serial.println(F("GpsWarmReset END"));
 }
 
 //************************************************
 void GpsON(bool GpsColdReset) {
-    if (DEVMODE) Serial.printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
+    if (VERBY[0]) Serial.printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
 
     if (GpsColdReset) {
-        if (DEVMODE) Serial.printf("GpsON GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
+        if (VERBY[9]) Serial.printf("GpsON GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
     }
     else {
-        if (DEVMODE) Serial.printf("GpsOn GpsIsOn_state %u GpsColdReset false" EOL, GpsIsOn_state);
+        if (VERBY[9]) Serial.printf("GpsOn GpsIsOn_state %u GpsColdReset false" EOL, GpsIsOn_state);
     }
     // could be off or on already
     // Assume GpsINIT was already done (pins etc)
@@ -615,7 +617,7 @@ void GpsON(bool GpsColdReset) {
     // does nothing if already on
     else if (!GpsIsOn()) GpsWarmReset();
 
-    if (DEVMODE) Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
+    if (VERBY[0]) Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
 }
 
 //************************************************
@@ -632,8 +634,9 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 */
 
 //************************************************
+bool ublox_high_alt_mode_enabled = false;
 void GpsOFF(void) {
-    if (DEVMODE) Serial.printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
+    if (VERBY[0]) Serial.printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
 
     digitalWrite(GpsPwr, HIGH);
     // Serial2.end()
@@ -675,16 +678,15 @@ void GpsOFF(void) {
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
 
-    if (DEVMODE) Serial.printf("GpsOFF END GpsIsOn_state %u" EOL, GpsIsOn_state);
+    if (VERBY[0]) Serial.printf("GpsOFF END GpsIsOn_state %u" EOL, GpsIsOn_state);
 }
 
 //************************************************
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
-    uint64_t current_millis = millis();
-    uint64_t entry_millis = current_millis;
-
+    if (VERBY[0]) Serial.println(F("updateGpsDataAndTime START"));
     Watchdog.reset();
+
     // ms has to be positive?
     // grab data for no more than ms milliseconds
     // stop if no data for 50 milliseconds
@@ -693,10 +695,12 @@ void updateGpsDataAndTime(int ms) {
     uint64_t last_serial2_millis = 0;
     uint64_t timeSinceLastChar_millis = 0;
     uint64_t duration_millis = 0;
+    uint64_t current_millis = millis();
+    uint64_t entry_millis = current_millis;
 
-    if (DEVMODE) Serial.println(F("updateGpsDataAndTime START"));
-    if (DEVMODE & (_verbosity[0] >= '8'))
-        Serial.printf("updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL, current_millis);
+    if (VERBY[0]) Serial.printf(
+        "updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL, 
+        current_millis);
 
     // clear the StampPrintf buffer, in case it had anything.
     DoLogPrint();
@@ -705,7 +709,6 @@ void updateGpsDataAndTime(int ms) {
     // we could keep track of how many sentences we get?
     // ideally we'd synchronize on the currently uknown start/end sentences?
     // Or we could exit when we get two of the same sentence? two of what?
-
     GpsON(false);
 
     // inc on '$'
@@ -738,7 +741,7 @@ void updateGpsDataAndTime(int ms) {
 
             // can't have the logBuffer fill up, because the unload is delayed
             int charsAvailable = (int) Serial2.available();
-            if (DEVMODE) {
+            if (VERBY[9]) {
                 if (charsAvailable > 28)
                     // this the case where we started this function with something in the buffer
                     // we unload each in less than 1ms..so we catch up
@@ -793,7 +796,7 @@ void updateGpsDataAndTime(int ms) {
             // this should eliminate duplicate CR LF sequences and just put one in the stream
             // FIX! might be odd if a stop is spread over two different calls here?
             // always start printing again on inital call to this function (see inital state)
-            if (DEVMODE & (_verbosity[0] >= '8')) {
+            if (VERBY[9]) {
                 if (enableStripping && 
                         (last_stopPrinting && !stopPrinting && !notprintable && !nullChar && !spaceChar)) {
                     // false: don't print if full, just empty
@@ -805,12 +808,10 @@ void updateGpsDataAndTime(int ms) {
             // FIX! do we get any unprintable? ignore unprintable chars. 
             if (!enableStripping || 
                 (!stopPrinting && !notprintable && !nullChar && !spaceChar)) {
-                // FIX! can we not send CR LF? don't care. but performance-wise, might be good?
-                // moved above
+                // FIX! can we not send CR LF? don't care. Performance-wise, might be good?
+                // moved above to send everything to TinyGPS++
                 // gps.encode(incomingChar);
-                if (DEVMODE & (_verbosity[0] >= '8')) {
-                    nmeaBufferAndPrint(incomingChar, false); 
-                }
+                if (VERBY[0]) nmeaBufferAndPrint(incomingChar, false); 
             }
 
             current_millis = millis();
@@ -831,7 +832,7 @@ void updateGpsDataAndTime(int ms) {
             // FIX! could the LED blinking have gotten delayed? ..we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
             duration_millis = current_millis - start_millis;
-            if (DEVMODE) StampPrintf(
+            if (VERBY[9]) StampPrintf(
                 "updateGpsDataAndTime early out: ms %d " 
                 "loop break at %" PRIu64 " millis,  duration %" PRIu64  EOL,
                  ms, current_millis, duration_millis);
@@ -848,9 +849,8 @@ void updateGpsDataAndTime(int ms) {
     } while ( (current_millis - entry_millis) < (uint64_t) ms); // works if ms is 0
 
 
-    // FIX! condition some of these with verbosityj
     // print/clear any accumulated NMEA sentence stuff
-    if (DEVMODE & (_verbosity[0] >= '8')) {
+    if (VERBY[0]) {
         // print should only get dumped here?
         nmeaBufferPrintAndClear(); // print and clear
         Serial.print(F(EOL));
@@ -858,7 +858,7 @@ void updateGpsDataAndTime(int ms) {
         DoLogPrint();
     }
 
-    if (DEVMODE & (_verbosity[0] >= '8')) {
+    if (VERBY[9]) {
         // seems like we get 12 sentences every time we call this function
         // should stay steady
         int diff = sentenceStartCnt - sentenceEndCnt;
@@ -874,7 +874,8 @@ void updateGpsDataAndTime(int ms) {
         // It includes dead time at start, dead time at end...
         // With some constant rate in the middle? but sentences could be split..
         // fixed: entry_millis is the entrance to the function
-        // star_millis is the first char. so duration_millis will include the end stall detect (25 millis)
+        // star_millis is the first char. so duration_millis will 
+        // include the end stall detect (25 millis)
         // So it's an average over that period.
         float AvgCharRateSec;
         if (duration_millis == 0) AvgCharRateSec = 0; 
@@ -884,22 +885,23 @@ void updateGpsDataAndTime(int ms) {
             AvgCharRateSec, duration_millis, incomingCharCnt);
     }
 
-    if (DEVMODE & (_verbosity[0] >= '8')) {
+    if (VERBY[9])
         Serial.printf("gps.time.isValid():%u" EOL, gps.time.isValid());
-    }
 
     if (gps.time.isValid()) {
         // Update the arduino (cpu) time. setTime is in the Time library.
         setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
-        if (DEVMODE & (_verbosity[0] >= '8'))
-            Serial.printf("setTime(%02u:%02u:%02u)" EOL,
-                gps.time.hour(), gps.time.minute(), gps.time.second());
+        if (VERBY[0]) Serial.printf("setTime(%02u:%02u:%02u)" EOL,
+            gps.time.hour(), gps.time.minute(), gps.time.second());
     }
 
     updateStatusLED();
     uint64_t total_millis = millis() - entry_millis;
+
     // will be interesting to see how much bigger this is compared to the duration_millis
-    if (DEVMODE) Serial.printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL, total_millis);
+    if (VERBY[0]) 
+        Serial.printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL, 
+            total_millis);
 }
 
 
@@ -980,9 +982,7 @@ void setGPS_DynamicModel6() {
     0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0xDC };
 
     while (!gps_set_success) {
-        if (DEVMODE) {
-            Serial.println(F("ublox DynamicModel6 try..."));
-        }
+        if (VERBY[9]) Serial.println(F("ublox DynamicModel6 try..."));
         sendUBX(setdm6, sizeof(setdm6)/sizeof(uint8_t));
         gps_set_success = getUBX_ACK(setdm6);
     }
@@ -991,9 +991,8 @@ void setGPS_DynamicModel6() {
 //************************************************
 void gpsDebug() {
     // https://github.com/StuartsProjects/GPSTutorial
-
-    if (!DEVMODE) return;
-    if (DEVMODE) Serial.println(F("GpsDebug START"));
+    if (!VERBY[0]) return;
+    Serial.println(F("GpsDebug START"));
 
     Serial.print(F(EOL EOL));
     Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars FixSents Checksum"));
@@ -1016,9 +1015,7 @@ void gpsDebug() {
     printInt(gps.failedChecksum(), true, 9);
 
     Serial.print(F(EOL EOL));
-
-    if (DEVMODE) Serial.println(F("GpsDebug END"));
-    if (DEVMODE) Serial.println(F("GpsINIT END"));
+    Serial.println(F("GpsDebug END"));
 }
 
 

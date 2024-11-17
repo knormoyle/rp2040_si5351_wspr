@@ -80,7 +80,7 @@ https://www.qrp-labs.com/images/synth/ms5351m.pdf
 // see externs in the *_functions.cpp
 // All char arrays have null terminators on values, so they can be easily printed for debug or other.
 // Flash is used to store configuration variables, to avoid recompiling firmware.
-// config to control whether printf's can send to stdout and verbosity levels to control amount of printing
+// config to control whether printf's can send to stdout and verbose levels to control amount of printing
 // flight will generally be set to no output to stdout (DEVMODE=0)
 // Only the pwm for wspr send is interrupt driven. Careful management of when uart data from gps is unloaded
 
