@@ -266,10 +266,18 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // GpsWarmReset is the normal "just power" on/off management that keeps vbat on
 
 // works
+// see gps_functions.cpp and problems with resetting to 9600 from higher bauds
+// too dangerous to use anything higher than 9600..could get stuck
+// with out vcc plus vbat power cycle.. I can't control vbat when on usb power
 extern const int SERIAL2_BAUD_RATE = 9600;
-// works
+
+// works going from 9600 to 19200
 // extern const int SERIAL2_BAUD_RATE = 19200;
-// ?
+// does it work  going back from 19200 to 9600 without unplugging usb power?
+// now it does! after asserting NRESET after power on, (during also)
+
+// can't seem to recover to 9600 after trying 38400? full cold reset not working?
+// need to unplug usb to get back to 9600
 // doesn't work now?
 // extern const int SERIAL2_BAUD_RATE = 38400;
 // extern const int SERIAL2_BAUD_RATE = 57600;

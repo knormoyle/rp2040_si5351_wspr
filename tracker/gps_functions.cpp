@@ -23,6 +23,11 @@
 // QFN package 40 pin 5x5x0.8mm
 // https://www.icofchina.com/d/file/xiazai/2016-12-05/b1be6f481cdf9d773b963ab30a2d11d8.pdf
 
+// says VDD_POR going low causes internal reset (nRESET)
+// nRST pin going low causes internal reset (nRESET)
+// nRST can be low while power is transition on, or it can be asserted/deasserted afer power on
+// tcxo_xref needs to be running
+
 
 //*******************************************
 // 'SIM28_Hardware Design_V1.07.pdf'
@@ -294,9 +299,12 @@ void setGpsBaud(int desiredBaud) {
         case 4800:   strncpy(nmeaBaudSentence, "$PCAS01,0*1C" CR LF, 21); break;
 
         // didn't work . now it worked?
-        // case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
+        // seems to be okay if chip is in 9600 state
+        case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
         // worked.. hmm broken? had to restart arduino to get it to work
-        case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
+        // maybe the PCAS commands are more sticky (write to rom?)
+        // or you have to be consistent?
+        // case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
 
         // worked
         case 19200:  strncpy(nmeaBaudSentence, "$PCAS01,2*1E" CR LF, 21); break;
@@ -336,6 +344,11 @@ void setGpsBaud(int desiredBaud) {
     // Serial2.end() Disables serial communication,
     // allowing the RX and TX pins to be used for general input and output.
     // To re-enable serial communication, call Serial.begin().
+
+    // FIX! we could try RP2040 using different bauds and see what baud rate it's at, then send
+    // the command to change baud rate. But really, how come we can't cold reset it to 9600?
+    // when it's in a not-9600 state? it's like vbat keeps the old baud rate on reset and/or power cycle??
+    // makes it dangerous to use anything other than 9600 baud.
     Serial2.end();
     Serial2.begin(usedBaud);
     if (DEVMODE) Serial.printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
@@ -355,15 +368,13 @@ void GpsINIT(void) {
     // Should turn gps off before doing init if you know it's been
     // initted already? 
 
+    //****************
+    // should have the default 8ma drive strength?
     gpio_init(GpsPwr);
     pinMode(GpsPwr, OUTPUT);
     gpio_pull_up(GpsPwr);
-    gpio_put(GpsPwr, HIGH); // init with gps power on?
-    Serial.printf("GpsPwr %d (power off)" EOL, GpsPwr);
+    gpio_put(GpsPwr, HIGH);
 
-    //****************
-    // FIX! are these doing anything?
-    // can you turn 'run' off for lower power mode? don't use, rely on vbat for gps hot reset
     gpio_init(GPS_NRESET_PIN);
     pinMode(GPS_NRESET_PIN, OUTPUT);
     gpio_pull_up(GPS_NRESET_PIN);
@@ -373,13 +384,16 @@ void GpsINIT(void) {
     pinMode(GPS_ON_PIN, OUTPUT);
     gpio_pull_up(GPS_ON_PIN);
     gpio_put(GPS_ON_PIN, HIGH);
+    //****************
 
     // Updated: Do a full reset since vbat may have kept old settings
     // don't know if that includes baud rate..maybe?
+    digitalWrite(GpsPwr, HIGH);
+    Serial.printf("set GpsPwr%d HIGH (power off)" EOL, GpsPwr);
     digitalWrite(GPS_NRESET_PIN, HIGH);
-    Serial.printf("set GPS_NRESET_PIN%d HIGH" EOL, GpsPwr);
+    Serial.printf("set GPS_NRESET_PIN%d HIGH" EOL, GPS_NRESET_PIN);
     digitalWrite(GPS_ON_PIN, HIGH);
-    Serial.printf("set GPS_ON_PIN%d HIGH" EOL, GpsPwr);
+    Serial.printf("set GPS_ON_PIN%d HIGH" EOL, GPS_ON_PIN);
     //****************
 
     if (DEVMODE) {
@@ -399,7 +413,8 @@ void GpsINIT(void) {
     Serial2.setFIFOSize(SERIAL2_FIFO_SIZE);
     Serial2.flush();
     Serial2.end();
-    // first talk at 9600
+
+    // first talk at 9600..but GpsFullColdReset() will do..so a bit redundant
     Serial2.begin(9600);
     sleepForMilliSecs(500, false);
     //****************
@@ -448,8 +463,8 @@ void GpsFullColdReset(void) {
     Serial.end();
 
     // assert reset during power off
-    digitalWrite(GPS_NRESET_PIN, LOW);
     digitalWrite(GPS_ON_PIN, HIGH);
+    digitalWrite(GPS_NRESET_PIN, LOW);
     digitalWrite(GpsPwr, HIGH);
     sleepForMilliSecs(1000, false);
 
@@ -463,28 +478,41 @@ void GpsFullColdReset(void) {
     // but we're relying on the Serial2.begin/end to be correct?
     // might as well commit to being right!
     //******************
-    // now power on with reset
-    digitalWrite(GPS_NRESET_PIN, LOW);
+
+    // now power on with reset asserted
     digitalWrite(GpsPwr, LOW);
     sleepForMilliSecs(1000, false);
-
-    // deassert reset after power on
+    // deassert NRESET after power on
     digitalWrite(GPS_NRESET_PIN, HIGH);
-    // wait for 2 secs before sending commands
+
+    // now: belt and suspenders: 
+    // wait 2 secs and assert/deassert NRESET
     sleepForMilliSecs(2000, false);
+
+    // experiment: should we bring the on pin low during the 2nd NRESET try?
+    digitalWrite(GPS_ON_PIN, LOW);
+    digitalWrite(GPS_NRESET_PIN, LOW);
+    sleepForMilliSecs(1000, false);
+    digitalWrite(GPS_NRESET_PIN, HIGH);
+    sleepForMilliSecs(1000, false);
+    digitalWrite(GPS_ON_PIN, HIGH);
+    sleepForMilliSecs(1000, false);
+
+    // gps comes up at 9600. so watch for that now
+    Serial.begin(9600);
+    // wait for 1 secs before sending commands
+    sleepForMilliSecs(1000, false);
 
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
 
-    // gps comes up at 9600. so match that
-    Serial.begin(9600);
-    sleepForMilliSecs(1000, false);
-
-    Serial.println(F("any output at 9600 after reset?"));
+    Serial.println(F("Should get some output at 9600 after reset?"));
     checkInitialGpsOutput();
 
-    // Try the full cold reset command now, after we can talk to it at 9600
-    if (true) {
+    if (false) {
+        Serial.println(F("Try the full cold reset command now, after we can talk to it at 9600"));
+        Serial.print("$PMTK104*37" CR LF);
+        sleepForMilliSecs(1000, false);
         Serial.print("$PMTK104*37" CR LF);
         sleepForMilliSecs(1000, false);
         Serial.flush();
