@@ -414,7 +414,7 @@ bool drainSerialTo_CRorNL (void) {
     char incomingByte = { 0 };
     bool found_CRorNL = false;
     bool found_any = false;
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < 1; i++) {
         Watchdog.reset();
         if (!Serial.available()) {
             Serial.println(F("Good! no Serial.available() ..sleep and reverify"));
@@ -567,14 +567,25 @@ void setup() {
         // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
         Serial.println(F("tracker.ino: Going to user_interface() from setup()"));
         updateStatusLED();
-        sleep_ms(1000);
+        // sleep_ms(1000);
         user_interface();
+        // won't return here, since all exits from user_interface reboot
     }
 
     //***************
-    Watchdog.reset();
     // get all the _* config state set and fix any bad values (to defaults)
-    read_FLASH();
+    int result = read_FLASH();
+    // if anything got fixed to defaults, no read again
+    
+    Watchdog.reset();
+    if (result == -1) {
+        Serial.println(F("WARN: read_FLASH got result -1 first time, redo. ..errors were fixed to default"));
+        result = read_FLASH();
+    }
+    Watchdog.reset();
+    if (result == -1) {
+        Serial.println(F("ERROR: read_FLASH got result -1 a second time, ignore"));
+    }
 
     //***************
     const uint32_t clkhz =  atoi(_clock_speed) * 1000000L;
@@ -649,12 +660,13 @@ void loop() {
     // temp hack to force DEVMODE and verbose 9
     forceHACK();
 
-    bool found_any = drainSerialTo_CRorNL();
-    if (found_any) {
-        Serial.println(F("tracker.ino: Going to user_interface() from loop()"));
+    if (Serial.available()) {
+        Serial.println(F("tracker.ino: (A) Going to user_interface() from setup()"));
+        setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
         updateStatusLED();
-        sleep_ms(1000);
+        // sleep_ms(1000);
         user_interface();
+        // won't return here, since all exits from user_interface reboot
     }
 
     Watchdog.reset();
@@ -1020,8 +1032,14 @@ void sleepSeconds(int secs) {
             // long enough to be sure to catch all NMEA during the broadcast interval of 1 sec
             // 1050: was this causing rx buffer overrun (21 to 32)
             updateGpsDataAndTime(1500);  // milliseconds
-
-            Serial.flush();
+            if (Serial.available()) {
+                Serial.println(F("tracker.ino: (C) Going to user_interface() from setup()"));
+                setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
+                updateStatusLED();
+                // sleep_ms(1000);
+                user_interface();
+                // won't return here, since all exits from user_interface reboot
+            }
         } else {
             sleep_ms(1500);
         }

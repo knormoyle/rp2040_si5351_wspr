@@ -142,29 +142,25 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
 
     int index = 0;
     int ch;
-
     // Display the prompt to the user
     Serial.printf("%s", prompt);
-    // FIX! does this work if printf doesn't
-    // fflush(stdout);
     Serial.flush();
-
-    while (1) {
-        
+    while (true) {
         int timeout_ms = 0;
+        Watchdog.reset();
         while (!Serial.available()) { 
-            sleep_ms(250);
-            timeout_ms += 250;
+            sleep_ms(100);
+            timeout_ms += 100;
             // this will eventually watchdog reset timeout if no character?
             updateStatusLED();
-            if (timeout_ms > 15 * 1000) {
-                Serial.println(F("ERROR: timeout waiting for input, rebooting" EOL));
+            if (timeout_ms > 60 * 1000) { // 60 secs
+                Serial.println(F("ERROR: exceeded 60 secs timeout waiting for input, rebooting" EOL));
                 Watchdog.enable(50);  // milliseconds
-                while (1) { ; }
+                while (true) { ; }
             }
          }
+
         ch = Serial.read();
-        
         if (ch == '\n' || ch == '\r') {  // Enter key pressed
             break;
         // Backspace key pressed (127 for most Unix, 8 for Windows)
@@ -184,11 +180,12 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
         // whenever something might have taken a long time like printing the big buffer
         updateStatusLED();
     }
-
     input_variable[index] = '\0';  // Null-terminate the string
     Serial.printf("\n");
 }
 
+
+//***************************************
 // Hex listing of the settings FLASH to stdout
 // buf: Address of FLASH to list <input>
 // len: Length of storage to list <input>
@@ -210,12 +207,9 @@ void config_intro(void) {
 
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
-
-    // should all do the same thing
     Serial.println(F("test Serial.println config_intro() Serial.println()"));
-    // can't use F() for this case
-    Serial.printf("test Serial.printf(\"..\", EOL) config_intro() Serial.printf%s", EOL);
-    Serial.print(F("test Serial.print(.. EOL) config_intro()" EOL));
+
+    // re-read the NVRAM just to see if we have any errors, and to see the VERBY decode
 
     Serial.print(F(CLEAR_SCREEN CURSOR_HOME BRIGHT));
     for (int i = 0; i < 10; i++) Serial.println();
@@ -229,6 +223,23 @@ void config_intro(void) {
     Serial.println("press any key to continue");
     Serial.print(F(NORMAL));
 
+    //***************
+    // get all the _* config state set and fix any bad values (to defaults)
+    // normally we only read it during setup() so we might not see prints from it in putty.log
+    int result = read_FLASH();
+    // if anything got fixed to defaults, no read again
+    Watchdog.reset();
+    if (result == -1) {
+        Serial.println(F("WARN: read_FLASH got result -1 first time, redo. ..errors were fixed to default"));
+        result = read_FLASH();
+    }
+    Watchdog.reset();
+    if (result == -1) {
+        Serial.println(F("ERROR: read_FLASH got result -1 a second time, ignore"));
+    }
+    //***************
+
+
     // wait..don't need the char user interrupted with 
     // int c = getchar_timeout_us(60000000);
     // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
@@ -239,7 +250,7 @@ void config_intro(void) {
     for (i = 0; i < 10*5; i++) {
         Watchdog.reset();
         if (!Serial.available()) {
-            sleep_ms(200);
+            sleep_ms(100);
         }
         else {
             incomingByte = Serial.read();
@@ -323,7 +334,6 @@ void user_interface(void) {
         Serial.print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
         // no comma to concat strings
         // F() to keep string in flash, not ram
-        Serial.print(F("(print) Enter single char command: /, X, C, U, V, T, K, A, P, D, R, G" EOL));
         Serial.println(F("(println) Enter single char command: /, X, C, U, V, T, K, A, P, D, R, G"));
         Serial.print(F(UNDERLINE_OFF NORMAL));
 
@@ -338,7 +348,7 @@ void user_interface(void) {
         for (i = 0; i < 100*5; i++) {
             Watchdog.reset();
             if (!Serial.available()) {
-                sleep_ms(200);
+                sleep_ms(100);
             }
             else { 
                 incomingByte = Serial.read();
@@ -502,8 +512,7 @@ void print_buf(const uint8_t *buf, int len) {
 // background
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 #define FLASH_BYTES_USED 28
-void read_FLASH(void) {
-
+int read_FLASH(void) {
     // there is no internal eeprom on rp2040
     // Therefore, do not frequently update the EEPROM or you may prematurely wear out the flash.
     // https://arduino-pico.readthedocs.io/en/latest/eeprom.html
@@ -577,22 +586,43 @@ void read_FLASH(void) {
     XMIT_FREQUENCY = init_rf_freq();
 
     // fix anything bad! both in _* variables and FLASH (defaults)
-    check_data_validity_and_set_defaults(); 
+    // -1 if anything got fixed
+    int result = check_data_validity_and_set_defaults(); 
 
     // hack _devmode _verbose DEVMODE
     // forces DEVMODE and _verbose == '9'
     forceHACK();
+    decodeVERBY();
+    return result;
+}
 
+void decodeVERBY(void) {
     // additional decodes from the base nvram state variables
-    if (_verbose[0] >= '0' && _verbose[0] <= '9') {
-        for (int i = 0; i < 10 ; i++) VERBY[i] = false;
-        // 0 is ascii 48
+    if (_verbose[0] < '0' && _verbose[0] > '9') {
+        // set everything if it's illegal ascii 
+        for (int i = 0; i < 10 ; i++) {
+            VERBY[i] = true;
+        }
+    }
+    else {
         int j = _verbose[0] - '0' ; // '0' is 48
-        VERBY[j] = true;
+        // j and everything below
+        // 0 is ascii 48
+        // decode '0' to '9' to thermometer code VERBY
+        for (int i = 0; i < 10 ; i++) {
+            // so for verbose 9, we'' get 0 thru 9 set to true
+            // for verbose 0 we'll just get 0
+            if (i <= j) VERBY[i] = true;
+            else VERBY[i] = false;
+        }
+    }
+    Serial.printf("decode _verbose %s to VERBY[9:0]" EOL, _verbose);
+    for (int i = 0; i < 10 ; i++) {
+        if (VERBY[i]) Serial.printf("VERBY[%d] true" EOL, i);
+        else Serial.printf("VERBY[%d] false" EOL, i);
     }
 
 }
-
 //***************************************
 // Write the user entered data into FLASH
 void write_FLASH(void) {
@@ -822,20 +852,19 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
+
     return result;
-    //****************
 }
 
 //***************************************
 // Function that writes out the current set values of parameters
 void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
-    Serial.println(F("show_values() START"));
+    if (VERBY[0]) Serial.println(F("show_values() START" EOL));
 
     // Serial.printf("%s%s%s\r\n", CLEAR_SCREEN, UNDERLINE_ON, BRIGHT);
     // since these macros are "" strings in defines.h, they will just concat here
     // no commas necessary?
     Serial.print(F(CLEAR_SCREEN UNDERLINE_ON BRIGHT "\r\n"));
-    Serial.print(F("1" "2" "3" "testing print string concat" "\r\n"));
 
     Serial.print(F("Current values:\r\n"));
     Serial.printf("%s%s\r\n", UNDERLINE_OFF, NORMAL);
@@ -869,6 +898,6 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     Serial.print(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)\r\n"));
     Serial.print(F("R: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)\r\n"));
 
-    Serial.println(F("show_values() END"));
+    if (VERBY[0]) Serial.println(F("show_values() END"));
 }
 

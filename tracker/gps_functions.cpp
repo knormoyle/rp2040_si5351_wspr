@@ -230,7 +230,7 @@ void checkInitialGpsOutput(void) {
     int i;
     char incomingChar = { 0 };
     // we drain during the GpsINIT now, oh. we should leave Gps ON so we get chars
-    for (i = 0; i < 5; i++) {
+    for (i = 0; i < 1; i++) {
         Watchdog.reset();
         if (!Serial2.available()) {
             Serial.println(F("no Serial2.available() ..sleep and reverify"));
@@ -242,7 +242,7 @@ void checkInitialGpsOutput(void) {
                 nmeaBufferAndPrint(incomingChar, true); // print if full
             }
         }
-        sleepForMilliSecs(2000, true); // return early if Serial2.available()
+        sleepForMilliSecs(1000, true); // return early if Serial2.available()
     }
     nmeaBufferPrintAndClear();
     updateStatusLED();
