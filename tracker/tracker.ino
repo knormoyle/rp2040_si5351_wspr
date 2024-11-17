@@ -445,10 +445,14 @@ bool drainSerialTo_CRorNL (void) {
 }
 
 //***********************************************************
-uint16_t  BeaconWait = 50;    // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
+// FIX! since we break out of the sleepSeconds when gps data starts (Serial2.available()) ..we could make 
+// this 60 secs. shouldn't be any benefit to being much more than 60 secs
+// but only 50 secs seems like you could leave just as things were arriving?
+// was 50. made it 61
+uint16_t  BeaconWait = 61;    // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
 uint16_t  BattWait = 1;       // seconds sleep if super capacitors/batteries are below BattMin
 
-// FIX! should this be non-zero?
+// FIX! should this be non-zero? Maybe all a don't care now with the voltage monitor that causes reset.
 float     GpsMinVolt = 0.0;   // min Volts for GPS to wake up.
 float     BattMin = 0.0;      // min Volts to wake up.
 float     WsprBattMin = 0.0;  // min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
@@ -650,6 +654,7 @@ int tx_cnt_3;
 void loop() {
     // getting 25 to 35 sec loop times from the BattWait/BeaconWait ?? (baud 19200)
     // some loops were 775 millis
+    // now getting 50 sec loops from the BeaconWait
 
     // FIX! should change baud back to 9600 (lower power?) only gettin 1800 baud during 300-400ms
     // when looking for data for slight >1 sec time period (all broadcasts are at 1 sec intervals)
@@ -755,7 +760,9 @@ void loop() {
 
         // FIX! why does isUpdated() get us past here?
         if (!gps.location.isValid() || (gps.location.age() >=1000 && !gps.location.isUpdated())) {
-            // these are the waits that give us 25-30 sec loop times?
+            // these are the waits that give us the long loop times
+            // they are looping with sleep, so it's a poor man's interrupt mechanism (with latency to react)
+            // Serial2.Activity() is the thing that gets it start to unload data.
             sleepSeconds(BeaconWait);
         } else {
             if (!gps.satellites.isValid() || gps.satellites.value() <= 3) {
@@ -1135,7 +1142,13 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
         proceed = false;
         while (!proceed) {
             // whenever we have spin loops we need to updateStatusLED()
-            updateStatusLED();
+            // the latency to decide if we had to do anything, and do it if we do   
+            // must be pretty small, so that it's okay that it introduces variance here
+            // we could disable this if not DEVMODE. means lights don't blink while transmitting?
+            // max time in this loop is less than watchdog interval?
+            // Leave it out for now, just in case it affects symbols
+            // maybe monitor elapsed time for updateStatusLED() ??
+            // updateStatusLED();
         }
         Watchdog.reset();
     }
