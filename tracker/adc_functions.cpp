@@ -15,11 +15,12 @@
 // per https://github.com/DeimosHall/RP2040_CPU_Temperature/blob/main/src/CPU.cpp
 
 extern const int BattPin;
-extern bool DEVMODE;
+// decode of _verbose 0-9
+extern bool VERBY[10];
 
 //****************************************************
 void adc_INIT() {
-    if (DEVMODE) Serial.println(F("adc_init START"));
+    if (VERBY[0]) Serial.println(F("adc_init START"));
     // FIX! why was this commented out?
     // FIX! move this into an adc_init() in adc_functions.cpp? and move readBatt in there?
     pinMode(BattPin, INPUT);
@@ -29,11 +30,11 @@ void adc_INIT() {
     adc_init();
     adc_set_temp_sensor_enabled(true);
 
-    if (DEVMODE) Serial.println(F("adc_init END"));
+    if (VERBY[0]) Serial.println(F("adc_init END"));
 }
 
 float readTemp(void) {
-    if (DEVMODE) Serial.println(F("readTemp START"));
+    if (VERBY[0]) Serial.println(F("readTemp START"));
     // 12-bit conversion, assume max value == ADC_VREF == 3.3 V
     const float CONVERSION_FACTOR = 3.3f / (1 << 12);
 
@@ -62,14 +63,14 @@ float readTemp(void) {
     // readTemp END tempC_a 82 tempC_b 24
     //  tempC_a 437 tempC_b 24 tempC_c 24
 
-    if (DEVMODE) Serial.printf("readTemp END tempC_a %.f tempC_b %.f" EOL, tempC_a, tempC_b);
+    if (VERBY[0]) Serial.printf("readTemp END tempC_a %.f tempC_b %.f" EOL, tempC_a, tempC_b);
     return tempC_b;
 }
 
 
 //****************************************************
 float readVoltage(void) {
-    if (DEVMODE) Serial.println(F("readVoltage START"));
+    if (VERBY[0]) Serial.println(F("readVoltage START"));
 
     // this should'nt be needed?
 
@@ -108,8 +109,8 @@ float readVoltage(void) {
     // float voltage = 3 * (float)adc_read() * conversionFactor;
     // if (voltage < 0.0f) voltage = 0.0f;
     // if (voltage > 9.9f) voltage = 9.9f;
-    if (DEVMODE) Serial.printf("voltage %.f adc_val %d" EOL, voltage, adc_val);
-    if (DEVMODE) Serial.printf("readVoltage END voltage %.f" EOL, voltage);
+    if (VERBY[0]) Serial.printf("voltage %.f adc_val %d" EOL, voltage, adc_val);
+    if (VERBY[0]) Serial.printf("readVoltage END voltage %.f" EOL, voltage);
     return voltage;
 }
 

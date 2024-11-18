@@ -14,8 +14,6 @@
 // https://www.bosch-sensortec.com/products/environmental-sensors/humidity-sensors-bme280/
 // 2.5x2.5mm 8 pin lga?
 
-
-
 // alternative bosch 8 pin sensors (same footprint?)
 // 3x3mm not recommended for new designs. 8 pin lga
 // mouser has 9289 digikey has 15534
@@ -152,6 +150,8 @@ extern const int BMP280_I2C1_SCL_PIN;
 extern Adafruit_BMP280 bmp;
 
 extern bool DEVMODE;
+// decode of _verbose 0-9
+extern bool VERBY[10];
 
 // This precision sensor from Bosch is the best low-cost sensing solution
 // for measuring barometric pressure and temperature.
@@ -159,7 +159,7 @@ extern bool DEVMODE;
 const int BMP280_I2C1_SCL_HZ = (1000 * 1000);
 
 void bmp_init(void) {
-    if (DEVMODE) Serial.println(F("bmp_init START"));
+    if (VERBY[0]) Serial.println(F("bmp_init START"));
     // always on? these pins don't exist
     // gpio_init(BMP280_VDD_ON_N_PIN)
 
@@ -173,7 +173,7 @@ void bmp_init(void) {
 
     gpio_set_function(BMP280_I2C1_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(BMP280_I2C1_SCL_PIN, GPIO_FUNC_I2C);
-    if (DEVMODE) Serial.println(F("bmp_init END"));
+    if (VERBY[0]) Serial.println(F("bmp_init END"));
 }
 
 
@@ -193,7 +193,7 @@ bmp.setSampling(
 
 
 void i2c_scan(void) {
-    if (DEVMODE) Serial.println(F("i2c_scan START"));
+    if (VERBY[0]) Serial.println(F("i2c_scan START"));
     uint8_t error, address;
     int nDevices;
     Serial.println("Scanning...");
@@ -214,7 +214,7 @@ void i2c_scan(void) {
     }
     if (nDevices == 0) Serial.println("No I2C devices found\n");
     else Serial.println("done\n");
-    if (DEVMODE) Serial.println(F("i2c_scan END"));
+    if (VERBY[0]) Serial.println(F("i2c_scan END"));
 }
 
 //*********************
@@ -222,22 +222,22 @@ void i2c_scan(void) {
 // FIX! have to add humidity code
 // FIX! change this to bme_280?
 float bmp_read_temperature(void) {
-    if (DEVMODE) Serial.println(F("bmp_read_temperature START"));
-    if (DEVMODE) Serial.println(F("bmp_read_temperature END"));
+    if (VERBY[0]) Serial.println(F("bmp_read_temperature START"));
+    if (VERBY[0]) Serial.println(F("bmp_read_temperature END"));
     return bmp.readTemperature();
 }
 
 float bmp_read_pressure(void) {
-    if (DEVMODE) Serial.println(F("bmp_read_pressure START"));
-    if (DEVMODE) Serial.println(F("bmp_read_pressure END"));
+    if (VERBY[0]) Serial.println(F("bmp_read_pressure START"));
+    if (VERBY[0]) Serial.println(F("bmp_read_pressure END"));
     return bmp.readPressure();
 }
 
 float bmp_read_humidity(void) {
     // FIX! need to switch to bme280
     // return bmp.readHumidity();
-    if (DEVMODE) Serial.println(F("bmp_read_humidity START"));
-    if (DEVMODE) Serial.println(F("bmp_read_humidity END"));
+    if (VERBY[0]) Serial.println(F("bmp_read_humidity START"));
+    if (VERBY[0]) Serial.println(F("bmp_read_humidity END"));
     return 0.0;
 }
 

@@ -6,13 +6,10 @@
 // what do we need ehre?
 #include <stdint.h>
 #include <stdarg.h>
-
-// do we need so we can slam in some printf?
-// #include <cstdio.h>
-// does stdio_init_all imply we want this
 #include <stdio.h>
 
 // stdlib https://www.tutorialspoint.com/c_standard_library/stdlib_h.htm
+// #include <cstdio.h>
 // #include <stdlib.h>
 // #include <string.h>
 
@@ -29,12 +26,14 @@
 
 #include "defines.h"
 extern bool DEVMODE;
+// decode of _verbose 0-9
+extern bool VERBY[10];
 
 //***********************************
 // why was this static?
 // is this used for signed or unsigned?
 void printInt(uint64_t val, bool valid, int len) {
-    if (!DEVMODE) return;
+    if (!VERBY[0]) return;
     char sz[32] = "*****************";
 
     // FIX! should this really be %ld? why not %d
@@ -64,7 +63,7 @@ void printInt(uint64_t val, bool valid, int len) {
 // why was this static
 // with arduino, can't we just use printf to stdout rather than Serial.print() ?
 void printDateTime(TinyGPSDate &d, TinyGPSTime &t) {
-    if (!DEVMODE) return;
+    if (!VERBY[0]) return;
     char sz[32];
     if (!d.isValid()) {
         Serial.print(F("********** "));
@@ -87,7 +86,7 @@ void printDateTime(TinyGPSDate &d, TinyGPSTime &t) {
 // why was this static
 // with arduino, can't we just use printf to stdout rather than Serial.print() ?
 void printStr(const char *str, int len) {
-    if (!DEVMODE) return;
+    if (!VERBY[0]) return;
     int slen = strlen(str);
     for (int i = 0; i < len; ++i) Serial.print(i < slen ? str[i] : ' ');
     // whenever something might have taken a long time like printing
@@ -98,7 +97,7 @@ void printStr(const char *str, int len) {
 // why was this static?
 // with arduino, can't we just use printf to stdout rather than Serial.print() ?
 void printFloat(float val, bool valid, int len, int prec) {
-    if (!DEVMODE) return;
+    if (!VERBY[0]) return;
 
     if (!valid) {
     while (len-- > 1) Serial.print('*');
@@ -117,7 +116,8 @@ void printFloat(float val, bool valid, int len, int prec) {
 //***********************************
 // got a "full" with 1024..had 996 things in it
 // from updateGpsDataAndTime()
-#define LOG_BUFFER_SIZE 2048
+// #define LOG_BUFFER_SIZE 2048
+#define LOG_BUFFER_SIZE 4096
 
 static char logBuffer[LOG_BUFFER_SIZE] = { 0 };
 

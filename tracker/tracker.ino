@@ -248,6 +248,7 @@ extern const int LED_STATUS_REBOOT_NO_SERIAL = 8;
 extern const int LED_STATUS_USER_CONFIG = 9;
 
 #include "led_functions.h"
+#include "keyboard_functions.h"
 
 //*********************************
 // some stuff on using namespace
@@ -274,8 +275,7 @@ extern const int GPS_1PPS_PIN = 17;   // input
 extern const int GPS_UART1_TX_PIN = 8;
 extern const int GPS_UART1_RX_PIN = 9;
 
-// talks to gps
-// extern const int SERIAL2_FIFO_SIZE = 4096;
+// talks to gps. can't really make the hardware uart fifo size bigger
 extern const int SERIAL2_FIFO_SIZE = 32;
 // earlephilhower says the hw serial units use the hardware rx fifo
 // so only 32?
@@ -310,7 +310,11 @@ extern const int SERIAL2_BAUD_RATE = 9600;
 // need to unplug usb to get back to 9600
 // doesn't work now?
 // extern const int SERIAL2_BAUD_RATE = 38400;
+
+// this is too fast. I can't keep up with incoming data
+// GPS burst: duration is 165 millisecs for 646 chars. 3954 baud effective
 // extern const int SERIAL2_BAUD_RATE = 57600;
+
 // don't use. rx buffer overruns
 // extern const int SERIAL2_BAUD_RATE = 115200;
 
@@ -511,15 +515,14 @@ void setup() {
     while (true) {
         // does core1 do Serial.begin() or Serial.end()
         // is this thread-safe and atomic? Okay if blocking
-        // Serial.print(F("setup() ..waiting for Serial.available()" EOL));
-        Serial.print(F("SETUP() ..WAITING FOR Serial.available()" EOL));
+        Serial.print(F(EOL "SETUP() ..WAITING FOR Serial.available()" EOL EOL));
         sleep_ms(5000);
         // core1 shouldn't be looking at Serial.available() any more. 
         // only core 0 (setup() and loop()) should
         // so don't care if this is thread safe
         if (Serial.available()) break;
     }
-    Serial.print(F("setup() ..LEAVING AFTER SEEING Serial.available()"));
+    Serial.print(F("SETUP() ..LEAVING AFTER SEEING Serial.available()"));
 }
 
 //*********************************************************
@@ -578,12 +581,11 @@ void loop() {
         loop_us_elapsed = absolute_time_diff_us(last_current_time_us, current_time_us);
         loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
-        // Serial.println(F("loop1() START"))
         if (core1_idled) {
-            Serial.println(F(EOL EOL "loop() LOOPING QUICKLY WITH core1_idled()" EOL EOL));
+            Serial.print(F(EOL "loop() LOOPING QUICKLY WITH core1_idled()" EOL EOL));
             sleep_ms(1000);
         } else {
-            Serial.println(F(EOL EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
+            Serial.print(F(EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
             sleep_ms(1000);
         }
 
@@ -603,9 +605,8 @@ void loop() {
             // https://arduino-pico.readthedocs.io/en/latest/multicore.html
             // https://stackoverflow.com/questions/3168275/printf-format-specifiers-for-uint32-t-and-size-t
             bool msgFound = rp2040.fifo.pop_nb(ptrTOS);
-            // Serial.printf("loop() rp2040_fifo_TOS %d msgFound %u" EOL, rp2040_fifo_TOS, msgFound);
             // %d not okay with int32_t?
-            Serial.printf(EOL EOL "loop() DOING COOL STUFF: rp2040_fifo_TOS %" PRIu32 " msgFound %u" EOL EOL, 
+            Serial.printf(EOL "loop() DOING COOL STUFF: rp2040_fifo_TOS %" PRIu32 " msgFound %u" EOL EOL, 
                 rp2040_fifo_TOS, msgFound);
         }
 
@@ -614,9 +615,6 @@ void loop() {
 
         int charsAvailable = (int) Serial.available();
         if (charsAvailable) {
-            // not thread safe!
-            // Serial.printf("loop1 saw charsAvailable and will sleep for 10 secs%d", charsAvailable)
-
             // bool rp2040.fifo.push_nb(uint32_t)
             // Pushes a value to the other core.
             // If the FIFO is full, returns false immediately and doesn’t block.
@@ -641,8 +639,8 @@ void loop() {
             core1_idled = true;
 
 
-            Serial.println(F(EOL EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
-            Serial.println(F(EOL EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
+            Serial.print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
+            Serial.print(F(EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
             // so will never resume the other core if we idled it?
             // rp2040.resumeOtherCore();
 
@@ -839,43 +837,6 @@ void setup1() {
     Watchdog.reset();
     Serial.println(F("setup1() END"));
     sleep_ms(1000);
-}
-
-//***********************************************************
-bool drainSerialTo_CRorNL (void) {
-    // Support hitting <enter> frantically to get to config menu right away on boot
-    int i;
-    char incomingByte = { 0 };
-    bool found_CRorNL = false;
-    bool found_any = false;
-    for (i = 0; i < 1; i++) {
-        Watchdog.reset();
-        if (!Serial.available()) {
-            Serial.println(F("Good! no Serial.available() ..sleep and reverify"));
-            updateStatusLED();
-            sleep_ms(200);
-        }
-        else {
-            found_any = true;
-            incomingByte = Serial.read();
-            Serial.println(incomingByte);
-            // FIX! 13 is ascii CR \r.
-            // FIX! 10 is ascii LF \n.
-            // we don't drain past CR/LF. so if you hit enter, the stuff after that stays as input
-            if (incomingByte == 13) {
-                Serial.println(F("Uh-oh. Found Serial incomingByte == 13 (CR)..will not drain the rest"));
-                // what happens if there is \r\n...I guess it will go to the setup menu with the \n
-                found_CRorNL = true;
-                break;
-            }
-            if (incomingByte == 10) {
-                Serial.println(F("Uh-oh. Found Serial incomingByte == 10 (CR)..will not drain the rest"));
-                found_CRorNL = true;
-                break;
-            }
-        }
-    }
-    return found_CRorNL | found_any;
 }
 
 //*************************************************************************

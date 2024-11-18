@@ -54,6 +54,8 @@ extern char _callsign[7];     // 6 bytes
 extern TinyGPSPlus gps;
 extern bool DEVMODE;
 extern int tx_cnt_0;
+// decode of _verbose 0-9
+extern bool VERBY[10];
 
 //****************************************************
 
@@ -62,7 +64,7 @@ int legalPowerSize = 19;
 
 //****************************************************
 void snapForTelemetry(void) {
-    if (DEVMODE) Serial.println(F("snapForTelemetry START"));
+    if (VERBY[0]) Serial.println(F("snapForTelemetry START"));
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
     if (!gps.location.isValid()) return;
@@ -131,7 +133,7 @@ void snapForTelemetry(void) {
     //  tempC_a 437 tempC_b 24 tempC_c 24
 
     //*********************************
-    if (DEVMODE) Serial.printf("tempC_a %.f tempC_b %.f tempC_c %.f" EOL,
+    if (VERBY[0]) Serial.printf("tempC_a %.f tempC_b %.f tempC_c %.f" EOL,
         tempC_a, tempC_b, tempC_c);
     float tempC = tempC_c;
     //*********************************
@@ -238,7 +240,7 @@ void snapForTelemetry(void) {
     if (tx_cnt_0 > 99) tx_cnt_0_val = 99;
     snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%3d", tx_cnt_0_val);
 
-    if (DEVMODE) {
+    if (VERBY[0]) {
         Serial.printf("t_************" EOL);
         Serial.printf("t_tx_count_0 %3s " EOL, t_tx_count_0);
         Serial.printf("t_callsign %6s" EOL, t_callsign);
@@ -256,7 +258,7 @@ void snapForTelemetry(void) {
         Serial.printf("t_pressure %7s " EOL, t_pressure);
         Serial.printf("t_************" EOL);
     }
-    if (DEVMODE) Serial.println(F("snapForTelemetry END"));
+    if (VERBY[0]) Serial.println(F("snapForTelemetry END"));
 }
 
 
@@ -264,7 +266,7 @@ void snapForTelemetry(void) {
 static float onewire_values[10] = { 0 };
 
 void process_TELEN_data(void) {
-    if (DEVMODE) Serial.println(F("process_TELEN_data START"));
+    if (VERBY[0]) Serial.println(F("process_TELEN_data START"));
     // FIX! where do these come from
     // minutes_since_boot
     // minutes_since_GPS_acquistion (should this be last time to fix);
@@ -316,5 +318,5 @@ void process_TELEN_data(void) {
     TELEN2_val1 = telen_values[2];
     // max values are 630k and 153k for val and val2
     TELEN2_val2 = telen_values[3];
-    if (DEVMODE) Serial.println(F("process_TELEN_data END"));
+    if (VERBY[0]) Serial.println(F("process_TELEN_data END"));
 }

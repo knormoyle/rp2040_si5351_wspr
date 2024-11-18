@@ -487,50 +487,42 @@ void GpsFullColdReset(void) {
     // deassert NRESET after power on
     digitalWrite(GPS_NRESET_PIN, HIGH);
 
-    // now: belt and suspenders: 
+
+    // experiment ..2nd reset assertion after power is good
+    // belt and suspenders: 
     // wait 2 secs and assert/deassert NRESET
-    sleepForMilliSecs(2000, false);
+    if (false) {
+        sleepForMilliSecs(2000, false);
+        digitalWrite(GPS_NRESET_PIN, LOW);
+        sleepForMilliSecs(1000, false);
+        digitalWrite(GPS_NRESET_PIN, HIGH);
+        sleepForMilliSecs(1000, false);
+    }
 
-    // experiment: should we bring the on pin low during the 2nd NRESET try?
-    digitalWrite(GPS_ON_PIN, LOW);
-    digitalWrite(GPS_NRESET_PIN, LOW);
-    sleepForMilliSecs(1000, false);
-    digitalWrite(GPS_NRESET_PIN, HIGH);
-    sleepForMilliSecs(1000, false);
-    digitalWrite(GPS_ON_PIN, HIGH);
-    sleepForMilliSecs(1000, false);
-
-    // gps comes up at 9600. so watch for that now
-    Serial2.begin(9600);
-    // wait for 1 secs before sending commands
-    sleepForMilliSecs(1000, false);
-
-    GpsIsOn_state = true;
-    GpsStartTime = get_absolute_time();  // usecs
-
-    Serial.println(F("Should get some output at 9600 after reset?"));
-    checkInitialGpsOutput();
-
-    if (true) {
-        Serial.println(F("Try the full cold reset command now, after we can talk to it at 9600"));
+    if (false) {
         // TOTAL HACK
         // since vbat seems to preserve the baud rate, even with NRESET assertion
         // try sending the full cold reset command at all reasonable baud rates
         // whatever baud rate the GPS was at, it should get one?
+        Serial.println(F("In case reset isn't everything: try full cold reset NMEA cmd at 9600 baud"));
         Serial.begin(9600);
         Serial.print("$PMTK104*37" CR LF);
         Serial.flush();
         sleepForMilliSecs(1000, false);
 
+        Serial.println(F("In case reset isn't everything, try full cold reset NMEA cmd at 19200 baud"));
         Serial.begin(19200);
         Serial.print("$PMTK104*37" CR LF);
         Serial.flush();
         sleepForMilliSecs(1000, false);
 
+        Serial.println(F("In case reset isn't everything, try full cold reset NMEA cmd at 38400 baud"));
         Serial.begin(38400);
         Serial.print("$PMTK104*37" CR LF);
         Serial.flush();
         sleepForMilliSecs(1000, false);
+
+        // We know we would have never told GPS a higher baud rate because we get data rx overruns
 
         // FIX! do we have to toggle power off/on to get the cold reset?
         // vbat is kept on when we toggle vcc
@@ -542,9 +534,19 @@ void GpsFullColdReset(void) {
         }
 
     }
+
     //******************
+    // gps shold come up at 9600 so look with our uart at 9600
+    Serial2.begin(9600);
+    // wait for 1 secs before sending commands
+    sleepForMilliSecs(1000, false);
+    Serial.println(F("Should get some output at 9600 after reset?"));
+    checkInitialGpsOutput();
+
     // FIX! we don't need to toggle power to get the effect?
     setGpsBalloonMode();
+
+    GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
 
     //******************
