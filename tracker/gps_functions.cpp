@@ -536,11 +536,11 @@ void GpsINIT(void) {
     // Updated: Do a full reset since vbat may have kept old settings
     // don't know if that includes baud rate..maybe?
     digitalWrite(GpsPwr, HIGH);
-    Serial.printf("set GpsPwr%d HIGH (power off)" EOL, GpsPwr);
+    Serial.printf("set GpsPwr %d HIGH (power off)" EOL, GpsPwr);
     digitalWrite(GPS_NRESET_PIN, HIGH);
-    Serial.printf("set GPS_NRESET_PIN%d HIGH" EOL, GPS_NRESET_PIN);
+    Serial.printf("set GPS_NRESET_PIN %d HIGH" EOL, GPS_NRESET_PIN);
     digitalWrite(GPS_ON_PIN, HIGH);
-    Serial.printf("set GPS_ON_PIN%d HIGH" EOL, GPS_ON_PIN);
+    Serial.printf("set GPS_ON_PIN %d HIGH" EOL, GPS_ON_PIN);
     //****************
 
     if (VERBY[9]) {

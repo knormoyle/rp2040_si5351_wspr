@@ -344,10 +344,11 @@ extern const int SI5351A_CLK_IDRV_2MA = (0 << 0);
 extern const int PLL_CALCULATION_PRECISION = 4;
 
 extern const int VFO_VDD_ON_N_PIN = 4;
+// are these really on Wire1
 extern const int VFO_I2C0_SDA_PIN = 12;
 extern const int VFO_I2C0_SCL_PIN = 13;
 
-// FIX! should these be in tracker.ino (for consistency?)
+// The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR, which is 0x60
 extern const int SI5351A_I2C_ADDR = 0x60;
 extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 
@@ -523,13 +524,13 @@ void setup() {
     // how to compare char: ..== 'R' is the same as == 82 (ascii value)
     if (found_any) {
         // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
-        Serial.print(F(EOL "SETUP() ..LEAVING AFTER SEEING Serial.available()" EOL EOL));
+        Serial.print(F(EOL "SETUP() ..LEAVING AFTER NOT SEEING Serial.available()" EOL EOL));
         updateStatusLED();
         // sleep_ms(1000);
         user_interface();
         // won't return here, since all exits from user_interface reboot
     }
-    Serial.print(F(EOL "SETUP() ..LEAVING AFTER NOT SEEING Serial.available()" EOL EOL));
+    Serial.print(F(EOL "SETUP() ..LEAVING SETUP() AFTER NOT SEEING Serial.available()" EOL EOL));
 
 }
 
@@ -744,14 +745,62 @@ void setup1() {
 
     //**********************
     vfo_init();
-    vfo_turn_off();
+    // FIX! don't turn off for now 11/18/24
+    // vfo_turn_off();
     vfo_turn_on(WSPR_TX_CLK_NUM);
 
     //**********************
     // necessary for Serial2 to work properly
     // we have only one i2c? what about the BMP280 ?
-    // probably don't even need this. the core may have already done it?
+
+
+    // kevin 11/18/24
+    // https://arduino-pico.readthedocs.io/en/latest/wire.html
+    // are the si5351 pins okay (ISC0) fore Wire? (ISC1) pints are for Wire1
+
+    // https://github.com/earlephilhower/arduino-pico/blob/master/docs/pins.rst
+    // The Raspberry Pi Pico has an incredibly flexible I/O configuration and most built-in peripherals (except for the ADC) can be used on multiple sets of pins. Note, however, that not all peripherals can use all I/Os. Refer to the RP2040 datasheet or an online pinout diagram for more details.
+
+    // Additional methods have been added to allow you to select a peripheral's I/O pins before calling ::begin. This is especially helpful when using third party libraries: the library doesn't need to be modified, only your own code in setup() is needed to adjust pinouts.
+
+    // doc had:
+    // bool setSDA(pin_size_t VFO_I2C0_SDA_PIN);
+    // bool setSCL(pin_size_t VFO_I2C0_SCL_PIN);
+    // now says 
+    // Wire.setSDA(pin_size_t VFO_I2C0_SDA_PIN);
+    // Wire.setSCL(pin_size_t VFO_I2C0_SCL_PIN);
+    // per May 2022 forum post
+
+    // this seemed key
+    // this is okay for Wire?
+    
+    /*
+    Wire.setSDA(VFO_I2C0_SDA_PIN); // 12
+    Wire.setSCL(VFO_I2C0_SCL_PIN); // 13
     Wire.begin();
+    */
+
+    // Notably this did a read of non-zero data (2a)
+    // Serial.println(F("SI5351A_MULTISYNTH0_BASE"));
+    // i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0);
+
+    // i2cReadTest START reg 2a val 00
+    // I2C read okay 2: reg:2a val:e8
+    // i2cReadTest END reg 2a val e8
+    // I seem to have gotten no errors on these reads now
+    // got rid of all places that power off vfo
+
+    // default pins for Wire  are SDA=4   SCL=5 
+    // default pins for Wire1 are SDA=26  SCL=27  
+    // our ISC1 for the BMP    is SDA 2,  SCL 3))
+    // our ISC0 for the Si5351 is SDA 12, SCL 13))
+
+    // https://docs.arduino.cc/language-reference/en/functions/communication/wire/
+    /*
+    Wire.begin();
+    */
+    // default pins for Wire 1 are SDA=26 SCL=27 ..wants to be our ISC0
+    // default pins for Wire 0 are SDA=4 SCL=5 (our ISC1 for the BMP)
 
     GpsINIT(); // also turns on and checks for output
     GpsOFF();
@@ -785,7 +834,8 @@ void setup1() {
 
     //**********************
     Watchdog.reset();
-    vfo_init();
+    // FIX! why would there be a second init . there is one in setup1()
+    // vfo_init();
 
     // sets minute/lane/id from chan number.
     // FIX! is it redundant at this point?..remove?
@@ -1006,7 +1056,10 @@ void loop1() {
     updateStatusLED();
     // always make sure tx is off?
     // does nothing if already off
-    vfo_turn_off();
+
+    // kevin 11/18/24
+    // FIX! why are we turing off
+    // vfo_turn_off();
 
     //******************
     // Gps may already be on
@@ -1599,7 +1652,9 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
 
     // FIX! leave on if we're going to do more telemetry?
     if (vfoOffWhenDone) {
-        vfo_turn_off();
+        // 11/18/24 kevin
+        // FIX! for now don't turn it off!
+        // vfo_turn_off();
     }
     Watchdog.reset();
     if (VERBY[0]) Serial.println(F("sendWSPR() END"));

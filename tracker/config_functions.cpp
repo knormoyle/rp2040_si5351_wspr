@@ -23,6 +23,7 @@
 #include "u4b_functions.h"
 #include "config_functions.h"
 #include "si5351_functions.h"
+#include "i2c_functions.h"
 
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
@@ -277,34 +278,79 @@ void config_intro(void) {
 
 //***************************************
 void show_TELEN_msg() {
-    Serial.println(F("show_TELEN_msg()"));
-    Serial.printf("%s%s\n\n\n\nTELEN CONFIG INSTRUCTIONS:\n\n%s%s",
-        BRIGHT, UNDERLINE_ON, UNDERLINE_OFF, NORMAL);
-    Serial.printf("* There are 4 possible TELEN values, corresponding to TELEN 1 value 1,\n");
-    Serial.printf("  TELEN 1 value 2, TELEN 2 value 1 and TELEN 2 value 2.\n");
-    Serial.printf("* Enter 4 characters (legal 0-9 or -) in TELEN_config.\n");
-    Serial.printf("  use a '-' (minus) to disable one or more values.\n");
-    Serial.printf("  example:\n");
-    Serial.printf("  '----' disables all telen \n");
-    Serial.printf("* example:\n");
-    Serial.printf("  '01--'\n");
-    Serial.printf("    Telen 1 value 1 to type 0\n");
-    Serial.printf("    Telen 1 value 2 to type 1\n");
-    Serial.printf("    disables all of TELEN 2\n");
+    Serial.print(F("show_TELEN_msg()"));
+    Serial.print(F(EOL "Telen Types:" EOL EOL));
+    Serial.print(F(BRIGHT UNDERLINE_ON));
+    Serial.print(F(EOL EOL EOL EOL "TELEN CONFIG INSTRUCTIONS:" EOL EOL));
+    Serial.print(F(UNDERLINE_OFF NORMAL));
+    Serial.print(F("* There are 4 possible TELEN values, corresponding to TELEN 1 value 1," EOL));
+    Serial.print(F("  TELEN 1 value 2, TELEN 2 value 1 and TELEN 2 value 2." EOL));
+    Serial.print(F("* Enter 4 characters (legal 0-9 or -) in TELEN_config." EOL));
+    Serial.print(F("  use a '-' (minus) to disable one or more values." EOL));
+    Serial.print(F("  example:" EOL));
+    Serial.print(F("  '----' disables all telen " EOL));
+    Serial.print(F("* example:" EOL));
+    Serial.print(F("  '01--'" EOL));
+    Serial.print(F("    Telen 1 value 1 to type 0" EOL));
+    Serial.print(F("    Telen 1 value 2 to type 1" EOL));
+    Serial.print(F("    disables all of TELEN 2" EOL));
 
-    Serial.printf("%s%s\nTelen Types:\n\n%s%s",
-        BRIGHT, UNDERLINE_ON, UNDERLINE_OFF, NORMAL);
-    Serial.printf("-: disabled, 0: ADC0, 1: ADC1, 2: ADC2, 3: ADC3,\n");
+    Serial.print(F(BRIGHT UNDERLINE_ON));
+    Serial.print(F(EOL "Telen Types:" EOL EOL));
+    Serial.print(F(UNDERLINE_OFF NORMAL));
+    Serial.print(F("-: disabled, 0: ADC0, 1: ADC1, 2: ADC2, 3: ADC3" EOL));
 
-    Serial.printf("4: minutes since boot, 5: minutes since GPS fix aquired \n");
-    Serial.printf("6-9: OneWire temperature sensors 1 though 4 \n");
-    Serial.printf("A: custom: OneWire temperature sensor 1 hourly low/high \n");
-    Serial.printf("B-Z: reserved for future I2C devices etc \n");
-    Serial.printf("\n(ADC values are in units of mV)\n");
-    Serial.printf("See the Wiki for more info.\n\n");
+    Serial.print(F("4: minutes since boot, 5: minutes since GPS fix aquired" EOL));
+    Serial.print(F("6-9: OneWire temperature sensors 1 though 4" EOL));
+    Serial.print(F("A: custom: OneWire temperature sensor 1 hourly low/high" EOL));
+    Serial.print(F("B-Z: reserved for future I2C devices etc" EOL));
+    Serial.print(F(EOL "(ADC values are in units of mV)" EOL));
+    Serial.print(F("See the Wiki for more info.n" EOL));
 }
 
-// called if keystroke from terminal on USB detected during operation.
+//********************************************
+// 'Z' command causes this to execute
+void do_i2c_scan_tests(void) {
+    // quick and dirty way to execute some different tests
+    if (false) {
+        // in i2c_functions.cpp
+        i2c_scan();
+    } else if (false) {
+        // in i2c_functions.cpp
+        i2c_scanner_setup();
+    } else {
+        
+        // FIX! should I do readback/compare on the first couple
+        // writes? to make sure the vfo is powered on and the writes complete?
+        // pass the read back for the compare? or pass a bool back for pass/fail
+        Serial.println(F(EOL "Can we read and write this one:"));
+
+
+        Serial.println(F(EOL "SI5351A_MULTISYNTH0_BASE reset state 0xe8 ?"));
+        i2cWrite(SI5351A_MULTISYNTH0_BASE, 0x55);
+        i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0x00);
+        i2cWrite(SI5351A_MULTISYNTH0_BASE, 0xaa);
+        i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0x00);
+        i2cWrite(SI5351A_MULTISYNTH0_BASE, 0xe8);
+        i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0x00);
+
+
+        Serial.println(F(EOL "Other reads:"));
+        Serial.println(F(EOL "SI5351A_MULTISYNTH1_BASE"));
+        i2cReadTest(SI5351A_MULTISYNTH1_BASE, 0);
+        Serial.println(F(EOL "SI5351A_CLK0_CONTROL"));
+        i2cReadTest(SI5351A_CLK0_CONTROL, 0);
+        Serial.println(F(EOL "SI5351A_CLK1_CONTROL"));
+        i2cReadTest(SI5351A_CLK1_CONTROL, 0);
+        Serial.println(F(EOL "SI5351A_OUTPUT_ENABLE_CONTROL"));
+        i2cReadTest(SI5351A_OUTPUT_ENABLE_CONTROL, 0);
+
+        Serial.println(F(EOL "SI5351A read reg 0x00"));
+        i2cReadTest(0, 0x00); // Device Status. D7 should be 1
+        Serial.println(F(EOL "SI5351A read reg 0x00"));
+        i2cReadTest(0, 0x00); // Device Status. D7 should be 1
+    }
+}
 
 //***************************************
 void user_interface(void) {
@@ -475,17 +521,9 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'Z':
-                Serial.println(F("SI5351A_MULTISYNTH0_BASE"));
-                i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0);
-                Serial.println(F("SI5351A_MULTISYNTH1_BASE"));
-                i2cReadTest(SI5351A_MULTISYNTH1_BASE, 0);
-                Serial.println(F("SI5351A_CLK0_CONTROL"));
-                i2cReadTest(SI5351A_CLK0_CONTROL, 0);
-                Serial.println(F("SI5351A_CLK1_CONTROL"));
-                i2cReadTest(SI5351A_CLK1_CONTROL, 0);
-                Serial.println(F("SI5351A_OUTPUT_ENABLE_CONTROL"));
-                i2cReadTest(SI5351A_OUTPUT_ENABLE_CONTROL, 0);
+                do_i2c_scan_tests();
                 break;
+
             case 13:  break;
             case 10:  break;
             default:
@@ -499,8 +537,8 @@ void user_interface(void) {
     }
 }
 
+//********************************************
 
-//***************************************
 // Reads flash where the user settings are saved
 // prints hexa listing of data
 // calls function which check data validity

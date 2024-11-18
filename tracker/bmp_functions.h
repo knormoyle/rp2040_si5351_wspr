@@ -10,7 +10,6 @@
 // what about the tiny gps library? already included in the .ino?
 
 void bmp_init(void);
-void i2c_scan(void);
 float bmp_read_temperature(void);
 float bmp_read_pressure(void);
 float bmp_read_humidity(void);

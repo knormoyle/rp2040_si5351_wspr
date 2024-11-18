@@ -17,6 +17,12 @@
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 #include "defines.h"
 
+
+// These are in arduino-pio core
+// https://github.com/earlephilhower/arduino-pico/tree/master/libraries
+#include <SPI.h>
+#include <Wire.h>
+
 // for i2c0
 #include "hardware/i2c.h"
 #define VFO_I2C_INSTANCE i2c0
@@ -35,6 +41,7 @@ extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 
 extern const int Si5351Pwr;
 extern const int VFO_VDD_ON_N_PIN;
+// FIX! are these just used on the Wire.begin?
 extern const int VFO_I2C0_SDA_PIN;
 extern const int VFO_I2C0_SCL_PIN;
 
@@ -54,28 +61,39 @@ extern const int PLL_CALCULATION_PRECISION;
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
 
-
+// https://wellys.com/posts/rp2040_arduino_i2c/
+// how to use the Pico’s 10 I2C interfaces, given the following issues with Arduino Wire:
+// There can only be two Wire interfaces, Wire and Wire1
+// All devices on a Wire/Wire1 interface needs to have its own address
 //****************************************************
+// pi pico can have two Wire
+// only one Wire and Wire pair can be active at a time
+
+// https://github.com/lkoepsel/I2C/blob/main/Arduino/Pico/I2C_Scanner/I2C_Scanner.ino
+
+
 // removed static
 void vfo_init(void) {
     if (VERBY[0]) Serial.println(F("vfo_init START"));
+    // this is also pin 4
+    // do the init first
+    gpio_init(Si5351Pwr);
     // turn ON VFO VDD
     // pin 4 ?
     pinMode(Si5351Pwr, OUTPUT);
+    gpio_pull_up(Si5351Pwr);
+    gpio_put(Si5351Pwr, 0);
 
-    // this is also pin 4
-    gpio_init(VFO_VDD_ON_N_PIN);
-    gpio_pull_up(VFO_VDD_ON_N_PIN);
-    gpio_put(VFO_VDD_ON_N_PIN, 0);
+    // FIX! does Wire.begin() take care of this?
+    if (true) {
+        // init I2C0 for VFO
+        i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+        gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
+        gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
+        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
+        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+    }
 
-    // init I2C0 for VFO
-    i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
-
-    gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
-    gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
-
-    gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-    gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
     if (VERBY[0]) Serial.println(F("vfo_init END"));
 }
 
@@ -87,11 +105,13 @@ void vfo_set_power_on(bool turn_on) {
     // if (turn_on == s_is_on) return;
 
     if ( turn_on) {
-        Serial.printf("set VDD_ON_N_PIN%d LOW (power on)" EOL, VFO_VDD_ON_N_PIN);
+        Serial.printf("set VDD_ON_N_PIN %d LOW (power on)" EOL, VFO_VDD_ON_N_PIN);
         digitalWrite(VFO_VDD_ON_N_PIN, LOW);
     } else {
-        Serial.printf("set VDD_ON_N_PIN%d HIGH (power off)" EOL, VFO_VDD_ON_N_PIN);
-        digitalWrite(VFO_VDD_ON_N_PIN, HIGH);
+        // Serial.printf("set VDD_ON_N_PIN %d HIGH (power off)" EOL, VFO_VDD_ON_N_PIN);
+        // digitalWrite(VFO_VDD_ON_N_PIN, HIGH);
+        // HACK..don't ever turn off!
+        Serial.printf("IGNORING (power stays on) ..set VDD_ON_N_PIN %d HIGH (power off)" EOL, VFO_VDD_ON_N_PIN);
     }
 
     // always just turn it on!
@@ -117,8 +137,9 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
     s_i2c_buf[1] = val;
 
     int res;
-    res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
-        SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
+    if (VERBY[0]) Serial.printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
+    // res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
+    res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false);
 
     if (res < PICO_ERROR_NONE) {
         if (VERBY[0]) Serial.printf("I2C write error %d: reg:%02x val:%02x" EOL, res, reg, val);
@@ -155,6 +176,38 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
 // Returns
 // Number of bytes read, or PICO_ERROR_GENERIC if address not acknowledged, no device present, or PICO_ERROR_TIMEOUT if a timeout occurred.
 
+// per https://github.com/earlephilhower/arduino-pico/discussions/1059
+// uint8_t _address = SI5351A_I2C_ADDR;
+// 
+// void writeRegister(uint8_t myRegister, uint8_t myValue) {
+//     uint8_t error;
+//     Wire.beginTransmission(_address);
+//     Wire.write(myRegister);
+//     Wire.write(myValue);
+//     error = Wire.endTransmission();
+//     if (error == 0) Serial.print("I2C device found at address 0x");
+//     if (error == 4) Serial.print("Unknown error at address 0x");
+// }
+// 
+// byte readRegister(uint8_t myRegister) {
+//     uint8_t error;
+//     byte returnValue;
+// 
+//     Wire.beginTransmission(_address);
+//     Wire.write(myRegister);
+//     error = Wire.endTransmission();
+//     if (error == 0) Serial.print("I2C device found at address 0x");
+//     if (error == 4) Serial.print("Unknown error at address 0x");
+// 
+//     Wire.requestFrom(_address, 1, true);
+//     // blocking
+//     while (Wire.available()) {
+//         returnValue = Wire.read();
+//     }
+//     return returnValue;
+// }
+
+//****************************************************
 // just reads two byte2
 int i2cReadTest(uint8_t reg, uint8_t val) {  // read reg via i2c
     if (VERBY[0]) Serial.printf("i2cReadTest START reg %02x val %02x" EOL, reg, val);
@@ -164,26 +217,31 @@ int i2cReadTest(uint8_t reg, uint8_t val) {  // read reg via i2c
     uint8_t s_i2c_buf[2];
     s_i2c_buf[0] = reg;
     s_i2c_buf[1] = 254; // a fixed value that should be overwritten?
+
+
     
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
     uint8_t val_orig = val;
     int res;
-    res = i2c_read_timeout_us(VFO_I2C_INSTANCE,
-        SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
+    // res = i2c_read_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
+    if (VERBY[0]) Serial.print(F("Doing i2c_read_blocking"));
+    res = i2c_read_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false);
 
-    val = s_i2c_buf[1];
-
-    if (res < PICO_ERROR_NONE) {
-        if (VERBY[0]) Serial.printf("I2C read error %d: reg:%02x val:%02x" EOL, res, reg, val);
-    }
+    if (res!=0) Serial.printf("ERROR: i2cReadTest got bad res %d reg %02x val %02x" EOL, res, reg, val);
+/*
     else {
-        if (VERBY[0]) Serial.printf("I2C read okay %d: reg:%02x val:%02x" EOL, res, reg, val);
+        // https://pschatzmann.github.io/pico-arduino/doc/html/class_pico_hardware_i2_c.html
+        // https://github.com/earlephilhower/arduino-pico/discussions/1059
+        // how are errors passed
+        uint8_t val_new;
+        val_new = readRegister(reg);  // read reg via i2c
+        s_i2c_buf[1] = val_new;
     }
-
+*/
+    val = s_i2c_buf[1];
     if (VERBY[0]) Serial.printf("i2cReadTest END reg %02x val %02x" EOL, reg, val);
     return res;
 }
-
-
 
 
 //****************************************************
@@ -484,35 +542,61 @@ void vfo_turn_on(uint8_t clk_num) {
         vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
     }
 
-    gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-    gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+    // does Wire.begin() deal with all of this
+    if (true) {
+        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
+        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+    }
 
     vfo_set_power_on(true);
 
-    // sleep_ms(100);
-    busy_wait_us_32(100000);
+    // kevin 11/18/24
+    Watchdog.reset();
+
+    sleep_ms(5000);
+
+    // too big a wait
+    // busy_wait_us_32(100000);
+
+    // timer_busy_wait_ms
+    // void timer_busy_wait_ms (timer_hw_t * timer, uint32_t delay_ms)
+    // Busy wait wasting cycles for the given number of milliseconds using the given timer instance.
+    // Parameters
+    // timer	
+    // the timer instance
+
 
     // output 7MHz on CLK0
     uint8_t reg;
     // Disable all CLK output drivers
     if (VERBY[0]) Serial.print(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
-    while (i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff) < PICO_ERROR_NONE) {
-        i2c_deinit(VFO_I2C_INSTANCE);
-        // sleep_ms(10);
-        busy_wait_us_32(10000);
-        i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
 
-        gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
-        gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
+    // HACK ..don't iterate
+    if (false) {
+        i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff);
+    } else {
+        while (i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff) < PICO_ERROR_NONE) {
+            i2c_deinit(VFO_I2C_INSTANCE);
+            // sleep_ms(10);
+            busy_wait_us_32(10000);
 
-        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+            // does Wire deal with all of this?
+            if (true) {
+                // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
+                i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+                gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
+                gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
+                gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
+                gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+            }
 
-        // sleep_ms(10);
-        busy_wait_us_32(10000);
-        if (VERBY[0]) Serial.print(F("vfo_turn_on trying to init the I2C0 pins inside loop"));
+            // sleep_ms(10);
+            busy_wait_us_32(10000);
+            if (VERBY[0]) Serial.print(F("vfo_turn_on trying to init the I2C0 pins inside loop" EOL));
+        }
     }
-    if (VERBY[0]) Serial.print(F("vfo_turn_on done trying to init the I2C0 pins in loop"));
+
+    if (VERBY[0]) Serial.print(F("vfo_turn_on done trying to init the I2C0 pins in loop" EOL));
 
     // Powerdown CLK's
     for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) {
@@ -571,9 +655,13 @@ void vfo_turn_off(void) {
     // sleep_ms(10);
     busy_wait_us_32(10000);
 
-    vfo_set_power_on(false);
-    gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
-    gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
+    // HACK never turn off for now
+    // vfo_set_power_on(false);
+
+    if (false)  {
+        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
+        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
+    }
     vfo_turn_off_completed = true;
     if (VERBY[0]) Serial.println(F("vfo_turn_off END"));
 }
