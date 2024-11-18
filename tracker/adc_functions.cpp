@@ -52,7 +52,7 @@ float readTemp(void) {
     // bogus
     float tempC_a = 27 - (adc_voltage - 0.706) / 0.001721;
 
-    // okay
+    // Another way
     float tempC_b = analogReadTemp();
     tempC_b += analogReadTemp();
     tempC_b += analogReadTemp();
@@ -70,8 +70,11 @@ float readTemp(void) {
 //****************************************************
 float readVoltage(void) {
     if (DEVMODE) Serial.println(F("readVoltage START"));
-    adc_select_input(BattPin);
-    delay(100); // milliseconds
+
+    // this should'nt be needed?
+
+    // adc_select_input(BattPin);
+    // delay(100); // milliseconds
 
     int adc_val = 0;
     adc_val += analogRead(BattPin);

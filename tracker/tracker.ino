@@ -13,7 +13,7 @@
 #include "pico/stdio.h"
 
 // what about this?
-// #include "class/cdc/cdc_device.h" 
+// #include "class/cdc/cdc_device.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -26,6 +26,39 @@
 #include <SPI.h>
 #include <Wire.h>
 
+// A complete copy of the Raspberry Pi Pico SDK is included with the arduino-pico core,
+// and all functions in the core are available inside the standard link libraries.
+// When you call SDK functions, the core and libraries are not aware of any changes 
+// to the Pico you perform. This may break the functionality of certain libraries in doing so.
+
+// Be wary of multicore and use of libraries. arduino-pico is not thread-safe.
+
+// The Arduino-Pico core implements a software-based Serial-over-USB port
+// using the USB ACM-CDC model to support a wide variety of operating systems.
+// Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate,
+// this rate is ignored since it is USB-based.
+
+// Also be aware that this USB Serial port is responsible forresetting the RP2040 
+// during the upload process,
+// following the Arduino standard of 1200bps = reset to bootloader).
+
+// The RP2040 provides two hardware-based UARTS with configurable pin selection.
+// Serial1 is UART0, and Serial2 is UART1.
+
+// The RP2040 chip has 2 cores that can run independently of each other,
+// sharing peripherals and memory with each other.
+// Arduino code will normally execute only on core 0,
+// with the 2nd core sitting idle in a low power state.
+// By adding a setup1() and loop1() function to your sketch you can make use of the second core.
+// Anything called from within the setup1() or loop1() routines will execute on the second core.
+// https://arduino-pico.readthedocs.io/en/latest/multicore.html
+
+// Using the 2nd core to handle keyboard interrupts and entry to config coe
+// core0 will stop balloon processing at an appropriate boundary which
+// may be longer than optimal for quick keyboard response.
+// changes to the config state may have atomicity issues, but the ballon code will
+// always be rebooted when done, as if to start from scratch after config changes
+
 // #include <ctype.h>
 // #include <defines.h>
 // #include "pico/stdlib.h"
@@ -33,6 +66,8 @@
 // #include "hardware/gpio.h"
 // #include "hardware/adc.h"
 // #include "hardware/clocks.h"
+
+
 
 //**************************
 // flash config
@@ -118,13 +153,6 @@ Can extract arbitrary data from any of the myriad NMEA sentences out there.
 // because the function will not alter it.
 // No const and it can.
 
-// https://arduino-pico.readthedocs.io/en/latest/serial.html
-// Arduino-Pico core implements a software-based Serial-over-USB port using the USB ACM-CDC model
-// Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate,
-// this rate is ignored since it is USB-based.
-// Be aware that this USB Serial port is responsible for
-// resetting the RP2040 during the upload process,
-// following the Arduino standard of 1200bps = reset to bootloader).
 
 // The RP2040 provides two hardware-based UARTS with configurable pin selection.
 // Serial1 is UART0, and Serial2 is UART1.
@@ -207,8 +235,8 @@ Adafruit_BMP280 bmp;
 JTEncode jtencode;
 
 //*********************************
+// all extern consts can be externed by a function
 extern const int STATUS_LED_PIN = 25;
-
 extern const int LED_STATUS_NO_GPS = 1;
 extern const int LED_STATUS_GPS_TIME = 2;
 extern const int LED_STATUS_GPS_FIX = 3;
@@ -229,14 +257,16 @@ extern const int LED_STATUS_USER_CONFIG = 9;
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 
 //*********************************
+// all extern consts can be externed by a function
 // so it can be used in gps_functions.cpp
-// extern is needed or the linker doesn't find it. see https://forum.arduino.cc/t/linker-problems-with-extern-const-struct/647136/2
+// extern is needed or the linker doesn't find it. 
+// see https://forum.arduino.cc/t/linker-problems-with-extern-const-struct/647136/2
 extern const int GpsPwr = 16; // output ..this cuts VCC, leaves VBAT
-// define is not used..GpsPwr is used. 
-// const int GPS_VCC_ON_N_PIN=16;     
+// define is not used..GpsPwr is used.
+// const int GPS_VCC_ON_N_PIN=16;
 
-extern const int GPS_NRESET_PIN = 5;  
-extern const int GPS_ON_PIN = 6;     
+extern const int GPS_NRESET_PIN = 5;
+extern const int GPS_ON_PIN = 6;
 
 // FIX! where is this used (calibration maybe)
 extern const int GPS_1PPS_PIN = 17;   // input
@@ -288,6 +318,7 @@ extern const int SERIAL2_BAUD_RATE = 9600;
 #include "gps_functions.h"
 
 //*********************************
+// all extern consts can be externed by a function
 // when we set both?
 extern const int WSPR_TX_CLK_1_NUM = 1;
 // this is the other differential clock for wspr? (was aprs)
@@ -315,7 +346,7 @@ extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 #include "u4b_functions.h"
 #include "tele_functions.h"
 
-// telemetry_buff
+// telemetry_buff all can be extern'ed by a function
 // init to 0 is just in case. Should always be set to something valid before use
 // empty string is not valid (not sure what will happen if used while empty..I suppose it can print ok)
 // always positive. clamp to 0 I guess
@@ -346,8 +377,11 @@ char t_callsign[7] = { 0 };
 char t_grid6[7] = { 0 };       // 6 bytes
 char t_power[3] = { 0 };       // 2 bytes
 
+int t_snap_cnt = 0;
+
 //***********************************************************
-// for config_functions.cpp
+// config strings: all can be extern'ed by a function
+// see config_functions.cpp
 // these get set via terminal, and then from NVRAM on boot
 // init with all null
 char _callsign[7] = { 0 };
@@ -363,6 +397,7 @@ char _correction[7] = { 0 };
 char _go_when_rdy[2] = { 0 };
 
 //*****************************
+// decoded stuff from config strings: all can be extern'ed by a function
 // decodes from _Band _U4B_chan
 // 0 should never happen for XMIT_FREQUENCY
 uint32_t XMIT_FREQUENCY = 0;
@@ -407,70 +442,241 @@ int64_t loop_ms_elapsed;
 uint64_t GpsFixMillis = 0;
 uint64_t GpsStartMillis = 0;
 
-//***********************************************************
-bool drainSerialTo_CRorNL (void) {
-    // Support hitting enter frantically to get to config menu right away on boot
-    int i;
-    char incomingByte = { 0 };
-    bool found_CRorNL = false;
-    bool found_any = false;
-    for (i = 0; i < 1; i++) {
-        Watchdog.reset();
-        if (!Serial.available()) {
-            Serial.println(F("Good! no Serial.available() ..sleep and reverify"));
-            updateStatusLED();
-            sleep_ms(200);
-        }
-        else {
-            found_any = true;
-            incomingByte = Serial.read(); 
-            Serial.println(incomingByte);
-            // FIX! 13 is ascii CR \r.
-            // FIX! 10 is ascii LF \n.
-            // we don't drain past CR/LF. so if you hit enter, the stuff after that stays as input
-            if (incomingByte == 13) {
-                Serial.println(F("Uh-oh. Found Serial incomingByte == 13 (CR)..will not drain the rest"));
-                // what happens if there is \r\n...I guess it will go to the setup menu with the \n
-                found_CRorNL = true;
-                break;
-            }
-            if (incomingByte == 10) {
-                Serial.println(F("Uh-oh. Found Serial incomingByte == 10 (CR)..will not drain the rest"));
-                found_CRorNL = true;
-                break;
-            }
-        }
-    }
-    return found_CRorNL | found_any;
-}
+uint64_t  loopCnt = 0;
 
 //***********************************************************
-// FIX! since we break out of the sleepSeconds when gps data starts (Serial2.available()) ..we could make 
-// this 60 secs. shouldn't be any benefit to being much more than 60 secs
-// but only 50 secs seems like you could leave just as things were arriving?
-// was 50. made it 61
-uint16_t  BeaconWait = 61;    // seconds sleep for next beacon (HF or VHF). Optimized value, do not change this if possible.
-uint16_t  BattWait = 1;       // seconds sleep if super capacitors/batteries are below BattMin
-
-// FIX! should this be non-zero? Maybe all a don't care now with the voltage monitor that causes reset.
+// FIX! should this be non-zero? 
+// Maybe all a don't care now with the voltage monitor that causes reset.
 float     GpsMinVolt = 0.0;   // min Volts for GPS to wake up.
 float     BattMin = 0.0;      // min Volts to wake up.
 float     WsprBattMin = 0.0;  // min Volts for HF (WSPR) radio module to transmit (TX) ~10 mW
 // GPS is always on if the voltage exceeds this value to protect solar caps from overcharge
-float     HighVolt = 9.9;     
+float     HighVolt = 9.9;
 
-uint64_t  loopCnt = 0;
 
 //***********************************************************
+// To allocate a separate 8K stack for core 1, 
+// resulting in 8K stacks being available for both cores, 
+bool core1_separate_stack = true;
+
+//***********************************************************
+// https://arduino-pico.readthedocs.io/en/latest/multicore.html
+// are the Serial.print* functions not threadsafe?  
+// Generally Serial is not thread-safe.
+// simple Serial.print() might be thread safe
+// but not Serial.println or especially not Serial.printf()
+
+// everything is shared/accessible between two cores, but little is thread safe?
+
 void setup() {
+
+    // what things are thread safe?
+    // https://forums.raspberrypi.com/viewtopic.php?t=370841
+    // sleep_us (Depends on Children, Unsolved due to "sleep_until")
+
+    // absolute_time_diff_us (Depends on Children, Looks SMP Safe/Thread Safe)
+    // get_absolute_time (Depends on Children, Looks SMP Safe/Thread Safe)
+
+    // to_us_since_boot (Looks SMP Safe/Thread Safe)
+    // update_us_since_boot (Looks SMP Safe/Thread Safe)
+    // time_reached (Depends on Children, Looks SMP Safe/Thread Safe)
+    // busy_wait_until (Depends on Children, Looks SMP Safe/Thread Safe)
+    // tight_loop_contents (NoOp, SMP Safe/Thread Safe)
+    // make_timeout_time_us (Depends on Children, Looks SMP Safe/Thread Safe)
+    // delayed_by_us (Depends on Children, Looks SMP Safe/Thread Safe)
+    // __get_current_exception (Looks SMP Safe/Thread Safe)
+
+    // loop on this and leave if once we get Serial.available()
+    // otherwise just stay here! This will give us a test
+    // of Serial.print() thread-safeness. We can remove the prints later to be careful.
+    absolute_time_t current_time_us  = 0;
+    absolute_time_t last_current_time_us  = 0;
+    int64_t loop_us_elapsed;
+    int64_t loop_ms_elapsed;
+
+    // wait 1 sec for core1 to create Serial
+    sleep_ms(1000);
+    while (true) {
+        // don't use watchog reset..not thread safe?
+        // can use absolute_time_diff() and get_absolute_time()
+        last_current_time_us = current_time_us;
+        current_time_us = get_absolute_time();
+        loop_us_elapsed = absolute_time_diff_us(last_current_time_us, current_time_us);
+        loop_ms_elapsed = loop_us_elapsed / 1000ULL;
+        // assume sleep_ms is okay.
+        if (!Serial) sleep_ms(1000);
+        else break;
+    }
+
+    while (true) {
+        // does core1 do Serial.begin() or Serial.end()
+        // is this thread-safe and atomic? Okay if blocking
+        // Serial.print(F("setup() ..waiting for Serial.available()" EOL));
+        Serial.print(F("SETUP() ..WAITING FOR Serial.available()" EOL));
+        sleep_ms(5000);
+        // core1 shouldn't be looking at Serial.available() any more. 
+        // only core 0 (setup() and loop()) should
+        // so don't care if this is thread safe
+        if (Serial.available()) break;
+    }
+    Serial.print(F("setup() ..LEAVING AFTER SEEING Serial.available()"));
+}
+
+//*********************************************************
+
+#define MSG_LOOP1_CONFIG_ACQUIRE 1
+#define MSG_LOOP1_CONFIG_RELEASE 2
+
+// Don't use the low level pi pico interprocessor stuff:
+// hmm. the raw pico interprocessor fifo/irq stuff
+// https://github.com/raspberrypi/pico-examples/tree/master/multicore/multicore_fifo_irqs
+
+// use arduino-pico core interprocessor stuff
+// run all balloon stuff on core1
+// core 0 just looks for keyboard interrupts. Can interrupt core1 to prevent
+// non-thread-safe flash access and Serial.print (will it interrupt a Serial.print in the middle? I suppose)
+// what will happen when it resumes a Serial.print on core1?
+// I guess undefined. So can't resume core1 after interrupting it. Can only reboot which
+// is the normal behavior afte messing with config state.
+
+// So core0 can stop core1 at any time. Do stuff with config, then reboot.
+// That should be safe.
+
+//**************************************
+// Here is our very basic way to not worry about thread-safe for keyboard usb serial -> user configuration changes
+
+// rp2040.idleOtherCore()
+// Sends a message to stop the other core
+// (i.e. when called from core 0 it pauses core 1, and vice versa).
+// Waits for the other core to acknowledge before returning.
+
+// The other core will have its interrupts disabled and be busy-waiting in an RAM-based routine,
+// so flash and other peripherals can be accessed.
+
+// NOTE idle core 0 too long, and the USB port can become frozen.
+// Because core 0 manages the USB and needs to service IRQs in a timely manner (which it can’t do when idled).
+// So we never idle core 0 !!
+//**************************************
+
+// void rp2040.resumeOtherCore()
+
+void loop() {
+    bool core1_idled = false;
+    // FIX! musing: should never get any usb/serial input while balloon is flying
+    // Could disable this if we knew we're flying.
+    // How? equivalent to cutting off USB connector.
+    // Shouldn't be necessary?
+    // if garbage serial arrived, and we went to config mode, eventually we'd timeout/reboot
+    absolute_time_t current_time_us  = 0;
+    absolute_time_t last_current_time_us  = 0;
+    int64_t loop_us_elapsed;
+    int64_t loop_ms_elapsed;
+    while (true) {
+        // don't use watchog reset..not thread safe?
+        last_current_time_us = current_time_us;
+        current_time_us = get_absolute_time();
+        loop_us_elapsed = absolute_time_diff_us(last_current_time_us, current_time_us);
+        loop_ms_elapsed = loop_us_elapsed / 1000ULL;
+
+        // Serial.println(F("loop1() START"))
+        if (core1_idled) {
+            Serial.println(F(EOL EOL "loop() LOOPING QUICKLY WITH core1_idled()" EOL EOL));
+            sleep_ms(1000);
+        } else {
+            Serial.println(F(EOL EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
+            sleep_ms(1000);
+        }
+
+        while (rp2040.fifo.available()) {
+            // int32_t fifo_TOS;
+            uint32_t rp2040_fifo_TOS; 
+            uint32_t *ptrTOS; 
+            ptrTOS = &rp2040_fifo_TOS;
+            // send a reference to a string?
+            // https://forum.arduino.cc/t/how-to-transfer-strings-between-two-cores-on-pico/1310533/3
+
+            // don't block if the fifo is empty. (that would be a bug case)
+            // https://www.geeksforgeeks.org/passing-pointers-to-functions-in-c/
+            // https://www.tutorialspoint.com/cprogramming/c_passing_pointers_to_functions.htm
+
+            // pass the pointer so I get fifo_TOS modified
+            // https://arduino-pico.readthedocs.io/en/latest/multicore.html
+            // https://stackoverflow.com/questions/3168275/printf-format-specifiers-for-uint32-t-and-size-t
+            bool msgFound = rp2040.fifo.pop_nb(ptrTOS);
+            // Serial.printf("loop() rp2040_fifo_TOS %d msgFound %u" EOL, rp2040_fifo_TOS, msgFound);
+            // %d not okay with int32_t?
+            Serial.printf(EOL EOL "loop() DOING COOL STUFF: rp2040_fifo_TOS %" PRIu32 " msgFound %u" EOL EOL, 
+                rp2040_fifo_TOS, msgFound);
+        }
+
+        // This core can handle modifying config state, not the other core
+        // so the other core just should be timely in stopping normal balloon work.
+
+        int charsAvailable = (int) Serial.available();
+        if (charsAvailable) {
+            // not thread safe!
+            // Serial.printf("loop1 saw charsAvailable and will sleep for 10 secs%d", charsAvailable)
+
+            // bool rp2040.fifo.push_nb(uint32_t)
+            // Pushes a value to the other core.
+            // If the FIFO is full, returns false immediately and doesn’t block.
+            // If the push is successful, returns true.
+            // notify the other core to stop what it's doing (at a boundary where it checks)
+            // should have < 2 sec response time for that, except if it's going thru
+            // the lengthy boot sequence which only checks when done with setup?
+
+            // 1 means we're taking over access to flash and config data. core 0 should idle
+            // until it gets a 0 which means we're done
+            // use the blocking calls
+
+            // Not really using this fifo for acquire/release. Testing for future possibilities.
+            // make this non-blocking in case fifo fills
+            rp2040.fifo.push_nb(MSG_LOOP1_CONFIG_ACQUIRE);
+
+            // this waits for the other core to acknowledge before completing.
+            // what if the other core is already idle?
+            // Have core1_idled state? don't send again if we know it's idle
+
+            if (!core1_idled) rp2040.idleOtherCore();
+            core1_idled = true;
+
+
+            Serial.println(F(EOL EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
+            Serial.println(F(EOL EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
+            // so will never resume the other core if we idled it?
+            // rp2040.resumeOtherCore();
+
+            // bool rp2040.fifo.pop_nb(uint32_t *dest)
+            // Reads a value from this core’s FIFO and places it in dest.
+            // Will return true if successful, or false if the pop would block.
+            // but since he will be also using Serial.print* that should be thread safe?
+
+            // make this non-blocking in case fifo fills
+            rp2040.fifo.push_nb(MSG_LOOP1_CONFIG_RELEASE);
+        }
+    }
+}
+
+//***********************************************************
+void setup1() {
+    Watchdog.enable(30000);
+    Watchdog.reset();
+    // this is a don't care because USB
+    // Serial.begin(115200);
+
+    // from SleepyDog library
+    // any use for Watchdog.sleep()  instead of sleep_ms() ?
+    // To enter low power sleep mode call Watchdog.sleep() like below
+    // and the watchdog will allow low power sleep for as long as possible.
+    // The actual amount of time spent in sleep will be returned in // milliseconds).
+    // digitalWrite(LED_BUILTIN, LOW); // Show we're asleep
+    // int sleepMS = Watchdog.sleep();
+
     // temp hack to force DEVMODE and verbose 9
     forceHACK();
 
     //**********************
-    Watchdog.enable(30000);
-    Watchdog.reset();
     // this is the usb serial. the baud rate doesn't really change usb data rates
-    Serial.begin(115200);
     // Wait up to 5 seconds for serial to be opened, to allow catching
     // startup messages on native USB boards (that do not reset when serial is opened).
 
@@ -484,7 +690,7 @@ void setup() {
         // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();
     }
-    Serial.println(F("setup() START"));
+    Serial.println(F("setup1() START"));
 
     //**********************
     // Apparently I don't need to init the usb serial port?
@@ -509,7 +715,7 @@ void setup() {
     // necessary for Serial2 to work properly
     // we have only one i2c? what about the BMP280 ?
     // probably don't even need this. the core may have already done it?
-    Wire.begin();  
+    Wire.begin();
 
     GpsINIT(); // also turns on and checks for output
     GpsOFF();
@@ -520,22 +726,22 @@ void setup() {
     // just full cold gps reset
     // this means we get a full cold result on the aruduino IDE with usb power
     // otherwise usb power means vbat is always on. so a hot reset!
-    GpsON(true); 
+    GpsON(true);
 
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
 
-    // FIX! assume this is the state it was in before config menu? 
+    // FIX! assume this is the state it was in before config menu?
     // not always right. but loop will self-correct?
 
-    if (!Serial) {  
+    if (!Serial) {
         setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
         // we're going to have to reboot..even balloon needs Serial created?
         // if serial data output buf is full, we just overflow it (on balloon)
         // DEVMODE and verbose used to limit output?
         // reboot
         Watchdog.enable(1000);  // milliseconds
-        for (;;) { 
+        for (;;) {
             // FIX! put a bad status in the leds
             updateStatusLED();
         }
@@ -557,10 +763,10 @@ void setup() {
     // shouldn't have to use the tud_cdc_connected() tud_cdc_available() hacks with ide
     // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
 
-    // FIX! this forces going to the user interface always on boot. don't want this 
+    // FIX! this forces going to the user interface always on boot. don't want this
     // for balloon, although it will time out there eventually
     // FIX! in case user is frantically trying to get to the config menu to avoid setting clock speed or ??
-    // if anything was found by incomingByte above, go to the config menu 
+    // if anything was found by incomingByte above, go to the config menu
     // (potentially a balloon weird case would timeout)
 
     Watchdog.reset();
@@ -569,7 +775,7 @@ void setup() {
     if (found_any) {
         // Old: getchar_timeout_us(0) returns a -2 (as of sdk 2) if no keypress.
         // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
-        Serial.println(F("tracker.ino: Going to user_interface() from setup()"));
+        Serial.println(F("tracker.ino: Going to user_interface() from setup1()"));
         updateStatusLED();
         // sleep_ms(1000);
         user_interface();
@@ -580,7 +786,7 @@ void setup() {
     // get all the _* config state set and fix any bad values (to defaults)
     int result = read_FLASH();
     // if anything got fixed to defaults, no read again
-    
+
     Watchdog.reset();
     if (result == -1) {
         Serial.println(F("WARN: read_FLASH got result -1 first time, redo. ..errors were fixed to default"));
@@ -631,10 +837,46 @@ void setup() {
     updateStatusLED();
 
     Watchdog.reset();
-    Serial.println(F("setup() END"));
+    Serial.println(F("setup1() END"));
     sleep_ms(1000);
 }
 
+//***********************************************************
+bool drainSerialTo_CRorNL (void) {
+    // Support hitting <enter> frantically to get to config menu right away on boot
+    int i;
+    char incomingByte = { 0 };
+    bool found_CRorNL = false;
+    bool found_any = false;
+    for (i = 0; i < 1; i++) {
+        Watchdog.reset();
+        if (!Serial.available()) {
+            Serial.println(F("Good! no Serial.available() ..sleep and reverify"));
+            updateStatusLED();
+            sleep_ms(200);
+        }
+        else {
+            found_any = true;
+            incomingByte = Serial.read();
+            Serial.println(incomingByte);
+            // FIX! 13 is ascii CR \r.
+            // FIX! 10 is ascii LF \n.
+            // we don't drain past CR/LF. so if you hit enter, the stuff after that stays as input
+            if (incomingByte == 13) {
+                Serial.println(F("Uh-oh. Found Serial incomingByte == 13 (CR)..will not drain the rest"));
+                // what happens if there is \r\n...I guess it will go to the setup menu with the \n
+                found_CRorNL = true;
+                break;
+            }
+            if (incomingByte == 10) {
+                Serial.println(F("Uh-oh. Found Serial incomingByte == 10 (CR)..will not drain the rest"));
+                found_CRorNL = true;
+                break;
+            }
+        }
+    }
+    return found_CRorNL | found_any;
+}
 
 //*************************************************************************
 uint64_t GpsTimeToLastFix = 0;    // milliseconds
@@ -651,22 +893,96 @@ int tx_cnt_2;
 int tx_cnt_3;
 
 //*************************************************************************
-void loop() {
-    // getting 25 to 35 sec loop times from the BattWait/BeaconWait ?? (baud 19200)
+
+// GPS nmea bursts: The thinking behind how we deal with it:
+// TinyGPS++ is not running as a separate task. Only does work when we call it.
+// we call it with every new char, and to get data it creates from a history 
+// of NMEA sentences in those chars.
+
+// NMEA sentence come in bursts at 1Hz ..
+// maybe not aligned to a second, but the burst is less than one full second of data.
+// and burst intervals say at 1 sec. Data is not spread out over the full second.
+// order is not random either. order stays the same for each burst. Just a interesting note
+// we can handle each char at about 300 usec avg. Obviously a char processing time is more
+// when TinyGPS++ sees a char is a "end of NMEA sentence" (32 deep rx fifo can absorb
+// some chars if we're delayed. Always want the rx fifo to be almost empty, to allow
+// that buffering if there's any backup.
+// if characters arrived at max 9600 baud, thats 1 char per .1 ms or 100 us.
+// so we're too slow for that
+// but the effective baud rate is maybe 900 chars/sec (at 9660 baud Serial2)
+// so that's around 1.1ms allowed time per char. Plenty..probably even if more processing
+// sometimes by TinyGPS++. We can even Allow faster baud rate for increased effective chars/sec
+// we don't have to locally buffer chars to allow for backpressure from TinyGPS++
+// (we could create a local fifo, to effectively absorb more than the 32 deep uart rx fifo)
+
+// If we created a secondary RX buffer to hold 600 plus chars (the entire NMEA burst per second)
+// then if we could absorb/empty it at least every second, we'd never lose anything.
+// less processing/power if we only absorb GPS data when we need it. Allows us to sleep when 
+// we don't need a fix update.
+// Key that TinyGPS++ absorbs our char send at bounded delays (per NMEA sentence. end of NMEA sentence
+// has longer delay. Apparently the CR LF is needed as a 'boundary' post checksum?
+// FIX! do we need both CR and LF or is one enough? Shouldn't matter.
+
+
+// seconds sleep for next beacon (HF or VHF).
+// not sure why this was 50 secs
+// is there any benefit to this trying to be aligned to second boundaries
+// this shouldn't lead to a old gps.location.age since we do gps while in sleepSeconds()
+// with this wait
+
+// how to deal with what a "fix" is, and .age
+// https://arduiniana.org/libraries/tinygps/
+// The NMEA sentences must report valid data. 
+// If the $GPRMC sentence reports a validity of “V” (void) instead of “A” (active), 
+// or if the $GPGGA sentence reports fix type “0” (no fix) then those sentences are discarded.
+
+// hmm. we just always qualify it with valid
+// TinyGPS::GPS_INVALID_AGE is the value when you never got a valid fix.
+// if (fix_age == TinyGPS::GPS_INVALID_AGE)
+//   Serial.println("No fix detected");
+// else if (fix_age > 5000)
+//   Serial.println("Warning: possible stale data!");
+// else
+//   Serial.println("Data is current.");
+
+
+uint16_t  BEACON_WAIT = 61; // secs
+// seconds sleep if super capacitors/batteries are below BattMin
+uint16_t  BATT_WAIT = 1;  // secs     
+
+// GPS_LOCATION_AGE_MAX should a bit greater than GPS_WAIT_FOR_NMEA_BURST_MAX
+// we could live with data that is more 'stale' but theoretically it should be no older than this?
+// how stale can it get? we might be waiting for a new hot fix? and the old one is in there and usable
+// maybe make an old fix good for up to 5 secs? (if we did a quick gps power off/on we won't get new
+// one for maybe 5 secs. but maybe that says we don't want anything older than 1-2 secs?
+// but who knows how tinyGPS++ creates the .age ??
+// maybe it needs to be hot fix max time? (allow 5 secs?)
+// worse would be if it only updates .age to 0 when the new fix changes any of location/altitude etc?
+#define GPS_LOCATION_AGE_MAX 8000
+
+// FIX! since we break out of the sleepSeconds when gps data starts (Serial2.available()) ..
+// we could make this bigger? needs to be at least 1 sec (a little more) since it
+// wants to grab a full burst, and we don't know where we are in the repeating
+// burst behavior when we start (idle or in the middle of a burst?)
+#define GPS_WAIT_FOR_NMEA_BURST_MAX 1100
+
+//*************************************************************************
+void loop1() {
+    // getting 25 to 35 sec loop times from the BATT_WAIT/BEACON_WAIT ?? (baud 19200)
     // some loops were 775 millis
-    // now getting 50 sec loops from the BeaconWait
+    // now getting 50 sec loops from the BEACON_WAIT
 
     // FIX! should change baud back to 9600 (lower power?) only gettin 1800 baud during 300-400ms
     // when looking for data for slight >1 sec time period (all broadcasts are at 1 sec intervals)
     // they all go in a burst together? so all within one sec, and actually a tighter burst.
     loopCnt++;
-    if (DEVMODE) Serial.printf(EOL "loop() loopCnt %" PRIu64 EOL, loopCnt);
-    
+    if (VERBY[0]) Serial.printf(EOL "loop1() loopCnt %" PRIu64 EOL, loopCnt);
+
     // temp hack to force DEVMODE and verbose 9
     forceHACK();
 
     if (Serial.available()) {
-        Serial.println(F("tracker.ino: (A) Going to user_interface() from setup()"));
+        Serial.println(F("tracker.ino: (A) Going to user_interface() from loop1()"));
         setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
         updateStatusLED();
         // sleep_ms(1000);
@@ -675,7 +991,7 @@ void loop() {
     }
 
     Watchdog.reset();
-    Serial.println(F("loop() START"));
+    Serial.println(F("loop1() START"));
 
     // copied from loop_us_end while in the loop (at bottom)
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
@@ -696,56 +1012,88 @@ void loop() {
     // this means we get a full cold result on the aruduino IDE with usb power
     // otherwise usb power means vbat is always on. so a hot reset!
 
-    // we do a full cold reset in setup() now (part of the GpsInit()?)
-    // if (loopCnt == 1) GpsON(true); 
-    // else GpsON(false); 
+    // we do a full cold reset in setup1() now (part of the GpsInit()?)
+    // if (loopCnt == 1) GpsON(true);
+    // else GpsON(false);
     GpsON(false);
 
     //******************
     // no need to have GpsFirstFix
     // maybe nice to report it?
     // if ( !(GpsFirstFix && (readVoltage() > BattMin)) || (!GpsFirstFix && (readVoltage() > GpsMinVolt)) )) {
-    //     sleepSeconds(BattWait);
+    //     sleepSeconds(BATT_WAIT);
 
     float solar_voltage;
     solar_voltage = readVoltage();
     if ( solar_voltage <= BattMin || solar_voltage <= GpsMinVolt ) {
-        sleepSeconds(BattWait);
+        sleepSeconds(BATT_WAIT);
     } else {
-        Serial.println(F("loop() solar_voltage good"));
+        Serial.println(F("loop1() solar_voltage good"));
         //*********************
         // FIX! this can set time and unload NMEA sentences?
         // unload for 2 secs to make sure we get 1 sec broadcasts?
         // actually just need a little over 1 sec.
         // Also: what about corruption if buffer overrun?)
         // does CRC check cover that? so okay if we have overrun?
-        updateGpsDataAndTime(1100);
+        updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
         gpsDebug();
 
-        if (gps.location.isValid() && gps.location.age() < 1000) {
+        // looks like we're getting age < 1200 ..so we're a little slower than 1000 age (was)
+        // change to 1400
+        // it takes 700 millis to get the burst of NMEA sentences?
+
+        // seeing this when we weren't snapTelemetry'ing
+        // gps.time.isValid():1
+        // gps.location.age():1191
+        // gps.location.isUpdated():0
+
+        // now seeing this with 1300 max. changed to 3000
+        // gps.location.age():2345
+
+
+        // this just handles led for time/fix and gps reboot check/execution
+        // "%lu" or "%" PRIu32 " to use with printf?
+        uint32_t fix_age = gps.location.age();
+        bool fix_valid = gps.location.isValid();
+        // isUpdated() indicates whether the object’s value has been updated (not necessarily changed) 
+        // since the last time you queried it
+        bool fix_updated = gps.location.isUpdated();
+        uint32_t fix_sat_cnt = gps.satellites.value();
+
+        if ( fix_valid && (fix_age < GPS_LOCATION_AGE_MAX) ) {
             GpsInvalidCnt = 0;
             setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
         } else {
-            Serial.println(F("loop() GpsInvalidCnt++"));
             // FIX! at what rate is this incremented? ..once per loop iteration (time varies)
             GpsInvalidCnt++;
-            // FIX! instead of looking for not 2000, look for valid years
-            // why doesn't this get included in valid gps fix?
+            Serial.printf("loop1() GpsInvalidCnt++ %d" EOL, GpsInvalidCnt);
+
+            // why doesn't this year check get included in determining valid gps fix?
+            // if gps time is valid, we constantly (each NMEA burst grab) 
+            // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime() 
+            // so don't here. Only update LED state here, though
             if (gps.date.year() >= 2024 && gps.date.year() <= 2034)
+                // FIX! where do we grab the time
                 setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
             else
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
             // FIX! this is loop iterations? could be 60 * 30 secs per loop (30 minutes)
             if (GpsInvalidCnt > 60 ) {
-                Serial.println(F("ERROR: loop() GpsInvalidCnt > 60 ..gps full cold reset"));
+                Serial.println(F("ERROR: loop1() GpsInvalidCnt > 60 ..gps full cold reset"));
                 // FIX! have to send cold gps reset, in case ephemeris is corrupted? since vbat is always there
                 // otherwise this is a warm reset?
                 GpsOFF();
+                // note that GpsOFF() has public access to TinyGPS++ now and clears these 3 which is sufficient
+                // for "reset TinyGPS++ stuff"
+                // gps.date.valid = false;
+                // gps.date.updated = false;
+                // gps.date.date = 0;
+
                 Watchdog.reset();
                 sleep_ms(1000);
                 // also do gps cold reset.
-                GpsON(true);  
+                GpsON(true);
                 GpsInvalidCnt = 0;
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
                 // https://forum.arduino.cc/t/possible-to-continue-the-main-loop/95541/5
@@ -758,185 +1106,97 @@ void loop() {
         // some detail on TinyGPS. precision?
         // https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps
 
-        // FIX! why does isUpdated() get us past here?
-        if (!gps.location.isValid() || (gps.location.age() >=1000 && !gps.location.isUpdated())) {
+        // FIX! why use isUpdated()  Allows ignoring gps.location.age() compare
+        // we read location in many places, so I don't think the isUpdated() info is useful?
+        // removing it from the age compare
+        //    (fix_age < GPS_LOCATION_AGE_MAX || fix_updated) ||
+        if (VERBY[0]) {
+            Serial.printf("fix_valid %u" EOL, fix_valid);
+            Serial.printf("fix_age %lu" EOL, fix_age);
+            Serial.printf("fix_sat_cnt %lu" EOL, fix_sat_cnt);
+            Serial.printf("fix_updated %u" EOL, fix_updated);
+        }
+        if (!fix_valid || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
+            if (VERBY[0]) 
+                Serial.println(F("loop1() WARN: GPS fix issue ..stail or not valid"));
+
             // these are the waits that give us the long loop times
-            // they are looping with sleep, so it's a poor man's interrupt mechanism (with latency to react)
-            // Serial2.Activity() is the thing that gets it start to unload data.
-            sleepSeconds(BeaconWait);
+            // Looping with sleep
+            // Serial2.Activity() is the thing that gets it to wake up early
+            // no change of LED here. done above in time set/reboot check
+            sleepSeconds(BEACON_WAIT);
+
+        } else if (fix_sat_cnt <= 3) { // implied also 'not the first if clause' .. i.e good fix
+            // FIX! should we have separate led count for 2d fix and 3d fix?
+            if (VERBY[0]) 
+                Serial.println(F("loop1() WARN: GPS fix issues ..not enough sats ..2d only"));
+
+            // these are the waits that give us 25-30 sec loop times?
+            sleepSeconds(BEACON_WAIT);
+            // FIX! how much should we wait here?
+
         } else {
-            if (!gps.satellites.isValid() || gps.satellites.value() <= 3) {
-                if (DEVMODE) Serial.println(F("loop() GPS not enough satelites"));
-                // these are the waits that give us 25-30 sec loop times?
-                sleepSeconds(BeaconWait);
-                // FIX! how much should we wait here?
-            } else {
-                // snapForTelemetry (all the t_* state) right before we do all the WSPRing
-                // we can update the telemetry buffer any minute we're not tx'ing
+            if (VERBY[0]) Serial.println(F("loop1() Good recent 3d fix"));
+            // snapForTelemetry (all the t_* state) right before we do all the WSPRing
+            // we can update the telemetry buffer any minute we're not tx'ing
 
-                // we know we have a good 3d fix at this point
-                // we don't check the valid bits again? they could have changed
-                // at any time (async) ..so can't really be an atomic grab anyhow?
-                // keep the snap close to the valid checks above
-                snapForTelemetry();
-                if (DEVMODE) Serial.println(F("loop() Gps Fix (3d) good?"));
-                GpsInvalidCnt = 0;
+            // we know we have a good 3d fix at this point
+            // we don't check the valid bits again? they could have changed
+            // at any time (async) ..so can't really be an atomic grab anyhow?
+            // keep the snap close to the valid checks above
+            snapForTelemetry();
+            if (VERBY[0]) Serial.println(F("loop1() Gps fix .. good 3d"));
+            GpsInvalidCnt = 0;
 
-                // GpsStartTime is reset every time we turn the gps on
-                // cleared every time we turn it off (don't care)
-                // Should this is also cleared when we turn gps off? no?
-                // floor divide to get milliseconds
-                /// FIX! is this the same as GpsFixMillis ?
+            // GpsStartTime is reset every time we turn the gps on
+            // cleared every time we turn it off (don't care)
+            // Should this is also cleared when we turn gps off? no?
+            // floor divide to get milliseconds
+            /// FIX! is this the same as GpsFixMillis ?
 
-                // GpsStartTime is set by gps_functions.cpp 
-                if (GpsTimeToLastFix==0) {
-                    GpsTimeToLastFix = (
-                        absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
-                    if (DEVMODE) 
-                            Serial.printf("loop() (a) first Gps Fix, after off->on! "
-                            "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL, 
-                            GpsFixMillis, GpsTimeToLastFix);
-                }
+            // GpsStartTime is set by gps_functions.cpp
+            if (GpsTimeToLastFix==0) {
+                GpsTimeToLastFix = (
+                    absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
+                if (VERBY[0])
+                    Serial.printf("loop(1) (a) first Gps Fix, after off->on! "
+                    "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL,
+                    GpsFixMillis, GpsTimeToLastFix);
+            }
 
-                // Just print this the first time we have a good fix
-                if (GpsFixMillis==0) {
-                    GpsFixMillis = millis() - GpsStartMillis;
-                    if (DEVMODE) 
-                            Serial.printf("loop() (b) first Gps Fix, after off->on! "
-                            "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL, 
-                            GpsFixMillis, GpsTimeToLastFix);
-                }
+            // Just print this the first time we have a good fix
+            if (GpsFixMillis==0) {
+                GpsFixMillis = millis() - GpsStartMillis;
+                if (VERBY[0])
+                    Serial.printf("loop1() (b) first Gps Fix, after off->on! "
+                    "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL,
+                    GpsFixMillis, GpsTimeToLastFix);
+            }
 
-                // sets all the t_* strings above
-                // voltage is captured when we write the buff? So it's before GPS is turned off?
-                // should we look at the live voltage instead?
-                if (DEVMODE)
-                    StampPrintf("loop() After snapTelemetry() timeStatus():%u minute():%u\n",
-                        timeStatus(), minute());
-                // make sure the buffer of prints is empty to avoid overflow
-                DoLogPrint();
+            // sets all the t_* strings above
+            // voltage is captured when we write the buff? So it's before GPS is turned off?
+            // should we look at the live voltage instead?
+            if (VERBY[0]) 
+                Serial.printf(
+                "loop1() After snapTelemetry() timeStatus():%u minute():%u second():%u" EOL,
+                timeStatus(), minute(), second());
 
-                // freeMem();
+            // make sure the buffer of prints is empty to avoid overflow
+            DoLogPrint();
 
-                // FIX! it should depend on the channel starting minute - 1 (modulo 10)
-                // preparations for HF starts one minute before TX time
-                // at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
+            // freeMem();
 
-                // FIX! why not look at seconds here?
-                // it will stall until lined up on secs below
-                // align to somewhere in the minute before the callsign starting minute
+            // FIX! it should depend on the channel starting minute - 1 (modulo 10)
+            // preparations for HF starts one minute before TX time
+            // at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
 
-                // so we can start the vfo 30 seconds before needed
-                if ( (readVoltage() > WsprBattMin) && alignMinute(-1) && second() > 30 ) {
-                    // don't want gps power and tx power together
-                    GpsOFF();
+            // FIX! why not look at seconds here?
+            // it will stall until lined up on secs below
+            // align to somewhere in the minute before the callsign starting minute
 
-                    // start the vfo 30 seconds before needed
-                    vfo_turn_on(WSPR_TX_CLK_NUM);
-                    setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
-
-                    // GPS will stay off for all
-                    char hf_callsign[7];
-                    snprintf(hf_callsign, sizeof(hf_callsign), "%s", t_callsign);
-                    // same declared size, so could just strncpy
-                    // strncpy(hf_callsign, t_callsign, 6);
-
-                    double lat_double = atof(t_lat);
-                    double lon_double = atof(t_lon);
-
-                    // get_mh_6 returns a pointer
-                    char *hf_grid6;
-                    char hf_grid4[5] = "AA00";
-                    hf_grid6 = get_mh_6(lat_double, lon_double);
-                    // not same declared size, so use snprintf)
-                    // just the first 4 chars
-                    snprintf(hf_grid4, sizeof(hf_grid4), "%s", hf_grid6);
-
-                    char hf_power[3];
-                    snprintf(hf_power, sizeof(hf_power), "%s", t_power);
-                    // same declared size, so can just strncpy
-                    // strncpy(hf_power, t_power, 2);
-
-                    // FIX! make the drive strength conditional on the config
-                    // we could even make the differential dependent on the config
-
-                    // this is done in the vfo_turn_on. shouldn't need to do again
-                    // vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
-                    // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
-                    // turns on both tx clk. The first time, has pll setup already?
-
-                    syncAndSendWspr(0, hf_callsign, hf_grid4, hf_power, false);
-                    if (DEVMODE) {
-                        tx_cnt_0 += 1;
-                        // we have 10 secs or so at the end of WSPR to get this off?
-                        if (DEVMODE) {
-                            StampPrintf("WSPR callsign Tx sent. minutes %d secs %d",
-                                minute(), second());
-                            DoLogPrint();  // we might have to delay this?
-                        }
-                    }
-                    // we don't loop around again caring about gps fix, because we've saved
-                    // telemetry (and sensor data in there) right before the callsign tx
-                    setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
-
-                    // input: uses t_callsign t_grid6 t_power
-                    // output: modifies globals: hf_callsign, hf_grid4, hf_power
-                    u4b_encode_std();
-                    syncAndSendWspr(1, hf_callsign, hf_grid4, hf_power, false);
-                    if (DEVMODE) {
-                        tx_cnt_1 += 1;
-                        // we have 10 secs or so at the end of WSPR to get this off?
-                        if (DEVMODE) {
-                            StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d",
-                                minute(), second());
-                            DoLogPrint();  // we might have to delay this?
-                        }
-                    }
-                    // have to send this if telen1 or telen2 is enabled
-                    if ( (_TELEN_config[0] != '-' || _TELEN_config[1] != '-') ||
-                         (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
-                        setStatusLEDBlinkCount(LED_STATUS_TX_TELEN1);
-
-                        // void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
-                        // output: modifies globals: hf_callsign, hf_grid4, hf_power
-                        // unint32_t globals? could be just int? don't use full range
-                        // TELEN1_val1
-                        // TELEN1_val2
-                        u4b_encode_telen(TELEN1_val1, TELEN1_val2, false);
-                        syncAndSendWspr(2, hf_callsign, hf_grid4, hf_power, false);
-                        if (DEVMODE) {
-                            tx_cnt_2 += 1;
-                            // we have 10 secs or so at the end of WSPR to get this off?
-                            if (DEVMODE) {
-                                StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d",
-                                    minute(), second());
-                                DoLogPrint();  // we might have to delay this?
-                            }
-                        }
-                    }
-                    // have to send this if telen2 is enabled
-                    if ( (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
-                        setStatusLEDBlinkCount(LED_STATUS_TX_TELEN2);
-                        // unint32_t globals? could be just int? don't use full range
-                        // TELEN1_val1
-                        // TELEN2_val1
-                        // TELEN2_val2
-                        u4b_encode_telen(TELEN1_val2, TELEN2_val2, true);
-                        syncAndSendWspr(3, hf_callsign, hf_grid4, hf_power, true);
-                        if (DEVMODE) {
-                            tx_cnt_3 += 1;
-                            // we have 10 secs or so at the end of WSPR to get this off?
-                            if (DEVMODE) {
-                                StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d",
-                                    minute(), second());
-                                DoLogPrint();  // we might have to delay this?
-                            }
-                        }
-                    }
-
-                    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-                    GpsON(false);  // no gps cold reset
-                }
+            // so we can start the vfo 30 seconds before needed
+            if ( (readVoltage() > WsprBattMin) && alignMinute(-1) && second() > 30 ) {
+                alignAndDoAllSequentialTx();
             }
         }
     }
@@ -946,7 +1206,7 @@ void loop() {
     // floor divide to get milliseconds
     loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
-    if (DEVMODE) {
+    if (VERBY[0]) {
         if (_verbose[0] >= '1') {
             // maybe show GpsInvalidCnt also? how old are they
             StampPrintf(
@@ -957,7 +1217,7 @@ void loop() {
                 "t_sat_count: %d "
                 "GpsTimeToLastFix %" PRIu64 " "
                 "GpsInvalidCnt %d" EOL,
-                t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count, 
+                t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count,
                 GpsTimeToLastFix, GpsInvalidCnt);
         }
         if (_verbose[0] >= '5') {
@@ -975,26 +1235,141 @@ void loop() {
     // next start is this end
     loop_us_start = loop_us_end;
     // whenever we have spin loops we need to updateStatusLED()
-    Serial.println(F("loop() END"));
+    if (VERBY[0]) Serial.println(F("loop1() END"));
 }
 
+
+//*******************************************************
+void alignAndDoAllSequentialTx (void) {
+    if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX START"));
+    // don't want gps power and tx power together
+    GpsOFF();
+
+    // start the vfo 30 seconds before needed
+    vfo_turn_on(WSPR_TX_CLK_NUM);
+    setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
+
+    // GPS will stay off for all
+    char hf_callsign[7];
+    snprintf(hf_callsign, sizeof(hf_callsign), "%s", t_callsign);
+    // same declared size, so could just strncpy
+    // strncpy(hf_callsign, t_callsign, 6);
+
+    double lat_double = atof(t_lat);
+    double lon_double = atof(t_lon);
+
+    // get_mh_6 returns a pointer
+    char *hf_grid6;
+    char hf_grid4[5] = "AA00";
+    hf_grid6 = get_mh_6(lat_double, lon_double);
+    // not same declared size, so use snprintf)
+    // just the first 4 chars
+    snprintf(hf_grid4, sizeof(hf_grid4), "%s", hf_grid6);
+
+    char hf_power[3];
+    snprintf(hf_power, sizeof(hf_power), "%s", t_power);
+    // same declared size, so can just strncpy
+    // strncpy(hf_power, t_power, 2);
+
+    // FIX! make the drive strength conditional on the config
+    // we could even make the differential dependent on the config
+
+    // this is done in the vfo_turn_on. shouldn't need to do again
+    // vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
+    // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
+    // turns on both tx clk. The first time, has pll setup already?
+
+    syncAndSendWspr(0, hf_callsign, hf_grid4, hf_power, false);
+    if (VERBY[0]) {
+        tx_cnt_0 += 1;
+        // we have 10 secs or so at the end of WSPR to get this off?
+        if (VERBY[0]) {
+            StampPrintf("WSPR callsign Tx sent. minutes %d secs %d",
+                minute(), second());
+            DoLogPrint();  // we might have to delay this?
+        }
+    }
+    // we don't loop around again caring about gps fix, because we've saved
+    // telemetry (and sensor data in there) right before the callsign tx
+    setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
+
+    // input: uses t_callsign t_grid6 t_power
+    // output: modifies globals: hf_callsign, hf_grid4, hf_power
+    u4b_encode_std();
+    syncAndSendWspr(1, hf_callsign, hf_grid4, hf_power, false);
+    if (VERBY[0]) {
+        tx_cnt_1 += 1;
+        // we have 10 secs or so at the end of WSPR to get this off?
+        if (VERBY[0]) {
+            StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d",
+                minute(), second());
+            DoLogPrint();  // we might have to delay this?
+        }
+    }
+    // have to send this if telen1 or telen2 is enabled
+    if ( (_TELEN_config[0] != '-' || _TELEN_config[1] != '-') ||
+         (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
+        setStatusLEDBlinkCount(LED_STATUS_TX_TELEN1);
+
+        // void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
+        // output: modifies globals: hf_callsign, hf_grid4, hf_power
+        // unint32_t globals? could be just int? don't use full range
+        // TELEN1_val1
+        // TELEN1_val2
+        u4b_encode_telen(TELEN1_val1, TELEN1_val2, false);
+        syncAndSendWspr(2, hf_callsign, hf_grid4, hf_power, false);
+        if (VERBY[0]) {
+            tx_cnt_2 += 1;
+            // we have 10 secs or so at the end of WSPR to get this off?
+            if (VERBY[0]) {
+                StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d",
+                    minute(), second());
+                DoLogPrint();  // we might have to delay this?
+            }
+        }
+    }
+    // have to send this if telen2 is enabled
+    if ( (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
+        setStatusLEDBlinkCount(LED_STATUS_TX_TELEN2);
+        // unint32_t globals? could be just int? don't use full range
+        // TELEN1_val1
+        // TELEN2_val1
+        // TELEN2_val2
+        u4b_encode_telen(TELEN1_val2, TELEN2_val2, true);
+        syncAndSendWspr(3, hf_callsign, hf_grid4, hf_power, true);
+        if (VERBY[0]) {
+            tx_cnt_3 += 1;
+            // we have 10 secs or so at the end of WSPR to get this off?
+            if (VERBY[0]) {
+                StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d",
+                    minute(), second());
+                DoLogPrint();  // we might have to delay this?
+            }
+        }
+    }
+
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+    GpsON(false);  // no gps cold reset
+
+    if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX END"));
+}
 
 //*******************************************************
 extern const int WSPR_PWM_SLICE_NUM=4;
 
 void PWM4_Handler(void) {
-    Serial.println(F("PWM4_Handler() START"));
+    if (VERBY[0]) Serial.println(F("PWM4_Handler() START"));
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     static int cnt = 0;
     if (++cnt >= 500) {
         cnt = 0;
         proceed = true;
     }
-    Serial.println(F("PWM4_Handler() END"));
+    if (VERBY[0]) Serial.println(F("PWM4_Handler() END"));
 }
 
 void zeroTimerSetPeriodMs(float ms) {
-    Serial.println(F("zeroTimerSetPeriodMs() START"));
+    if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
     static pwm_config wspr_pwm_config = pwm_get_default_config();
 
     pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS
@@ -1006,14 +1381,14 @@ void zeroTimerSetPeriodMs(float ms) {
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
     pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
-    Serial.println(F("zeroTimerSetPeriodMs() END"));
+    if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() END"));
 }
 
 //***********************************************************
 void sleepSeconds(int secs) {
     // this doesn't have an early out (although the updateGpsDataAndTime() can
     // so the delay will be >= secs
-    Serial.println(F("sleepSeconds() START"));
+    if (VERBY[0]) Serial.println(F("sleepSeconds() START"));
     Serial.flush();
     uint64_t start_millis = millis();
     uint64_t current_millis = start_millis;
@@ -1040,7 +1415,7 @@ void sleepSeconds(int secs) {
             // 1050: was this causing rx buffer overrun (21 to 32)
             updateGpsDataAndTime(1500);  // milliseconds
             if (Serial.available()) {
-                Serial.println(F("tracker.ino: (C) Going to user_interface() from setup()"));
+                Serial.println(F("tracker.ino: (C) Going to user_interface() from setup1()"));
                 setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
                 updateStatusLED();
                 // sleep_ms(1000);
@@ -1052,10 +1427,10 @@ void sleepSeconds(int secs) {
         }
         current_millis = millis();
     } while ((current_millis - start_millis) < duration_millis);
-    
+
     Watchdog.reset();
     // Gps gets left off it the voltage was low at any point
-    Serial.println(F("sleepSeconds() END"));
+    if (VERBY[0]) Serial.println(F("sleepSeconds() END"));
 }
 
 //***********************************************************
@@ -1102,10 +1477,10 @@ bool alignMinute(int offset) {
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3
 void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
-    Serial.println(F("sendWSPR() START"));
+    if (VERBY[0]) Serial.println(F("sendWSPR() START"));
     Watchdog.reset();
     if (txNum < 0 || txNum > 3) {
-        if (DEVMODE) Serial.printf("bad txNum %d ..ignoring" EOL, txNum);
+        if (VERBY[0]) Serial.printf("bad txNum %d ..ignoring" EOL, txNum);
         return;
     }
 
@@ -1117,14 +1492,14 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
         hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
     }
 
-    // if (DEVMODE) Serial.printf("WSPR desired freq: %lu used hf_freq %u with correction %s" EOL,
+    // if (VERBY[0]) Serial.printf("WSPR desired freq: %lu used hf_freq %u with correction %s" EOL,
     //    XMIT_FREQUENCY, hf_freq, _correction);
 
     symbol_count = WSPR_SYMBOL_COUNT;  // From the library defines
     tone_spacing = WSPR_TONE_SPACING;
     tone_delay = WSPR_DELAY;
 
-    
+
     // need uint8_t for power
     uint8_t hf_power_val = (uint8_t)atoi(hf_power);
     set_tx_buffer(hf_callsign, hf_grid4, hf_power_val, tx_buffer);
@@ -1142,7 +1517,7 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
         proceed = false;
         while (!proceed) {
             // whenever we have spin loops we need to updateStatusLED()
-            // the latency to decide if we had to do anything, and do it if we do   
+            // the latency to decide if we had to do anything, and do it if we do
             // must be pretty small, so that it's okay that it introduces variance here
             // we could disable this if not DEVMODE. means lights don't blink while transmitting?
             // max time in this loop is less than watchdog interval?
@@ -1163,16 +1538,16 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
         vfo_turn_off();
     }
     Watchdog.reset();
-    Serial.println(F("sendWSPR() END"));
+    if (VERBY[0]) Serial.println(F("sendWSPR() END"));
     // Serial.println(F(__func__ " END"));
 }
 
 void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
-    Serial.println(F("syncAndSendWSPR() START"));
+    if (VERBY[0]) Serial.println(F("syncAndSendWSPR() START"));
     // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
     // we turned the vfo on in the minute before 0, separately
 
-    if (DEVMODE) {
+    if (VERBY[0]) {
         Serial.printf("will start WSPR txNum %d when aligned zero secs, currently %d secs\n",
             txNum, second());
         Serial.printf("WSPR txNum %d Preparing", txNum);
@@ -1190,7 +1565,7 @@ void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_powe
     }
 
     sendWspr(txNum, hf_callsign,  hf_grid4, hf_power, vfoOffWhenDone);
-    Serial.println(F("syncAndSendWSPR() END"));
+    if (VERBY[0]) Serial.println(F("syncAndSendWSPR() END"));
 }
 
 //**********************************
@@ -1225,20 +1600,12 @@ void set_tx_buffer(char *hf_callsign, char *hf_loc, uint8_t hf_power, uint8_t *t
 
 void freeMem() {
     Serial.println(F("freeMem() START"));
-    if (DEVMODE) return;
-
-    // Using F() for strings
-    // what happens in a Harvard architecture uC is that the compiled string stays in flash
-    // and does not get copied to SRAM during the C++ initialization that happens before
-    // your sketch receives run control.
-    // Since the string is not moved to SRAM, it has the PROGMEM property and runs from flash.
-
-    // FIX! do we want this? slower?
-    // compile your program: it says
-    // how much program memory (stored in flash) and how much dynamic ram you are using.
-    // rp2040: 264 KB ram (256 KB?), 2MB flash
-    Serial.print(F("Free RAM: ")); 
-    Serial.print(freeMemory(), DEC); 
+    if (!VERBY[0]) return;
+    // NIce to use F() for strings that are constant
+    // compiled string stays in flash. does not get copied to SRAM during the C++ initialization
+    // string it has the PROGMEM property and runs from flash.
+    Serial.print(F("Free RAM: "));
+    Serial.print(freeMemory(), DEC);
     Serial.println(F(" byte"));
     Serial.println(F("freeMem() END"));
 }
@@ -1297,4 +1664,5 @@ int InitPicoClock(int PLL_SYS_MHZ) {
 // interesting old benchmark testing wiggling gpio
 // should run it on the pi pico and see
 // https://github.com/hzeller/rpi-gpio-dma-demo#direct-output-loop-to-gpio
+
 

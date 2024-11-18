@@ -1,0 +1,52 @@
+
+// Fix these compile warnings in TinyGPS++
+// this was in the head I got originally
+// change /home/kevin/Arduino/libraries (which are links) 
+// to the libraries dir that's part of the tracker repo
+
+// Okay to ignore these warnings (red when sometimes recompiled in Arduino ide compile output window)
+
+home/kevin/Arduino/libraries/TinyGPSPlus/src/TinyGPS++.cpp: In member function 'bool TinyGPSPlus::encode(char)':
+/home/kevin/Arduino/libraries/TinyGPSPlus/src/TinyGPS++.cpp:74:12: warning: this statement may fall through [-Wimplicit-fallthrough=]
+  74 |     parity ^= (uint8_t)c;
+      |     ~~~~~~~^~~~~~~~~~~~~
+/home/kevin/Arduino/libraries/TinyGPSPlus/src/TinyGPS++.cpp:75:3: note: here
+  75 |   case '\r':
+      |   ^~~~
+
+/home/kevin/Arduino/libraries/JTEncode/src/nhash.c: In function 'nhash_':
+/home/kevin/Arduino/libraries/JTEncode/src/nhash.c:225:21: warning: variable 'k8' set but not used [-Wunused-but-set-variable]
+  225 |     const uint8_t  *k8;
+      |                     ^~
+/home/kevin/Arduino/libraries/JTEncode/src/init_rs_int.cpp: In member function 'void* JTEncode::init_rs_int(int, int, int, int, int, int)':
+/home/kevin/Arduino/libraries/JTEncode/src/init_rs_int.cpp:33:29: warning: comparison of integer expressions of different signedness: 'int' and 'unsigned int' [-Wsign-compare]
+   33 |   if(symsize < 0 || symsize > 8*sizeof(data_t)){
+      |                     ~~~~~~~~^~~~~~~~~~~~~~~~~~
+Compiling library "Time"
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp: In member function 'void JTEncode::fsq_encode(const char*, const char*, uint8_t*)':
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp:251:35: warning: unused variable 'tone' [-Wunused-variable]
+  251 |   uint8_t i, fch, vcode1, vcode2, tone;
+      |                                   ^~~~
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp: In member function 'void JTEncode::fsq_dir_encode(const char*, const char*, char, const char*, uint8_t*)':
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp:338:35: warning: unused variable 'tone' [-Wunused-variable]
+  338 |   uint8_t i, fch, vcode1, vcode2, tone, from_call_crc;
+      |                                   ^~~~
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp: In member function 'void JTEncode::ft8_encode(const char*, uint8_t*)':
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp:426:11: warning: unused variable 'i' [-Wunused-variable]
+  426 |   uint8_t i;
+      |           ^
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp: In member function 'void JTEncode::jt9_interleave(uint8_t*)':
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp:1249:14: warning: unused variable 'j' [-Wunused-variable]
+ 1249 |   uint8_t i, j;
+      |              ^
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp: In member function 'uint8_t JTEncode::crc8(const char*)':
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp:1612:16: warning: comparison of integer expressions of different signedness: 'int' and 'size_t' {aka 'unsigned int'} [-Wsign-compare]
+ 1612 |   for(i = 0; i < strlen(text); i++)
+      |              ~~^~~~~~~~~~~~~~
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp: In member function 'void JTEncode::ft8_bit_packing(char*, uint8_t*)':
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp:1122:39: warning: 'i0' may be used uninitialized [-Wmaybe-uninitialized]
+ 1122 |                 memmove(c18, message, i0 + 1);
+      |                                       ^~
+/home/kevin/Arduino/libraries/JTEncode/src/JTEncode.cpp:1084:26: note: 'i0' was declared here
+ 1084 |         uint8_t i, j, x, i0;
+      |                          ^~

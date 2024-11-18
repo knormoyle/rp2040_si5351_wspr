@@ -345,7 +345,7 @@ void setGpsBaud(int desiredBaud) {
     // Note:
     // Serial2.end() Disables serial communication,
     // allowing the RX and TX pins to be used for general input and output.
-    // To re-enable serial communication, call Serial.begin().
+    // To re-enable serial communication, call Serial2.begin().
 
     // FIX! we could try RP2040 using different bauds and see what baud rate it's at, then send
     // the command to change baud rate. But really, how come we can't cold reset it to 9600?
@@ -501,7 +501,7 @@ void GpsFullColdReset(void) {
     sleepForMilliSecs(1000, false);
 
     // gps comes up at 9600. so watch for that now
-    Serial.begin(9600);
+    Serial2.begin(9600);
     // wait for 1 secs before sending commands
     sleepForMilliSecs(1000, false);
 
@@ -511,15 +511,27 @@ void GpsFullColdReset(void) {
     Serial.println(F("Should get some output at 9600 after reset?"));
     checkInitialGpsOutput();
 
-    if (false) {
+    if (true) {
         Serial.println(F("Try the full cold reset command now, after we can talk to it at 9600"));
+        // TOTAL HACK
+        // since vbat seems to preserve the baud rate, even with NRESET assertion
+        // try sending the full cold reset command at all reasonable baud rates
+        // whatever baud rate the GPS was at, it should get one?
+        Serial.begin(9600);
         Serial.print("$PMTK104*37" CR LF);
-        sleepForMilliSecs(1000, false);
-        Serial.print("$PMTK104*37" CR LF);
-        sleepForMilliSecs(1000, false);
         Serial.flush();
-        Serial.end();
         sleepForMilliSecs(1000, false);
+
+        Serial.begin(19200);
+        Serial.print("$PMTK104*37" CR LF);
+        Serial.flush();
+        sleepForMilliSecs(1000, false);
+
+        Serial.begin(38400);
+        Serial.print("$PMTK104*37" CR LF);
+        Serial.flush();
+        sleepForMilliSecs(1000, false);
+
         // FIX! do we have to toggle power off/on to get the cold reset?
         // vbat is kept on when we toggle vcc
         if (true) {
@@ -577,8 +589,8 @@ void GpsWarmReset(void) {
 
     // don't know what baud rate it was at. gps comes up at 9600
     // maybe just assume it's the same as whatever setup was agreed on before
-    // Serial.end();
-    // Serial.begin(9600);
+    // Serial2.end();
+    // Serial2.begin(9600);
 
     // hmm.. just leave it like it was? vbat will keep the old baud rate?
     // resets to 9600. set to new baud rate
@@ -641,7 +653,7 @@ void GpsOFF(void) {
     digitalWrite(GpsPwr, HIGH);
     // Serial2.end()
     // Disables serial communication, allowing the RX and TX pins to be used for general input and output.
-    // To re-enable serial communication, call Serial.begin().
+    // To re-enable serial communication, call Serial2.begin().
     // FIX! do we really need or want to turn off Serial2? Remember to Serial2.begin() when we turn it back on
     // (only if it was off)
     Serial2.end();
