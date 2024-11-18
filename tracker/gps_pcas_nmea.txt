@@ -1,0 +1,205 @@
+/*******************************************
+// ATGM336H uses AT6558 silicon ??
+// AT6558 BDS/GNSS Full Constellation SOC Chip Data Sheet Version 1.14
+// AT6558-5N-3X is GPS + BDS
+// QFN package 40 pin 5x5x0.8mm
+// https://www.icofchina.com/d/file/xiazai/2016-12-05/b1be6f481cdf9d773b963ab30a2d11d8.pdf
+
+//******************************************************
+// do these PCAS nmea commands work in addition to the PMTK commands?
+// $PCAS00*01  Save config to flash
+
+//******************************************************
+// baud (can go up to 115200 ?)
+// $PCAS01,0*1C 4800 bps
+// $PCAS01,1*1D 9600 bps
+// $PCAS01,2*1E 19200 bps
+// $PCAS01,3*1F 38400 bps
+// $PCAS01,4*18 57600 bps
+// $PCAS01,5*19 115200 bps
+
+//******************************************************
+// fix rate (millis)
+// $PCAS02,1000*2E 1000 ms fixes
+// $PCAS02,500*1A  500 ms fixes
+// $PCAS02,200*1D  200 ms fixes
+// $PCAS02,100*1E  100 ms fixes
+
+//******************************************************
+// Enabling output:
+// Checksums:
+// ; Odd number of "ones": 03
+// ; Even number of "ones": 02
+
+// $PCAS03,1,0,0,0,1,1,0,0*03
+// $PCAS03,1,1,1,1,1,1,0,0*02
+//         | | | | | | | |
+//         '-|-|-|-|-|-|-|--> GGA
+//           '-|-|-|-|-|-|--> GLL
+//             '-|-|-|-|-|--> GSA
+//               '-|-|-|-|--> GSV
+//                 '-|-|-|--> RMC
+//                   '-|-|--> VTG
+//                     '-|--> ZDA
+//                       '--> TXT
+// ```
+// 
+// 
+// Examples:
+// RMC only:
+// $PCAS03,0,0,0,0,1,0,0,0*03
+// 
+// GLL and VTG:
+// $PCAS03,0,1,0,0,0,1,0,0*02
+// 
+// GSA, GSV and RMC:
+// $PCAS03,0,0,1,1,1,0,0,0*03
+
+
+//******************************************************
+// Did the PMTK baud rate commands not work??
+
+// are these PMTK equivalent? also in SIM868 NMEA Message Specification V1.04
+// Packet Type: 353 PMTK_API_SET_GNSS_SEARCH_MODE
+
+// $PMTK353,1,0,0,0,1*2B : Search GPS and BEIDOU satellites
+// $PMTK353,0,1,0,0,0*2A : Search GLONASS satellites only
+// $PMTK353,1,0,0,0,0*2A : Search GPS satellites only
+// $PMTK353,1,1,0,0,0*2B : Search GPS and GLONASS satellites
+// $PMTK353,1,1,1,0,0*2A : Search GPS GLONASS, GALILEO satellites
+// $PMTK353,0,0,0,0,1*2A : Search BEIDOU satellites only
+
+// kevin try
+// https://www.meme.au/nmea-checksum.html
+// $PMTK353,1,1,1,0,1*2B : Search GPS BEIDOU GLONASS and GALILEO satellites
+
+//******************************************************
+
+// constellations
+// bits: 1 = BDS; 0 = GPS
+
+// kevin. what about other numbers?
+write("$PCAS04,51C\r\n"); // satellite reception GPS and GLONASS
+https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/issues/187
+The Quectel_L76KL26K_GNSS (in Chinese) document does not include PCAS06 and PCAS11
+The Quectel_L76-LBL26-LBLC86L_GNSS_Protocol_Specification_V1.1 does not include any PCAS commands.
+
+
+https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/files/10636690/CASIC_ProtocolSpecification.pdf
+https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/files/10684311/AT3340.ProductManual.pdf
+
+This is the manual
+CASIC_ProtocolSpecification.pdf
+
+
+
+// kevin
+// $PCAS04,5*1A GPS and GLONAS
+// $PCAS04,7*1A GPS and GLONAS and Beidou
+
+// $PCAS04,3*1A BDS + GPS
+// $PCAS04,2*1B BDS only
+// $PCAS04,1*18 GPS only
+
+// ----- Configure whether to receive any satellite in the system -----
+// $PCAS15,2,FFFFFFFF*37  turns-on Beidou's satellites 1-32
+// $PCAS15,2,FFFFFFE0*42  turns-on Beidou's satellites 6-32, Beidou's satellites 1- 5 is turned off
+// $PCAS15,4,FFFF*31      turns-on   SBAS   satellites 1-16, that is PRN=120-135
+// $PCAS15,5,1F*47        turns-on   QZSS   satellites 1- 5,  namely PRN=193, 194, 195, 199, 197
+
+//  2=Beidou Satellite  1-32
+//  3=Beidou Satellite 33-54
+//  4= SBAS  Satellite  1-19
+//  5= QZSS  Satellite  1- 5
+
+
+//*************************************************
+
+this is the chip that most every uses for gps
+It by default is enabled for us GPS and Baidou satellites
+interestingly the ATGM336H-71 is enabled ro GPS, Baidou and GLONASS
+
+
+Both modules are based on the underlying AT6558 chip
+
+
+I was surprised I was able to use "secret" $PCAS commands to change baud rate. (just testing to see when things fall apart).
+
+
+not the normal $PMTK command set
+
+
+But where were these secret $PCAS commands fully documented?
+ 
+Sleuthing pointed to two docs:
+https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/files/10636690/CASIC_ProtocolSpecification.pdf
+
+https://github.com/Xinyuan-LilyGO/TTGO_TWatch_Library/files/10684311/AT3340.ProductManual.pdf
+
+
+But the first was in Chinese (Mandarin)
+Google Translate was my friend and I created an english translation of the first here:
+everyone with this link should have access to this on my google drive:
+https://drive.google.com/file/d/1-CqV_M3tCUw4MWGjlLXMrPUUwBU3lOeF
+file is CASIC_ProtocolSpecification_english.pdf
+v4.2.03 was updated 2020.01.06 
+most of it translated to english.
+
+
+The baud rate commands are on page 25 ($PCAS01 commands)
+
+
+The $PCAS04 commands for changing used constellations are on page 28
+1=GPS
+2=BDS
+3=GPS+BDS
+4=GLONASS
+5=GPS+GLONASS
+6=BDS+GLONASS
+7=GPS+BDS+GLONASS
+
+
+So with correct NMEA checksum
+$PCAS04,1*18 GPS only
+$PCAS04,2*1B BDS only
+$PCAS04,3*1A BDS + GPS
+$PCAS04,5*1C GPS+GLONASS
+$PCAS04,6*AF BDS+GLONASS
+$PCAS04,7*1E GPS+BDS+GLONASS
+
+
+Here's what I used to change baud rate. the checksum always has to be correct and is, below
+remember you have to send CR LF at the end, also
+here's what I used to send command for baud rate (code to change baud rate at the arduino side, not shown)
+
+
+// ascii 13
+#define CR "\r"
+// ascii 10
+#define LF "\n"
+
+
+
+    // So with correct NMEA checksum
+    // $PCAS04,1*18 GPS
+    // $PCAS04,2*1B BDS
+    // $PCAS04,3*1A GPS+BDS 
+    // $PCAS04,4*1D GLONASS
+    // $PCAS04,5*1C GPS+GLONASS
+    // $PCAS04,6*AF BDS+GLONASS
+    // $PCAS04,7*1E GPS+BDS+GLONASS
+
+    switch (usedConstellations) {
+        case 1: strncpy(nmeaBaudSentence, "$PCAS04,1*18" CR LF, 21); break;
+        case 2: strncpy(nmeaBaudSentence, "$PCAS04,2*1B" CR LF, 21); break;
+        case 3: strncpy(nmeaBaudSentence, "$PCAS04,3*1A" CR LF, 21); break;
+        case 4: strncpy(nmeaBaudSentence, "$PCAS04,4*1D" CR LF, 21); break;
+        case 5: strncpy(nmeaBaudSentence, "$PCAS04,5*1C" CR LF, 21); break;
+        case 6: strncpy(nmeaBaudSentence, "$PCAS04,6*AF" CR LF, 21); break;
+        case 7: strncpy(nmeaBaudSentence, "$PCAS04,7*1E" CR LF, 21); break;
+        default:
+            usedConstellations = 3;
+            strncpy(nmeaBaudSentence, "$PCAS04,3*1D" CR LF, 21);
+    }
+
+
