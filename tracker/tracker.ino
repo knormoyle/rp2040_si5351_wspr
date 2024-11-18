@@ -1164,23 +1164,34 @@ void loop1() {
             /// FIX! is this the same as GpsFixMillis ?
 
             // GpsStartTime is set by gps_functions.cpp
-            if (GpsTimeToLastFix==0) {
-                GpsTimeToLastFix = (
-                    absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
-                if (VERBY[0])
-                    Serial.printf("loop(1) (a) first Gps Fix, after off->on! "
-                    "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL,
-                    GpsFixMillis, GpsTimeToLastFix);
+            if (GpsTimeToLastFix == 0) {
+                // FIX! odd case. Did the GPS get turned off, but TinyGPS++
+                // still says it has valid fix?
+                // until I figure out why, set GpsTimeToLastFix to 0 for this case
+                if (GpsStartTime == 0) {
+                    GpsTimeToLastFix = 0;
+                } else {
+                    GpsTimeToLastFix = (
+                        absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
+                }
             }
 
+            // FIX! just need one or the other of these
             // Just print this the first time we have a good fix
-            if (GpsFixMillis==0) {
-                GpsFixMillis = millis() - GpsStartMillis;
-                if (VERBY[0])
-                    Serial.printf("loop1() (b) first Gps Fix, after off->on! "
+            if (GpsFixMillis == 0) {
+                // FIX! odd case. Did the GPS get turned off, but TinyGPS++
+                // still says it has valid fix?
+                // until I figure out why, set GpsStartMillies would be 0 for this case
+                if (GpsStartMillis == 0) {
+                    GpsFixMillis = 0;
+                } else {
+                    GpsFixMillis = millis() - GpsStartMillis;
+                }
+            }
+            if (VERBY[0])
+                Serial.printf("loop1() first Gps Fix, after off->on! "
                     "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL,
                     GpsFixMillis, GpsTimeToLastFix);
-            }
 
             // sets all the t_* strings above
             // voltage is captured when we write the buff? So it's before GPS is turned off?
@@ -1222,13 +1233,16 @@ void loop1() {
         // use Serial.printf()
         Serial.printf(
             "t_tx_count_0: %s "
+            "t_callsign: %s "
             "t_temp: %s "
+            "t_voltage: %s "
             "t_altitude: %s "
             "t_grid6: %s "
+            "t_power: %s "
             "t_sat_count: %s "
             "GpsTimeToLastFix %d "
             "GpsInvalidCnt %d" EOL,
-            t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count,
+            t_tx_count_0, t_callsign, t_temp, t_voltage, t_altitude, t_grid6, t_power, t_sat_count,
             GpsTimeToLastFix, GpsInvalidCnt);
     }
 

@@ -81,7 +81,7 @@ void snapForTelemetry(void) {
     if (speed > 999) speed = 999;
     snprintf(t_speed, sizeof(t_speed), "%3d", speed);
 
-    // fixing negative altitude values causing display bug on aprs.fi
+    // fixing negative altitude values
     int altitude = (int) gps.altitude.meters();
     if (altitude < 0) altitude = 0;
     if (altitude > 999999) altitude = 999999;

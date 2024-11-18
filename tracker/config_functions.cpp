@@ -488,28 +488,12 @@ void user_interface(void) {
     }
 }
 
-//***************************************
-// Prints out hex listing of the settings FLASH to stdio
-// buf: address of FLASH to list <input>
-// len: bytes of FLASH to list <input>
-void print_buf(const uint8_t *buf, int len) {
-    Serial.println(F("print_buf()"));
-    Serial.printf("%s%s%s%s\nFLASH dump:\n%s%s", 
-        CLEAR_SCREEN, BRIGHT, BOLD_ON, UNDERLINE_ON, BOLD_OFF, UNDERLINE_OFF);
-    for (int i = 0; i < len; ++i) {
-        Serial.printf("%02x", buf[i]);
-        if (i % 16 == 15) Serial.printf("\n");
-        else Serial.printf(" ");
-    }
-    Serial.printf("%s", NORMAL);
-}
 
+//***************************************
 // Reads flash where the user settings are saved
 // prints hexa listing of data
 // calls function which check data validity
 
-
-//***************************************
 // background
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 #define FLASH_BYTES_USED 28
@@ -557,7 +541,7 @@ int read_FLASH(void) {
 
     // FIX! why is this weird, re above defs?
     const uint8_t *uflash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
-    print_buf(uflash_target_contents, (int) FLASH_PAGE_SIZE);  // 256
+    // printFLASH(uflash_target_contents, (int) FLASH_PAGE_SIZE);  // 256
 
     char flash_target_contents[FLASH_BYTES_USED] = { 0 };
     for (int i = 0; i < FLASH_BYTES_USED ; i++) {
@@ -566,7 +550,7 @@ int read_FLASH(void) {
     // BE SURE YOU ONLY USE ONE PAGE: i.e. 256 bytes total
     // FIX! should we just use snprintf?
     strncpy(_callsign,     flash_target_contents + 0,  6); _callsign[6] = 0;
-    strncpy(_verbose,    flash_target_contents + 6,  1); _verbose[1] = 0;
+    strncpy(_verbose,      flash_target_contents + 6,  1); _verbose[1] = 0;
     strncpy(_TELEN_config, flash_target_contents + 7,  4); _TELEN_config[4] = 0;
     strncpy(_clock_speed,  flash_target_contents + 11, 3); _clock_speed[3] = 0;
     strncpy(_U4B_chan,     flash_target_contents + 14, 3); _U4B_chan[3] = 0;
