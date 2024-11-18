@@ -36,39 +36,24 @@ void adc_INIT() {
 float readTemp(void) {
     if (VERBY[0]) Serial.println(F("readTemp START"));
     // 12-bit conversion, assume max value == ADC_VREF == 3.3 V
-    const float CONVERSION_FACTOR = 3.3f / (1 << 12);
 
-    float adc_voltage;
-    // Select ADC input 4 for internal temperature sensor
-    adc_select_input(4);
-    delay(100); // milliseconds
+    float tempC = 0.0;
+    for (int i = 0 ; i < 30 ; i++) {
+        tempC += analogReadTemp();
+    }
+    tempC = tempC / 10;
 
-    adc_voltage =  adc_read();
-    adc_voltage += adc_read();
-    adc_voltage += adc_read();
+    // readTemp END tempC_a 82 tempC 25
+    // readTemp END tempC_a 82 tempC 24
+    //  tempC_a 437 tempC 24 tempC_c 24
 
-    adc_voltage = ((float) adc_voltage / 3) * CONVERSION_FACTOR;
-    // formula found on page 71 (section 4.1.1. hardware_adc) of
-    // the Raspberry Pi Pico C/C++ SDK documentation
-    // bogus
-    float tempC_a = 27 - (adc_voltage - 0.706) / 0.001721;
-
-    // Another way
-    float tempC_b = analogReadTemp();
-    tempC_b += analogReadTemp();
-    tempC_b += analogReadTemp();
-    tempC_b = tempC_b / 3;
-
-    // readTemp END tempC_a 82 tempC_b 25
-    // readTemp END tempC_a 82 tempC_b 24
-    //  tempC_a 437 tempC_b 24 tempC_c 24
-
-    if (VERBY[0]) Serial.printf("readTemp END tempC_a %.f tempC_b %.f" EOL, tempC_a, tempC_b);
-    return tempC_b;
+    if (VERBY[0]) Serial.printf("readTemp END tempC %.f" EOL, tempC);
+    return tempC;
 }
 
 
 //****************************************************
+// always return a positive voltage (>0)
 float readVoltage(void) {
     if (VERBY[0]) Serial.println(F("readVoltage START"));
 
@@ -99,6 +84,9 @@ float readVoltage(void) {
 
     // this must be a calibrated linear equation? only need to calibrate between 2.8v and 5v?
     float voltage = ((float)adc_val / 3.0f - 27.0f) / 412.0f;
+
+    // keep it positive
+    if (voltage < 0.0) voltage = 0;
 
     // there is a 200 ohm resistor between 3V3 and ADC_AVDD
     // we did 3 reads above ..averaging?

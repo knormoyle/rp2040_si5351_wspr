@@ -1188,21 +1188,16 @@ void loop1() {
                     GpsFixMillis = millis() - GpsStartMillis;
                 }
             }
-            if (VERBY[0])
-                Serial.printf("loop1() first Gps Fix, after off->on! "
+            if (VERBY[0]) Serial.printf("loop1() first Gps Fix, after off->on! "
                     "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL,
                     GpsFixMillis, GpsTimeToLastFix);
 
             // sets all the t_* strings above
             // voltage is captured when we write the buff? So it's before GPS is turned off?
             // should we look at the live voltage instead?
-            if (VERBY[0]) 
-                Serial.printf(
+            if (VERBY[0]) Serial.printf(
                 "loop1() After snapTelemetry() timeStatus():%u minute():%u second():%u" EOL,
                 timeStatus(), minute(), second());
-
-            // make sure the buffer of prints is empty to avoid overflow
-            DoLogPrint();
 
             // freeMem();
 
@@ -1215,8 +1210,32 @@ void loop1() {
             // align to somewhere in the minute before the callsign starting minute
 
             // so we can start the vfo 30 seconds before needed
-            if ( (readVoltage() > WsprBattMin) && alignMinute(-1) && second() > 30 ) {
-                alignAndDoAllSequentialTx();
+            // if we're in the minute before sending..just live with gps fix
+            // because it might take a minute to have another one?
+            Watchdog.reset(); 
+            // make sure readVoltage always returns postive # (> 0)
+            // readVoltage can return 0
+            if (readVoltage() >= WsprBattMin) {
+                if (alignMinute(-1)) {
+                    if (second() > 30) {
+                        // to late..don't try to send
+                        Serial.println(F("WARN: past needed 30 sec setup in the minute before WSPR should start"));
+                        // minute() second() come from Time.h as ints
+                        Serial.printf("WARN: because minute() %d second() %d alignMinute(-1) %u" EOL, 
+                            minute(), second(), alignMinute(-1));
+                    } else {
+                        while (second() < 30) {
+                            delay(10); // 10 millis
+                            // we could end up waiting for 30 secs so update LED
+                            updateStatusLED();
+                        }
+                        // will call this with less than or equal to 30 secs to go
+                        alignAndDoAllSequentialTx();
+                    }
+                } else {
+                    // we fall thru and can get another gps fix or just try again.
+                    // hopefully the BeaconWait or BattWait doesn't kick in?
+                }
             }
         }
     }
@@ -1240,7 +1259,7 @@ void loop1() {
             "t_grid6: %s "
             "t_power: %s "
             "t_sat_count: %s "
-            "GpsTimeToLastFix %d "
+            "GpsTimeToLastFix %" PRIu64 " "
             "GpsInvalidCnt %d" EOL,
             t_tx_count_0, t_callsign, t_temp, t_voltage, t_altitude, t_grid6, t_power, t_sat_count,
             GpsTimeToLastFix, GpsInvalidCnt);
@@ -1254,7 +1273,6 @@ void loop1() {
             "loop_us_end: %llu microsecs",
             _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
     }
-    DoLogPrint();
     updateStatusLED();
 
     // next start is this end
@@ -1266,6 +1284,21 @@ void loop1() {
 
 //*******************************************************
 void alignAndDoAllSequentialTx (void) {
+    // if we called this to early, just return so we don't wait 10 minuts here
+    // at most wait up to a minute if called the minute before start time)
+    if (!alignMinute(-1)) {
+        if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX END early out: align way off!"));
+        return;
+    }
+
+    if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX START"));
+    Watchdog.reset(); 
+    while (second() < 30)  {
+        delay(5); // 5 millis
+        // we could end up waiting for 30 secs
+        updateStatusLED();
+    }
+
     if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX START"));
     // don't want gps power and tx power together
     GpsOFF();
@@ -1304,6 +1337,8 @@ void alignAndDoAllSequentialTx (void) {
     // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
     // turns on both tx clk. The first time, has pll setup already?
 
+    Watchdog.reset(); 
+    // will sync up to the right minute and second == 0
     syncAndSendWspr(0, hf_callsign, hf_grid4, hf_power, false);
     if (VERBY[0]) {
         tx_cnt_0 += 1;
@@ -1439,16 +1474,6 @@ void sleepSeconds(int secs) {
             // long enough to be sure to catch all NMEA during the broadcast interval of 1 sec
             // 1050: was this causing rx buffer overrun (21 to 32)
             updateGpsDataAndTime(1500);  // milliseconds
-
-            // FIX! to remove all of this is now detected in loop()
-            if (false and Serial.available()) {
-                Serial.println(F("tracker.ino: (C) Going to user_interface() from setup1()"));
-                setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
-                updateStatusLED();
-                // sleep_ms(1000);
-                user_interface();
-                // won't return here, since all exits from user_interface reboot
-            }
         } else {
             sleep_ms(1500);
         }
@@ -1571,6 +1596,7 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
 
 void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
     if (VERBY[0]) Serial.println(F("syncAndSendWSPR() START"));
+    if (txNum < 0 || txNum > 3) txNum = 0;
     // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
     // we turned the vfo on in the minute before 0, separately
 
@@ -1581,11 +1607,11 @@ void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_powe
         Serial.printf("hf_grid4: %s", hf_grid4);
     }
     // this should be fine even if we wait a long time
+    Watchdog.reset();
     int i = 2 * txNum;  // 0, 2, 4, 6
     while (!alignMinute(i) || (second() != 0)) {
-        Watchdog.reset();
         // FIX! delay 1 sec? change to pico busy_wait_us()?
-        sleep_ms(1000);
+        sleep_ms(20);
         // delay(1);
         // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();

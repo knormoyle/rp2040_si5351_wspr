@@ -122,12 +122,10 @@ void snapForTelemetry(void) {
 
     //*********************************
     // okay (it's getting analogReadTemp() from readTemp())
-    float tempC_c = 0.0;
-    for (int i = 0 ; i < 10 ; i++) {
-        tempC_c += readTemp();
-    }
-    tempC_c = tempC_c / 10;
+    // readTemp does 30 analogReadTemp() and averages
+    float tempC_c = readTemp();
 
+    // examples:
     // readTemp END tempC_a 82 tempC_b 25
     // readTemp END tempC_a 82 tempC_b 24
     //  tempC_a 437 tempC_b 24 tempC_c 24
