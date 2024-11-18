@@ -266,7 +266,7 @@ void setGpsBalloonMode(void) {
 // always GGA GLL GSA GSV RMC
 // nver ZDA TXT
 void setGpsBroadcast() {
-    if (VERBY[0]) Serial.print(F("setBroadcast START" EOL));
+    if (VERBY[0]) Serial.print(F("setGpsBroadcast START" EOL));
     updateStatusLED();
     Watchdog.reset();
     char nmeaSentence[21] = { 0 };
@@ -393,7 +393,8 @@ void setGpsConstellations(int desiredConstellations) {
             strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 21);
     }
 
-    if (false) {
+    // was it not passing unless I did this?
+    if (true) {
         // this was an experiment
         // what about this rumored PMTK353 sentence?
         // $PMTK353,1,1,1,0,1*2B : Search GPS BEIDOU GLONASS and GALILEO satellites

@@ -1216,7 +1216,7 @@ void loop1() {
             // make sure readVoltage always returns postive # (> 0)
             // readVoltage can return 0
             float voltageBeforeWSPR = readVoltage();
-            if (voltageBeforeWSPR < WsprBattMin) {
+            if (voltageBeforeWSPR >= WsprBattMin) {
                 if (alignMinute(-1)) {
                     if (second() > 30) {
                         // to late..don't try to send
@@ -1237,12 +1237,16 @@ void loop1() {
                     Serial.printf("WARN: good gps fix but loop fallthru because minute() %d second() %d alignMinute(-1) %u" EOL,
                         minute(), second(), alignMinute(-1));
                     // we fall thru and can get another gps fix or just try again.
-                    // hopefully the BeaconWait or BattWait doesn't kick in?
+                    // sleep because we don't want to cycle endlessly waiting to align
+                    sleepSeconds(BEACON_WAIT);
                 }
             }
             else {
+                // this line will print a lot if we're failing because of this?
+                // but we have the min at 0.0 for now
                 Serial.printf("WARN: good gps fix but loop fallthru because voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
                     voltageBeforeWSPR, WsprBattMin);
+                sleepSeconds(BATT_WAIT);
             }
         }
     }
@@ -1329,7 +1333,8 @@ void alignAndDoAllSequentialTx (void) {
     get_mh_6(hf_grid6, lat_double, lon_double);
     // not same declared size, so use snprintf)
     // just the first 4 chars
-    snprintf(hf_grid4, sizeof(hf_grid4), "%s", hf_grid6);
+    for (int i = 0; i < 4; i++) hf_grid4[i] = hf_grid6[i];
+    hf_grid4[4] = 0;
 
     char hf_power[3];
     snprintf(hf_power, sizeof(hf_power), "%s", t_power);

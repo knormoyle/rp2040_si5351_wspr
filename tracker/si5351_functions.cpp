@@ -60,8 +60,10 @@ static bool vfo_turn_off_completed = false;
 void vfo_init(void) {
     if (VERBY[0]) Serial.println(F("vfo_init START"));
     // turn ON VFO VDD
+    // pin 4 ?
     pinMode(Si5351Pwr, OUTPUT);
 
+    // this is also pin 4
     gpio_init(VFO_VDD_ON_N_PIN);
     gpio_pull_up(VFO_VDD_ON_N_PIN);
     gpio_put(VFO_VDD_ON_N_PIN, 0);
@@ -80,18 +82,33 @@ void vfo_init(void) {
 //****************************************************
 // removed static
 void vfo_set_power_on(bool turn_on) {
-    if (VERBY[0]) Serial.println(F("vfo_set_power_on START"));
+    if (VERBY[0]) Serial.printf("vfo_set_power_on START %u" EOL, turn_on);
     static bool s_is_on = false;
-    if (turn_on == s_is_on) return;
+    // if (turn_on == s_is_on) return;
+
+    if ( turn_on) {
+        Serial.printf("set VDD_ON_N_PIN%d LOW (power on)" EOL, VFO_VDD_ON_N_PIN);
+        digitalWrite(VFO_VDD_ON_N_PIN, LOW);
+    } else {
+        Serial.printf("set VDD_ON_N_PIN%d HIGH (power off)" EOL, VFO_VDD_ON_N_PIN);
+        digitalWrite(VFO_VDD_ON_N_PIN, HIGH);
+    }
+
+    // always just turn it on!
     s_is_on = turn_on;
-    gpio_set_dir(VFO_VDD_ON_N_PIN, (turn_on ? GPIO_OUT : GPIO_IN));
-    if (VERBY[0]) Serial.println(F("vfo_set_power_on END"));
+     
+    // FIX! kevin 11/18/24
+    // huh? don't change the direction when it's on vs off
+    // we can just read the level
+    // gpio_set_dir(VFO_VDD_ON_N_PIN, (turn_on ? GPIO_OUT : GPIO_IN));
+
+    if (VERBY[0]) Serial.printf("vfo_set_power_on END %u" EOL, s_is_on);
 }
 
 
 //****************************************************
 int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
-    if (VERBY[0]) Serial.printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
+    if (VERBY[0]) Serial.printf("i2cWrite START reg %02x val %02x" EOL, reg, val);
     // FIX! shouldn't this be local ? or does it setup data for i2cWriten
     // moved here to be local, and not static (shared) anymore
     // only need length 2!
@@ -104,11 +121,69 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
         SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
 
     if (res < PICO_ERROR_NONE) {
-        if (VERBY[0]) Serial.printf("I2C error %d: reg:%02x val:%02x" EOL, res, reg, val);
+        if (VERBY[0]) Serial.printf("I2C write error %d: reg:%02x val:%02x" EOL, res, reg, val);
     }
     if (VERBY[0]) Serial.printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
     return res;
 }
+
+    
+//****************************************************
+// https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
+// i2c_read_timeout_us
+// https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html#ga9662f16f2e0def852f8fc051e695528d
+
+// i2c_read_timeout_us()
+// static int i2c_read_timeout_us (
+// i2c_inst_t * i2c,
+// uint8_t 	addr,
+// uint8_t * dst,
+// size_t 	len,
+// bool 	nostop,
+// uint 	timeout_us 
+// )		
+//
+// Attempt to read specified number of bytes from address, with timeout.
+// 
+// Parameters
+// i2c	Either i2c0 or i2c1
+// addr	7-bit address of device to read from
+// dst	Pointer to buffer to receive data
+// len	Length of data in bytes to receive
+// nostop	If true, master retains control of the bus at the end of the transfer (no Stop is issued), and the next transfer will begin with a Restart rather than a Start.
+// timeout_us	The time that the function will wait for the entire transaction to complete
+// Returns
+// Number of bytes read, or PICO_ERROR_GENERIC if address not acknowledged, no device present, or PICO_ERROR_TIMEOUT if a timeout occurred.
+
+// just reads two byte2
+int i2cReadTest(uint8_t reg, uint8_t val) {  // read reg via i2c
+    if (VERBY[0]) Serial.printf("i2cReadTest START reg %02x val %02x" EOL, reg, val);
+    // FIX! shouldn't this be local ? or does it setup data for i2cWriten
+    // moved here to be local, and not static (shared) anymore
+    // only need length 2!
+    uint8_t s_i2c_buf[2];
+    s_i2c_buf[0] = reg;
+    s_i2c_buf[1] = 254; // a fixed value that should be overwritten?
+    
+    uint8_t val_orig = val;
+    int res;
+    res = i2c_read_timeout_us(VFO_I2C_INSTANCE,
+        SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
+
+    val = s_i2c_buf[1];
+
+    if (res < PICO_ERROR_NONE) {
+        if (VERBY[0]) Serial.printf("I2C read error %d: reg:%02x val:%02x" EOL, res, reg, val);
+    }
+    else {
+        if (VERBY[0]) Serial.printf("I2C read okay %d: reg:%02x val:%02x" EOL, res, reg, val);
+    }
+
+    if (VERBY[0]) Serial.printf("i2cReadTest END reg %02x val %02x" EOL, reg, val);
+    return res;
+}
+
+
 
 
 //****************************************************
@@ -153,39 +228,6 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
 
  */
 
-const int SI5351_TCXO_FREQ =                26000000;
-
-const int SI5351A_OUTPUT_ENABLE_CONTROL =   3;
-const int SI5351A_CLK0_CONTROL =            16;
-const int SI5351A_CLK1_CONTROL =            17;
-const int SI5351A_CLK7_CONTROL =            23;
-const int SI5351A_PLLB_BASE =               34;
-const int SI5351A_MULTISYNTH0_BASE =        42;
-const int SI5351A_MULTISYNTH1_BASE =        50;
-const int SI5351A_PLL_RESET =               177;
-
-const int SI5351A_CLK0_MS0_INT =            (1 << 6);
-const int SI5351A_CLK0_MS0_SRC_PLLB =       (1 << 5);
-const int SI5351A_CLK1_MS1_INT =            (1 << 6);
-const int SI5351A_CLK1_MS1_SRC_PLLB =       (1 << 5);
-
-const int SI5351A_CLK0_SRC_MULTISYNTH_0 =   (3 << 2);
-const int SI5351A_CLK1_SRC_MULTISYNTH_0 =   (2 << 2);
-
-const int SI5351A_CLK1_CLK1_INV =           (1 << 4);
-const int SI5351A_CLK1_SRC_MULTISYNTH_1 =   (3 << 2);
-
-const int SI5351A_CLK0_IDRV_8MA =           (3 << 0);
-const int SI5351A_CLK0_IDRV_6MA =           (2 << 0);
-const int SI5351A_CLK0_IDRV_4MA =           (1 << 0);
-const int SI5351A_CLK0_IDRV_2MA =           (0 << 0);
-
-const int SI5351A_CLK1_IDRV_8MA =           (3 << 0);
-const int SI5351A_CLK1_IDRV_6MA =           (2 << 0);
-const int SI5351A_CLK1_IDRV_4MA =           (1 << 0);
-const int SI5351A_CLK1_IDRV_2MA =           (0 << 0);
-
-const int SI5351A_PLL_RESET_PLLB_RST =      (1 << 7);
 
 static uint32_t prev_ms_div = 0;
 static uint8_t s_regs[8];
@@ -393,13 +435,33 @@ void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
 //****************************************************
 bool vfo_is_on(void) {
     // power on and completed successfully
-    return (!gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
+    // FIX! in vs out doesn't make sense
+
+    // static bool gpio_is_dir_out	(	uint 	gpio	)	
+    // Check if a specific GPIO direction is OUT.
+    // gpio	GPIO number
+    // returns
+    // true if the direction for the pin is OUT
+
+    // can use gpio_get_out_level()
+
+    // gpio_get_out_level()
+    // static bool gpio_get_out_level	(uint gpio )	
+    // Determine whether a GPIO is currently driven high or lowThis function returns the high/low output level most recently assigned to a GPIO via gpio_put() or similar. This is the value that is presented outward to the IO muxing, not the input level back from the pad (which can be read using gpio_get()).
+    // 
+    // To avoid races, this function must not be used for read-modify-write sequences when driving GPIOs – instead functions like gpio_put() should be used to atomically update GPIOs. This accessor is intended for debug use only.
+
+    // gpio	GPIO number
+    // Returns
+    // true if the GPIO output level is high, false if low.
+    return (!gpio_get_out_level(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
 }
 
 //****************************************************
 bool vfo_is_off(void) {
     // power on and completed successfully
-    return (gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
+    // return (gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
+    return (gpio_get_out_level(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
 }
 
 // what is vfo_clk2 ? is that another PLL? is that used for calibration?
@@ -424,13 +486,16 @@ void vfo_turn_on(uint8_t clk_num) {
 
     gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+
     vfo_set_power_on(true);
+
     // sleep_ms(100);
     busy_wait_us_32(100000);
 
     // output 7MHz on CLK0
     uint8_t reg;
     // Disable all CLK output drivers
+    if (VERBY[0]) Serial.print(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
     while (i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff) < PICO_ERROR_NONE) {
         i2c_deinit(VFO_I2C_INSTANCE);
         // sleep_ms(10);
@@ -445,7 +510,9 @@ void vfo_turn_on(uint8_t clk_num) {
 
         // sleep_ms(10);
         busy_wait_us_32(10000);
+        if (VERBY[0]) Serial.print(F("vfo_turn_on trying to init the I2C0 pins inside loop"));
     }
+    if (VERBY[0]) Serial.print(F("vfo_turn_on done trying to init the I2C0 pins in loop"));
 
     // Powerdown CLK's
     for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) {

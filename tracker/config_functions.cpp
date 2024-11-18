@@ -22,6 +22,7 @@
 #include "led_functions.h"
 #include "u4b_functions.h"
 #include "config_functions.h"
+#include "si5351_functions.h"
 
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
@@ -69,7 +70,7 @@ extern uint32_t PLL_SYS_MHZ;
 // decode of _devmode
 extern bool DEVMODE;
 // decode of verbose 0-9
-extern bool VERBY[10]; 
+extern bool VERBY[10];
 
 //**************************************
 
@@ -146,7 +147,7 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
     while (true) {
         int timeout_ms = 0;
         Watchdog.reset();
-        while (!Serial.available()) { 
+        while (!Serial.available()) {
             sleep_ms(100);
             timeout_ms += 100;
             // this will eventually watchdog reset timeout if no character?
@@ -239,7 +240,7 @@ void config_intro(void) {
     //***************
 
 
-    // wait..don't need the char user interrupted with 
+    // wait..don't need the char user interrupted with
     // int c = getchar_timeout_us(60000000);
     // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
     // int c = getchar_timeout_us(0);
@@ -263,7 +264,7 @@ void config_intro(void) {
     if (i == 10*5) {
         Serial.println("(2) Must have timed out looking for input char(s) on Serial");
     }
-    // FIX! assume this is the state it was in before config menu? 
+    // FIX! assume this is the state it was in before config menu?
     // not always right. but loop will self-correct?
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
@@ -309,16 +310,16 @@ void show_TELEN_msg() {
 void user_interface(void) {
     // Does println do better compared to my Serial.print() with LINEND as \r\n ??
     // Serial.println()
-    // Prints data to the serial port as human-readable ASCII text 
-    // followed by a carriage return character (ASCII 13, or '\r') 
-    // and a newline character (ASCII 10, or '\n'). 
+    // Prints data to the serial port as human-readable ASCII text
+    // followed by a carriage return character (ASCII 13, or '\r')
+    // and a newline character (ASCII 10, or '\n').
     // Serial.println(val)
     // Serial.println(val, format)
-    // Serial: serial port object. 
+    // Serial: serial port object.
     // val: the value to print - any data type
 
     // format can be DEC, HEX, OCT, BIN ..prints as ASCII-encoded.
-    // format: specifies the number base (for integral data types) 
+    // format: specifies the number base (for integral data types)
     // or number of decimal places (for floating point types)
 
     // seems like we can use it
@@ -349,7 +350,7 @@ void user_interface(void) {
             if (!Serial.available()) {
                 sleep_ms(100);
             }
-            else { 
+            else {
                 incomingByte = Serial.read();
                 Serial.println(incomingByte);
                 if (incomingByte != 13) {
@@ -396,7 +397,7 @@ void user_interface(void) {
                 for (;;) { ; }
             case 'C':
                 // FIX! will 1 char send wspr?
-                get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]", 
+                get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]",
                     _callsign, sizeof(_callsign));
                 convertToUpperCase(_callsign);
                 write_FLASH();
@@ -456,13 +457,13 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'D':
-                get_user_input("Enter DEVMODE to enable messaging: (0 or 1) ", 
+                get_user_input("Enter DEVMODE to enable messaging: (0 or 1) ",
                     _devmode, sizeof(_devmode));
                 write_FLASH();
                 break;
             case 'R':
                 Serial.printf("Don't cause more than approx. 43 hz 'correction' on a band. Effect varies per band?");
-                get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ", 
+                get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ",
                     _correction, sizeof(_correction));
                 write_FLASH();
                 break;
@@ -472,6 +473,18 @@ void user_interface(void) {
                 get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ",
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
+                break;
+            case 'Z':
+                Serial.println(F("SI5351A_MULTISYNTH0_BASE"));
+                i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0);
+                Serial.println(F("SI5351A_MULTISYNTH1_BASE"));
+                i2cReadTest(SI5351A_MULTISYNTH1_BASE, 0);
+                Serial.println(F("SI5351A_CLK0_CONTROL"));
+                i2cReadTest(SI5351A_CLK0_CONTROL, 0);
+                Serial.println(F("SI5351A_CLK1_CONTROL"));
+                i2cReadTest(SI5351A_CLK1_CONTROL, 0);
+                Serial.println(F("SI5351A_OUTPUT_ENABLE_CONTROL"));
+                i2cReadTest(SI5351A_OUTPUT_ENABLE_CONTROL, 0);
                 break;
             case 13:  break;
             case 10:  break;
@@ -500,7 +513,7 @@ int read_FLASH(void) {
     // Therefore, do not frequently update the EEPROM or you may prematurely wear out the flash.
     // https://arduino-pico.readthedocs.io/en/latest/eeprom.html
 
-    // While the Raspberry Pi Pico RP2040 does not come with an EEPROM onboard, 
+    // While the Raspberry Pi Pico RP2040 does not come with an EEPROM onboard,
     // we could use a simulated one by using a single 4K chunk of flash at the end of flash space.
     // April 13, 2023
     // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
@@ -510,17 +523,17 @@ int read_FLASH(void) {
     // FLASH_PAGE_SIZE       # The size of one page, in bytes (the mimimum amount you can write)
 
     // expected:
-    // PICO_FLASH_SIZE_BYTES is 2MB or 2097152 bytes. 
-    // FLASH_SECTOR_SIZE is 4K or 4096 bytes. 
-    // FLASH_PAGE_SIZE is 256 bytes. 
+    // PICO_FLASH_SIZE_BYTES is 2MB or 2097152 bytes.
+    // FLASH_SECTOR_SIZE is 4K or 4096 bytes.
+    // FLASH_PAGE_SIZE is 256 bytes.
 
     // So 256 bytes will be one page? does my config fit in that? yes!
 
-    // pointer should be the last physical sector to eliminate the chance 
-    // that it will interfere with program code. 
+    // pointer should be the last physical sector to eliminate the chance
+    // that it will interfere with program code.
     // That sector starts at the address:
     // PICO_FLASH_SIZE_BYTES - FLASH_SECTOR_SIZE
-    // two functions to use 
+    // two functions to use
     // https://www.raspberrypi.com/documentation/pico-sdk/hardware.html
     // https://www.raspberrypi.com/documentation/pico-sdk/hardware.html#group_hardware_flash
 
@@ -570,7 +583,7 @@ int read_FLASH(void) {
 
     // fix anything bad! both in _* variables and FLASH (defaults)
     // -1 if anything got fixed
-    int result = check_data_validity_and_set_defaults(); 
+    int result = check_data_validity_and_set_defaults();
 
     // hack _devmode _verbose DEVMODE
     // forces DEVMODE and _verbose == '9'
@@ -587,7 +600,7 @@ int read_FLASH(void) {
 void decodeVERBY(void) {
     // additional decodes from the base nvram state variables
     if (_verbose[0] < '0' && _verbose[0] > '9') {
-        // set everything if it's illegal ascii 
+        // set everything if it's illegal ascii
         for (int i = 0; i < 10 ; i++) {
             VERBY[i] = true;
         }
@@ -734,8 +747,8 @@ int check_data_validity_and_set_defaults(void) {
     // 0-9 and - are legal. _
     // make sure to null terminate
     bool bad = false;
-    if (_TELEN_config[0] == 0) {    
-        bad = true;     
+    if (_TELEN_config[0] == 0) {
+        bad = true;
     }
     else {
         for (int i = 1; i <= 3; ++i) {
@@ -764,7 +777,7 @@ int check_data_validity_and_set_defaults(void) {
     // clock gets fixed, then the defaults will get fixed (where errors exist)
     // be sure to null terminate
     if (_clock_speed[0] == 0 || atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
-        Serial.printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s", 
+        Serial.printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s",
             RED, _clock_speed, NORMAL);
         snprintf(_clock_speed, sizeof(_clock_speed), "133");
         write_FLASH();
@@ -774,7 +787,7 @@ int check_data_validity_and_set_defaults(void) {
     uint32_t clkhz = atoi(_clock_speed) * 1000000UL;
     if (!set_sys_clock_khz(clkhz / kHz, false)) {
         // http://jhshi.me/2014/07/11/print-uint64-t-properly-in-c/index.html
-        Serial.printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s", 
+        Serial.printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
             RED, PLL_SYS_MHZ, NORMAL);
         snprintf(_clock_speed, sizeof(_clock_speed), "133");
         write_FLASH();
@@ -784,7 +797,7 @@ int check_data_validity_and_set_defaults(void) {
     //*********
     // be sure to null terminate
     if (_U4B_chan[0] == 0 || atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
-        Serial.printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s", 
+        Serial.printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s",
             RED, _U4B_chan, NORMAL);
         snprintf(_U4B_chan, sizeof(_U4B_chan), "599");
         write_FLASH();
@@ -879,18 +892,19 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
 
     Serial.printf("%s%sValid commands: %s%s\r\n", UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
 
-    // FIX! could we use Serial.println and avoid the \r\n ?
-    Serial.print(F("X: eXit configuration and reboot\r\n"));
-    Serial.print(F("/: reboot to bootloader mode to drag/drop new .uf2\r\n"));
-    Serial.print(F("C: change Callsign (6 char max)\r\n"));
-    Serial.print(F("U: change U4b channel # (0-599)\r\n"));
-    Serial.print(F("A: change band (10,12,15,17,20 default 20)\r\n"));
-    Serial.print(F("V: verbose (0 for no messages, 9 for all) \r\n"));
-    Serial.print(F("T: TELEN config\r\n"));
-    Serial.print(F("K: clock speed  (default: 133)\r\n"));
-    Serial.print(F("D: DEVMODE to enable messaging (default: 0)\r\n"));
-    Serial.print(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)\r\n"));
-    Serial.print(F("R: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)\r\n"));
+    // FIX! could we use Serial.printlnln and avoid the \r\n ?
+    Serial.println(F("X: eXit configuration and reboot"));
+    Serial.println(F("/: reboot to bootloader mode to drag/drop new .uf2"));
+    Serial.println(F("C: change Callsign (6 char max)"));
+    Serial.println(F("U: change U4b channel # (0-599)"));
+    Serial.println(F("A: change band (10,12,15,17,20 default 20)"));
+    Serial.println(F("V: verbose (0 for no messages, 9 for all)"));
+    Serial.println(F("T: TELEN config"));
+    Serial.println(F("K: clock speed  (default: 133)"));
+    Serial.println(F("D: DEVMODE to enable messaging (default: 0)"));
+    Serial.println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
+    Serial.println(F("R: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)"));
+    Serial.println(F("Z: run test: currently i2cReadTest()"));
 
     if (VERBY[0]) Serial.println(F("show_values() END"));
 }
