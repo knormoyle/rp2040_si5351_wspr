@@ -266,6 +266,8 @@ void setGpsBalloonMode(void) {
 // always GGA GLL GSA GSV RMC
 // nver ZDA TXT
 void setGpsBroadcast() {
+    // do nothing.. is it inhibiting the wrong things?
+    return;
     if (VERBY[0]) Serial.print(F("setGpsBroadcast START" EOL));
     updateStatusLED();
     Watchdog.reset();

@@ -28,20 +28,35 @@
 #include "Wire.h"
 #include "si5351.h"
 
+// mine. can't findj
+// #include "si5351_functions.h"
+
 
 /********************/
 /* Public functions */
 /********************/
+// kevin
+// hmm. why is \n not sufficient?
+#define EOL "\r\n"
+
 
 Si5351::Si5351(uint8_t i2c_addr):
 	i2c_bus_addr(i2c_addr)
 {
+    Serial.println(F("Si5351 library object entered" EOL));
+    // can't find
+    // vfo_set_power_on(true); 
+    sleep_ms(5000);
+
+
 	xtal_freq[0] = SI5351_XTAL_FREQ;
 
 	// Start by using XO ref osc as default for each PLL
 	plla_ref_osc = SI5351_PLL_INPUT_XO;
 	pllb_ref_osc = SI5351_PLL_INPUT_XO;
 	clkin_div = SI5351_CLKIN_DIV_1;
+    Serial.println(F("Si5351 library object created" EOL));
+
 }
 
 /*
@@ -62,13 +77,33 @@ Si5351::Si5351(uint8_t i2c_addr):
  */
 bool Si5351::init(uint8_t xtal_load_c, uint32_t xo_freq, int32_t corr)
 {
+    Serial.print(F("Si5351 library object init entered" EOL));
+    Serial.flush();
 	// Start I2C comms
+    bool kevin = true;
+    #define VFO_I2C0_SDA_PIN 12
+    #define VFO_I2C0_SCL_PIN 13
+    if (kevin) {
+        Wire.setSDA(VFO_I2C0_SDA_PIN); // 12
+        Wire.setSCL(VFO_I2C0_SCL_PIN); // 13
+    }
+
 	Wire.begin();
+    Serial.print(F("Si5351 library Wire created" EOL));
+    Serial.flush();
 
 	// Check for a device on the bus, bail out if it is not there
+    Serial.print(F("Si5351 library Wire beginTransmission start" EOL));
+    Serial.flush();
 	Wire.beginTransmission(i2c_bus_addr);
+    Serial.print(F("Si5351 library Wire beginTransmission complete" EOL));
+    Serial.flush();
 	uint8_t reg_val;
-  reg_val = Wire.endTransmission();
+    Serial.print(F("Si5351 library Wire endTransmission start" EOL));
+    Serial.flush();
+    reg_val = Wire.endTransmission();
+    Serial.print(F("Si5351 library Wire endTransmission complete" EOL));
+    Serial.flush();
 
 	if(reg_val == 0)
 	{

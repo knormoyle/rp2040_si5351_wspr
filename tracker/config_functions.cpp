@@ -22,8 +22,17 @@
 #include "led_functions.h"
 #include "u4b_functions.h"
 #include "config_functions.h"
+
+// just so we can do some tests?
 #include "si5351_functions.h"
 #include "i2c_functions.h"
+
+//*****************************************************
+// include the SI5351Arduino library and Wire for it
+#include "si5351.h"
+#include "Wire.h"
+//*****************************************************
+
 
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
@@ -308,11 +317,49 @@ void show_TELEN_msg() {
     Serial.print(F("See the Wiki for more info.n" EOL));
 }
 
+//*****************************************************
+void do_test_si5351() {
+    if (VERBY[0]) Serial.println(F("do_test_si5351() START" EOL));
+    Serial.flush();
+    bool i2c_found;
+
+    // be sure to disable all the other nonsense we have
+    // modify the library to start Wire with our SDA/SCL pins
+    Si5351 si5351;
+    if (VERBY[0]) Serial.println(F("do_test_si5351() si5351 object created" EOL));
+    Serial.flush();
+    // do we crash here after creating the object?
+
+    if (VERBY[0]) Serial.println(F("do_test_si5351() si5351 object init starting" EOL));
+    Serial.flush();
+    sleep_ms(1000);
+
+    i2c_found = si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
+    if (VERBY[0]) Serial.println(F("do_test_si5351() si5351 object init completed" EOL));
+    Serial.flush();
+    if (!i2c_found) Serial.println(F("Device not found on I2C bus!" EOL));
+    Serial.flush();
+
+    // Set CLK0 to output 14 MHz
+    si5351.set_freq(1400000000ULL, SI5351_CLK0);
+
+    // Set CLK1 to output 175 MHz
+    si5351.set_ms_source(SI5351_CLK1, SI5351_PLLB);
+    si5351.set_freq_manual(17500000000ULL, 70000000000ULL, SI5351_CLK1);
+
+    // Query a status update and wait a bit to let the Si5351 populate the
+    // status flags correctly.
+    si5351.update_status();
+    if (VERBY[0]) Serial.println(F("do_test_si5351() END"));
+}
+
 //********************************************
 // 'Z' command causes this to execute
 void do_i2c_scan_tests(void) {
     // quick and dirty way to execute some different tests
-    if (false) {
+    if (true) {
+        do_test_si5351();
+    } else if (false) {
         // in i2c_functions.cpp
         i2c_scan();
     } else if (false) {
@@ -947,3 +994,5 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     if (VERBY[0]) Serial.println(F("show_values() END"));
 }
 
+
+//*****************************************************

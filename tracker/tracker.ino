@@ -350,7 +350,9 @@ extern const int VFO_I2C0_SCL_PIN = 13;
 
 // The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR, which is 0x60
 extern const int SI5351A_I2C_ADDR = 0x60;
-extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
+// extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
+// maybe go lower frequency?
+extern const int VFO_I2C0_SCL_HZ = (100 * 1000);
 
 #include "si5351_functions.h"
 
@@ -748,6 +750,9 @@ void setup1() {
     // FIX! don't turn off for now 11/18/24
     // vfo_turn_off();
     vfo_turn_on(WSPR_TX_CLK_NUM);
+    // FIX! hack for now
+    vfo_set_power_on(true);
+
 
     //**********************
     // necessary for Serial2 to work properly
@@ -774,11 +779,13 @@ void setup1() {
     // this seemed key
     // this is okay for Wire?
     
-    /*
-    Wire.setSDA(VFO_I2C0_SDA_PIN); // 12
-    Wire.setSCL(VFO_I2C0_SCL_PIN); // 13
-    Wire.begin();
-    */
+    if (false) {
+        // #define VFO_I2C0_SDA_PIN = 12;
+        // #define VFO_I2C0_SCL_PIN = 13;
+        Wire.setSDA(VFO_I2C0_SDA_PIN); // 12
+        Wire.setSCL(VFO_I2C0_SCL_PIN); // 13
+        Wire.begin();
+    }
 
     // Notably this did a read of non-zero data (2a)
     // Serial.println(F("SI5351A_MULTISYNTH0_BASE"));
@@ -796,9 +803,6 @@ void setup1() {
     // our ISC0 for the Si5351 is SDA 12, SCL 13))
 
     // https://docs.arduino.cc/language-reference/en/functions/communication/wire/
-    /*
-    Wire.begin();
-    */
     // default pins for Wire 1 are SDA=26 SCL=27 ..wants to be our ISC0
     // default pins for Wire 0 are SDA=4 SCL=5 (our ISC1 for the BMP)
 

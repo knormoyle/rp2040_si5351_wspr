@@ -3,6 +3,7 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
+
 // https://wellys.com/posts/rp2040_arduino_i2c/
 // from https://github.com/lkoepsel/I2C/blob/main/Arduino/Pico/I2C_Scanner/I2C_Scanner.ino
 
@@ -149,3 +150,5 @@ void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire)
 
     if (VERBY[0]) Serial.printf("scan_WIRE %u %u END" EOL, SDA, SCL );
 }
+
+// https://deepbluembedded.com/arduino-i2c-tutorial-examples/
