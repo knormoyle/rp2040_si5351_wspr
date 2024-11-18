@@ -28,7 +28,7 @@
 
 // A complete copy of the Raspberry Pi Pico SDK is included with the arduino-pico core,
 // and all functions in the core are available inside the standard link libraries.
-// When you call SDK functions, the core and libraries are not aware of any changes 
+// When you call SDK functions, the core and libraries are not aware of any changes
 // to the Pico you perform. This may break the functionality of certain libraries in doing so.
 
 // Be wary of multicore and use of libraries. arduino-pico is not thread-safe.
@@ -38,7 +38,7 @@
 // Serial is the USB serial port, and while Serial.begin() does allow specifying a baud rate,
 // this rate is ignored since it is USB-based.
 
-// Also be aware that this USB Serial port is responsible forresetting the RP2040 
+// Also be aware that this USB Serial port is responsible forresetting the RP2040
 // during the upload process,
 // following the Arduino standard of 1200bps = reset to bootloader).
 
@@ -260,7 +260,7 @@ extern const int LED_STATUS_USER_CONFIG = 9;
 //*********************************
 // all extern consts can be externed by a function
 // so it can be used in gps_functions.cpp
-// extern is needed or the linker doesn't find it. 
+// extern is needed or the linker doesn't find it.
 // see https://forum.arduino.cc/t/linker-problems-with-extern-const-struct/647136/2
 extern const int GpsPwr = 16; // output ..this cuts VCC, leaves VBAT
 // define is not used..GpsPwr is used.
@@ -303,7 +303,7 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // can't seem to restrict burst data
 // with the GLONASS sats
 // There are 821 chars in a burst, handling takes 892 milliseconds per burst
-// try increasing the baud rate to see if duration takes less 
+// try increasing the baud rate to see if duration takes less
 // works going from 9600 to 19200
 extern const int SERIAL2_BAUD_RATE = 19200;
 // it now does the burst in half that time, around 450 milliseconds
@@ -456,7 +456,7 @@ uint64_t GpsStartMillis = 0;
 uint64_t  loopCnt = 0;
 
 //***********************************************************
-// FIX! should this be non-zero? 
+// FIX! should this be non-zero?
 // Maybe all a don't care now with the voltage monitor that causes reset.
 float     GpsMinVolt = 0.0;   // min Volts for GPS to wake up.
 float     BattMin = 0.0;      // min Volts to wake up.
@@ -466,13 +466,13 @@ float     HighVolt = 9.9;
 
 
 //***********************************************************
-// To allocate a separate 8K stack for core 1, 
-// resulting in 8K stacks being available for both cores, 
+// To allocate a separate 8K stack for core 1,
+// resulting in 8K stacks being available for both cores,
 bool core1_separate_stack = true;
 
 //***********************************************************
 // https://arduino-pico.readthedocs.io/en/latest/multicore.html
-// are the Serial.print* functions not threadsafe?  
+// are the Serial.print* functions not threadsafe?
 // Generally Serial is not thread-safe.
 // simple Serial.print() might be thread safe
 // but not Serial.println or especially not Serial.printf()
@@ -602,8 +602,8 @@ void loop() {
         // no one should send me stuff
         while (rp2040.fifo.available()) {
             // int32_t fifo_TOS;
-            uint32_t rp2040_fifo_TOS; 
-            uint32_t *TOS_ptr; 
+            uint32_t rp2040_fifo_TOS;
+            uint32_t *TOS_ptr;
             TOS_ptr = &rp2040_fifo_TOS;
             // send a reference to a string?
             // https://forum.arduino.cc/t/how-to-transfer-strings-between-two-cores-on-pico/1310533/3
@@ -617,9 +617,9 @@ void loop() {
             // https://stackoverflow.com/questions/3168275/printf-format-specifiers-for-uint32-t-and-size-t
             bool msgFound = rp2040.fifo.pop_nb(TOS_ptr);
             // %d not okay with int32_t?
-            Serial.printf(EOL "loop() DOING COOL STUFF: rp2040_fifo_TOS %" PRIu32 " msgFound %u" EOL EOL, 
+            Serial.printf(EOL "loop() DOING COOL STUFF: rp2040_fifo_TOS %" PRIu32 " msgFound %u" EOL EOL,
                 rp2040_fifo_TOS, msgFound);
-            
+
             Serial.print(F(EOL "loop() WE SHOULDN'T BE SEEING THIS LOOPING HERE!" EOL EOL));
             // don't want to hang here
             break;
@@ -870,7 +870,7 @@ int tx_cnt_3;
 // LightAPRS only looked for GPS NMEA data when it needed a fix. Not all the time.
 
 // TinyGPS++ is not running as a separate task. Only does work when we call it.
-// we call it with every new char, and to get data it creates from a history 
+// we call it with every new char, and to get data it creates from a history
 // of NMEA sentences in those chars.
 
 // NMEA sentence come in bursts at 1Hz ..
@@ -879,12 +879,12 @@ int tx_cnt_3;
 // Maybe not aligned to a second, but the burst is less than one full second of data.
 // and burst intervals are at 1 sec. Data is not spread out over the full second.
 
-// Order of each NMEA sentence is not random either. Order stays the same for each burst. 
+// Order of each NMEA sentence is not random either. Order stays the same for each burst.
 // Just a interesting note
 
-// we can handle each char at about 300 usec avg. 
-// Obviously a char processing time is more when TinyGPS++ sees a char is a "end of NMEA sentence" 
-// (32 deep rx fifo can absorb some chars if we're delayed. 
+// we can handle each char at about 300 usec avg.
+// Obviously a char processing time is more when TinyGPS++ sees a char is a "end of NMEA sentence"
+// (32 deep rx fifo can absorb some chars if we're delayed.
 // Always want the rx fifo to be almost empty, to allow that little bit buffering if there's any backup.
 
 // If characters arrived at max 9600 baud, thats 1 char per .1 ms or 100 us.
@@ -892,9 +892,9 @@ int tx_cnt_3;
 // So we're too slow to handle that.
 // but the effective baud rate out of ATGM336H-51 is maybe 900 chars/sec (at 9660 baud Serial2)
 
-// so that's around 1.1ms allowed time per char. 
+// so that's around 1.1ms allowed time per char.
 
-// Plenty..probably even if more processingsometimes by TinyGPS++. 
+// Plenty..probably even if more processingsometimes by TinyGPS++.
 // We can even allow faster baud rate for increased effective chars/sec
 
 // we don't have to locally buffer chars to allow for backpressure from TinyGPS++
@@ -905,10 +905,10 @@ int tx_cnt_3;
 
 // Then if we could absorb/empty it at least every second, we'd never lose anything.
 
-// Less processing/power if we only absorb GPS data when we need it. 
+// Less processing/power if we only absorb GPS data when we need it.
 // Allows us to sleep when  we don't need a fix update.
 
-// Key that TinyGPS++ absorbs our char send at bounded delays (per NMEA sentence). 
+// Key that TinyGPS++ absorbs our char send at bounded delays (per NMEA sentence).
 // end of NMEA sentence has longer delay. Apparently the CR LF is needed as a 'boundary' post checksum?
 // FIX! do we need both CR and LF or is one enough? Shouldn't matter.
 
@@ -921,8 +921,8 @@ int tx_cnt_3;
 
 // how to deal with what a "fix" is, and .age
 // https://arduiniana.org/libraries/tinygps/
-// The NMEA sentences must report valid data. 
-// If the $GPRMC sentence reports a validity of “V” (void) instead of “A” (active), 
+// The NMEA sentences must report valid data.
+// If the $GPRMC sentence reports a validity of “V” (void) instead of “A” (active),
 // or if the $GPGGA sentence reports fix type “0” (no fix) then those sentences are discarded.
 
 // hmm. we just always qualify it with valid
@@ -937,7 +937,7 @@ int tx_cnt_3;
 
 uint16_t  BEACON_WAIT = 61; // secs
 // seconds sleep if super capacitors/batteries are below BattMin
-uint16_t  BATT_WAIT = 1;  // secs     
+uint16_t  BATT_WAIT = 1;  // secs
 
 // GPS_LOCATION_AGE_MAX should a bit greater than GPS_WAIT_FOR_NMEA_BURST_MAX
 // we could live with data that is more 'stale' but theoretically it should be no older than this?
@@ -1063,7 +1063,7 @@ void loop1() {
         // "%lu" or "%" PRIu32 " to use with printf?
         uint32_t fix_age = gps.location.age();
         bool fix_valid = gps.location.isValid();
-        // isUpdated() indicates whether the object’s value has been updated (not necessarily changed) 
+        // isUpdated() indicates whether the object’s value has been updated (not necessarily changed)
         // since the last time you queried it
         bool fix_updated = gps.location.isUpdated();
         uint32_t fix_sat_cnt = gps.satellites.value();
@@ -1077,8 +1077,8 @@ void loop1() {
             Serial.printf("loop1() GpsInvalidCnt++ %d" EOL, GpsInvalidCnt);
 
             // why doesn't this year check get included in determining valid gps fix?
-            // if gps time is valid, we constantly (each NMEA burst grab) 
-            // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime() 
+            // if gps time is valid, we constantly (each NMEA burst grab)
+            // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime()
             // so don't here. Only update LED state here, though
             if (gps.date.year() >= 2024 && gps.date.year() <= 2034)
                 // FIX! where do we grab the time
@@ -1126,8 +1126,8 @@ void loop1() {
             Serial.printf("fix_updated %u" EOL, fix_updated);
         }
         if (!fix_valid || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
-            if (VERBY[0]) 
-                Serial.println(F("loop1() WARN: GPS fix issue ..stail or not valid"));
+            if (VERBY[0])
+                Serial.println(F("loop1() WARN: GPS fix issue ..stale or not valid"));
 
             // these are the waits that give us the long loop times
             // Looping with sleep
@@ -1137,7 +1137,7 @@ void loop1() {
 
         } else if (fix_sat_cnt <= 3) { // implied also 'not the first if clause' .. i.e good fix
             // FIX! should we have separate led count for 2d fix and 3d fix?
-            if (VERBY[0]) 
+            if (VERBY[0])
                 Serial.println(F("loop1() WARN: GPS fix issues ..not enough sats ..2d only"));
 
             // these are the waits that give us 25-30 sec loop times?
@@ -1212,16 +1212,17 @@ void loop1() {
             // so we can start the vfo 30 seconds before needed
             // if we're in the minute before sending..just live with gps fix
             // because it might take a minute to have another one?
-            Watchdog.reset(); 
+            Watchdog.reset();
             // make sure readVoltage always returns postive # (> 0)
             // readVoltage can return 0
-            if (readVoltage() >= WsprBattMin) {
+            float voltageBeforeWSPR = readVoltage();
+            if (voltageBeforeWSPR < WsprBattMin) {
                 if (alignMinute(-1)) {
                     if (second() > 30) {
                         // to late..don't try to send
                         Serial.println(F("WARN: past needed 30 sec setup in the minute before WSPR should start"));
                         // minute() second() come from Time.h as ints
-                        Serial.printf("WARN: because minute() %d second() %d alignMinute(-1) %u" EOL, 
+                        Serial.printf("WARN: because minute() %d second() %d alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
                     } else {
                         while (second() < 30) {
@@ -1233,9 +1234,15 @@ void loop1() {
                         alignAndDoAllSequentialTx();
                     }
                 } else {
+                    Serial.printf("WARN: good gps fix but loop fallthru because minute() %d second() %d alignMinute(-1) %u" EOL,
+                        minute(), second(), alignMinute(-1));
                     // we fall thru and can get another gps fix or just try again.
                     // hopefully the BeaconWait or BattWait doesn't kick in?
                 }
+            }
+            else {
+                Serial.printf("WARN: good gps fix but loop fallthru because voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
+                    voltageBeforeWSPR, WsprBattMin);
             }
         }
     }
@@ -1292,7 +1299,7 @@ void alignAndDoAllSequentialTx (void) {
     }
 
     if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX START"));
-    Watchdog.reset(); 
+    Watchdog.reset();
     while (second() < 30)  {
         delay(5); // 5 millis
         // we could end up waiting for 30 secs
@@ -1337,7 +1344,7 @@ void alignAndDoAllSequentialTx (void) {
     // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
     // turns on both tx clk. The first time, has pll setup already?
 
-    Watchdog.reset(); 
+    Watchdog.reset();
     // will sync up to the right minute and second == 0
     syncAndSendWspr(0, hf_callsign, hf_grid4, hf_power, false);
     if (VERBY[0]) {
