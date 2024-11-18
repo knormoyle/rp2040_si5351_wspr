@@ -183,7 +183,7 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
     // FIX! should we do this here or where?
     Watchdog.reset();
     if (n < 0 || n > 5000) {
-        Serial.printf("ERROR: sleepForMilliSecs() n %d too big. Using 1000" EOL, n);
+        Serial.printf("ERROR: sleepForMilliSecs() n %d too big (5000 max). Using 1000" EOL, n);
         n = 1000;
     }
     int milliDiv = n / 10;
@@ -575,18 +575,6 @@ void GpsINIT(void) {
     // sleep 3 secs
     sleepForMilliSecs(3000, false);
 
-    //****************
-    // already did in the GpsFullColdReset()
-    if (false) {
-        checkInitialGpsOutput();
-        // FIFO is big enough to hold output while we send more input here
-        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
-        // then up the speed to desired (both gps chip and then Serial2
-        setGpsBaud(desiredBaud);
-        Serial.println(F("Should get some GPS output now at the target baud rate"));
-        checkInitialGpsOutput();
-    }
-
     if (VERBY[0]) Serial.println(F("GpsINIT END"));
 }
 
@@ -644,7 +632,7 @@ void GpsFullColdReset(void) {
     }
 
     if (false) {
-        // TOTAL HACK
+        // TOTAL HACK experiment
         // since vbat seems to preserve the baud rate, even with NRESET assertion
         // try sending the full cold reset command at all reasonable baud rates
         // whatever baud rate the GPS was at, it should get one?
@@ -679,16 +667,30 @@ void GpsFullColdReset(void) {
 
     }
 
-    
-
     //******************
+    // resets to 9600. set to new baud rate
+    // FIFO is big enough to hold output while we send more input here
+    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+    // then up the speed to desired (both gps chip and then Serial2
+
+    // if it came up already in our target baud rate
+    // this will be a no-op (seems it happens if vbat stays on)
+    // if so, since we only have one target baud rate hardwired in, 
+    // we should be able to start talking to it 
+
     // gps shold come up at 9600 so look with our uart at 9600
     Serial2.begin(9600);
     // wait for 1 secs before sending commands
     sleepForMilliSecs(1000, false);
     Serial.println(F("Should get some output at 9600 after reset?"));
+    // we'll see if it's wrong baud rate or not, at this point
+    checkInitialGpsOutput();
+    
+    // But then we'll be good when we transition to the target rate also
+    setGpsBaud(desiredBaud);
     checkInitialGpsOutput();
 
+    //******************
     // FIX! we don't need to toggle power to get the effect?
     setGpsBalloonMode();
 
@@ -700,13 +702,6 @@ void GpsFullColdReset(void) {
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
 
-    //******************
-    // resets to 9600. set to new baud rate
-    // FIFO is big enough to hold output while we send more input here
-    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
-    // then up the speed to desired (both gps chip and then Serial2
-    setGpsBaud(desiredBaud);
-    checkInitialGpsOutput();
     //******************
     if (VERBY[0]) Serial.println(F("GpsFullColdReset END"));
 }
@@ -751,6 +746,11 @@ void GpsWarmReset(void) {
     // the old reset if you want to change baud rate  
     // should be the same from init, so this should work? (unecessary ?)
     // don't change or ?? should be don't care?
+
+    // if it comes back up in out desired BAUD rate already, 
+    // everything will be fine and we'll start talking to it
+    // as long as the tracker only got one other Baud rate other than 9600 
+    // all will be fine
     if (true) {
         int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
         // then up the speed to desired (both gps chip and then Serial2
@@ -919,7 +919,7 @@ void updateGpsDataAndTime(int ms) {
                     // this the case where we started this function with something in the buffer
                     // we unload each in less than 1ms..so we catch up
                     // compare to 28 so we only get 4 (32 -28) ERROR messages as we catch up
-                    StampPrintf("ERROR: NMEA incoming chars backing up? 32 deep uart rx buffer has %d)" EOL,
+                    StampPrintf("WARN: NMEA incoming chars backing up? 32 deep uart rx buffer has %d)" EOL,
                         (int) charsAvailable);
             }
 

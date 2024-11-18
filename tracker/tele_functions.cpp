@@ -220,9 +220,10 @@ void snapForTelemetry(void) {
     snprintf(t_callsign, sizeof(t_callsign), "%6s", _callsign);
 
     // string literals are null terminated
-    char power[3] = "3";
-    if (_tx_high[0] == '1')
-        snprintf(power, sizeof(power), "%1s", "5");
+    int power_int;
+    if (_tx_high[0] == '1') power_int = 7; // legal
+    else power_int = 3; // legal
+
     // we clamp to a legalPower when we snapForTelemetry()
     // basically we look at _tx_high[0] to decide our power level that will be used for rf
     // we could use values that are unique for this tracker,
@@ -231,7 +232,6 @@ void snapForTelemetry(void) {
 
     // validity check the power. for 'same as everything else' checking
     bool found = false;
-    int power_int = atoi(power);
     for (int i = 0; i < legalPowerSize; i++) {
         if (legalPower[i] == power_int) {
             found = true;

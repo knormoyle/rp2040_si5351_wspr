@@ -118,15 +118,13 @@ void forceHACK(void) {
 
         Serial.println(F("Forcing DEVMODE true, _devmode 1 (always for now)"));
         strncpy(_devmode, "1", sizeof(_devmode));
-        DEVMODE = true;  // set when _devmode is set
         // HACK FIX! always 9 now for debug
 
         Serial.println(F("Forcing _verbose to 9 (always for now)"));
         strncpy(_verbose, "9", sizeof(_verbose));
-    }
-    else {
-        if (_devmode[0] == '1') DEVMODE = true;
-        else DEVMODE = true;
+
+        Serial.println(F("Forcing _go_when_rdy to 1 (always for now)"));
+        strncpy(_go_when_rdy, "1", sizeof(_go_when_rdy));
     }
 }
 
@@ -577,7 +575,12 @@ int read_FLASH(void) {
     // hack _devmode _verbose DEVMODE
     // forces DEVMODE and _verbose == '9'
     forceHACK();
+
+    if (_devmode[0] == '1') DEVMODE = true;
+    else DEVMODE = false;
+
     decodeVERBY();
+
     return result;
 }
 
