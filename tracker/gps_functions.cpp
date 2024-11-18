@@ -229,7 +229,7 @@ void checkInitialGpsOutput(void) {
 
     int i;
     char incomingChar = { 0 };
-    // we drain during the GpsINIT now, oh. we should leave Gps ON so we get chars
+    // we drain during the GpsINIT now, oh. we should leave gps on so we get chars
     for (i = 0; i < 1; i++) {
         Watchdog.reset();
         if (!Serial2.available()) {
@@ -769,14 +769,13 @@ void GpsWarmReset(void) {
 
 //************************************************
 void GpsON(bool GpsColdReset) {
-    if (VERBY[0]) Serial.printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
+    if (VERBY[0]) {
+        // no print if no cold reset request. So I can grep on GpsColdReset as a special case only
+        if (!GpsColdReset) Serial.printf("GpsON START GpsIsOn_state %u" EOL, GpsIsOn_state);
+        else Serial.printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL, 
+            GpsIsOn_state, GpsColdReset);
+    }
 
-    if (GpsColdReset) {
-        if (VERBY[9]) Serial.printf("GpsON GpsIsOn_state %u GpsColdReset true" EOL, GpsIsOn_state);
-    }
-    else {
-        if (VERBY[9]) Serial.printf("GpsOn GpsIsOn_state %u GpsColdReset false" EOL, GpsIsOn_state);
-    }
     // could be off or on already
     // Assume GpsINIT was already done (pins etc)
 
@@ -786,7 +785,11 @@ void GpsON(bool GpsColdReset) {
     // does nothing if already on
     else if (!GpsIsOn()) GpsWarmReset();
 
-    if (VERBY[0]) Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
+    if (VERBY[0]) {
+        if (!GpsColdReset) Serial.printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
+        else Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, 
+            GpsIsOn_state, GpsColdReset);
+    }
 }
 
 //************************************************
@@ -804,6 +807,7 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 
 //************************************************
 bool ublox_high_alt_mode_enabled = false;
+
 void GpsOFF(void) {
     if (VERBY[0]) Serial.printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
 
@@ -1001,7 +1005,7 @@ void updateGpsDataAndTime(int ms) {
             // FIX! could the LED blinking have gotten delayed? ..we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
             duration_millis = current_millis - start_millis;
-            if (VERBY[9]) StampPrintf(
+            if (false && VERBY[9]) StampPrintf(
                 "updateGpsDataAndTime early out: ms %d " 
                 "loop break at %" PRIu64 " millis,  duration %" PRIu64  EOL,
                  ms, current_millis, duration_millis);

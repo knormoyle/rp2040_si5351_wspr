@@ -603,8 +603,8 @@ void loop() {
         while (rp2040.fifo.available()) {
             // int32_t fifo_TOS;
             uint32_t rp2040_fifo_TOS; 
-            uint32_t *ptrTOS; 
-            ptrTOS = &rp2040_fifo_TOS;
+            uint32_t *TOS_ptr; 
+            TOS_ptr = &rp2040_fifo_TOS;
             // send a reference to a string?
             // https://forum.arduino.cc/t/how-to-transfer-strings-between-two-cores-on-pico/1310533/3
 
@@ -615,7 +615,7 @@ void loop() {
             // pass the pointer so I get fifo_TOS modified
             // https://arduino-pico.readthedocs.io/en/latest/multicore.html
             // https://stackoverflow.com/questions/3168275/printf-format-specifiers-for-uint32-t-and-size-t
-            bool msgFound = rp2040.fifo.pop_nb(ptrTOS);
+            bool msgFound = rp2040.fifo.pop_nb(TOS_ptr);
             // %d not okay with int32_t?
             Serial.printf(EOL "loop() DOING COOL STUFF: rp2040_fifo_TOS %" PRIu32 " msgFound %u" EOL EOL, 
                 rp2040_fifo_TOS, msgFound);
@@ -983,8 +983,8 @@ void loop1() {
     if (VERBY[0]) Serial.printf(EOL "loop1() loopCnt %" PRIu64 EOL, loopCnt);
 
     // temp hack to force DEVMODE and verbose 9
-
-    forceHACK();
+    // shouldn't need to do this on every loop. done in config (and in setup)
+    // forceHACK();
 
     // moved to loop()
     if (false) {
@@ -1216,27 +1216,29 @@ void loop1() {
     loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
     if (VERBY[0]) {
-        if (_verbose[0] >= '1') {
-            // maybe show GpsInvalidCnt also? how old are they
-            StampPrintf(
-                "t_tx_count_0: %d "
-                "t_temp: %0.2f "
-                "t_altitude: %0.0f "
-                "t_grid6: %s "
-                "t_sat_count: %d "
-                "GpsTimeToLastFix %" PRIu64 " "
-                "GpsInvalidCnt %d" EOL,
-                t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count,
-                GpsTimeToLastFix, GpsInvalidCnt);
-        }
-        if (_verbose[0] >= '5') {
-            StampPrintf(
-                "main/20: _Band %s "
-                "loop_ms_elapsed: %d millisecs "
-                "loop_us_start: %llu microsecs "
-                "loop_us_end: %llu microsecs",
-                _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
-        }
+        // maybe show GpsInvalidCnt also? how old are they
+        // FIX! StampPrintf doesn't seem to be printing correctly with this format string?
+        // oh I had the wrong formats for the variables. Serial.printf exposed that. StampPrintf didn't.
+        // use Serial.printf()
+        Serial.printf(
+            "t_tx_count_0: %s "
+            "t_temp: %s "
+            "t_altitude: %s "
+            "t_grid6: %s "
+            "t_sat_count: %s "
+            "GpsTimeToLastFix %d "
+            "GpsInvalidCnt %d" EOL,
+            t_tx_count_0, t_temp, t_voltage, t_altitude, t_grid6, t_sat_count,
+            GpsTimeToLastFix, GpsInvalidCnt);
+    }
+
+    if (VERBY[5]) {
+        Serial.printf(
+            "main/20: _Band %s "
+            "loop_ms_elapsed: %" PRIu64 " millisecs "
+            "loop_us_start: %llu microsecs "
+            "loop_us_end: %llu microsecs",
+            _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
     }
     DoLogPrint();
     updateStatusLED();
@@ -1267,10 +1269,10 @@ void alignAndDoAllSequentialTx (void) {
     double lat_double = atof(t_lat);
     double lon_double = atof(t_lon);
 
-    // get_mh_6 returns a pointer
-    char *hf_grid6;
+    // get_mh_6 users the first arg as pointer to a char array for the return data
+    char hf_grid6[7] = { 0 };
     char hf_grid4[5] = "AA00";
-    hf_grid6 = get_mh_6(lat_double, lon_double);
+    get_mh_6(hf_grid6, lat_double, lon_double);
     // not same declared size, so use snprintf)
     // just the first 4 chars
     snprintf(hf_grid4, sizeof(hf_grid4), "%s", hf_grid6);

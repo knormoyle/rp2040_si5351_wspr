@@ -190,10 +190,16 @@ void snapForTelemetry(void) {
     if (lon > 180) lon = 180;
     snprintf(t_lon, sizeof(t_lon), "%.7f", lon);
 
-    // get_mh_6 returns a pointer
-    char *grid6;  // null term
+    char grid6[7] = { 0 };
     // FIX! are lat/lon double
-    grid6 = get_mh_6(gps.location.lat(), gps.location.lng());
+    // get_mh_6 modifies grid6 here with the grid6_ptr
+    // foo(char* s) and foo(char s[]) are exactly equivalent to one another. 
+    // In both cases, you pass the array with its name:
+    // char array[4];
+    // foo(array); // regardless of whether foo accepts a char* or a char[]
+
+    get_mh_6(grid6, gps.location.lat(), gps.location.lng());
+    
     // two letters, two digits, two letters
     // base 18, base 18, base 10, base 10, base 24, base 24
     // [A-R][A-R][0-9][0-9][A-X][A-X]

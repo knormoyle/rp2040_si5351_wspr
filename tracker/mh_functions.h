@@ -8,6 +8,6 @@
 #include <stdint.h>
 
 char letterize(int x);
-char* get_mh_6(double lat, double lon);
+void get_mh_6(char *grid6, double lat, double lon);
 
 #endif
