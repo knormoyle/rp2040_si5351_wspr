@@ -462,7 +462,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'R':
-                Serial.printf("Don't cause than approx. 43 hz 'correction' on a band. Effect varies per band?");
+                Serial.printf("Don't cause more than approx. 43 hz 'correction' on a band. Effect varies per band?");
                 get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ", 
                     _correction, sizeof(_correction));
                 write_FLASH();
@@ -706,29 +706,24 @@ int check_data_validity_and_set_defaults(void) {
     // ignore extra trailing nulls
     int clength = strlen(_callsign);
     bool callsignBad = false;
+    // this also covers the null case (strlen 0)
     if (clength < 3) {
         callsignBad = true;
-    }
-
-    int i;
-    if (clength > 6) {
+    } else if (clength > 6) {
         callsignBad = true;
     } else if (clength >= 3) {
-        for (i = 0; i <= 2; i++) {
+        for (int i = 0; i <= 2; i++) {
             if ((_callsign[i] < 'A' && _callsign[i] > 'Z') &&
                 (_callsign[i] < '0' && _callsign[i] > '9')) {
                 callsignBad = true;
             }
         }
     } else if (clength >= 4) {
-        i = 3;
-        if (_callsign[i] < 'A' || _callsign[i] > 'Z') callsignBad = true;
+        if (_callsign[3] < 'A' || _callsign[3] > 'Z') callsignBad = true;
     } else if (clength >= 5) {
-        i = 4;
-        if (_callsign[i] < 'A' || _callsign[i] > 'Z') callsignBad = true;
+        if (_callsign[4] < 'A' || _callsign[4] > 'Z') callsignBad = true;
     } else if (clength == 6) {
-        i = 5;
-        if (_callsign[i] < 'A' || _callsign[i] > 'Z') callsignBad = true;
+        if (_callsign[5] < 'A' || _callsign[5] > 'Z') callsignBad = true;
     }
 
     if (callsignBad) {
@@ -740,7 +735,7 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     // change to strcpy for null terminate
-    if (_verbose[0] < '0' || _verbose[0] > '9') {
+    if (_verbose[0] == 0 || _verbose[0] < '0' || _verbose[0] > '9') {
         Serial.printf("%s\n_verbose %s is not supported/legal, initting to 1\n%s",
             RED, _verbose, NORMAL);
         snprintf(_verbose, sizeof(_verbose), "1");
@@ -750,14 +745,21 @@ int check_data_validity_and_set_defaults(void) {
 
     // 0-9 and - are legal. _
     // make sure to null terminate
-    for (int i = 1; i <= 3; ++i) {
-        if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i] != '-') {
-            Serial.printf("%s\n_TELEN_config %s is not supported/legal, initting to ---\n%s",
-                RED, _TELEN_config, NORMAL);
-            snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
-            write_FLASH();
-            result = -1;
+    bool bad = false;
+    if (_TELEN_config[0] == 0) {    
+        bad = true;     
+    }
+    else {
+        for (int i = 1; i <= 3; ++i) {
+            if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i] != '-') bad = true;
         }
+    }
+    if (bad) {
+        Serial.printf("%s\n_TELEN_config %s is not supported/legal, initting to ---\n%s",
+            RED, _TELEN_config, NORMAL);
+        snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
+        write_FLASH();
+        result = -1;
     }
 
     // _clock_speed
@@ -773,7 +775,7 @@ int check_data_validity_and_set_defaults(void) {
     // hmm. I suppose we could call this routine to fix nvram at the beginning, so if the
     // clock gets fixed, then the defaults will get fixed (where errors exist)
     // be sure to null terminate
-    if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
+    if (_clock_speed[0] == 0 || atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
         Serial.printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s", 
             RED, _clock_speed, NORMAL);
         snprintf(_clock_speed, sizeof(_clock_speed), "133");
@@ -793,7 +795,7 @@ int check_data_validity_and_set_defaults(void) {
 
     //*********
     // be sure to null terminate
-    if (atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
+    if (_U4B_chan[0] == 0 || atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
         Serial.printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s", 
             RED, _U4B_chan, NORMAL);
         snprintf(_U4B_chan, sizeof(_U4B_chan), "599");
@@ -805,6 +807,7 @@ int check_data_validity_and_set_defaults(void) {
     }
     //****************
     // kevin 10_30_24
+    // null returns 0
     switch (atoi(_Band)) {
         case 10: break;
         case 12: break;
@@ -823,21 +826,23 @@ int check_data_validity_and_set_defaults(void) {
             result = -1;
             break;
     }
-    if (_tx_high[0] != '0' && _tx_high[0] > '1') {
+    if (_tx_high[0] != '0' && _tx_high[0] != '1') {
         Serial.printf("%s\n_tx_high %s is not supported/legal, initting to 1\n%s",
             RED, _tx_high, NORMAL);
         snprintf(_tx_high, sizeof(_tx_high), "1");
         write_FLASH();
         result = -1;
     }
-    if (_devmode[0] != '0' && _devmode[0] > '1') {
+    if (_devmode[0] != '0' && _devmode[0] != '1') {
         Serial.printf("%s\n_devmode %s is not supported/legal, initting to 0\n%s",
             RED, _devmode, NORMAL);
         snprintf(_devmode, sizeof(_devmode), "0");
         write_FLASH();
         result = -1;
     }
-    if (atoi(_correction) < -3000 || atoi(_correction) > 3000) {
+    // what does atoi() when null is first char? returns 0
+    // detect that case to get ascii 0 in there
+    if (_correction[0]==0 || atoi(_correction) < -3000 || atoi(_correction) > 3000) {
         // left room for 6 bytes
         Serial.printf("%s\n_correction %s is not supported/legal, initting to 0\n%s",
             RED, _correction, NORMAL);
@@ -845,13 +850,14 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
-    if (_go_when_rdy[0] != '0' && _go_when_rdy[0] > '1') {
+    if (_go_when_rdy[0] != '0' && _go_when_rdy[0] != '1') {
         Serial.printf("%s\n_go_when_rdy %s is not supported/legal, initting to 0\n%s",
             RED, _go_when_rdy, NORMAL);
         snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
         write_FLASH();
         result = -1;
     }
+
 
     return result;
 }

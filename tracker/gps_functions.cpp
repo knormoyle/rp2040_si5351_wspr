@@ -1185,8 +1185,8 @@ void gpsDebug() {
     Serial.println(F("GpsDebug START"));
 
     Serial.print(F(EOL EOL));
-    Serial.println(F("Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course   Speed Card     Chars FixSents  Checksum"));
-    Serial.println(F("          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----       RX    RX        Fail"));
+    Serial.println(F("Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course  Speed Card Chars FixSents  Checksum"));
+    Serial.println(F("          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail"));
     Serial.println(F("---------------------------------------------------------------------------------------------------------------------"));
 
     printInt(gps.satellites.value(), gps.satellites.isValid(), 5);

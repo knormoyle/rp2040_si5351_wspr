@@ -826,7 +826,7 @@ void setup1() {
 
     Watchdog.reset();
     bmp_init();
-    i2c_scan();
+    // i2c_scan();
 
     // Adafruit_BMP805 bmp;
     if (!bmp.begin()) {
