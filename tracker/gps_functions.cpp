@@ -262,6 +262,152 @@ void setGpsBalloonMode(void) {
     if (VERBY[0]) Serial.println(F("setGpsBalloonMode END"));
 }
 
+//************************************************
+// always GGA GLL GSA GSV RMC
+// nver ZDA TXT
+void setGpsBroadcast() {
+    if (VERBY[0]) Serial.print(F("setBroadcast START" EOL));
+    updateStatusLED();
+    Watchdog.reset();
+    char nmeaSentence[21] = { 0 };
+
+    //*************************************************
+    // ZDA
+    // this time info is in other sentences also?
+    // $–ZDA,hhmmss.ss,xx,xx,xxxx,xx,xx
+    // hhmmss.ss = UTC
+    // xx = Day, 01 to 31
+    // xx = Month, 01 to 12
+    // xxxx = Year
+    // xx = Local zone description, 00 to +/- 13 hours
+    // xx = Local zone minutes description (same sign as hours)
+
+    //*************************************************
+    // from the latest CASIC_ProtocolSpecification_english.pdf
+    // $PCAS03 string nGGA value Message ID, sentence header
+
+    // no 0 or 1 fields?
+
+    // 2  GGA output frequency, statement output frequency is based on positioning update rate
+    // n (0~9) means output once every n positioning times, 0 means no output
+    // If this statement is left blank, the original configuration will be retained.
+
+    // 3  nGLL GLL output frequency,  same as nGGA
+    // 4  nGSA GSA output frequency,  same as nGGA
+    // 5  nGSV SV output frequency,   same as nGGA
+    // 6  nRMC RMC output frequency,  same as nGGA
+    // 7  nVTG VTG output frequency,  same as nGGA
+    // 8  nZDA ZDA output frequency,  same as nGGA
+    // 9  nANT ANT output frequency,  same as nGGA (this is the antenna open TXT ?)
+    // 10 nDHV DHV output frequency,  same as nGGA
+    // 11 nLPS LPS output frequency,  same as nGGA
+    // 12 res1 reserve
+    // 13 res2 reserve
+    // 14 nUTC UTC output frequency,  same as nGGA
+    // 15 nGST GST output frequency,  same as nGST
+    // 16 res3 reserve
+    // 17 res4 reserve
+    // 18 res5 reserve
+    // 19 nTIM TIM (PCAS60) output frequency, same as nGGA
+
+    // 20 CSvalue Hexadecimal value checksum, XOR result of all characters between $ and * (excluding $ and *)
+    // 21 <CR><LF> charactersCarriage return and line feed
+
+    // hmm this didn't work? still got zda and ANT txt. this was a forum posting. wrong apparently
+    // strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0*02" CR LF, 21);
+
+    // spec has more/new detail. see below
+    // FIX! still getting GNZDA and GPTXT ANTENNAOPEN with this
+    strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 21);
+
+    // example in pdf
+    // first field after 3, is field ..no it's field 2
+    // reserved fields are empty here
+    // all data
+    // $PCAS03,1,1,1,1,1,1,1,1,0,0,,,1,1,,,,1*33
+
+    // using this:
+    // no ANT or ZDA (example already disabled DHV and LPS)
+    // why is 19 TIM PCAS60 needed? That's another receiver time in "subsequent versions"
+    // $PCAS03,1,1,1,1,1,0,0,1,0,0,,,1,1,,,,1*33
+
+    Serial2.print(nmeaSentence);
+    Serial2.flush();
+    delay(1000);
+
+    Serial2.print(nmeaSentence);
+    Serial2.flush();
+    delay(1000);
+
+    if (VERBY[9]) Serial.printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
+    if (VERBY[0]) Serial.print(F("setGpsBroadcast END" EOL ));
+
+}
+
+//***************************************
+// my GPTXT on 11/18/24. 
+// $GPTXT,01,01,02,HW=ATGM336H,0004090746370*1E
+// $GPTXT,01,01,02,IC=AT6558-5N-31-0C510800,EF16CKJ-F2-008017*5A
+// $GPTXT,01,01,02,SW=URANUS5,V5.3.0.0*1D
+// $GPTXT,01,01,02,TB=2020-04-28,13:43:10*40
+// $GPTXT,01,01,02,MO=GBR*25
+// $GPTXT,01,01,02,BS=SOC_BootLoader,V6.2.0.2*34
+// $GPTXT,01,01,02,FI=00856014*71
+// $GPTXT,01,01,01,ANTENNAOPEN*25
+
+//***************************************
+// examples of GPTXT messages from spec. we are disabling them now in setGpsBroadcast
+// this is not from oiurs
+// $GPTXT,01,01,02,MA=CASIC*27
+// Indicates the manufacturer's name (CASIC)
+// $GPTXT,01,01,02,IC=ATGB03+ATGR201*71
+// Indicates the model of the chip or chipset (baseband chip model ATGB03, RF chip model ATGR201)
+// $GPTXT,01,01,02,SW=URANUS2,V2.2.1.0*1D
+// Indicates the software name and version number (software name URANUS2, version number V2.2.1.0)
+// $GPTXT,01,01,02,TB=2013-06-20,13:02:49*43
+// Indicates the code compilation time (June 20, 2013, 13:02:49)
+// $GPTXT,01,01,02,MO=GB*77
+// Indicates the working mode of the receiver at this startup (GB indicates the dual-mode mode of GPS+BDS)
+// $GPTXT,01,01,02,CI=00000000*7A
+// Indicates the customer number (the customer number is 00000000)
+
+//************************************************
+void setGpsConstellations(int desiredConstellations) {
+    if (VERBY[0]) Serial.printf("setConstellations START %d" EOL, desiredConstellations);
+    updateStatusLED();
+    Watchdog.reset();
+    // FIX! should we ignore desiredConstellations and force 3 (BDS + GPS
+    int usedConstellations = desiredConstellations;
+    char nmeaSentence[21] = { 0 };
+
+    switch (usedConstellations) {
+        case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 21); break;
+        case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 21); break;
+        case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 21); break;
+        case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 21); break;
+        case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 21); break;
+        case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 21); break;
+        case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 21); break;
+        default:
+            usedConstellations = 3;
+            strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 21);
+    }
+
+    if (false) {
+        // this was an experiment
+        // what about this rumored PMTK353 sentence?
+        // $PMTK353,1,1,1,0,1*2B : Search GPS BEIDOU GLONASS and GALILEO satellites
+        strncpy(nmeaSentence, "$PMTK353,1,1,1,0,1*2B" CR LF, 21);
+        Serial2.print(nmeaSentence);
+        Serial2.flush();
+        delay(1000);
+    }
+
+    if (VERBY[9]) Serial.printf("setGpsConstellations for usedConstellations %d, sent %s" EOL, desiredConstellations, nmeaSentence);
+    if (VERBY[0]) Serial.printf("setGpsConstellations END %d" EOL, desiredConstellations);
+}
+
+//************************************************
 void setGpsBaud(int desiredBaud) {
     // Assumes we can talk to gps already at some existing agreed
     // on Serial2/gps chip setup (setup by int/warm reset/full cold reset)
@@ -304,8 +450,6 @@ void setGpsBaud(int desiredBaud) {
         // seems to be okay if chip is in 9600 state
         case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
         // worked.. hmm broken? had to restart arduino to get it to work
-        // maybe the PCAS commands are more sticky (write to rom?)
-        // or you have to be consistent?
         // case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
 
         // worked
@@ -535,6 +679,8 @@ void GpsFullColdReset(void) {
 
     }
 
+    
+
     //******************
     // gps shold come up at 9600 so look with our uart at 9600
     Serial2.begin(9600);
@@ -545,6 +691,11 @@ void GpsFullColdReset(void) {
 
     // FIX! we don't need to toggle power to get the effect?
     setGpsBalloonMode();
+
+    // all constellations
+    setGpsConstellations(7); 
+    // no ZDA/TXT
+    setGpsBroadcast(); 
 
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
@@ -607,6 +758,10 @@ void GpsWarmReset(void) {
     }
     // wait 2 seconds for normal power before sending more commands
     setGpsBalloonMode();
+    // all constellations
+    setGpsConstellations(7); 
+    // no ZDA/TXT
+    setGpsBroadcast(); 
 
     checkInitialGpsOutput();
     if (VERBY[0]) Serial.println(F("GpsWarmReset END"));
@@ -1001,6 +1156,23 @@ void setGPS_DynamicModel6() {
         gps_set_success = getUBX_ACK(setdm6);
     }
 }
+//******************************************************
+// Enabling output:
+// Checksums:
+// ; Odd number of "ones": 03
+// ; Even number of "ones": 02
+
+// $PCAS03,1,0,0,0,1,1,0,0*03
+// $PCAS03,1,1,1,1,1,1,0,0*02
+//         | | | | | | | |
+//         '-|-|-|-|-|-|-|--> GGA
+//           '-|-|-|-|-|-|--> GLL
+//             '-|-|-|-|-|--> GSA
+//               '-|-|-|-|--> GSV
+//                 '-|-|-|--> RMC
+//                   '-|-|--> VTG
+//                     '-|--> ZDA
+//                       '--> TXT
 
 //************************************************
 void gpsDebug() {
@@ -1009,9 +1181,9 @@ void gpsDebug() {
     Serial.println(F("GpsDebug START"));
 
     Serial.print(F(EOL EOL));
-    Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card Chars FixSents Checksum"));
-    Serial.println(F("          (deg)      (deg)       Age                      Age  (m)    --- from GPS ----  RX    RX        Fail"));
-    Serial.println(F("-----------------------------------------------------------------------------------------------------------------"));
+    Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt     Course Speed Card Chars FixSents Checksum"));
+    Serial.println(F("          (deg)      (deg)       Age                      Age  (m)     --- from GPS ----  RX    RX        Fail"));
+    Serial.println(F("------------------------------------------------------------------------------------------------------------------"));
 
     printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
     printInt(gps.hdop.value(), gps.hdop.isValid(), 5);

@@ -95,20 +95,25 @@ void printStr(const char *str, int len) {
 
 
 // why was this static?
-// with arduino, can't we just use printf to stdout rather than Serial.print() ?
 void printFloat(float val, bool valid, int len, int prec) {
     if (!VERBY[0]) return;
 
     if (!valid) {
     while (len-- > 1) Serial.print('*');
         Serial.print(' ');
+        // add 1 more space? (to cover too many digits?)
+        Serial.print(' ');
     } else {
         Serial.print(val, prec);
         int vi = abs((int)val);
         int flen = prec + (val < 0.0 ? 2 : 1);  // . and -
         flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
+
+        // FIX! should this be <= ? (kevin)
         for (int i = flen; i < len; ++i) Serial.print(' ');
     }
+    // kevin add 1 more space? we somehow did too many digits above?
+    Serial.print(' ');
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }

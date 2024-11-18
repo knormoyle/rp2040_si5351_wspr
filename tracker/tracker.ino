@@ -854,38 +854,54 @@ int tx_cnt_2;
 int tx_cnt_3;
 
 //*************************************************************************
+// GPS NMEA bursts: The thinking behind how we deal with it:
+// LightAPRS only looked for GPS NMEA data when it needed a fix. Not all the time.
 
-// GPS nmea bursts: The thinking behind how we deal with it:
 // TinyGPS++ is not running as a separate task. Only does work when we call it.
 // we call it with every new char, and to get data it creates from a history 
 // of NMEA sentences in those chars.
 
 // NMEA sentence come in bursts at 1Hz ..
-// maybe not aligned to a second, but the burst is less than one full second of data.
-// and burst intervals say at 1 sec. Data is not spread out over the full second.
-// order is not random either. order stays the same for each burst. Just a interesting note
-// we can handle each char at about 300 usec avg. Obviously a char processing time is more
-// when TinyGPS++ sees a char is a "end of NMEA sentence" (32 deep rx fifo can absorb
-// some chars if we're delayed. Always want the rx fifo to be almost empty, to allow
-// that buffering if there's any backup.
-// if characters arrived at max 9600 baud, thats 1 char per .1 ms or 100 us.
-// so we're too slow for that
-// but the effective baud rate is maybe 900 chars/sec (at 9660 baud Serial2)
-// so that's around 1.1ms allowed time per char. Plenty..probably even if more processing
-// sometimes by TinyGPS++. We can even Allow faster baud rate for increased effective chars/sec
+// And the pi pico only has 32 byte receive bufffer on the UART that talks to ATGM336H-51
+
+// Maybe not aligned to a second, but the burst is less than one full second of data.
+// and burst intervals are at 1 sec. Data is not spread out over the full second.
+
+// Order of each NMEA sentence is not random either. Order stays the same for each burst. 
+// Just a interesting note
+
+// we can handle each char at about 300 usec avg. 
+// Obviously a char processing time is more when TinyGPS++ sees a char is a "end of NMEA sentence" 
+// (32 deep rx fifo can absorb some chars if we're delayed. 
+// Always want the rx fifo to be almost empty, to allow that little bit buffering if there's any backup.
+
+// If characters arrived at max 9600 baud, thats 1 char per .1 ms or 100 us.
+
+// So we're too slow to handle that.
+// but the effective baud rate out of ATGM336H-51 is maybe 900 chars/sec (at 9660 baud Serial2)
+
+// so that's around 1.1ms allowed time per char. 
+
+// Plenty..probably even if more processingsometimes by TinyGPS++. 
+// We can even allow faster baud rate for increased effective chars/sec
+
 // we don't have to locally buffer chars to allow for backpressure from TinyGPS++
 // (we could create a local fifo, to effectively absorb more than the 32 deep uart rx fifo)
 
-// If we created a secondary RX buffer to hold 600 plus chars (the entire NMEA burst per second)
-// then if we could absorb/empty it at least every second, we'd never lose anything.
-// less processing/power if we only absorb GPS data when we need it. Allows us to sleep when 
-// we don't need a fix update.
-// Key that TinyGPS++ absorbs our char send at bounded delays (per NMEA sentence. end of NMEA sentence
-// has longer delay. Apparently the CR LF is needed as a 'boundary' post checksum?
+// If we created a secondary RX buffer to hold 600 plus chars (the entire burst of multiple
+// NMEA sentences, per second, for the default enabled sentences (US and Baidu satellites)
+
+// Then if we could absorb/empty it at least every second, we'd never lose anything.
+
+// Less processing/power if we only absorb GPS data when we need it. 
+// Allows us to sleep when  we don't need a fix update.
+
+// Key that TinyGPS++ absorbs our char send at bounded delays (per NMEA sentence). 
+// end of NMEA sentence has longer delay. Apparently the CR LF is needed as a 'boundary' post checksum?
 // FIX! do we need both CR and LF or is one enough? Shouldn't matter.
 
-
-// seconds sleep for next beacon (HF or VHF).
+//*********************************************************************************
+// Now about sleepSeconds() for next beacon (HF or VHF).
 // not sure why this was 50 secs
 // is there any benefit to this trying to be aligned to second boundaries
 // this shouldn't lead to a old gps.location.age since we do gps while in sleepSeconds()
@@ -919,7 +935,16 @@ uint16_t  BATT_WAIT = 1;  // secs
 // but who knows how tinyGPS++ creates the .age ??
 // maybe it needs to be hot fix max time? (allow 5 secs?)
 // worse would be if it only updates .age to 0 when the new fix changes any of location/altitude etc?
-#define GPS_LOCATION_AGE_MAX 8000
+// #define GPS_LOCATION_AGE_MAX 8000
+// 60 secs
+// could be this old if we do the BEACON_WAIT with gps off? no gps data to wake us out of sleepSeconds()
+#define GPS_LOCATION_AGE_MAX 61000
+//
+// smallest seen
+// fix_age 1211
+// biggest seen
+// fix_age 60322
+
 
 // FIX! since we break out of the sleepSeconds when gps data starts (Serial2.available()) ..
 // we could make this bigger? needs to be at least 1 sec (a little more) since it
@@ -1071,6 +1096,7 @@ void loop1() {
         // we read location in many places, so I don't think the isUpdated() info is useful?
         // removing it from the age compare
         //    (fix_age < GPS_LOCATION_AGE_MAX || fix_updated) ||
+        // fix_age will be 4294967295 if not valid
         if (VERBY[0]) {
             Serial.printf("fix_valid %u" EOL, fix_valid);
             Serial.printf("fix_age %lu" EOL, fix_age);
