@@ -190,15 +190,16 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
 // buf: Address of FLASH to list <input>
 // len: Length of storage to list <input>
 void printFLASH(const uint8_t *buf, size_t len) {
-    Serial.printf("%s%s%s%s\nFLASH dump: \n%s%s",
-        CLEAR_SCREEN, BRIGHT, BOLD_ON, UNDERLINE_ON, BOLD_OFF, UNDERLINE_OFF);
+    Serial.print(F(CLEAR_SCREEN BRIGHT BOLD_ON UNDERLINE_ON EOL));
+    Serial.print(F("printFLASH:" EOL));
+    Serial.print(F(BOLD_OFF UNDERLINE_OFF));
 
     for (size_t i = 0; i < len; ++i) {
         Serial.printf("%02x", buf[i]);
-        if (i % 16 == 15) Serial.printf("\n");
-        else Serial.printf(" ");
+        if (i % 16 == 15) Serial.print(F(EOL));
+        else Serial.print(F(" "));
     }
-    Serial.printf("%s", NORMAL);
+    Serial.print(F(NORMAL));
 }
 
 //***************************************
