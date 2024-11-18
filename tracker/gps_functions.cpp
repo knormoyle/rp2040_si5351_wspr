@@ -1181,9 +1181,9 @@ void gpsDebug() {
     Serial.println(F("GpsDebug START"));
 
     Serial.print(F(EOL EOL));
-    Serial.println(F("Sats HDOP Latitude   Longitude   Fix  Date       Time     Date Alt     Course Speed Card Chars FixSents Checksum"));
-    Serial.println(F("          (deg)      (deg)       Age                      Age  (m)     --- from GPS ----  RX    RX        Fail"));
-    Serial.println(F("------------------------------------------------------------------------------------------------------------------"));
+    Serial.println(F("Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course   Speed Card     Chars FixSents  Checksum"));
+    Serial.println(F("          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----       RX    RX        Fail"));
+    Serial.println(F("---------------------------------------------------------------------------------------------------------------------"));
 
     printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
     printInt(gps.hdop.value(), gps.hdop.isValid(), 5);
@@ -1204,6 +1204,23 @@ void gpsDebug() {
     Serial.println(F("GpsDebug END"));
 }
 
+// I was wondering why the HDOP was so high. it seems the 90 really means 90 / 100 = .9 HDOP 
+// i.e. less than 1. so that's ideal. Yeah!
+// https://en.wikipedia.org/wiki/Dilution_of_precision_(navigation)
+
+// DOP Value	Rating[5]	Description
+// < 1	Ideal	Highest possible confidence level to be used for applications demanding the highest possible precision at all times.
+// 1–2	Excellent	At this confidence level, positional measurements are considered accurate enough to meet all but the most sensitive applications.
+// 2–5	Good	Represents a level that marks the minimum appropriate for making accurate decisions. Positional measurements could be used to make reliable in-route navigation suggestions to the user.
+// 5–10	Moderate	Positional measurements could be used for calculations, but the fix quality could still be improved. A more open view of the sky is recommended.
+// 10–20	Fair	Represents a low confidence level. Positional measurements should be discarded or used only to indicate a very rough estimate of the current location.
+// > 20	Poor	At this level, measurements should be discarded.
+
+// why I believe the TinyGPS++ number is hundredths:
+
+// https://github.com/mikalhart/TinyGPSPlus/issues/8
+// It was a design decision—possibly flawed—to deliver the HDOP exactly as reported by the NMEA string. NMEA reports HDOP in hundredths. We could have made this return a floating-point with the correct value, but at the time it seemed better to not introduce floating-point values. Just convert to float and divide by 100 and you should be good.
+// Mikal
 
 //*****************
 // Notes:

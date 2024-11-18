@@ -299,10 +299,17 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // see gps_functions.cpp and problems with resetting to 9600 from higher bauds
 // too dangerous to use anything higher than 9600..could get stuck
 // with out vcc plus vbat power cycle.. I can't control vbat when on usb power
-extern const int SERIAL2_BAUD_RATE = 9600;
-
+// extern const int SERIAL2_BAUD_RATE = 9600;
+// can't seem to restrict burst data
+// with the GLONASS sats
+// There are 821 chars in a burst, handling takes 892 milliseconds per burst
+// try increasing the baud rate to see if duration takes less 
 // works going from 9600 to 19200
-// extern const int SERIAL2_BAUD_RATE = 19200;
+extern const int SERIAL2_BAUD_RATE = 19200;
+// it now does the burst in half that time, around 450 milliseconds
+// so this is good..11/18/24
+
+// FIX! recheck this
 // does it work  going back from 19200 to 9600 without unplugging usb power?
 // now it does! after asserting NRESET after power on, (during also)
 
@@ -493,36 +500,37 @@ void setup() {
     // loop on this and leave if once we get Serial.available()
     // otherwise just stay here! This will give us a test
     // of Serial.print() thread-safeness. We can remove the prints later to be careful.
-    absolute_time_t current_time_us  = 0;
-    absolute_time_t last_current_time_us  = 0;
-    int64_t loop_us_elapsed;
-    int64_t loop_ms_elapsed;
-
     // wait 1 sec for core1 to create Serial
-    sleep_ms(1000);
-    while (true) {
-        // don't use watchog reset..not thread safe?
-        // can use absolute_time_diff() and get_absolute_time()
-        last_current_time_us = current_time_us;
-        current_time_us = get_absolute_time();
-        loop_us_elapsed = absolute_time_diff_us(last_current_time_us, current_time_us);
-        loop_ms_elapsed = loop_us_elapsed / 1000ULL;
-        // assume sleep_ms is okay.
-        if (!Serial) sleep_ms(1000);
-        else break;
-    }
 
-    while (true) {
-        // does core1 do Serial.begin() or Serial.end()
-        // is this thread-safe and atomic? Okay if blocking
-        Serial.print(F(EOL "SETUP() ..WAITING FOR Serial.available()" EOL EOL));
-        sleep_ms(5000);
-        // core1 shouldn't be looking at Serial.available() any more. 
-        // only core 0 (setup() and loop()) should
-        // so don't care if this is thread safe
-        if (Serial.available()) break;
+    // "Arduino not support direct call to stdio getchar_timeout_us() is C function... but you call from CPP"
+    // https://forums.raspberrypi.com/viewtopic.php?t=331207
+    // https://github.com/earlephilhower/arduino-pico/discussions/2224
+    // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
+    // int c = getchar_timeout_us(0);
+    // shouldn't have to use the tud_cdc_connected() tud_cdc_available() hacks with ide
+    // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
+
+    // FIX! this forces going to the user interface always on boot. don't want this
+    // for balloon, although it will time out there eventually
+    // FIX! in case user is frantically trying to get to the config menu to avoid setting clock speed or ??
+    // if anything was found by incomingByte above, go to the config menu
+    // (potentially a balloon weird case would timeout)
+
+    sleep_ms(1000);
+    Serial.print(F(EOL "SETUP() ..LOOKING FOR Serial.available()" EOL EOL));
+    Watchdog.reset();
+    bool found_any = drainSerialTo_CRorNL();
+    // how to compare char: ..== 'R' is the same as == 82 (ascii value)
+    if (found_any) {
+        // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
+        Serial.print(F(EOL "SETUP() ..LEAVING AFTER SEEING Serial.available()" EOL EOL));
+        updateStatusLED();
+        // sleep_ms(1000);
+        user_interface();
+        // won't return here, since all exits from user_interface reboot
     }
-    Serial.print(F("SETUP() ..LEAVING AFTER SEEING Serial.available()"));
+    Serial.print(F(EOL "SETUP() ..LEAVING AFTER NOT SEEING Serial.available()" EOL EOL));
+
 }
 
 //*********************************************************
@@ -585,10 +593,13 @@ void loop() {
             Serial.print(F(EOL "loop() LOOPING QUICKLY WITH core1_idled()" EOL EOL));
             sleep_ms(1000);
         } else {
-            Serial.print(F(EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
+            // Serial.print(F(EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
+            // with a 1 sec sleep..most of the time we're sleeping this core?
+            // we couldn't sleep that long if we were updating leds? or ??
             sleep_ms(1000);
         }
 
+        // no one should send me stuff
         while (rp2040.fifo.available()) {
             // int32_t fifo_TOS;
             uint32_t rp2040_fifo_TOS; 
@@ -608,6 +619,11 @@ void loop() {
             // %d not okay with int32_t?
             Serial.printf(EOL "loop() DOING COOL STUFF: rp2040_fifo_TOS %" PRIu32 " msgFound %u" EOL EOL, 
                 rp2040_fifo_TOS, msgFound);
+            
+            Serial.print(F(EOL "loop() WE SHOULDN'T BE SEEING THIS LOOPING HERE!" EOL EOL));
+            // don't want to hang here
+            break;
+            sleep_ms(1000);
         }
 
         // This core can handle modifying config state, not the other core
@@ -638,9 +654,30 @@ void loop() {
             if (!core1_idled) rp2040.idleOtherCore();
             core1_idled = true;
 
-
             Serial.print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
             Serial.print(F(EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
+
+            // FIX! what if did all the updateStatusLED from this core?
+            // the other core could update the count as a writer and we would just be a reader
+            // we could strip all the updateStatusLED() out of the other core
+            // I guess we don't have a watch dog timer just for this core
+            // but that's okay..worst case we lose keyboard response and if we do led here
+            // we could lose led update if we hang here.
+            // so when we loop here, we also do updateStatusLED()
+            // have to remove all of it from the other core.
+            // NO! we'd have to wake up more than once a sec. Leave it on the other core
+            // which is active anyhow
+
+            // moved here from loop1
+            if (Serial.available()) {
+                Serial.println(F("tracker.ino: (A) Going to user_interface() from loop()"));
+                setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
+                updateStatusLED();
+                // sleep_ms(1000);
+                user_interface();
+                // won't return here, since all exits from user_interface reboot
+            }
+
             // so will never resume the other core if we idled it?
             // rp2040.resumeOtherCore();
 
@@ -650,6 +687,7 @@ void loop() {
             // but since he will be also using Serial.print* that should be thread safe?
 
             // make this non-blocking in case fifo fills
+            // we should be able to overflow this and it's no big deal?
             rp2040.fifo.push_nb(MSG_LOOP1_CONFIG_RELEASE);
         }
     }
@@ -753,32 +791,6 @@ void setup1() {
     // FIX! is it redundant at this point?..remove?
     process_chan_num();
 
-    // "Arduino not support direct call to stdio getchar_timeout_us() is C function... but you call from CPP"
-    // https://forums.raspberrypi.com/viewtopic.php?t=331207
-    // https://github.com/earlephilhower/arduino-pico/discussions/2224
-    // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
-    // int c = getchar_timeout_us(0);
-    // shouldn't have to use the tud_cdc_connected() tud_cdc_available() hacks with ide
-    // https://code.stanford.edu/sb860219/ee185/-/blob/master/software/firmware/circuitpython-main/supervisor/shared/serial.c
-
-    // FIX! this forces going to the user interface always on boot. don't want this
-    // for balloon, although it will time out there eventually
-    // FIX! in case user is frantically trying to get to the config menu to avoid setting clock speed or ??
-    // if anything was found by incomingByte above, go to the config menu
-    // (potentially a balloon weird case would timeout)
-
-    Watchdog.reset();
-    bool found_any = drainSerialTo_CRorNL();
-    // how to compare char: ..== 'R' is the same as == 82 (ascii value)
-    if (found_any) {
-        // Old: getchar_timeout_us(0) returns a -2 (as of sdk 2) if no keypress.
-        // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
-        Serial.println(F("tracker.ino: Going to user_interface() from setup1()"));
-        updateStatusLED();
-        // sleep_ms(1000);
-        user_interface();
-        // won't return here, since all exits from user_interface reboot
-    }
 
     //***************
     // get all the _* config state set and fix any bad values (to defaults)
@@ -938,7 +950,13 @@ uint16_t  BATT_WAIT = 1;  // secs
 // #define GPS_LOCATION_AGE_MAX 8000
 // 60 secs
 // could be this old if we do the BEACON_WAIT with gps off? no gps data to wake us out of sleepSeconds()
-#define GPS_LOCATION_AGE_MAX 61000
+// #define GPS_LOCATION_AGE_MAX 61000
+// seeing some 68727 with 61000 (our beacon wait is 61 secs)
+// increase to 70000
+// at 180mph we could move 3 horizontal miles in 1 minute? hmm. what about a descending balloon?
+// fixes could be 1 minute old? that's kind of like a cold fix time
+#define GPS_LOCATION_AGE_MAX 70000
+
 //
 // smallest seen
 // fix_age 1211
@@ -965,15 +983,19 @@ void loop1() {
     if (VERBY[0]) Serial.printf(EOL "loop1() loopCnt %" PRIu64 EOL, loopCnt);
 
     // temp hack to force DEVMODE and verbose 9
+
     forceHACK();
 
-    if (Serial.available()) {
-        Serial.println(F("tracker.ino: (A) Going to user_interface() from loop1()"));
-        setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
-        updateStatusLED();
-        // sleep_ms(1000);
-        user_interface();
-        // won't return here, since all exits from user_interface reboot
+    // moved to loop()
+    if (false) {
+        if (Serial.available()) {
+            Serial.println(F("tracker.ino: (A) Going to user_interface() from loop1()"));
+            setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
+            updateStatusLED();
+            // sleep_ms(1000);
+            user_interface();
+            // won't return here, since all exits from user_interface reboot
+        }
     }
 
     Watchdog.reset();
@@ -1401,7 +1423,9 @@ void sleepSeconds(int secs) {
             // long enough to be sure to catch all NMEA during the broadcast interval of 1 sec
             // 1050: was this causing rx buffer overrun (21 to 32)
             updateGpsDataAndTime(1500);  // milliseconds
-            if (Serial.available()) {
+
+            // FIX! to remove all of this is now detected in loop()
+            if (false and Serial.available()) {
                 Serial.println(F("tracker.ino: (C) Going to user_interface() from setup1()"));
                 setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
                 updateStatusLED();
