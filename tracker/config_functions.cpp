@@ -30,7 +30,7 @@
 //*****************************************************
 // include the SI5351Arduino library and Wire for it
 #include "si5351.h"
-#include "Wire.h"
+#include <Wire.h>
 //*****************************************************
 
 

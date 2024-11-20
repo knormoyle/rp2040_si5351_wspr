@@ -28,9 +28,8 @@
 #include "Wire.h"
 #include "si5351.h"
 
-// mine. can't findj
+// mine. can't find
 // #include "si5351_functions.h"
-
 
 /********************/
 /* Public functions */
@@ -79,17 +78,26 @@ bool Si5351::init(uint8_t xtal_load_c, uint32_t xo_freq, int32_t corr)
 {
     Serial.print(F("Si5351 library object init entered" EOL));
     Serial.flush();
+    // FAILS sometime afer here
 	// Start I2C comms
     bool kevin = true;
     #define VFO_I2C0_SDA_PIN 12
     #define VFO_I2C0_SCL_PIN 13
-    if (kevin) {
-        Wire.setSDA(VFO_I2C0_SDA_PIN); // 12
-        Wire.setSCL(VFO_I2C0_SCL_PIN); // 13
-    }
+    #define PIN_WIRE_SDA 12
+    #define PIN_WIRE_SCL 13
 
+    Serial.print(F("Si5351 library object init before Wire.begin()" EOL));
+	// Wire.begin(12, 13);
 	Wire.begin();
+    Serial.print(F("Si5351 library object init after Wire.begin()" EOL));
     Serial.print(F("Si5351 library Wire created" EOL));
+    Serial.flush();
+
+    Wire.setSDA(VFO_I2C0_SDA_PIN); // 12
+    Serial.print(F("Si5351 library object after setSDA" EOL));
+    Serial.flush();
+    Wire.setSCL(VFO_I2C0_SCL_PIN); // 13
+    Serial.print(F("Si5351 library object after setSCL" EOL));
     Serial.flush();
 
 	// Check for a device on the bus, bail out if it is not there
@@ -105,6 +113,11 @@ bool Si5351::init(uint8_t xtal_load_c, uint32_t xo_freq, int32_t corr)
     Serial.print(F("Si5351 library Wire endTransmission complete" EOL));
     Serial.flush();
 
+    // that seemed to work. (the PIN_WIRE_SDA PIN_WIRE_SCL)
+    // we got down to here
+    // but then we got "Device not found on I2C bus"
+
+    // I guess because reg_val is 0
 	if(reg_val == 0)
 	{
 		// Wait for SYS_INIT flag to be clear, indicating that device is ready
@@ -114,31 +127,39 @@ bool Si5351::init(uint8_t xtal_load_c, uint32_t xo_freq, int32_t corr)
 			status_reg = si5351_read(SI5351_DEVICE_STATUS);
 		} while (status_reg >> 7 == 1);
 
+        Serial.print(F("Si5351 library Wire DEVICE_STATUS complete" EOL));
 		// Set crystal load capacitance
 		si5351_write(SI5351_CRYSTAL_LOAD, (xtal_load_c & SI5351_CRYSTAL_LOAD_MASK) | 0b00010010);
+        Serial.print(F("Si5351 library Wire CRYSTAL_LOAD complete" EOL));
 
 		// Set up the XO and CLKIN reference frequencies
 		if (xo_freq != 0)
 		{
 			set_ref_freq(xo_freq, SI5351_PLL_INPUT_XO);
             set_ref_freq(xo_freq, SI5351_PLL_INPUT_CLKIN);          //Also CLKIN
+            Serial.print(F("Si5351 library Wire PLL_INPUT with xo_freq complete" EOL));
 		}
 		else
 		{
 			set_ref_freq(SI5351_XTAL_FREQ, SI5351_PLL_INPUT_XO);
             set_ref_freq(SI5351_XTAL_FREQ, SI5351_PLL_INPUT_CLKIN); //Also CLKIN
+            Serial.print(F("Si5351 library Wire PLL_INPUT with XTAL_FREQ complete" EOL));
 		}
 
 		// Set the frequency calibrations for the XO and CLKIN
 		set_correction(corr, SI5351_PLL_INPUT_XO);
+        Serial.print(F("Si5351 library Wire set_correction1 complete" EOL));
         set_correction(corr, SI5351_PLL_INPUT_CLKIN);
+        Serial.print(F("Si5351 library Wire set_correction2 complete" EOL));
 
 		reset();
+        Serial.print(F("Si5351 library Wire reset complete" EOL));
 
 		return true;
 	}
 	else
 	{
+        Serial.print(F("Si5351 library failed, returning false" EOL));
 		return false;
 	}
 }

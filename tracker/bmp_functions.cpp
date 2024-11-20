@@ -160,6 +160,7 @@ const int BMP280_I2C1_SCL_HZ = (1000 * 1000);
 
 void bmp_init(void) {
     if (VERBY[0]) Serial.println(F("bmp_init START"));
+    return;
     // always on? these pins don't exist
     // gpio_init(BMP280_VDD_ON_N_PIN)
 
@@ -198,12 +199,14 @@ bmp.setSampling(
 // FIX! change this to bme_280?
 float bmp_read_temperature(void) {
     if (VERBY[0]) Serial.println(F("bmp_read_temperature START"));
+    return 0.0;
     if (VERBY[0]) Serial.println(F("bmp_read_temperature END"));
     return bmp.readTemperature();
 }
 
 float bmp_read_pressure(void) {
     if (VERBY[0]) Serial.println(F("bmp_read_pressure START"));
+    return 0.0;
     if (VERBY[0]) Serial.println(F("bmp_read_pressure END"));
     return bmp.readPressure();
 }
