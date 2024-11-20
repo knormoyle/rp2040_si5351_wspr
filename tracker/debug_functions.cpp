@@ -183,7 +183,11 @@ void StampPrintf(const char* pformat, ...) {
 
     // will the message fit without dumping the existing buffer?
     else if ( (i + j + j2 + 1) > LOG_BUFFER_SIZE) {
-        Serial.printf(
+          // create timestamp
+    snprintf(timestamp, sizeof(timestamp),
+        "%02lud%02lu:%02lu:%02lu.%06llu [%04lu] ",
+        tm_day, tm_hour, tm_min, tm_sec, tm_us, sTick++);
+  Serial.printf(
             EOL "ERROR: LOG_BUFFER_SIZE %d, i %d, adding j + j2 + 1 = %d, "
             "has no room for timestamp %s message %s (+ EOL)" EOL EOL,
             LOG_BUFFER_SIZE, i, j + j2 + 1, timestamp, message);

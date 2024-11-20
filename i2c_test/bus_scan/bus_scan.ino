@@ -17,18 +17,37 @@
 // have to use the pins labeled I2C0 for Wire
 // have to use the pins labeleds I2C1 for Wire1
 
+// variable number of args to macros
+// https://gcc.gnu.org/onlinedocs/cpp/Variadic-Macros.html
 
-// copy this into defines.h
-#define BALLOONFLYING 1
+// playing with this. see a different strategy in tracker/print_functions.cpp
+// with a real function call (so can do more complicated things)
+// call those yPrint*()
 
-#ifdef BALLONFLYING
-#define xPrint(x);
-#define xPrintf(x);
-#define xPrintLn(x);
+
+// https://stackoverflow.com/questions/26053959/what-does-va-args-in-a-macro-mean
+// full details of issues at:
+// https://en.wikipedia.org/wiki/Variadic_macro_in_the_C_preprocessor
+// C99 has the trailing comma expansion issue
+// c++20 works with the following:
+
+#ifndef FLY_WITH_NO_USBSERIAL
+#define FLY_WITH_NO_USBSERIAL 0
+#endif
+
+// have to handle a varying number of args
+#if FLY_WITH_NO_USBSERIAL == 1
+#define xPrintf(...)
+// just one arg
+#define xPrint(x)
+#define xPrintLn(x)
 #else
-#define xPrint(x); Serial.print(x);
-#define xPrintf(x); Serial.printf(x);
-#define xPrintLn(x); Serial.println(x);
+// prepend the function name?
+// Remember: can't have line breaks in a string
+#define xPrintf(cformat, ...) Serial.printf(__FUNC__ cformat _VA_OPT__ (,) __VA_ARGS__)
+// just one arg
+#define xPrint(x) Serial.print(__FUNC__ x)
+#define xPrintln(x) Serial.println(__FUNC__ x)
 #endif
 
 // if BALLONFLYING and we get voltage<=4.9v, turn off
@@ -190,19 +209,21 @@ bool reserved_addr(uint8_t addr) {
     return (addr & 0x78) == 0 || (addr & 0x78) == 0x78;
 }
 
+void setup() { ; }
+
 int scan_i2c(int i2c_number) {
-    Serial.printf(EOL "scan_i2c(%d) START" EOL, i2c_number);
+    xPrintf(EOL "scan_i2c(%d) START" EOL, i2c_number);
     // power up the Si5351 if we're scanning that bus
     // FIX! what about the BMP..it's always on!
     if (i2c_number == 0) {
-        Serial.println("power on Si5351");
+        xPrintln("power on Si5351");
         gpio_init(Si5351Pwr);
         pinMode(Si5351Pwr, OUTPUT_4MA);
         digitalWrite(Si5351Pwr, LOW);
     }
 
     // if we're running without USB_CONNECTED, it must be loaded/running with solar power
-    // ideally with BALLON_FLYING firmware? BALLOON_FLYING firmware can be connected
+    // ideally with "real flight" firmware? i.e. FLY_WITH_NO_USBSERIAL firmware can be connected
     // to usb for power, but won't have any usb serial input/output capabilities?
     // (does power savings)
     // have to bootsel/power cycle, to reload non BALOON_FLYING software.
@@ -227,12 +248,12 @@ int scan_i2c(int i2c_number) {
     // I suppose could set them both up at once, rather than conditional
 
     // deinit both! Just to make sure we're only using the one we expect
-    Serial.println("Deinit both isc0 and isc1");
+    xPrintln("Deinit both isc0 and isc1");
     i2c_deinit(isc0);
     i2c_deinit(isc1);
 
     // only init the one we're testing
-    Serial.printf("Only init the isc we're testing:  %d with %d Hz rate" EOL, i2c_number, PICO_I2C_CLK_HZ);
+    xPrintf("Only init the isc we're testing:  %d with %d Hz rate" EOL, i2c_number, PICO_I2C_CLK_HZ);
     // uint i2c_init (i2c_inst_t * i2c, uint baudrate)
     i2c_init(i2c_instance_to_test, PICO_I2C_CLK_HZ);
 
@@ -247,12 +268,12 @@ int scan_i2c(int i2c_number) {
         scl_pin = VFO_SCL_PIN;
     }
 
-    Serial.printf("SDA is pin %d" EOL, sda_pin);
+    xPrintf("SDA is pin %d" EOL, sda_pin);
     gpio_set_function(sda_pin, GPIO_FUNC_I2C);
-    Serial.printf("SCL is pin %d" EOL, scl_pin);
+    xPrintf("SCL is pin %d" EOL, scl_pin);
     gpio_set_function(scl_pin, GPIO_FUNC_I2C);
 
-    Serial.println("no pullup or pulldowns by RP2040 on both SDA and SCL");
+    xPrintln("no pullup or pulldowns by RP2040 on both SDA and SCL");
     gpio_set_pulls(scl_pin, false, false);
     gpio_set_pulls(sda_pin, false, false);
 
@@ -287,7 +308,7 @@ int scan_i2c(int i2c_number) {
     }
 
     if (i2c_number == 0) {
-        Serial.println("power off Si5351");
+        xPrintln("power off Si5351");
         gpio_init(Si5351Pwr);
         pinMode(Si5351Pwr, OUTPUT_4MA);
         digitalWrite(Si5351Pwr, LOW);
@@ -299,18 +320,18 @@ int scan_i2c(int i2c_number) {
 }
 
 //**********************************************
-loop() {
-    Serial.println(F(EOL "Will scan isc0 (si5351 should be only device)" EOL);
+void loop() {
+    xPrintln(EOL "Will scan isc0 (si5351 should be only device)" EOL);
     scan_i2c(0);
 
-    Serial.println(F(EOL "Will scan isc1 (bmp280 should be only device)" EOL);
+    xPrintln(EOL "Will scan isc1 (bmp280 should be only device)" EOL);
     scan_i2c(1);
 
-    Serial.println("Deinit both isc0 and isc1");
+    xPrintln("Deinit both isc0 and isc1");
     i2c_deinit(isc0);
     i2c_deinit(isc1);
-    Serial.println("left sda/scl's as defined with pullups");
-    Serial.println("power off Si5351");
+    xPrintln("left sda/scl's as defined with pullups");
+    xPrintln("power off Si5351");
     gpio_init(Si5351Pwr);
     pinMode(Si5351Pwr, OUTPUT_4MA);
     digitalWrite(Si5351Pwr, LOW);
@@ -327,17 +348,6 @@ loop() {
 
 // we'd want to have a compile that gets rid of all Serial references
 // i.e. load up a new firmware with no print
-
-#define DEBUG 1
-
-#if DEBUG==1
-#define outputDebug(x); Serial.print(x);
-#define outputDebugLine(x); Serial.println(x);
-#else
-#define outputDebug(x);
-#define outputDebugLine(x);
-#endif
-
 
 // we could turn off usb pll if we're running with DEBUG disabled and the voltage is lower than 4.5v?
 // or, if we have no debug print, disable usb serial input too
@@ -358,22 +368,22 @@ loop() {
 //
 // void loop() {
 //   if (USB_CONNECTED) {
-//     Serial.println("USB Connected!");
+//     xPrintln("USB Connected!");
 //   } else {
-//     Serial.println("USB Disconnected!");
+//     xPrintln("USB Disconnected!");
 //   }
 //   delay(1000); // Delay for readability
 // }
 
 // #include <usb_dev.h>
 // void loop() {
-//   Serial.println("USB Status: ");
+//   xPrintln("USB Status: ");
 //   while (1) {
 //     if (USB_Status() == 1) {
-//       Serial.println("USB Connected");
+//       xPrintln("USB Connected");
 //     }
 //     else {
-//       Serial.println("You can't read this");
+//       xPrintln("You can't read this");
 //     }
 //     delay(500);
 // }

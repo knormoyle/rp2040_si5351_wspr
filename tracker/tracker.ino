@@ -20,6 +20,8 @@
 #include <avr/dtostrf.h>
 
 #include "defines.h"
+#include <stdarg.h>
+#include "print_functions.h"
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
