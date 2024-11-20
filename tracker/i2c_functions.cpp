@@ -21,6 +21,8 @@ extern bool DEVMODE;
 // decode of verbose 0-9
 extern bool VERBY[10];
 
+// FIX! better scanner now in ../i2c_test/bus_scan.ino
+// also ../i2c_test/i2c_test.ino for probing si5351 regs, with random read/write
 //************************************************
 // this assumes Wire is created beforehand?
 void i2c_scan_with_Wire(void) {

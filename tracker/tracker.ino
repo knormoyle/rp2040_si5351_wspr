@@ -303,13 +303,17 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // see gps_functions.cpp and problems with resetting to 9600 from higher bauds
 // too dangerous to use anything higher than 9600..could get stuck
 // with out vcc plus vbat power cycle.. I can't control vbat when on usb power
-// extern const int SERIAL2_BAUD_RATE = 9600;
+extern const int SERIAL2_BAUD_RATE = 9600;
+
 // can't seem to restrict burst data
 // with the GLONASS sats
 // There are 821 chars in a burst, handling takes 892 milliseconds per burst
 // try increasing the baud rate to see if duration takes less
 // works going from 9600 to 19200
-extern const int SERIAL2_BAUD_RATE = 19200;
+// reduced broadcast works now, with 3 constellations
+// 670 chars with 396 ms duration. going back to 9600
+// extern const int SERIAL2_BAUD_RATE = 19200;
+
 // it now does the burst in half that time, around 450 milliseconds
 // so this is good..11/18/24
 
@@ -536,6 +540,7 @@ void setup() {
         user_interface();
         // won't return here, since all exits from user_interface reboot
     }
+    freeMem();
     Serial.print(F(EOL "SETUP() ..LEAVING SETUP() AFTER NOT SEEING Serial.available()" EOL EOL));
 
 }
@@ -775,14 +780,14 @@ void setup1() {
     // doc had:
     // bool setSDA(pin_size_t VFO_I2C0_SDA_PIN);
     // bool setSCL(pin_size_t VFO_I2C0_SCL_PIN);
-    // now says 
+    // now says
     // Wire.setSDA(pin_size_t VFO_I2C0_SDA_PIN);
     // Wire.setSCL(pin_size_t VFO_I2C0_SCL_PIN);
     // per May 2022 forum post
 
     // this seemed key
     // this is okay for Wire?
-    
+
     if (false) {
         // #define VFO_I2C0_SDA_PIN = 12;
         // #define VFO_I2C0_SCL_PIN = 13;
@@ -801,8 +806,8 @@ void setup1() {
     // I seem to have gotten no errors on these reads now
     // got rid of all places that power off vfo
 
-    // default pins for Wire  are SDA=4   SCL=5 
-    // default pins for Wire1 are SDA=26  SCL=27  
+    // default pins for Wire  are SDA=4   SCL=5
+    // default pins for Wire1 are SDA=26  SCL=27
     // our ISC1 for the BMP    is SDA 2,  SCL 3))
     // our ISC0 for the Si5351 is SDA 12, SCL 13))
 
@@ -1280,26 +1285,29 @@ void loop1() {
             float voltageBeforeWSPR = readVoltage();
             if (voltageBeforeWSPR >= WsprBattMin) {
                 if (alignMinute(-1)) {
-                    Serial.println("send wspr? good alignMinute(-1) and voltageBeforeWSPR %.f" EOL, voltageBeforeWSPR);
+                    Serial.printf("wspr? good alignMinute(-1) and voltageBeforeWSPR %.f" EOL, voltageBeforeWSPR);
                     if (second() > 30) {
                         // to late..don't try to send
-                        Serial.println(F("WARN: past needed 30 sec setup in the minute before WSPR should start"));
+                        Serial.println(F("WARN: wspr no send. passed the needed 30 sec setup in the minute before WSPR should start"));
                         // minute() second() come from Time.h as ints
-                        Serial.printf("WARN: because minute() %d second() %d alignMinute(-1) %u" EOL,
+                        Serial.printf("WARN: no send, because minute() %d *second() %d* alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
                     } else {
-                        Serial.println(F("wait until we're 30 secs into the minute"));
+                        Serial.printf("wspr? wait until 30 secs before the aligned starting minute now: minute() %d *second() %d*" EOL,
+                            minute(), second());
                         while (second() < 30) {
+                            Watchdog.reset();
                             delay(10); // 10 millis
                             // we could end up waiting for 30 secs so update LED
                             updateStatusLED();
                         }
                         // will call this with less than or equal to 30 secs to go
-                        Serial.println(F("okay we have 30 secs to go till the starting minute.. get the vfo going"));
+                        Serial.println("wspr? have 30 secs to go till the aligned starting minute");
+                        Serial.printf("wspr? get the vfo going now: minute() %d second %d" EOL, minute(), second());
                         alignAndDoAllSequentialTx();
                     }
                 } else {
-                    Serial.printf("WARN: good gps fix but loop fallthru because minute() %d second() %d alignMinute(-1) %u" EOL,
+                    Serial.printf("WARN: wspr no send. because minute() %d second() %d *alignMinute(-1) %u*" EOL,
                         minute(), second(), alignMinute(-1));
                     // we fall thru and can get another gps fix or just try again.
                     // sleep because we don't want to cycle endlessly waiting to align
@@ -1309,7 +1317,7 @@ void loop1() {
             else {
                 // this line will print a lot if we're failing because of this?
                 // but we have the min at 0.0 for now
-                Serial.printf("WARN: good gps fix but loop fallthru because voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
+                Serial.printf("WARN:  no send because voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
                     voltageBeforeWSPR, WsprBattMin);
                 sleepSeconds(BATT_WAIT);
             }
@@ -1363,19 +1371,22 @@ void alignAndDoAllSequentialTx (void) {
     // if we called this to early, just return so we don't wait 10 minuts here
     // at most wait up to a minute if called the minute before start time)
     if (!alignMinute(-1)) {
-        if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX END early out: align way off!"));
+        if (VERBY[0]) Serial.printf("FAIL: alignAndDoAllSequentialTX END early out: alignment wrong! now: minute() %d second %d" EOL,
+            minute(), second());
         return;
     }
 
-    if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX START"));
-    Watchdog.reset();
+    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute() %d second() %d" EOL,
+        minute(), second());
     while (second() < 30)  {
+        Watchdog.reset();
         delay(5); // 5 millis
         // we could end up waiting for 30 secs
         updateStatusLED();
     }
 
-    if (VERBY[0]) Serial.println(F("alignAndDoAllSequentialTX START"));
+    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute() %d second() %d" EOL,
+        minute(), second());
     // don't want gps power and tx power together
     GpsOFF();
 
@@ -1421,7 +1432,7 @@ void alignAndDoAllSequentialTx (void) {
         tx_cnt_0 += 1;
         // we have 10 secs or so at the end of WSPR to get this off?
         if (VERBY[0]) {
-            StampPrintf("WSPR callsign Tx sent. minutes %d secs %d",
+            StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d",
                 minute(), second());
             DoLogPrint();  // we might have to delay this?
         }
@@ -1495,14 +1506,17 @@ void alignAndDoAllSequentialTx (void) {
 extern const int WSPR_PWM_SLICE_NUM=4;
 
 void PWM4_Handler(void) {
-    if (VERBY[0]) Serial.println(F("PWM4_Handler() START"));
+    // too much output!
+    // if (VERBY[0]) Serial.println(F("PWM4_Handler() START"));
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     static int cnt = 0;
     if (++cnt >= 500) {
+        // every 500 times PMW4_Handler is called, we toggle proceed to true?
+        // is that 500 interrupts?
         cnt = 0;
         proceed = true;
     }
-    if (VERBY[0]) Serial.println(F("PWM4_Handler() END"));
+    // if (VERBY[0]) Serial.println(F("PWM4_Handler() END"));
 }
 
 void zeroTimerSetPeriodMs(float ms) {
@@ -1606,7 +1620,7 @@ bool alignMinute(int offset) {
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3
 void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
-    if (VERBY[0]) Serial.println(F("sendWSPR() START"));
+    if (VERBY[0]) Serial.printf("sendWSPR() START now: minute() %d second() %d" EOL, minute(), second());
     Watchdog.reset();
     if (txNum < 0 || txNum > 3) {
         if (VERBY[0]) Serial.printf("bad txNum %d ..ignoring" EOL, txNum);
@@ -1674,21 +1688,21 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
 }
 
 void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
-    if (VERBY[0]) Serial.println(F("syncAndSendWSPR() START"));
+    if (VERBY[0]) Serial.printf("syncAndSendWSPR() START now: minute() %d second() %d" EOL, minute(), second());
     if (txNum < 0 || txNum > 3) txNum = 0;
     // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
     // we turned the vfo on in the minute before 0, separately
 
     if (VERBY[0]) {
-        Serial.printf("will start WSPR txNum %d when aligned zero secs, currently %d secs\n",
+        Serial.printf("will start WSPR txNum %d when aligned zero secs, currently %d secs" EOL,
             txNum, second());
         Serial.printf("WSPR txNum %d Preparing", txNum);
         Serial.printf("hf_grid4: %s", hf_grid4);
     }
     // this should be fine even if we wait a long time
-    Watchdog.reset();
     int i = 2 * txNum;  // 0, 2, 4, 6
     while (!alignMinute(i) || (second() != 0)) {
+        Watchdog.reset();
         // FIX! delay 1 sec? change to pico busy_wait_us()?
         sleep_ms(20);
         // delay(1);
