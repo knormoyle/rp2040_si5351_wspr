@@ -7,6 +7,8 @@
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdarg.h>
+
 // do we need these two for  getchar_timeout_us() (return type is int
 // #include "pico/stdlib.h"
 // so we can use stdio_usb
@@ -17,10 +19,10 @@
 
 #include <stdlib.h>
 #include <string.h>
+// FIX! is this needed?
 #include <avr/dtostrf.h>
 
 #include "defines.h"
-#include <stdarg.h>
 #include "print_functions.h"
 
 // These are in arduino-pio core
@@ -1258,6 +1260,7 @@ void loop1() {
                 "loop1() After snapTelemetry() timeStatus():%u minute():%u second():%u" EOL,
                 timeStatus(), minute(), second());
 
+            // FIX! does this cause a reboot?
             // freeMem();
 
             // FIX! it should depend on the channel starting minute - 1 (modulo 10)
@@ -1277,6 +1280,7 @@ void loop1() {
             float voltageBeforeWSPR = readVoltage();
             if (voltageBeforeWSPR >= WsprBattMin) {
                 if (alignMinute(-1)) {
+                    Serial.println("send wspr? good alignMinute(-1) and voltageBeforeWSPR %.f" EOL, voltageBeforeWSPR);
                     if (second() > 30) {
                         // to late..don't try to send
                         Serial.println(F("WARN: past needed 30 sec setup in the minute before WSPR should start"));
@@ -1284,12 +1288,14 @@ void loop1() {
                         Serial.printf("WARN: because minute() %d second() %d alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
                     } else {
+                        Serial.println(F("wait until we're 30 secs into the minute"));
                         while (second() < 30) {
                             delay(10); // 10 millis
                             // we could end up waiting for 30 secs so update LED
                             updateStatusLED();
                         }
                         // will call this with less than or equal to 30 secs to go
+                        Serial.println(F("okay we have 30 secs to go till the starting minute.. get the vfo going"));
                         alignAndDoAllSequentialTx();
                     }
                 } else {
@@ -1727,7 +1733,7 @@ void set_tx_buffer(char *hf_callsign, char *hf_loc, uint8_t hf_power, uint8_t *t
 void freeMem() {
     Serial.println(F("freeMem() START"));
     if (!VERBY[0]) return;
-    // NIce to use F() for strings that are constant
+    // Nice to use F() for strings that are constant
     // compiled string stays in flash. does not get copied to SRAM during the C++ initialization
     // string it has the PROGMEM property and runs from flash.
     Serial.print(F("Free RAM: "));

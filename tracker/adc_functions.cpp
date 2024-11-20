@@ -5,12 +5,25 @@
 
 #include <Arduino.h>
 #include <stdlib.h>
+
 #include "defines.h"
+#include "print_functions.h"
 #include "adc_functions.h"
 
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
+
 #include "pico/stdlib.h"
+// https://github.com/raspberrypi/pico-sdk/blob/master/src/common/pico_stdlib_headers/include/pico/stdlib.h
+// aggregates  
+// hardware_divider
+// hardware_gpio
+// hardware_uart
+// pico_runtime
+// pico_platform
+// pico_stdio
+// pico_time
+// pico_util
 
 // per https://github.com/DeimosHall/RP2040_CPU_Temperature/blob/main/src/CPU.cpp
 

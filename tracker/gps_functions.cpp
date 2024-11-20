@@ -77,6 +77,7 @@
 #include <ctype.h>
 #include "gps_functions.h"
 #include "debug_functions.h"
+#include "print_functions.h"
 #include "defines.h"
 
 // in libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
@@ -266,12 +267,11 @@ void setGpsBalloonMode(void) {
 // always GGA GLL GSA GSV RMC
 // nver ZDA TXT
 void setGpsBroadcast() {
-    // do nothing.. is it inhibiting the wrong things?
-    return;
     if (VERBY[0]) Serial.print(F("setGpsBroadcast START" EOL));
     updateStatusLED();
     Watchdog.reset();
-    char nmeaSentence[21] = { 0 };
+    // room for a 60 char sentence with CR and LF also
+    char nmeaSentence[62] = { 0 };
 
     //*************************************************
     // ZDA
@@ -320,7 +320,7 @@ void setGpsBroadcast() {
 
     // spec has more/new detail. see below
     // FIX! still getting GNZDA and GPTXT ANTENNAOPEN with this
-    strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 21);
+    strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
 
     // example in pdf
     // first field after 3, is field ..no it's field 2
@@ -380,27 +380,27 @@ void setGpsConstellations(int desiredConstellations) {
     Watchdog.reset();
     // FIX! should we ignore desiredConstellations and force 3 (BDS + GPS
     int usedConstellations = desiredConstellations;
-    char nmeaSentence[21] = { 0 };
+    char nmeaSentence[62] = { 0 };
 
     switch (usedConstellations) {
-        case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 21); break;
-        case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 21); break;
-        case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 21); break;
-        case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 21); break;
-        case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 21); break;
-        case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 21); break;
-        case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 21); break;
+        case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 62); break;
+        case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 62); break;
+        case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 62); break;
+        case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 62); break;
+        case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 62); break;
+        case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 62); break;
+        case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break;
         default:
             usedConstellations = 3;
-            strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 21);
+            strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62);
     }
 
-    // was it not passing unless I did this?
-    if (true) {
-        // this was an experiment
+    // FIX! was it not passing unless I did this?
+    if (false) {
+        // alternative experiment
         // what about this rumored PMTK353 sentence?
         // $PMTK353,1,1,1,0,1*2B : Search GPS BEIDOU GLONASS and GALILEO satellites
-        strncpy(nmeaSentence, "$PMTK353,1,1,1,0,1*2B" CR LF, 21);
+        strncpy(nmeaSentence, "$PMTK353,1,1,1,0,1*2B" CR LF, 62);
         Serial2.print(nmeaSentence);
         Serial2.flush();
         delay(1000);
@@ -1240,55 +1240,3 @@ void gpsDebug() {
 // Example: if the function argument list contains user defined data types and
 // the automatically created function prototype is placed before the declaration of that data type.
 
-//*****************
-// alternative GPS
-// SIM28ML
-// SIM28ML/9600 9.7x10.1mm
-
-// ATGM336H-5N11 9.7x10.1mm
-// https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_ZHONGKEWEI-ATGM336H-5N11_C90769.pdf
-// 5N-1X is gps only. saw + lnda
-// Ipeak = 100mA
-// ATGM336H-5N31 9.7x10.1mm
-// https://www.lcsc.com/datasheet/lcsc_datasheet_1810261521_ZHONGKEWEI-ATGM336H-5N31_C90770.pdf
-// 5N-3X is gps + bda. saw + lna
-
-// Ipeak = 100mA
-// ATGM336H-5NR32 10.1x9.7mm
-// https://www.lcsc.com/datasheet/lcsc_datasheet_2411041759_ZHONGKEWEI-ATGM336H-5NR32_C5117921.pdf
-// gps + bds. lna + saw
-
-// 6N-32 is gps + bd2/3. -74 has GLO. 115200baud
-// Ipeak = 100mA
-// ATGM336H-6N-74 10.1x9.7mm
-// https://www.lcsc.com/datasheet/lcsc_datasheet_2401121833_ZHONGKEWEI-ATGM336H-6N-74_C5804601.pdf
-
-// Quectel L70-RL 10.1x9.7x2.5mm
-// 18ma tracking compare to max-6x
-// 18 pin lcc
-// # protocol 2016 https://auroraevernet.ru/upload/iblock/6e6/6e624183292772f8dad0a6c327153eff.pdf
-// # presentation
-// https://auroraevernet.ru/upload/iblock/4bd/4bd89e299765c46248256cf6d9b8e0a7.pdf
-// 5H Quectel L70 GP* only?
-
-// L70B-M39 C6072279 SMD-18P
-// hard to find the datasheets. need user account
-// https://jlcpcb.com/partdetail/QUECTEL-L70BM39/C6072279
-// L70REL-M37 C5745045 SMD-18P End of Life but L70REL-M37-EIT 10.1x9.7x2.5mm is not EOL?
-// https://jlcpcb.com/partdetail/Quectel-L70RELM37/C5745045
-// mouser uses this datasheet (for the L70_R)
-// https://www.mouser.com/datasheet/2/1052/Quectel_L70_R_GPS_Specification_V2_2-1829911.pdf
-// L70RE-M37 L70REL-M37 L70REL-M37-EIT
-// https://www.quectel.com/gnss-iot-modules/
-/// L76 L76G single band
-
-//*******************
-// ATGM336 might not support this:
-// could use as PMTK_API_SET_PWR_SAV_MODE (elsewhere) rather than powering off?
-// would have to wait for ack or time, after changing
-// https://www.meme.au/nmea-checksum.html
-// power saving mod off: (should this really be checksum 2F?)
-// $PMTK320,0*26\r\n" manual has wrong checksum here?
-// power saving mod on:
-// $PMTK320,1*2E\r\n"
-//*******************

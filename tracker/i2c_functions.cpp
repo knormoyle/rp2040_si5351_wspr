@@ -3,17 +3,17 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-
 // https://wellys.com/posts/rp2040_arduino_i2c/
 // from https://github.com/lkoepsel/I2C/blob/main/Arduino/Pico/I2C_Scanner/I2C_Scanner.ino
 
+#include "defines.h"
 #include "i2c_functions.h"
+#include "print_functions.h"
 
 // I2C_Scanner - scans all Wire and Wire interfaces on Pico for devices
 // Specific pins must be set for both interfaces
 
 #include <Wire.h>
-#include "defines.h"
 
 // extern char _verbose[2];
 // decode of _devmode
@@ -23,7 +23,7 @@ extern bool VERBY[10];
 
 //************************************************
 // this assumes Wire is created beforehand?
-void i2c_scan(void) {
+void i2c_scan_with_Wire(void) {
     if (VERBY[0]) Serial.println(F("i2c_scan START"));
     uint8_t error, address;
     int nDevices;
@@ -82,7 +82,7 @@ const unsigned int SCL_15 = 27;
 // scan the Wire interface for devices
 void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire);
 
-void i2c_scanner_setup() {
+void i2c_scanner_with_Wire_setup() {
     if (VERBY[0]) Serial.println(F("i2c_scanner_setup START"));
 
     if (VERBY[0]) Serial.println(F("Just Wire"));

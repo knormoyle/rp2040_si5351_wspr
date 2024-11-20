@@ -14,11 +14,12 @@
 // #include <string.h>
 // #include <cstdio.h>
 
+#include "defines.h"
 #include "debug_functions.h"
+#include "print_functions.h"
 #include "led_functions.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-#include "defines.h"
 extern bool DEVMODE;
 // decode of _verbose 0-9
 extern bool VERBY[10];

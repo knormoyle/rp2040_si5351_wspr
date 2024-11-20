@@ -7,8 +7,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include "u4b_functions.h"
+
 #include <JTEncode.h>  // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
 #include "defines.h"
+#include "print_functions.h"
 
 //********************************
 // the key output that is used to pwm rf ..162 symbols that are 4-FSK

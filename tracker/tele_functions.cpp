@@ -5,11 +5,13 @@
 
 #include <Arduino.h>
 #include <stdlib.h>
+
+#include "defines.h"
 #include "config_functions.h"
+#include "print_functions.h"
 #include "bmp_functions.h"
 #include "mh_functions.h"
 #include "adc_functions.h"
-#include "defines.h"
 
 #include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
 

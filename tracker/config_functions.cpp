@@ -5,12 +5,11 @@
 #include <Arduino.h>
 
 #include <stdint.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include "pico/stdio.h"
-// what about this?
-#include "class/cdc/cdc_device.h"
+// #include "class/cdc/cdc_device.h"
 
-#include <stdlib.h>
 // for isprint()
 #include <ctype.h>
 
@@ -19,6 +18,7 @@
 
 // my stuff
 #include "defines.h"
+#include "print_functions.h"
 #include "led_functions.h"
 #include "u4b_functions.h"
 #include "config_functions.h"

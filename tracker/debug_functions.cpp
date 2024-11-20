@@ -3,7 +3,7 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 //********************************************
-// what do we need ehre?
+// what do we need here?
 #include <stdint.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -13,9 +13,8 @@
 // #include <stdlib.h>
 // #include <string.h>
 
-// #include "hardware/clocks.h"
-// #include "pico/stdlib.h"
-
+#include "defines.h"
+#include "print_functions.h"
 #include "debug_functions.h"
 #include "led_functions.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
@@ -24,7 +23,6 @@
 #include <TinyGPS++.h>
 #include <Wire.h>
 
-#include "defines.h"
 extern bool DEVMODE;
 // decode of _verbose 0-9
 extern bool VERBY[10];
@@ -119,6 +117,11 @@ void printFloat(float val, bool valid, int len, int prec) {
 }
 
 //***********************************
+// background on i/o
+// interesting info on tracking GPIO transitions with IRQ and callback function
+// https://ceworkbench.wordpress.com/2023/01/04/using-the-raspberry-pi-pico-gpio-with-the-c-c-sdk/
+
+//***********************************
 // got a "full" with 1024..had 996 things in it
 // from updateGpsDataAndTime()
 // #define LOG_BUFFER_SIZE 2048
@@ -131,10 +134,6 @@ static char logBuffer[LOG_BUFFER_SIZE] = { 0 };
 // pformat: printf style format
 // ... argument list to print
 void StampPrintf(const char* pformat, ...) {
-    // background on i/o
-    // interesting info on tracking GPIO transitions with IRQ and callback function
-    // https://ceworkbench.wordpress.com/2023/01/04/using-the-raspberry-pi-pico-gpio-with-the-c-c-sdk/
-
     static uint32_t sTick = 0;
 
     uint64_t tm_us = to_us_since_boot(get_absolute_time());
@@ -157,7 +156,6 @@ void StampPrintf(const char* pformat, ...) {
     va_list argptr;
     va_start(argptr, pformat);
     // message can be up to the full buffer size?
-    // FIX! should we check if it violates? somehow? Not possible?
     char message[LOG_BUFFER_SIZE];
     // vsnprintf https://cplusplus.com/reference/cstdio/vsnprintf/
     // format the message
@@ -166,8 +164,7 @@ void StampPrintf(const char* pformat, ...) {
 
     // make LOG_BUFFER_SIZE bigger and recompile or do more DoLogPrint() if we run into a problem realtime
 
-    // I put the 3 things in the logBuffer more efficiently than doing
-    // successive strlen()' and strncat?
+    // Put the 3 things in the logBuffer more efficiently than doing successive strlen()' and strncat?
     int i = strlen(logBuffer);
     int j = strlen(timestamp);
     int j2 = strlen(message);
@@ -181,13 +178,13 @@ void StampPrintf(const char* pformat, ...) {
         ignore = true;
     }
 
-    // will the message fit without dumping the existing buffer?
+    // Will the message fit without dumping the existing buffer?
     else if ( (i + j + j2 + 1) > LOG_BUFFER_SIZE) {
           // create timestamp
     snprintf(timestamp, sizeof(timestamp),
         "%02lud%02lu:%02lu:%02lu.%06llu [%04lu] ",
         tm_day, tm_hour, tm_min, tm_sec, tm_us, sTick++);
-  Serial.printf(
+    Serial.printf(
             EOL "ERROR: LOG_BUFFER_SIZE %d, i %d, adding j + j2 + 1 = %d, "
             "has no room for timestamp %s message %s (+ EOL)" EOL EOL,
             LOG_BUFFER_SIZE, i, j + j2 + 1, timestamp, message);

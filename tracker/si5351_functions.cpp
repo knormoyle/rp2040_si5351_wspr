@@ -10,13 +10,14 @@
 
 // for busy_wait_us_32()
 #include <Arduino.h>
-#include "si5351_functions.h"
 #include <stdlib.h>
 #include <cstring>
 #include "hardware/gpio.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
-#include "defines.h"
 
+#include "defines.h"
+#include "si5351_functions.h"
+#include "print_functions.h"
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
@@ -327,10 +328,10 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     // so these are out of the for loops
     uint8_t start = 0;
     uint8_t end = 7;
-    // FIX! why always use the s_regs_prev buffer to copy to s_regs? (overwrite?)
-    // it means this is a one shot kind of deal? just one call?
-    // but what if we change bands?
-    // FIX! disabled this from original Kazu. not sure why you would restore from s_regs_prev
+    // is this just looking for a range of bits that changed?
+    // the i2cWriten writes as burst below..maybe that's why?
+    // we could keep a static copy of what was written , and only write
+    // when values change.
     if (prev_ms_div != 0) {
         for (; start < 8; start++) {
             if (s_regs[start] != s_regs_prev[start]) break;
@@ -525,21 +526,27 @@ bool vfo_is_on(void) {
 
     // gpio_get_out_level()
     // static bool gpio_get_out_level	(uint gpio )	
-    // Determine whether a GPIO is currently driven high or lowThis function returns the high/low output level most recently assigned to a GPIO via gpio_put() or similar. This is the value that is presented outward to the IO muxing, not the input level back from the pad (which can be read using gpio_get()).
+    // Determine whether a GPIO is currently driven high or low
+    // This function returns the high/low output level most recently assigned to a GPIO via gpio_put() or similar. 
+    // This is the value that is presented outward to the IO muxing, 
+    // not the input level back from the pad (which can be read using gpio_get()).
     // 
-    // To avoid races, this function must not be used for read-modify-write sequences when driving GPIOs – instead functions like gpio_put() should be used to atomically update GPIOs. This accessor is intended for debug use only.
+    // To avoid races, this function must not be used for read-modify-write sequences when driving GPIOs – 
+    // instead functions like gpio_put() should be used to atomically update GPIOs. 
+    // This accessor is intended for debug use only.
 
     // gpio	GPIO number
     // Returns
     // true if the GPIO output level is high, false if low.
-    return (!gpio_get_out_level(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
+    // return (!gpio_get_out_level(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
+    return (!gpio_get(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
 }
 
 //****************************************************
 bool vfo_is_off(void) {
     // power on and completed successfully
     // return (gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
-    return (gpio_get_out_level(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
+    return (gpio_get(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
 }
 
 // what is vfo_clk2 ? is that another PLL? is that used for calibration?

@@ -3,14 +3,19 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
+#include <Arduino.h>
+#include <stdint.h>
+#include <stdarg.h>
+#include <stdio.h>
+
+#include "print_functions.h"
+
 // va_start stdarg https://www.tutorialspoint.com/c_standard_library/c_macro_va_start.htm
-
-include "print_functions.h"
-
 // https://en.wikipedia.org/wiki/Variadic_macro_in_the_C_preprocessor
 
 // Without variadic macros, writing wrappers to printf is not directly possible. 
-// The standard workaround is to use the stdargs functionality of C/C++, and have the function call printf instead.
+// The standard workaround is to use the stdargs functionality of C/C++, and 
+// have the function call printf instead.
 
 //***********************************************
 // could make FLY_WITH_NO_USBSERIAL a sticky configuration
@@ -36,19 +41,6 @@ include "print_functions.h"
 
 // NOTE: we could expand this to have timestamps in front of each print,
 // if desirable
-void yPrint(const char* pformat, ...) {
-#if FLY_WITH_NO_USBSERIAL == 1
-    ;
-#else
-    va_list argptr;
-    va_start(argptr, pformat);
-    // there shouldn't be any comma-separated args..otherwise Serial.print will fail)
-    // Serial.print(F(pformat, argptr));
-    Serial.print(argptr);
-    va_end(argptr);
-#endif
-    return;
-}
 void yPrintf(const char* pformat, ...) {
 #if FLY_WITH_NO_USBSERIAL == 1
     va_list argptr;
@@ -58,7 +50,20 @@ void yPrintf(const char* pformat, ...) {
 #else
     ;
 #endif
-    return
+    return;
+}
+void yPrint(const char* pformat, ...) {
+#if FLY_WITH_NO_USBSERIAL == 1
+    ;
+#else
+    va_list argptr;
+    va_start(argptr, pformat);
+    // there shouldn't be any comma-separated args..otherwise Serial.print will fail)
+    // Serial.print(F(pformat, argptr));
+    Serial.print(pformat);
+    va_end(argptr);
+#endif
+    return;
 }
 void yPrintln(const char* pformat, ...) {
 #if FLY_WITH_NO_USBSERIAL == 1
@@ -70,6 +75,6 @@ void yPrintln(const char* pformat, ...) {
 #else
     ;
 #endif
-    return
+    return;
 }
 
