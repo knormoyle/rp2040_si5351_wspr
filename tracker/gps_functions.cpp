@@ -1065,10 +1065,20 @@ void updateGpsDataAndTime(int ms) {
         Serial.printf("gps.time.isValid():%u" EOL, gps.time.isValid());
 
     if (gps.time.isValid()) {
+        // FIX! don't be updating this every time
+        // this will end up checking every time we get a burst?
+
+        // do we need to check every iteration?
         // Update the arduino (cpu) time. setTime is in the Time library.
-        setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
-        if (VERBY[0]) Serial.printf("setTime(%02u:%02u:%02u)" EOL,
-            gps.time.hour(), gps.time.minute(), gps.time.second());
+        // we don't care about comparing that the date is right??
+        // we actually don't care about hour..but good to be aligned with that
+        // uint8_t for gps data
+        // the Time things are int
+        if (hour() != gps.time.hour() || minute() != gps.time.minute() || second() != gps.time.second()) {
+            setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
+            if (VERBY[0]) Serial.printf("setTime(%02u:%02u:%02u)" EOL,
+                gps.time.hour(), gps.time.minute(), gps.time.second());
+        }
     }
 
     updateStatusLED();

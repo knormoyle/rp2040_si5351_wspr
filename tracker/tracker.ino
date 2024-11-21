@@ -1713,7 +1713,7 @@ void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_powe
         Serial.printf("will start WSPR txNum %d when aligned zero secs, currently %d secs" EOL,
             txNum, second());
         Serial.printf("WSPR txNum %d Preparing.." EOL, txNum);
-        Serial.printf("hf_grid4: %s", hf_grid4);
+        Serial.printf("hf_grid4: %s" EOL, hf_grid4);
     }
     // this should be fine even if we wait a long time
     int i = 2 * txNum;  // 0, 2, 4, 6

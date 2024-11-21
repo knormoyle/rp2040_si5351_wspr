@@ -184,7 +184,7 @@ bool reserved_reg(uint8_t reg) {
 
 //****************************************************
 int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
-    if (VERBY[0]) Serial.printf("i2cWrite START reg %02x val %02x" EOL, reg, val);
+    // if (VERBY[0]) Serial.printf("i2cWrite START reg %02x val %02x" EOL, reg, val);
     // FIX! shouldn't this be local ? or does it setup data for i2cWriten
     // moved here to be local, and not static (shared) anymore
     // only need length 2!
@@ -195,23 +195,23 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
     int res;
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
-        Serial.printf("i2cWrRead reserved reg %u", reg);
+        // if (VERBY[0]) Serial.printf("i2cWrRead reserved reg %u", reg);
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     }
     else {
-        if (VERBY[0]) Serial.printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
+        // if (VERBY[0]) Serial.printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
         // res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false, 1000);
         res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false);
 
         if (VERBY[0]) {
             if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
-            else if (res == 2) Serial.printf("GOOD: res %d after i2cWrite" EOL, res);
+            else if (res == 2) ; // Serial.printf("GOOD: res %d after i2cWrite" EOL, res);
             else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWrite" EOL, res);
             else Serial.printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
         }
     }
-    if (VERBY[0]) Serial.printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
+    // if (VERBY[0]) Serial.printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
     return res;
 }
 
@@ -357,7 +357,7 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
 
 //****************************************************
 int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
-    if (VERBY[0]) {
+    if (false && VERBY[0]) {
         Serial.printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
         for (uint8_t i = 0; i < vcnt; i++) {
             Serial.printf("val i %d %u" EOL, i, *(vals + i));
@@ -379,21 +379,21 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     } else {
-        if (VERBY[0]) Serial.printf("i2cWriten doing i2c_write_blocking reg %02x " EOL, reg);
+        // if (VERBY[0]) Serial.printf("i2cWriten doing i2c_write_blocking reg %02x " EOL, reg);
         // res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
         res = i2c_write_blocking(VFO_I2C_INSTANCE,
             SI5351A_I2C_ADDR, i2c_buf, (vcnt + 1), false); // addr + data (byte)
 
         if (VERBY[0]) {
             if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
-            else if (res == (1 + (int) vcnt)) Serial.printf("GOOD: res %d after i2cWriten" EOL, res);
+            else if (res == (1 + (int) vcnt)) ; // Serial.printf("GOOD: res %d after i2cWriten" EOL, res);
             else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWriten" EOL, res);
             else Serial.printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
         }
     }
 
 
-    if (VERBY[0]) Serial.printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
+    // if (VERBY[0]) Serial.printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
     return res;
 }
 
@@ -565,9 +565,14 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
     // only if it changes
     if (ms_div != prev_ms_div) {
         prev_ms_div = ms_div;
+
         if (clk_num == 0) si5351a_setup_multisynth0(ms_div);
         // this used to be for setting up the aprs clock on clk_num == 1?
-        else si5351a_setup_multisynth1(ms_div);
+        else {
+            Serial.println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
+            si5351a_setup_multisynth1(ms_div);
+        }
+
         si5351a_reset_PLLB();
     }
     if (VERBY[0]) Serial.printf("vfo_set_freq_x16 END clk_num %u freq %lu" EOL, clk_num, freq);
