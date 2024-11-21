@@ -193,7 +193,6 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
     i2c_buf[1] = val;
 
     int res;
-    if (VERBY[0]) Serial.printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
         Serial.printf("i2cWrRead reserved reg %u", reg);
@@ -201,12 +200,16 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
         res = 127;
     }
     else {
+        if (VERBY[0]) Serial.printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
         // res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false, 1000);
         res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false);
-        if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
-        else if (res == 2) Serial.printf("GOOD: res %d after i2cWrite" EOL, res);
-        else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWrite" EOL, res);
-        else Serial.printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
+
+        if (VERBY[0]) {
+            if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
+            else if (res == 2) Serial.printf("GOOD: res %d after i2cWrite" EOL, res);
+            else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWrite" EOL, res);
+            else Serial.printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
+        }
     }
     if (VERBY[0]) Serial.printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
     return res;
@@ -307,7 +310,6 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
     //     PICO_ERROR_CONNECT_FAILED = -8,
     // };
 
-    if (VERBY[0]) Serial.print(F("i2cWrRead doing i2c_read_blocking" EOL));
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
         Serial.printf("i2cWrRead reserved reg %u", reg);
@@ -315,22 +317,35 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
         res = 127;
     }
     else {
+        if (VERBY[0]) Serial.print(F("i2cWrRead doing i2c_write_blockin then i2c_read_blocking" EOL));
         int res1, res2;
+        // FIX! should these be _timeout_us instead?
         res1 = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, &reg, 1, true);  
         res2 = i2c_read_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 1, false);
-        // res2 = i2c_read_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false, 1000);
         // copy the data we got to val location to return it.
         *val = i2c_buf[0];
 
         // see enums for other errors (all negative) at
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/error_8h_source.html
-        if (res1 == PICO_ERROR_GENERIC || res1 != 1) res = PICO_ERROR_GENERIC;
-        else if (res2 == PICO_ERROR_GENERIC || res2 != 1) res = PICO_ERROR_GENERIC;
-        // good one byte read! both parts
-        else if (res1 == 1 && res2 == 1) res = 1; 
-        else res = PICO_ERROR_GENERIC;
+        // see enums for other errors (all negative) at
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/error_8h_source.html
+        if (res1 == PICO_ERROR_GENERIC || res1 != 1)
+            res = PICO_ERROR_GENERIC;
+        else if (res2 == PICO_ERROR_GENERIC || res2 != 1)
+            res = PICO_ERROR_GENERIC; 
+        else if (res1 == 1 && res2 == 1)
+            res = 1; // good one byte read! both parts
+    }
 
-        if (res!=1) Serial.printf("ERROR: i2cWrRead got bad res %d reg %02x val %02x" EOL, res, reg, *val);
+    if (VERBY[0]) {
+        // cover all - errors above
+        if (res == 127) ; // my decode for reserved
+        else if (res == PICO_ERROR_GENERIC || res < 0)
+            Serial.printf("ERROR: i2cRead() got bad res %d reg %02x val %02x" EOL, res, reg, *val);
+        else if (res==1)
+            Serial.printf("GOOD: i2cRead() got good res %d reg %02x val %02x" EOL, res, reg, *val);
+        else
+            Serial.printf("UNEXPECTED: i2cRead() got unexpected res %d reg %02x val %02x" EOL, res, reg, *val);
     }
 
     if (VERBY[0]) Serial.printf("i2cWrRead END reg %02x val %02x" EOL, reg, *val);
@@ -364,13 +379,17 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     } else {
-        res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
-            SI5351A_I2C_ADDR, i2c_buf, (vcnt + 1), false, 10000);
+        if (VERBY[0]) Serial.printf("i2cWriten doing i2c_write_blocking reg %02x " EOL, reg);
+        // res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
+        res = i2c_write_blocking(VFO_I2C_INSTANCE,
+            SI5351A_I2C_ADDR, i2c_buf, (vcnt + 1), false); // addr + data (byte)
 
-        if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
-        else if (res == (int) vcnt ) Serial.printf("GOOD: res %d after i2cWriten" EOL, res);
-        else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWriten" EOL, res);
-        else Serial.printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
+        if (VERBY[0]) {
+            if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
+            else if (res == (1 + (int) vcnt)) Serial.printf("GOOD: res %d after i2cWriten" EOL, res);
+            else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWriten" EOL, res);
+            else Serial.printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
+        }
     }
 
 
@@ -640,7 +659,8 @@ bool vfo_is_off(void) {
 void vfo_turn_on(uint8_t clk_num) {
     if (VERBY[0]) Serial.printf("vfo_turn_on START clk_num %u" EOL, clk_num);
     // already on successfully
-    if (vfo_is_on()) return;
+    // FIX! ..always turn it on now? for debug
+    // if (vfo_is_on()) return;
 
     vfo_set_power_on(true);
     vfo_turn_on_completed = false;
@@ -681,26 +701,9 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // HACK ..don't iterate
     int tries = 0;
-    while (i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff) < PICO_ERROR_NONE) {
-        tries++;
-        Serial.println("re-initing VFO_I2C_INSTANCE after trying a i2cWrite");
-        Serial.flush();
-
-        i2c_deinit(VFO_I2C_INSTANCE);
-        // sleep_ms(10);
-        busy_wait_us_32(10000);
-
-        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
-        i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
-        gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
-        gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
-        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
-
-        // sleep_ms(10);
-        busy_wait_us_32(10000);
-        if (VERBY[0]) Serial.printf("vfo_turn_on trying to init the I2C0 pins inside loop. tries %d" EOL, tries);
-        Serial.flush();
+    // any error
+    int res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff); 
+    while (res != 2) {
         if (tries > 5) {
             Serial.println("Rebooting because can't init VFO_I2C_INSTANCE after 5 tries");
             Watchdog.enable(1000);  // milliseconds
@@ -709,7 +712,40 @@ void vfo_turn_on(uint8_t clk_num) {
                 updateStatusLED();
             }
         }
+        Watchdog.reset();
+        tries++;
+        Serial.println("VFO_I2C_INSTANCE trying re-init, after trying a i2cWrite and it failed");
+        Serial.flush();
 
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
+        // i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+        Serial.println("i2c_deinit() start");
+        i2c_deinit(VFO_I2C_INSTANCE);
+        Serial.println("i2c_deinit() complete");
+        busy_wait_ms(1000);
+
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
+        Serial.println("i2c_init() start");
+        i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+        Serial.println("i2c_init() complete");
+        busy_wait_ms(1000);
+
+        gpio_pull_up(VFO_I2C0_SDA_PIN);
+        gpio_pull_up(VFO_I2C0_SCL_PIN);
+        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
+        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+        i2c_set_slave_mode(VFO_I2C_INSTANCE, false, 0);
+        busy_wait_ms(1000);
+
+        // power the vfo off/on
+        digitalWrite(Si5351Pwr, HIGH);
+        busy_wait_ms(1000);
+        digitalWrite(Si5351Pwr, LOW);
+        busy_wait_ms(2000);
+
+        if (VERBY[0]) Serial.printf("vfo_turn_on re-iinit the I2C0 pins inside loop. tries %d" EOL, tries);
+        res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff); 
+        Serial.flush();
 
     }
 
@@ -749,7 +785,10 @@ void vfo_turn_on(uint8_t clk_num) {
         }
     }
 
-    freq = (uint32_t) freq << PLL_CALCULATION_PRECISION;
+    // FIX! HACK it to 20M
+    // freq = (uint32_t) freq << PLL_CALCULATION_PRECISION;
+    freq = 14097000UL << PLL_CALCULATION_PRECISION;
+
     vfo_set_freq_x16(clk_num, freq);
 
     si5351bx_clken = 0xff;
@@ -761,6 +800,8 @@ void vfo_turn_on(uint8_t clk_num) {
 //****************************************************
 void vfo_turn_off(void) {
     if (VERBY[0]) Serial.println(F("vfo_turn_off START"));
+    if (VERBY[0]) Serial.println(F("NEVER TURNING VFO OFF (DEBU)"));
+    return;
     // already off successfully?
     if (vfo_is_off()) return;
     vfo_turn_on_completed = false;
@@ -771,14 +812,10 @@ void vfo_turn_off(void) {
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
     // sleep_ms(10);
     busy_wait_us_32(10000);
-
-    // HACK never turn off for now
-    // vfo_set_power_on(false);
-
-    if (false)  {
-        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
-        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
-    }
+    vfo_set_power_on(false);
+    gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
+    gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
+    
     vfo_turn_off_completed = true;
     if (VERBY[0]) Serial.println(F("vfo_turn_off END"));
 }

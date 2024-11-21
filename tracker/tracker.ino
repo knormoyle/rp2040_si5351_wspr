@@ -764,11 +764,14 @@ void setup1() {
     //**********************
     Watchdog.reset();
     vfo_init();
-    // FIX! don't turn off for now 11/18/24
-    // vfo_turn_off();
-    vfo_turn_on(WSPR_TX_CLK_NUM);
-    // FIX! hack for now
-    vfo_set_power_on(true);
+
+    // FIX! HACK it on for now
+    if (true) {
+        vfo_set_power_on(true);
+        // FIX! don't turn off for now 11/18/24
+        // vfo_turn_off();
+        vfo_turn_on(WSPR_TX_CLK_NUM);
+    }
 
 
     //**********************
@@ -1709,7 +1712,7 @@ void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_powe
     if (VERBY[0]) {
         Serial.printf("will start WSPR txNum %d when aligned zero secs, currently %d secs" EOL,
             txNum, second());
-        Serial.printf("WSPR txNum %d Preparing", txNum);
+        Serial.printf("WSPR txNum %d Preparing.." EOL, txNum);
         Serial.printf("hf_grid4: %s", hf_grid4);
     }
     // this should be fine even if we wait a long time

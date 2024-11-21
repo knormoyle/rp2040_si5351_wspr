@@ -129,13 +129,16 @@ void forceHACK(void) {
 
         Serial.println(F("Forcing DEVMODE true, _devmode 1 (always for now)"));
         strncpy(_devmode, "1", sizeof(_devmode));
-        // HACK FIX! always 9 now for debug
+        DEVMODE = true;
 
+        // HACK FIX! always 9 now for debug
         Serial.println(F("Forcing _verbose to 9 (always for now)"));
         strncpy(_verbose, "9", sizeof(_verbose));
+        decodeVERBY();
 
         Serial.println(F("Forcing _go_when_rdy to 1 (always for now)"));
         strncpy(_go_when_rdy, "1", sizeof(_go_when_rdy));
+
     }
 }
 
