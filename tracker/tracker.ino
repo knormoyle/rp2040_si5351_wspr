@@ -302,8 +302,12 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // works
 // see gps_functions.cpp and problems with resetting to 9600 from higher bauds
 // too dangerous to use anything higher than 9600..could get stuck
-// with out vcc plus vbat power cycle.. I can't control vbat when on usb power
-extern const int SERIAL2_BAUD_RATE = 9600;
+// with out vcc plu)s vbat power cycle.. I can't control vbat when on usb power
+
+// current 3 constellations with broadcast restricted, at 9600 baud
+// kind of slow? maybe go back to 19200
+// NMEA AvgCharRateSec 930.0 duration_millis 757 incomingCharCnt 704
+// extern const int SERIAL2_BAUD_RATE = 9600;
 
 // can't seem to restrict burst data
 // with the GLONASS sats
@@ -312,7 +316,7 @@ extern const int SERIAL2_BAUD_RATE = 9600;
 // works going from 9600 to 19200
 // reduced broadcast works now, with 3 constellations
 // 670 chars with 396 ms duration. going back to 9600
-// extern const int SERIAL2_BAUD_RATE = 19200;
+extern const int SERIAL2_BAUD_RATE = 19200;
 
 // it now does the burst in half that time, around 450 milliseconds
 // so this is good..11/18/24
@@ -398,6 +402,8 @@ char t_lon[13] = { 0 };        // 12 bytes
 char t_callsign[7] = { 0 };
 char t_grid6[7] = { 0 };       // 6 bytes
 char t_power[3] = { 0 };       // 2 bytes
+
+char t_hdop[4] = { 0 };        // 3 bytes;
 
 int t_snap_cnt = 0;
 
@@ -1193,7 +1199,7 @@ void loop1() {
         }
         if (!fix_valid || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
             if (VERBY[0])
-                Serial.println(F("loop1() WARN: GPS fix issue ..stale or not valid"));
+                Serial.printf("loop1() WARN: GPS fix issue ..stale or not valid ..fix_age %u" EOL, fix_age);
 
             // these are the waits that give us the long loop times
             // Looping with sleep
@@ -1288,10 +1294,13 @@ void loop1() {
                     Serial.printf("wspr? good alignMinute(-1) and voltageBeforeWSPR %.f" EOL, voltageBeforeWSPR);
                     if (second() > 30) {
                         // to late..don't try to send
-                        Serial.println(F("WARN: wspr no send. passed the needed 30 sec setup in the minute before WSPR should start"));
                         // minute() second() come from Time.h as ints
-                        Serial.printf("WARN: no send, because minute() %d *second() %d* alignMinute(-1) %u" EOL,
+                        Serial.printf("WARN: wspr no send, past 30 secs in pre-minute: minute() %d *second() %d* alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
+                        int SMART_WAIT = (60 - second() + 20);
+                        Serial.printf("will sleepSeconds() 20 secs into the next minute with SMART_WAIT %d" EOL, SMART_WAIT);
+                        sleepSeconds(SMART_WAIT);
+
                     } else {
                         Serial.printf("wspr? wait until 30 secs before the aligned starting minute now: minute() %d *second() %d*" EOL,
                             minute(), second());

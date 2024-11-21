@@ -344,7 +344,7 @@ int i2cRead(uint8_t reg, uint8_t *val) {
         // This is just handling one byte reads. can do more. another function.
         // They want a ptr for the "buffer"..hence &reg
         // works with false, (full stop) also
-        res1 = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, &reg, 1, true);  // errors with true?
+        res1 = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, &reg, 1, true);
         res2 = i2c_read_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 1, false);
         // copy the data we got to val location to return it.
         *val = i2c_buf[0];
@@ -358,7 +358,14 @@ int i2cRead(uint8_t reg, uint8_t *val) {
         else if (res1 == 1 && res2 == 1)
             res = 1; // good one byte read! both parts
         else
-            res = PICO_ERROR_GENERIC;
+            res =     int res;
+    if (reserved_reg(reg)) {
+        // don't want to hang on a reserved reg. so don't send
+        Serial.printf("i2cWrRead reserved reg %u", reg);
+        // make this a unique error to recognize my reserved reg detection
+        res = 127;
+    }
+PICO_ERROR_GENERIC;
     }
     Serial.print(EOL);
     // cover all - errors above

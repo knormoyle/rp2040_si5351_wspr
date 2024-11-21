@@ -3,7 +3,6 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-
 // besides comparing to the arduino library, can compare to:
 // "Multipurpose signal generator with SI5351"
 // https://github.com/pu2clr/SI5351
@@ -77,7 +76,6 @@ static bool vfo_turn_off_completed = false;
 void vfo_init(void) {
     if (VERBY[0]) Serial.println(F("vfo_init START"));
     digitalWrite(VFO_VDD_ON_N_PIN, LOW);
-    return;
 
     // this is also pin 4
     // do the init first
@@ -108,8 +106,8 @@ void vfo_set_power_on(bool turn_on) {
     if (VERBY[0]) Serial.printf("vfo_set_power_on START %u" EOL, turn_on);
     digitalWrite(VFO_VDD_ON_N_PIN, LOW);
     s_is_on = true;
-    return;
 
+    // FIX! 
     // if (turn_on == s_is_on) return;
 
     if ( turn_on) {
@@ -133,25 +131,77 @@ void vfo_set_power_on(bool turn_on) {
     if (VERBY[0]) Serial.printf("vfo_set_power_on END %u" EOL, s_is_on);
 }
 
+//****************************************************
+bool reserved_reg(uint8_t reg) {
+    // hung on read of d7 (215)
+    // hung on read of d8 (216)
+    bool bad = false;
+    switch (reg) {
+        case 4: ;
+        case 5: ;
+        case 6: ;
+        case 7: ;
+        case 8: ;
+        case 10: ;
+        case 11: ;
+        case 12: ;
+        case 13: ;
+        case 14: ;
+        case 173: ;
+        case 174: ;
+        case 175: ;
+        case 176: ;
+        case 178: ;
+        case 179: ;
+        case 180: ;
+        case 181: ;
+        case 182: bad = true; break;
+        // possible range is already constrained to 255 by uint8_t size
+        default: if (reg >= 184) bad = true;
+    }
+    switch (reg) {
+        case 0: ; // has some status bits
+        case 1: ; bad = true; break; // has some status bits
+        // FIX! we should check these rules for bad multisynth?
+        // multisynth3 thru multisynth7 ??
+        // do invalid numbers write ? what happens?
+        // This 8-bit number is the Multisynth6 divide ratio. Multisynth6 divide ratio 
+        // can only be even integers greater than or equal to 6. All other divide values are invalid.
+        // Si5351B and C are 8-outputs. Si5351a we use is only 3. (there is 8 output version) that's why.
+        default: if (reg >= 66 && reg <= 91) bad = true;
+    }
+
+    // also say the reg that don't return exact pattern just written are "reserved"
+    // terms of this test can't just do write than read and compare data.
+    return bad;
+
+}
 
 //****************************************************
 int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
     if (VERBY[0]) Serial.printf("i2cWrite START reg %02x val %02x" EOL, reg, val);
-    return 0;
     // FIX! shouldn't this be local ? or does it setup data for i2cWriten
     // moved here to be local, and not static (shared) anymore
     // only need length 2!
-    uint8_t s_i2c_buf[2];
-    s_i2c_buf[0] = reg;
-    s_i2c_buf[1] = val;
+    uint8_t i2c_buf[2];
+    i2c_buf[0] = reg;
+    i2c_buf[1] = val;
 
     int res;
     if (VERBY[0]) Serial.printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
-    // res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
-    res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false);
-
-    if (res < PICO_ERROR_NONE) {
-        if (VERBY[0]) Serial.printf("I2C write error %d: reg:%02x val:%02x" EOL, res, reg, val);
+    if (reserved_reg(reg)) {
+        // don't want to hang on a reserved reg. so don't send
+        Serial.printf("i2cWrRead reserved reg %u", reg);
+        // make this a unique error to recognize my reserved reg detection
+        res = 127;
+    }
+    else {
+        // res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false, 1000);
+        res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false);
+        if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
+        else if (res == 2) Serial.printf("GOOD: res %d after i2cWrite" EOL, res);
+        else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWrite" EOL, res);
+        else Serial.printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
     }
     if (VERBY[0]) Serial.printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
     return res;
@@ -217,45 +267,76 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
 // }
 
 //****************************************************
-// just reads two byte2
-int i2cReadTest(uint8_t reg, uint8_t val) {  // read reg via i2c
-    if (VERBY[0]) Serial.printf("i2cReadTest START reg %02x val %02x" EOL, reg, val);
-    return 0;
+// do a read like this
+// uint8_t val = 0xaa;
+// static uint8_t reg = 0;
+// res = i2cWrRead(reg, &val) ;
+
+
+// just reads two byte
+// FIX! done need to read a stream of bytes? i2cWrReadn()?
+int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
+    if (VERBY[0]) Serial.printf("i2cWrRead START reg %02x val %02x" EOL, reg, *val);
 
     // FIX! shouldn't this be local ? or does it setup data for i2cWriten
     // moved here to be local, and not static (shared) anymore
     // only need length 2!
-    uint8_t s_i2c_buf[2];
-    s_i2c_buf[0] = reg;
-    s_i2c_buf[1] = 254; // a fixed value that should be overwritten?
+    uint8_t i2c_buf[2];
+    i2c_buf[0] = reg;
+    i2c_buf[1] = 254; // a fixed value that should be overwritten?
 
     // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
-    uint8_t val_orig = val;
     int res;
-    // res = i2c_read_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false, 1000);
-    if (VERBY[0]) Serial.print(F("Doing i2c_read_blocking" EOL));
-    res = i2c_read_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, s_i2c_buf, 2, false);
 
-    if (res!=0) Serial.printf("ERROR: i2cReadTest got bad res %d reg %02x val %02x" EOL, res, reg, val);
-/*
-    else {
-        // https://pschatzmann.github.io/pico-arduino/doc/html/class_pico_hardware_i2_c.html
-        // https://github.com/earlephilhower/arduino-pico/discussions/1059
-        // how are errors passed
-        uint8_t val_new;
-        val_new = readRegister(reg);  // read reg via i2c
-        s_i2c_buf[1] = val_new;
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/error_8h_source.html
+    // enum pico_error_codes {
+    //     PICO_OK = 0,
+    //     PICO_ERROR_NONE = 0,
+    //     PICO_ERROR_TIMEOUT = -1,
+    //     PICO_ERROR_GENERIC = -2,
+    //     PICO_ERROR_NO_DATA = -3,
+    //     PICO_ERROR_NOT_PERMITTED = -4,
+    //     PICO_ERROR_INVALID_ARG = -5,
+    //     PICO_ERROR_IO = -6,
+    //     PICO_ERROR_BADAUTH = -7,
+    //     PICO_ERROR_CONNECT_FAILED = -8,
+    // };
+
+    if (VERBY[0]) Serial.print(F("i2cWrRead doing i2c_read_blocking" EOL));
+    if (reserved_reg(reg)) {
+        // don't want to hang on a reserved reg. so don't send
+        Serial.printf("i2cWrRead reserved reg %u", reg);
+        // make this a unique error to recognize my reserved reg detection
+        res = 127;
     }
-*/
-    val = s_i2c_buf[1];
-    if (VERBY[0]) Serial.printf("i2cReadTest END reg %02x val %02x" EOL, reg, val);
+    else {
+        int res1, res2;
+        res1 = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, &reg, 1, true);  
+        res2 = i2c_read_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 1, false);
+        // res2 = i2c_read_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false, 1000);
+        // copy the data we got to val location to return it.
+        *val = i2c_buf[0];
+
+        // see enums for other errors (all negative) at
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/error_8h_source.html
+        if (res1 == PICO_ERROR_GENERIC || res1 != 1) res = PICO_ERROR_GENERIC;
+        else if (res2 == PICO_ERROR_GENERIC || res2 != 1) res = PICO_ERROR_GENERIC;
+        // good one byte read! both parts
+        else if (res1 == 1 && res2 == 1) res = 1; 
+        else res = PICO_ERROR_GENERIC;
+
+        if (res!=1) Serial.printf("ERROR: i2cWrRead got bad res %d reg %02x val %02x" EOL, res, reg, *val);
+    }
+
+    if (VERBY[0]) Serial.printf("i2cWrRead END reg %02x val %02x" EOL, reg, *val);
     return res;
+    // https://pschatzmann.github.io/pico-arduino/doc/html/class_pico_hardware_i2_c.html
+    // https://github.com/earlephilhower/arduino-pico/discussions/1059
 }
 
 
 //****************************************************
 int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
-    return 0;
     if (VERBY[0]) {
         Serial.printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
         for (uint8_t i = 0; i < vcnt; i++) {
@@ -264,20 +345,29 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
     }
         
     // FIX! shouldn't this be local ? or does it use the data from i2cWrite
-    uint8_t s_i2c_buf[16];
+    uint8_t i2c_buf[16];
     // moved here to be local, and not static (shared) anymore
-    s_i2c_buf[0] = reg;
+    i2c_buf[0] = reg;
 
     // because of the large vcnt, the buf is length 16?
-    memcpy(&s_i2c_buf[1], vals, vcnt);
+    memcpy(&i2c_buf[1], vals, vcnt);
 
     int res;
-    res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
-        SI5351A_I2C_ADDR, s_i2c_buf, (vcnt + 1), false, 10000);
+    if (reserved_reg(reg)) {
+        // don't want to hang on a reserved reg. so don't send
+        Serial.printf("i2cWrRead reserved reg %u", reg);
+        // make this a unique error to recognize my reserved reg detection
+        res = 127;
+    } else {
+        res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
+            SI5351A_I2C_ADDR, i2c_buf, (vcnt + 1), false, 10000);
 
-    if (res < PICO_ERROR_NONE) {
-        if (VERBY[0]) Serial.printf("I2C error %d: reg:%02x" EOL, res, reg);
+        if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
+        else if (res == (int) vcnt ) Serial.printf("GOOD: res %d after i2cWriten" EOL, res);
+        else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWriten" EOL, res);
+        else Serial.printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
     }
+
 
     if (VERBY[0]) Serial.printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
     return res;
@@ -307,7 +397,6 @@ static uint8_t s_vfo_drive_strength[3];
 // FIX! removed static. hmm maybe add back..should only call from this file?
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     if (VERBY[0]) Serial.printf("si5351a_setup_PLLB START mult %u num %lu denom %lu" EOL, mult, num, denom);
-    return;
 
     static uint8_t s_regs_prev[8];
 
@@ -357,10 +446,8 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
 // removed static
 void si5351a_setup_multisynth0(uint32_t div) {
     if (VERBY[0]) Serial.printf("si5351a_setup_multisynth0 START div %lu" EOL, div);
-    return;
 
     uint32_t p1 = 128 * div - 512;
-
     s_regs[0] = 0;
     s_regs[1] = 1;
     s_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
@@ -391,10 +478,8 @@ void si5351a_setup_multisynth0(uint32_t div) {
 //****************************************************
 void si5351a_setup_multisynth1(uint32_t div) {
     if (VERBY[0]) Serial.printf("si5351a_setup_multisynth1 START div %lu" EOL, div);
-    return;
 
     uint32_t p1 = 128 * div - 512;
-
     s_regs[0] = 0;
     s_regs[1] = 1;
     s_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
@@ -425,7 +510,6 @@ void si5351a_setup_multisynth1(uint32_t div) {
 //****************************************************
 // we don't user PLLA ?
 void si5351a_reset_PLLB(void) {
-    return;
     i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
     if (VERBY[0]) Serial.println(F("si5351a_reset_PLLB END"));
 }
@@ -433,7 +517,6 @@ void si5351a_reset_PLLB(void) {
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
-    return;
     if (VERBY[0]) Serial.printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
     const int PLL_MAX_FREQ  = 900000000;
     const int PLL_MIN_FREQ  = 600000000;
@@ -470,10 +553,8 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
 static uint8_t  si5351bx_clken = 0xff;
 void vfo_turn_on_clk_out(uint8_t clk_num) {
     if (VERBY[0]) Serial.printf("vfo_turn_on_clk_out START clk_num %u" EOL, clk_num);
-    return;
 
     uint8_t enable_bit = 1 << clk_num;
-
     // #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
     if (clk_num == 0) {
         enable_bit |= 1 << 1;
@@ -486,7 +567,6 @@ void vfo_turn_on_clk_out(uint8_t clk_num) {
 
 void vfo_turn_off_clk_out(uint8_t clk_num) {
     if (VERBY[0]) Serial.println(F("vfo_turn_off_clk_out START"));
-    return;
     uint8_t enable_bit = 1 << clk_num;
     // always now
     // #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
@@ -502,7 +582,6 @@ void vfo_turn_off_clk_out(uint8_t clk_num) {
 //****************************************************
 void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     if (VERBY[0]) Serial.printf("vfo_set_drive_strength START clk_num %u" EOL, clk_num);
-    return;
     // only called during the initial vfo_turn_on()
     s_vfo_drive_strength[clk_num] = strength;
     // reset the prev_ms_div to force vfo_set_freq_x16()
@@ -556,7 +635,6 @@ bool vfo_is_off(void) {
 void vfo_turn_on(uint8_t clk_num) {
     if (VERBY[0]) Serial.printf("vfo_turn_on START clk_num %u" EOL, clk_num);
     vfo_set_power_on(true);
-    return;
 
     // already on successfully
     if (vfo_is_on()) return;

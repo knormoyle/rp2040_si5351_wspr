@@ -28,6 +28,7 @@ extern char t_temp_ext[8];    // 7 bytes
 extern char t_humidity[8];    // 7 bytes
 extern char t_voltage[6];     // 5 bytes
 extern char t_sat_count[3];   // 2 bytes
+extern char t_hdop[4];        // 3 bytes
 
 // lat/lon precision: How much to store
 // https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
@@ -171,6 +172,11 @@ void snapForTelemetry(void) {
     if (voltage < 0) voltage = 0;
     if (voltage > 99.99) voltage = 99.99;
     snprintf(t_voltage, sizeof(t_voltage), "%5.2f", voltage);
+
+    int hdop = gps.hdop.isValid() ? (int) gps.hdop.value() : 0;
+    if (hdop < 0) hdop = 0; // hundredths. < 100 is very good
+    if (hdop > 999) hdop = 999;
+    snprintf(t_hdop, sizeof(t_hdop), "%3d", hdop);
 
     int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
     if (sat_count < 0) sat_count = 0;
