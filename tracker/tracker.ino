@@ -1536,7 +1536,7 @@ void PWM4_Handler(void) {
 }
 
 void zeroTimerSetPeriodMs(float ms) {
-    if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
+    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
     static pwm_config wspr_pwm_config = pwm_get_default_config();
 
     pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS
@@ -1548,7 +1548,7 @@ void zeroTimerSetPeriodMs(float ms) {
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
     pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
-    if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() END"));
+    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() END"));
 }
 
 //***********************************************************
@@ -1608,6 +1608,10 @@ bool alignMinute(int offset) {
     }
 
     // this should have been only set to be char strs 0, 2, 4, 6, or 8
+    // this it the channel config minute to align to, plus an offset
+    // we only use offsets -1, 0, 2, 4, 6
+    // the telemetry and other prep is al done during -1.
+    // the u4b channel minutes should all be 
     int align_minute = atoi(_start_minute);
     switch (align_minute) {
         case 0: {;}
@@ -1615,17 +1619,21 @@ bool alignMinute(int offset) {
         case 4: {;}
         case 6: {;}
         case 8: align_minute = (align_minute + offset) % 10; break;
-        default: align_minute = 0;
+        default: 
+            if (VERBY[0]) {
+                Serial.printf("ERROR: Illegal align_minute %d coming out of config for u4b channel" EOL, align_minute);
+                align_minute = 0;
+            }
     }
 
-    // FIX! update to look at u4b channel config
-    aligned = (minute() % 10) == align_minute;
     if (_go_when_rdy[0] == '1') {
-        // any odd minute
-        if (offset == -1) aligned = (minute() % 2) == 1;
-        // any even minute
+        // any odd minute for any odd offset (including -1)
+        if ((abs(offset) % 2) == 1) aligned = (minute() % 2) == 1;
+        // any even minute for any even offset
         else aligned = (minute() % 2) == 0;
-        // telemetry buffer is also updated whenever if _go_when_ready
+    }
+    else {
+        aligned = (minute() % 10) == align_minute;
     }
     return aligned;
 }
@@ -1644,8 +1652,13 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
     }
 
     // FIX! use the u4b channel freq
-    uint32_t hf_freq = XMIT_FREQUENCY;
-    if (atoi(_correction) != 0) {
+    // uint32_t hf_freq = XMIT_FREQUENCY;
+    // hack! in si53531_functions.cpp also
+    uint32_t hf_freq = 14097000UL ;
+
+
+    // FIX! disabled for now
+    if (false and atoi(_correction) != 0) {
         // this will be a floor divide
         // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
         hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
@@ -1675,6 +1688,7 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
         // PWM handler sets proceed?
         proceed = false;
         while (!proceed) {
+            ;
             // whenever we have spin loops we need to updateStatusLED()
             // the latency to decide if we had to do anything, and do it if we do
             // must be pretty small, so that it's okay that it introduces variance here
@@ -1713,7 +1727,9 @@ void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_powe
         Serial.printf("will start WSPR txNum %d when aligned zero secs, currently %d secs" EOL,
             txNum, second());
         Serial.printf("WSPR txNum %d Preparing.." EOL, txNum);
-        Serial.printf("hf_grid4: %s" EOL, hf_grid4);
+        Serial.printf("hf_callsign %s" EOL, hf_callsign);
+        Serial.printf("hf_grid4 %s" EOL, hf_grid4);
+        Serial.printf("hf_power %s" EOL, hf_power);
     }
     // this should be fine even if we wait a long time
     int i = 2 * txNum;  // 0, 2, 4, 6
@@ -1732,9 +1748,10 @@ void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_powe
 
 //**********************************
 void set_tx_buffer(char *hf_callsign, char *hf_loc, uint8_t hf_power, uint8_t *tx_buffer) {
-    Serial.println(F("set_tx_buffer() START"));
+    // if VERBY[0] Serial.println(F("set_tx_buffer() START"));
     // Clear out the transmit buffer
     memset(tx_buffer, 0, 255);  // is this bigger than WSPR_SYMBOL_COUNT ?
+
     // Set the proper frequency and timer CTC
     // legalPower = [0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60]
 
@@ -1755,9 +1772,10 @@ void set_tx_buffer(char *hf_callsign, char *hf_loc, uint8_t hf_power, uint8_t *t
     */
     // hf_power needs to be passed as uint8_t
     jtencode.wspr_encode(hf_callsign, hf_loc, hf_power, tx_buffer);
+
     // maybe useful python for testing wspr encoding
     // https://github.com/robertostling/wspr-tools/blob/master/README.md
-    Serial.println(F("set_tx_buffer() END"));
+    // if VERBY[0] Serial.println(F("set_tx_buffer() END"));
 }
 
 void freeMem() {

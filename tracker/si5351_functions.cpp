@@ -420,7 +420,7 @@ static uint8_t s_vfo_drive_strength[3];
 //****************************************************
 // FIX! removed static. hmm maybe add back..should only call from this file?
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
-    if (VERBY[0]) Serial.printf("si5351a_setup_PLLB START mult %u num %lu denom %lu" EOL, mult, num, denom);
+    // if (VERBY[0]) Serial.printf("si5351a_setup_PLLB START mult %u num %lu denom %lu" EOL, mult, num, denom);
 
     static uint8_t s_regs_prev[8];
 
@@ -462,7 +462,7 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     uint8_t len = end - start + 1;
     i2cWriten(reg, &s_regs[start], len);
     *((uint64_t *)s_regs_prev) = *((uint64_t *)s_regs);
-    if (VERBY[0]) Serial.printf("si5351a_setup_PLLB END mult %u num %lu denom %lu" EOL, mult, num, denom);
+    // if (VERBY[0]) Serial.printf("si5351a_setup_PLLB END mult %u num %lu denom %lu" EOL, mult, num, denom);
 }
 
 //****************************************************
@@ -541,7 +541,7 @@ void si5351a_reset_PLLB(void) {
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
-    if (VERBY[0]) Serial.printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
+    // if (VERBY[0]) Serial.printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
     const int PLL_MAX_FREQ  = 900000000;
     const int PLL_MIN_FREQ  = 600000000;
 
@@ -575,7 +575,7 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
 
         si5351a_reset_PLLB();
     }
-    if (VERBY[0]) Serial.printf("vfo_set_freq_x16 END clk_num %u freq %lu" EOL, clk_num, freq);
+    // if (VERBY[0]) Serial.printf("vfo_set_freq_x16 END clk_num %u freq %lu" EOL, clk_num, freq);
 }
 
 //****************************************************
@@ -702,7 +702,7 @@ void vfo_turn_on(uint8_t clk_num) {
     // output 7MHz on CLK0
     uint8_t reg;
     // Disable all CLK output drivers
-    if (VERBY[0]) Serial.print(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
+    if (VERBY[0]) Serial.println(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
 
     // HACK ..don't iterate
     int tries = 0;
