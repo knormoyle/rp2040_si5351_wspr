@@ -1654,7 +1654,12 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
     // FIX! use the u4b channel freq
     // uint32_t hf_freq = XMIT_FREQUENCY;
     // hack! in si53531_functions.cpp also
-    uint32_t hf_freq = 14097000UL ;
+
+    // why is this 1000 hz up from the vfo_init freuency?
+    // what's the relationship of this to the u4b channel freq
+    // okay it's same as the vfo init?
+    // this should be middle of the passband?
+    uint32_t hf_freq = 14097100UL;
 
 
     // FIX! disabled for now
@@ -1707,14 +1712,12 @@ void sendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool
     irq_remove_handler(PWM_IRQ_WRAP, PWM4_Handler);
 
     // FIX! leave on if we're going to do more telemetry?
-    if (vfoOffWhenDone) {
-        // 11/18/24 kevin
-        // FIX! for now don't turn it off!
-        // vfo_turn_off();
+    // or always turn off?
+    if (true || vfoOffWhenDone) {
+        vfo_turn_off();
     }
     Watchdog.reset();
     if (VERBY[0]) Serial.println(F("sendWSPR() END"));
-    // Serial.println(F(__func__ " END"));
 }
 
 void syncAndSendWspr(int txNum, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
