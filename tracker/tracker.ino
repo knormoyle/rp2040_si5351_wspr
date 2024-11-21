@@ -546,7 +546,7 @@ void setup() {
         user_interface();
         // won't return here, since all exits from user_interface reboot
     }
-    freeMem();
+    // freeMem();
     Serial.print(F(EOL "SETUP() ..LEAVING SETUP() AFTER NOT SEEING Serial.available()" EOL EOL));
 
 }
@@ -758,9 +758,11 @@ void setup1() {
     // if (!stdio_init_all()) Serial.println("ERROR: stdio_init_all() failed)");
 
     //**********************
+    Watchdog.reset();
     adc_INIT();
 
     //**********************
+    Watchdog.reset();
     vfo_init();
     // FIX! don't turn off for now 11/18/24
     // vfo_turn_off();
@@ -821,6 +823,7 @@ void setup1() {
     // default pins for Wire 1 are SDA=26 SCL=27 ..wants to be our ISC0
     // default pins for Wire 0 are SDA=4 SCL=5 (our ISC1 for the BMP)
 
+    Watchdog.reset();
     GpsINIT(); // also turns on and checks for output
     GpsOFF();
 
@@ -839,6 +842,7 @@ void setup1() {
     // not always right. but loop will self-correct?
 
     if (!Serial) {
+        Serial.println("Why can't we see Serial from setup1()..rebooting");
         setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
         // we're going to have to reboot..even balloon needs Serial created?
         // if serial data output buf is full, we just overflow it (on balloon)
@@ -1199,7 +1203,7 @@ void loop1() {
         }
         if (!fix_valid || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
             if (VERBY[0])
-                Serial.printf("loop1() WARN: GPS fix issue ..stale or not valid ..fix_age %u" EOL, fix_age);
+                Serial.printf("loop1() WARN: GPS fix issue ..stale or not valid ..fix_age %lu" EOL, fix_age);
 
             // these are the waits that give us the long loop times
             // Looping with sleep

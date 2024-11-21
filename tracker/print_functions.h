@@ -26,11 +26,11 @@ void yPrintln(const char* pformat, ...);
 
 //***********************************************
 // this is another compile option
-#define USE_SPECIAL_ASCII
+#define USE_SPECIAL_ASCII 0
 
 // ANSI escape codes for color
 // arduino ide serial monitor won't interpret these..don't send them
-#ifdef USE_SPECIAL_ASCII
+#if USE_SPECIAL_ASCII == 1
 #define RED "\x1b[91m"
 #define BRIGHT "\x1b[97m"
 #define NORMAL "\x1b[37m"

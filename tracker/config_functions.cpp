@@ -185,7 +185,6 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
             }
         }
         Serial.flush();
-        // fflush(stdout);
         // whenever something might have taken a long time like printing the big buffer
         updateStatusLED();
     }

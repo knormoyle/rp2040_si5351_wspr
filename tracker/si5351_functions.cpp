@@ -17,6 +17,7 @@
 #include "defines.h"
 #include "si5351_functions.h"
 #include "print_functions.h"
+#include "led_functions.h"
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
@@ -40,7 +41,6 @@ extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 
 extern const int Si5351Pwr;
-extern const int VFO_VDD_ON_N_PIN;
 // FIX! are these just used on the Wire.begin?
 extern const int VFO_I2C0_SDA_PIN;
 extern const int VFO_I2C0_SCL_PIN;
@@ -75,7 +75,6 @@ static bool vfo_turn_off_completed = false;
 // removed static
 void vfo_init(void) {
     if (VERBY[0]) Serial.println(F("vfo_init START"));
-    digitalWrite(VFO_VDD_ON_N_PIN, LOW);
 
     // this is also pin 4
     // do the init first
@@ -83,18 +82,18 @@ void vfo_init(void) {
     // turn ON VFO VDD
     // pin 4 ?
     pinMode(Si5351Pwr, OUTPUT);
+    // FIX! remove pull_up to save power:w
+
     gpio_pull_up(Si5351Pwr);
     gpio_put(Si5351Pwr, 0);
 
     // FIX! does Wire.begin() take care of this?
-    if (false) {
-        // init I2C0 for VFO
-        i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
-        gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
-        gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
-        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
-    }
+    // init I2C0 for VFO
+    i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+    gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
+    gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
+    gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
 
     if (VERBY[0]) Serial.println(F("vfo_init END"));
 }
@@ -104,21 +103,26 @@ void vfo_init(void) {
 void vfo_set_power_on(bool turn_on) {
     static bool s_is_on = false;
     if (VERBY[0]) Serial.printf("vfo_set_power_on START %u" EOL, turn_on);
-    digitalWrite(VFO_VDD_ON_N_PIN, LOW);
-    s_is_on = true;
+    Serial.flush();
 
     // FIX! 
     // if (turn_on == s_is_on) return;
 
     if ( turn_on) {
-        Serial.printf("set VDD_ON_N_PIN %d LOW (power on)" EOL, VFO_VDD_ON_N_PIN);
-        digitalWrite(VFO_VDD_ON_N_PIN, LOW);
+        Serial.printf("set Si5351Pwr %d LOW (power on) before" EOL, Si5351Pwr);
+        Serial.println("power on Si5351");
+        gpio_init(Si5351Pwr);
+        pinMode(Si5351Pwr, OUTPUT_4MA);
+        digitalWrite(Si5351Pwr, LOW);
+        Serial.printf("set Si5351Pwr %d LOW (power on) after" EOL, Si5351Pwr);
     } else {
-        // Serial.printf("set VDD_ON_N_PIN %d HIGH (power off)" EOL, VFO_VDD_ON_N_PIN);
-        digitalWrite(VFO_VDD_ON_N_PIN, HIGH);
+        // Serial.printf("set VDD_ON_N_PIN %d HIGH (power off)" EOL, Si5351Pwr);
+        digitalWrite(Si5351Pwr, HIGH);
         // HACK..don't ever turn off!
-        Serial.printf("IGNORING (power stays on) ..set VDD_ON_N_PIN %d HIGH (power off)" EOL, VFO_VDD_ON_N_PIN);
+        Serial.printf("IGNORING (power stays on) ..set VDD_ON_N_PIN %d HIGH (power off)" EOL, Si5351Pwr);
     }
+    Serial.flush();
+    Serial.println("After Serial.flush()");
 
     // always just turn it on!
     s_is_on = turn_on;
@@ -126,9 +130,10 @@ void vfo_set_power_on(bool turn_on) {
     // FIX! kevin 11/18/24
     // huh? don't change the direction when it's on vs off
     // we can just read the level
-    // gpio_set_dir(VFO_VDD_ON_N_PIN, (turn_on ? GPIO_OUT : GPIO_IN));
+    // gpio_set_dir(Si5351Pwr, (turn_on ? GPIO_OUT : GPIO_IN));
 
     if (VERBY[0]) Serial.printf("vfo_set_power_on END %u" EOL, s_is_on);
+    Serial.flush();
 }
 
 //****************************************************
@@ -617,15 +622,15 @@ bool vfo_is_on(void) {
     // gpio	GPIO number
     // Returns
     // true if the GPIO output level is high, false if low.
-    // return (!gpio_get_out_level(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
-    return (!gpio_get(VFO_VDD_ON_N_PIN) && vfo_turn_on_completed);
+    // return (!gpio_get_out_level(Si5351Pwr) && vfo_turn_on_completed);
+    return (!gpio_get(Si5351Pwr) && vfo_turn_on_completed);
 }
 
 //****************************************************
 bool vfo_is_off(void) {
     // power on and completed successfully
-    // return (gpio_is_dir_out(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
-    return (gpio_get(VFO_VDD_ON_N_PIN) && vfo_turn_off_completed);
+    // return (gpio_is_dir_out(Si5351Pwr) && vfo_turn_off_completed);
+    return (gpio_get(Si5351Pwr) && vfo_turn_off_completed);
 }
 
 // what is vfo_clk2 ? is that another PLL? is that used for calibration?
@@ -634,10 +639,10 @@ bool vfo_is_off(void) {
 //****************************************************
 void vfo_turn_on(uint8_t clk_num) {
     if (VERBY[0]) Serial.printf("vfo_turn_on START clk_num %u" EOL, clk_num);
-    vfo_set_power_on(true);
-
     // already on successfully
     if (vfo_is_on()) return;
+
+    vfo_set_power_on(true);
     vfo_turn_on_completed = false;
     vfo_turn_off_completed = false;
     // sets state to be used later
@@ -657,7 +662,6 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // kevin 11/18/24
     Watchdog.reset();
-
     sleep_ms(5000);
 
     // too big a wait
@@ -676,28 +680,37 @@ void vfo_turn_on(uint8_t clk_num) {
     if (VERBY[0]) Serial.print(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
 
     // HACK ..don't iterate
-    if (false) {
-        i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff);
-    } else {
-        while (i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff) < PICO_ERROR_NONE) {
-            i2c_deinit(VFO_I2C_INSTANCE);
-            // sleep_ms(10);
-            busy_wait_us_32(10000);
+    int tries = 0;
+    while (i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff) < PICO_ERROR_NONE) {
+        tries++;
+        Serial.println("re-initing VFO_I2C_INSTANCE after trying a i2cWrite");
+        Serial.flush();
 
-            // does Wire deal with all of this?
-            if (false) {
-                // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
-                i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
-                gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
-                gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
-                gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-                gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+        i2c_deinit(VFO_I2C_INSTANCE);
+        // sleep_ms(10);
+        busy_wait_us_32(10000);
+
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
+        i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+        gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
+        gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
+        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
+        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+
+        // sleep_ms(10);
+        busy_wait_us_32(10000);
+        if (VERBY[0]) Serial.printf("vfo_turn_on trying to init the I2C0 pins inside loop. tries %d" EOL, tries);
+        Serial.flush();
+        if (tries > 5) {
+            Serial.println("Rebooting because can't init VFO_I2C_INSTANCE after 5 tries");
+            Watchdog.enable(1000);  // milliseconds
+            for (;;) {
+                // FIX! put a bad status in the leds
+                updateStatusLED();
             }
-
-            // sleep_ms(10);
-            busy_wait_us_32(10000);
-            if (VERBY[0]) Serial.print(F("vfo_turn_on trying to init the I2C0 pins inside loop" EOL));
         }
+
+
     }
 
     if (VERBY[0]) Serial.print(F("vfo_turn_on done trying to init the I2C0 pins in loop" EOL));
