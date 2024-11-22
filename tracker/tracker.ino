@@ -1407,8 +1407,7 @@ void alignAndDoAllSequentialTx (void) {
         return;
     }
 
-    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute() %d second() %d" EOL,
-        minute(), second());
+    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute() %d second() %d" EOL, minute(), second());
     while (second() < 30)  {
         Watchdog.reset();
         delay(5); // 5 millis
@@ -1416,8 +1415,7 @@ void alignAndDoAllSequentialTx (void) {
         updateStatusLED();
     }
 
-    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute() %d second() %d" EOL,
-        minute(), second());
+    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute() %d second() %d" EOL, minute(), second());
     // don't want gps power and tx power together
     GpsOFF();
 
@@ -1458,32 +1456,36 @@ void alignAndDoAllSequentialTx (void) {
 
     Watchdog.reset();
     // will sync up to the right minute and second == 0
-    syncAndSendWspr(hf_freq, hf_tx_buffer, 0, hf_callsign, hf_grid4, hf_power, false);
     if (VERBY[0]) {
-        tx_cnt_0 += 1;
-        // we have 10 secs or so at the end of WSPR to get this off?
-        if (VERBY[0]) {
-            StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d",
-                minute(), second());
-            DoLogPrint();  // we might have to delay this?
-        }
+        Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
+        Serial.printf("hf_callsign %s" EOL, hf_callsign);
+        Serial.printf("hf_grid4 %s" EOL, hf_grid4);
+        Serial.printf("hf_power %s" EOL, hf_power);
     }
+    syncAndSendWspr(hf_freq, hf_tx_buffer, 0, hf_callsign, hf_grid4, hf_power, false);
+    tx_cnt_0 += 1;
+    // we have 10 secs or so at the end of WSPR to get this off?
+    if (VERBY[0]) StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d", minute(), second());
+    
     // we don't loop around again caring about gps fix, because we've saved
     // telemetry (and sensor data in there) right before the callsign tx
     setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
 
     // output: modifies globals: hf_callsign, hf_grid4, hf_power
-    u4b_encode_std(hf_callsign, hf_grid6, hf_power, t_grid6, t_altitude, t_temp, t_voltage, t_speed);
+    // FIX! check that we have time for these prints at the end of each wspr tx, before the next
+    Serial.printf("WSPR txNum %d Preparing with u4b_encode_std().." EOL, txNum);
+    Serial.flush();
+    u4b_encode_std(hf_callsign, hf_grid4, hf_power, t_grid6, t_altitude, t_temp, t_voltage, t_speed);
+    Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
+    Serial.printf("hf_callsign %s" EOL, hf_callsign);
+    Serial.printf("hf_grid4 %s" EOL, hf_grid4);
+    Serial.printf("hf_power %s" EOL, hf_power);
+    Serial.flush();
     syncAndSendWspr(hf_freq, hf_tx_buffer, 1, hf_callsign, hf_grid4, hf_power, false);
-    if (VERBY[0]) {
-        tx_cnt_1 += 1;
-        // we have 10 secs or so at the end of WSPR to get this off?
-        if (VERBY[0]) {
-            StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d",
-                minute(), second());
-            DoLogPrint();  // we might have to delay this?
-        }
-    }
+    tx_cnt_1 += 1;
+    // we have 10 secs or so at the end of WSPR to get this off?
+    if (VERBY[0]) StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d", minute(), second());
+    
     // have to send this if telen1 or telen2 is enabled
     if ( (_TELEN_config[0] != '-' || _TELEN_config[1] != '-') ||
          (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
@@ -1493,36 +1495,38 @@ void alignAndDoAllSequentialTx (void) {
         // output: modifies globals: hf_callsign, hf_grid4, hf_power
         // unint32_t globals? could be just int? don't use full range
         // input: TELEN1_val1/2 are ints?
+        Serial.printf("WSPR txNum %d Preparing with u4b_encode_telen().." EOL, txNum);
+        Serial.flush();
         u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false);
+        Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
+        Serial.printf("hf_callsign %s" EOL, hf_callsign);
+        Serial.printf("hf_grid4 %s" EOL, hf_grid4);
+        Serial.printf("hf_power %s" EOL, hf_power);
+        Serial.flush();
         syncAndSendWspr(hf_freq, hf_tx_buffer, 2, hf_callsign, hf_grid4, hf_power, false);
-        if (VERBY[0]) {
-            tx_cnt_2 += 1;
-            // we have 10 secs or so at the end of WSPR to get this off?
-            if (VERBY[0]) {
-                StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d",
-                    minute(), second());
-                DoLogPrint();  // we might have to delay this?
-            }
-        }
+        tx_cnt_2 += 1;
+        if (VERBY[0]) StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d", minute(), second());
     }
     // have to send this if telen2 is enabled
     if ( (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEN2);
         // output: modifies globals: hf_callsign, hf_grid4, hf_power
         // input: TELEN2_val1/2 are ints?
+        Serial.printf("WSPR txNum %d Preparing with u4b_encode_telen().." EOL, txNum);
+        Serial.flush();
         u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false);
+        Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
+        Serial.printf("hf_callsign %s" EOL, hf_callsign);
+        Serial.printf("hf_grid4 %s" EOL, hf_grid4);
+        Serial.printf("hf_power %s" EOL, hf_power);
+        Serial.flush();
         syncAndSendWspr(hf_freq, hf_tx_buffer, 3, hf_callsign, hf_grid4, hf_power, true);
-        if (VERBY[0]) {
-            tx_cnt_3 += 1;
-            // we have 10 secs or so at the end of WSPR to get this off?
-            if (VERBY[0]) {
-                StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d",
-                    minute(), second());
-                DoLogPrint();  // we might have to delay this?
-            }
-        }
+        tx_cnt_3 += 1;
+        // we have 10 secs or so at the end of WSPR to get this off?
+        if (VERBY[0]) StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d", minute(), second());
     }
 
+    DoLogPrint();  // we might have to delay this?
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     GpsON(false);  // no gps cold reset
 
@@ -1549,11 +1553,9 @@ void PWM4_Handler(void) {
 void zeroTimerSetPeriodMs(float ms) {
     // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
     static pwm_config wspr_pwm_config = pwm_get_default_config();
-
     pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS
     pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)ms - 1));
     pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
-
     irq_set_exclusive_handler(PWM_IRQ_WRAP, PWM4_Handler);
     irq_set_enabled(PWM_IRQ_WRAP, true);
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
@@ -1724,15 +1726,6 @@ void syncAndSendWspr(uint32_t hf_freq, uint8_t *hf_tx_buffer, int txNum, char *h
     if (txNum < 0 || txNum > 3) txNum = 0;
     // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
     // we turned the vfo on in the minute before 0, separately
-
-    if (VERBY[0]) {
-        Serial.printf("will start WSPR txNum %d when aligned zero secs, currently %d secs" EOL,
-            txNum, second());
-        Serial.printf("WSPR txNum %d Preparing.." EOL, txNum);
-        Serial.printf("hf_callsign %s" EOL, hf_callsign);
-        Serial.printf("hf_grid4 %s" EOL, hf_grid4);
-        Serial.printf("hf_power %s" EOL, hf_power);
-    }
 
     // now encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
     // FIX! replace all atoi() because of no error handling defn. for atoi()
