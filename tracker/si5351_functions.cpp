@@ -792,7 +792,12 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // FIX! HACK it to 20M
     // freq = (uint32_t) freq << PLL_CALCULATION_PRECISION;
+    // this is what it was?
     freq = 14097000UL << PLL_CALCULATION_PRECISION;
+    // should it be this from tracker.ino?
+    freq = 14097100UL << PLL_CALCULATION_PRECISION;
+
+
 
     vfo_set_freq_x16(clk_num, freq);
 
@@ -805,8 +810,8 @@ void vfo_turn_on(uint8_t clk_num) {
 //****************************************************
 void vfo_turn_off(void) {
     if (VERBY[0]) Serial.println(F("vfo_turn_off START"));
-    if (VERBY[0]) Serial.println(F("NEVER TURNING VFO OFF (DEBU)"));
-    return;
+    // if (VERBY[0]) Serial.println(F("NEVER TURNING VFO OFF (DEBU)"));
+    // return;
     // already off successfully?
     if (vfo_is_off()) return;
     vfo_turn_on_completed = false;
@@ -818,9 +823,9 @@ void vfo_turn_off(void) {
     // sleep_ms(10);
     busy_wait_us_32(10000);
     vfo_set_power_on(false);
+    // disable the i2c
     gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
-    
     vfo_turn_off_completed = true;
     if (VERBY[0]) Serial.println(F("vfo_turn_off END"));
 }

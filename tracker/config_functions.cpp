@@ -368,7 +368,7 @@ void do_i2c_scan_tests(void) {
         // in i2c_functions.cpp
         i2c_scanner_setup();
     } else {
-        
+
         // FIX! should I do readback/compare on the first couple
         // writes? to make sure the vfo is powered on and the writes complete?
         // pass the read back for the compare? or pass a bool back for pass/fail
@@ -474,10 +474,7 @@ void user_interface(void) {
         // make char capital either way
         if (c_char > 90) c_char -= 32;
 
-        // regenerated from _clock_speed below
-        uint32_t clkhz = 0;
         // FIX! can we case the int32_t to char. we might lost data with the cast
-
         switch ( c_char ) {
             case '/':
                 Serial.print(F("Rebooting to bootloader mode..drag/drop a uf2 per normal\r\n"));
@@ -515,29 +512,28 @@ void user_interface(void) {
             case 'K':
                 get_user_input("Enter clock speed (100-250): ", _clock_speed, sizeof(_clock_speed));
                 write_FLASH();
-                clkhz = atoi(_clock_speed) * 1000000UL;
                 // frequencies like 205 mhz will PANIC,
                 // System clock of 205000 kHz cannot be exactly achieved
                 // should detect the failure and change the nvram, otherwise we're stuck even on reboot
                 // this is the only config where we don't let something bad get into flash
                 // don't change the pll, just check. change it on reboot
                 if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
-                    Serial.printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s",
-                        RED, _TELEN_config, NORMAL);
+                    Serial.printf(EOL "_clock_speed %s not supported/legal, initting to " DEFAULT_PLL_SYS_MHZ_STRING EOL, _clock_speed);
                     // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
                     // recommends to always
                     // snprintf(buffer, sizeof(buffer), "%s", string);
                     // I guess this is okay for when we source from fixed size string literals
-                    snprintf(_clock_speed, sizeof(_clock_speed), "133");
+                    snprintf(_clock_speed, sizeof(_clock_speed), DEFAULT_PLL_SYS_MHZ_STRING);
                     write_FLASH();
-                    clkhz = atoi(_clock_speed) * 1000000UL;
+                    PLL_SYS_MHZ = atoi(_clock_speed) * 1000000UL;
                 }
-                if (!set_sys_clock_khz(clkhz / kHz, false)) {
-                    Serial.printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
-                        RED, PLL_SYS_MHZ, NORMAL);
-                    snprintf(_clock_speed, sizeof(_clock_speed), "133");
+
+                if (!set_sys_clock_khz(PLL_SYS_MHZ / kHz, false)) {
+                    Serial.printf(EOL "RP2040 can't change clock to %luMhz. Using" \
+                        DEFAULT_PLL_SYS_MHZ_STRING " instead" EOL, PLL_SYS_MHZ);
+                    snprintf(_clock_speed, sizeof(_clock_speed), "%s", DEFAULT_PLL_SYS_MHZ_STRING);
                     write_FLASH();
-                    clkhz = atoi(_clock_speed) * 1000000UL;
+                    PLL_SYS_MHZ = atoi(_clock_speed) * 1000000UL;
                 }
                 break;
             case 'A':
@@ -864,21 +860,22 @@ int check_data_validity_and_set_defaults(void) {
     // clock gets fixed, then the defaults will get fixed (where errors exist)
     // be sure to null terminate
     if (_clock_speed[0] == 0 || atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
-        Serial.printf("%s\n_clock_speed %s is not supported/legal, initting to 133\n%s",
-            RED, _clock_speed, NORMAL);
-        snprintf(_clock_speed, sizeof(_clock_speed), "133");
+        Serial.printf(EOL "_clock_speed %s is not supported/legal, initting to " \
+            DEFAULT_PLL_SYS_MHZ_STRING EOL, _clock_speed);
+        snprintf(_clock_speed, sizeof(_clock_speed), "%s", DEFAULT_PLL_SYS_MHZ_STRING);
         write_FLASH();
         result = -1;
     }
 
-    uint32_t clkhz = atoi(_clock_speed) * 1000000UL;
-    if (!set_sys_clock_khz(clkhz / kHz, false)) {
+    PLL_SYS_MHZ = atoi(_clock_speed) * 1000000UL;
+    if (!set_sys_clock_khz(PLL_SYS_MHZ / kHz, false)) {
         // http://jhshi.me/2014/07/11/print-uint64-t-properly-in-c/index.html
-        Serial.printf("%s\n RP2040 can't change clock to %luMhz. Using 133 instead\n%s",
-            RED, PLL_SYS_MHZ, NORMAL);
-        snprintf(_clock_speed, sizeof(_clock_speed), "133");
+        Serial.printf(EOL "RP2040 can't change clock to %luMhz. Using " \
+            DEFAULT_PLL_SYS_MHZ_STRING " instead" EOL, PLL_SYS_MHZ);
+        snprintf(_clock_speed, sizeof(_clock_speed), "%s", DEFAULT_PLL_SYS_MHZ_STRING);
         write_FLASH();
         result = -1;
+        PLL_SYS_MHZ = atoi(_clock_speed) * 1000000UL;
     }
 
     //*********
@@ -987,7 +984,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     Serial.println(F("A: change band (10,12,15,17,20 default 20)"));
     Serial.println(F("V: verbose (0 for no messages, 9 for all)"));
     Serial.println(F("T: TELEN config"));
-    Serial.println(F("K: clock speed  (default: 133)"));
+    Serial.println(F("K: clock speed  (default: " DEFAULT_PLL_SYS_MHZ_STRING));
     Serial.println(F("D: DEVMODE to enable messaging (default: 0)"));
     Serial.println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     Serial.println(F("R: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)"));

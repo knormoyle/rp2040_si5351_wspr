@@ -30,6 +30,11 @@ extern char t_voltage[6];     // 5 bytes
 extern char t_sat_count[3];   // 2 bytes
 extern char t_hdop[4];        // 3 bytes
 
+extern int t_TELEN1_val1;
+extern int t_TELEN1_val2;
+extern int t_TELEN2_val1;
+extern int t_TELEN2_val2;
+
 // lat/lon precision: How much to store
 // https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
 // 6 decimal places represent accuracy for ~ 10 cm
@@ -252,6 +257,12 @@ void snapForTelemetry(void) {
     if (tx_cnt_0 > 99) tx_cnt_0_val = 99;
     snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%3d", tx_cnt_0_val);
 
+    // snap for consistency with everything else (all at one instant in time)
+    t_TELEN1_val1 = TELEN1_val1;
+    t_TELEN1_val2 = TELEN1_val2;
+    t_TELEN2_val1 = TELEN2_val1;
+    t_TELEN2_val2 = TELEN2_val2;
+
     if (VERBY[0]) {
         Serial.printf("t_************" EOL);
         Serial.printf("t_tx_count_0 %3s " EOL, t_tx_count_0);
@@ -268,11 +279,14 @@ void snapForTelemetry(void) {
         Serial.printf("t_speed %3s " EOL, t_speed);
         Serial.printf("t_temp_ext %7s" EOL, t_temp);
         Serial.printf("t_pressure %7s " EOL, t_pressure);
+        Serial.printf("t_TELEN1_val1 %d " EOL, t_TELEN1_val1);
+        Serial.printf("t_TELEN1_val2 %d " EOL, t_TELEN1_val2);
+        Serial.printf("t_TELEN2_val1 %d " EOL, t_TELEN2_val1);
+        Serial.printf("t_TELEN2_val2 %d " EOL, t_TELEN2_val2);
         Serial.printf("t_************" EOL);
     }
     if (VERBY[0]) Serial.println(F("snapForTelemetry END"));
 }
-
 
 //****************************************************
 static float onewire_values[10] = { 0 };

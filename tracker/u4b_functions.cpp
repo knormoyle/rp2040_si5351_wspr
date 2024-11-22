@@ -6,18 +6,16 @@
 #include <Arduino.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include "u4b_functions.h"
 
-#include <JTEncode.h>  // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
 #include "defines.h"
+#include "u4b_functions.h"
 #include "print_functions.h"
 
 //********************************
 // the key output that is used to pwm rf ..162 symbols that are 4-FSK
-extern uint8_t tx_buffer[255];  // is this bigger than WSPR_SYMBOL_COUNT?
 extern uint32_t XMIT_FREQUENCY;
 extern bool DEVMODE;
-extern JTEncode jtencode;
+extern bool VERBY[10];
 
 //********************************
 // t_* (was: telemetry_buff) is a snapshot of consistent-in-time data used to
@@ -246,17 +244,18 @@ void process_chan_num() {
 }
 
 //*******************************************
-void u4b_encode_std() {
-    // input: uses t_callsign t_grid6 t_power
-    // output: tx_buffer
+// 3 parameters for return char arrays.
+// then all variables (char arrays) used from the snapped telemetry:
+// standard u4b telemetry
+void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power, 
+    char *t_grid6, char *t_altitude, char *t_temp, char *t_voltage, char *t_speed) {
+
+    if (VERBY[0]) Serial.printf( 
+        "u4b_encode_char START t_grid6 %s t_altitude %s t_temp %s 5_voltage %s t_speed %s" EOL,
+        t_grid6, t_altitude, t_temp, t_voltage, t_speed);
 
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
-    // normal telemetry
-    if (DEVMODE && _verbose[0] >= '3') printf("creating U4B telemetry 0\n");
-    char grid_3_0[5];
-    strncpy(grid_3_0, t_grid6, 4);
-    grid_3_0[4] = 0;
 
     uint8_t grid5Val = t_grid6[4] - 'A';
     uint8_t grid6Val = t_grid6[5] - 'A';
@@ -292,8 +291,8 @@ void u4b_encode_std() {
     char id5 = 'A' + id5Val;
     char id6 = 'A' + id6Val;
 
-    // string id13[0], id2, id13[1], id4, id5, id6
     char callsign[7];
+    // string id13[0], id2, id13[1], id4, id5, id6
     callsign[0] =  _id13[0];
     callsign[1] =  id2;
     callsign[2] =  _id13[1];
@@ -308,8 +307,8 @@ void u4b_encode_std() {
 
     // handle possible illegal range (double wrap on tempC?).
     // or should it clamp at the bounds?
-    int tempCNum      = (int) (tempC - -50) % 90;
-    int voltageNum    = (int) round((((voltage * 100) - 300) / 5) + 20) % 40;
+    int tempCNum    = (int) (tempC - -50) % 90;
+    int voltageNum  = (int) round((((voltage * 100) - 300) / 5) + 20) % 40;
 
     // FIX! kl3cbr did encoding # of satelites into knots.
     // t_speed is integer
@@ -333,43 +332,49 @@ void u4b_encode_std() {
 
     // unshift big number into output radix values
     uint8_t powerVal = val % 19; val = val / 19;
+    int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
+    char power[3];
+    snprintf(power, sizeof(power), "%2d", legalPower[powerVal]);
+
     uint8_t g4Val    = val % 10; val = val / 10;
     uint8_t g3Val    = val % 10; val = val / 10;
     uint8_t g2Val    = val % 18; val = val / 18;
     uint8_t g1Val    = val % 18; val = val / 18;
 
     // map output radix to presentation
-    char g1 = 'A' + g1Val;
-    char g2 = 'A' + g2Val;
-    char g3 = '0' + g3Val;
-    char g4 = '0' + g4Val;
+    char grid4[5] = { 0 }; 
+    grid4[0] = 'A' + g1Val;
+    grid4[1] = 'A' + g2Val;
+    grid4[2] = '0' + g3Val;
+    grid4[3] = '0' + g4Val;
 
-    char grid4[5];
-    grid4[0] = g1;
-    grid4[1] = g2;
-    grid4[2] = g3;
-    grid4[3] = g4;
-    grid4[4] = 0;
-
-    int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
     // n is max number of bytes used. generated string is at most n-1 bytes
     // (leaves room for null term)
     // null term is appended after the generated string
 
-    uint8_t power = (uint8_t) legalPower[powerVal];
+    // ah, can't use sizeof. size is lost
+    snprintf(hf_callsign, 7, "%6s", callsign);
+    snprintf(hf_grid4, 5, "%4s", grid4);
+    snprintf(hf_power, 3, "%2s", power);
 
-    printf("normal telemetry goes to tx_buffer as callsign %s grid %s power %u)\n",
-        callsign, grid4, power);
-    // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
-    jtencode.wspr_encode(callsign, grid4, power, tx_buffer);
+    if (VERBY[0]) Serial.printf("u4b_encode_std created: hf_icallsign %s hf_grid %s hf_power %s)" EOL,
+        hf_callsign, hf_grid4, hf_power);
+
 }
 
 //********************************************************************
-void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2) {
+// first 3 parameters are all for return char arrays.
+void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power, 
+    uint32_t t_telen_val1, uint32_t t_telen_val2, bool for_telen2) {
+
+    if (VERBY[0]) Serial.printf("u4b_encode_telen() START t_telen_val1 %lu t_telen_val2 %lu" EOL,
+            t_telen_val1, t_telen_val2);
+
+    //********************************************
     // creates callsign, grid4, power
     // wspr_encode() then creates tx_buffer() which is the 162 wspr symbols
     // used by pwm handler to send 4-FSK rf thru si5351
-    uint32_t val = telen_val1;
+    uint32_t val = t_telen_val1;
     // extract into altered dynamic base
     uint8_t id6Val = val % 26; val = val / 26;
     uint8_t id5Val = val % 26; val = val / 26;
@@ -384,15 +389,22 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2)
     telen_chars[2] = 'A' + id5Val;
     telen_chars[3] = 'A' + id6Val;
 
-    // (bitshift to the left twice to make room for gps bits at end)
-    val = telen_val2 * 4;
-
     // unshift big number into output radix values
     uint8_t powerVal = val % 19; val = val / 19;
+    int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
+    char power[3];
+    snprintf(power, sizeof(power), "%2d", legalPower[powerVal]);
+
+    //********************************************
+    // (bitshift to the left twice to make room for gps bits at end)
+    val = t_telen_val2 * 4;
+
     uint8_t g4Val    = val % 10; val = val / 10;
     uint8_t g3Val    = val % 10; val = val / 10;
     uint8_t g2Val    = val % 18; val = val / 18;
     uint8_t g1Val    = val % 18; val = val / 18;
+
+    // unshift big number into output radix values
 
     // map output radix to presentation
     telen_chars[4] = 'A' + g1Val;
@@ -410,7 +422,6 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2)
     else powerVal = powerVal + 0;
     // the last bit, the old GPS-sat bit, is always 0 now.
 
-
     char callsign[7];
     callsign[0] = _id13[0];
     callsign[1] = telen_chars[0];
@@ -427,12 +438,13 @@ void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, bool for_telen2)
     grid4[3] = telen_chars[7];
     grid4[4] = 0;  // null term
 
-    int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
-    uint8_t power = (uint8_t) legalPower[powerVal];
-    printf("val1 %lu val2 %lu goes to tx_buffer as callsign %s grid %s power %u)\n",
-        telen_val1, telen_val2, callsign, grid4, power);
+    // can't use sizeof() .. size is lost
+    snprintf(hf_callsign, 7, "%6s", callsign);
+    snprintf(hf_grid4, 5, "%4s", grid4);
+    snprintf(hf_power, 3, "%2s", power);
 
-    // now encode into 162 symbols (4 value? 4-FSK) for tx_buffer
-    jtencode.wspr_encode(callsign, grid4, power, tx_buffer);
+    if (VERBY[0]) Serial.printf("u4b_encode_telen() END hf_callsign %s hf_grid4 %s hf_power %s" EOL,
+        hf_callsign, hf_grid4, hf_power);
+
 }
 
