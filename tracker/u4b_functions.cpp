@@ -263,11 +263,10 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     // modulo 20 for altitude. integer
     // decimal
     int altitudeVal = (int) t_altitude / 20;
-    if (altitudeVal >= (1068 * 20)) {
-        // this will be a floor divide: t_altitude is int
-        // there are only 1068 encodings for altitude..clamp to max
-        altitudeVal = (1068 * 20) - 20;  // 21340 meters?
-    }
+    // there are only 1068 encodings for altitude..clamp to max (or min)
+    if (altitudeVal < 0) altitudeVal = 0; 
+    // this will be a floor divide: t_altitude is int
+    else if (altitudeVal > 1067) altitudeVal = 1067;  // 21340 meters?
 
     // convert inputs into a big number
     uint32_t val = 0;
@@ -306,16 +305,25 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     double voltage = atof(t_voltage);
 
     // handle possible illegal range (double wrap on tempC?).
-    // or should it clamp at the bounds?
-    int tempCNum    = (int) (tempC - -50) % 90;
-    int voltageNum  = (int) round((((voltage * 100) - 300) / 5) + 20) % 40;
+    // should it clamp at the bounds? Yes
+    if (tempC < -50) tempC = -50;
+    // only 0-89 encodings. (90)
+    else if (tempC > (-50 + 89)) tempC = (-50 + 89); // 39C max
+    int tempCNum = (int) tempC + 50; 
+
+    // voltage: 20 to 39, 0 to 19 for 3.00 to 4.95V with a resolution of 0.05V
+    /// 0 to 39 encodings
+    if (voltage > 4.95) voltage = 4.95;
+    else if (voltage < 3.00) voltage = 3.00;
+    int voltageNum = (int) (round ((voltage - 3.00) / .05) + 20) % 40; // should only 3 to 4.95
 
     // FIX! kl3cbr did encoding # of satelites into knots.
     // t_speed is integer
     // max t_speed could be 999 ?
-    int speedKnotsNum = (int)t_speed  / 2;
+    int speedKnotsNum = (int)t_speed / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
+    if (speedKnotsNum < 0) speedKnotsNum = 0; 
     if (speedKnotsNum > 41) speedKnotsNum = 41;
 
     //****************
@@ -357,7 +365,7 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     snprintf(hf_grid4, 5, "%4s", grid4);
     snprintf(hf_power, 3, "%2s", power);
 
-    if (VERBY[0]) Serial.printf("u4b_encode_std created: hf_icallsign %s hf_grid %s hf_power %s)" EOL,
+    if (VERBY[0]) Serial.printf("u4b_encode_std created: hf_callsign %s hf_grid %s hf_power %s)" EOL,
         hf_callsign, hf_grid4, hf_power);
 
 }
