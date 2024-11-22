@@ -434,8 +434,8 @@ char _start_minute[2] = { 0 };
 char _lane[2] = { 0 };
 
 // decode of _clock_speed
-
-uint32_t PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+extern const uint32_t DEFAULT_PLL_SYS_MHZ = 133;
+extern uint32_t PLL_SYS_MHZ = 0;
 
 // decode of _devmode
 bool DEVMODE = false;
@@ -801,8 +801,6 @@ void setup1() {
     // this is okay for Wire?
 
     if (false) {
-        // #define VFO_I2C0_SDA_PIN = 12;
-        // #define VFO_I2C0_SCL_PIN = 13;
         Wire.setSDA(VFO_I2C0_SDA_PIN); // 12
         Wire.setSCL(VFO_I2C0_SCL_PIN); // 13
         Wire.begin();
@@ -846,7 +844,7 @@ void setup1() {
     // not always right. but loop will self-correct?
 
     if (!Serial) {
-        Serial.println("Why can't we see Serial from setup1()..rebooting");
+        // Serial.println("Why can't we see Serial from setup1()..rebooting");
         setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
         // we're going to have to reboot..even balloon needs Serial created?
         // if serial data output buf is full, we just overflow it (on balloon)
@@ -858,6 +856,7 @@ void setup1() {
             updateStatusLED();
         }
     }
+    Serial.println("Serial() is true");
 
     //**********************
     Watchdog.reset();
@@ -885,17 +884,17 @@ void setup1() {
     }
 
     //***************
-    if (!set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, false)) {
-        Serial.printf(" RP2040 can't change clock to %luMhz. Using " \
-            DEFAULT_PLL_SYS_MHZ_STRING " instead" EOL, PLL_SYS_MHZ);
-        snprintf(_clock_speed, sizeof(_clock_speed), "%s", DEFAULT_PLL_SYS_MHZ_STRING);
-        write_FLASH();
-        // FIX! should we have this in parallel to _clock_speed? have to maintain it
-        // should we call it _clock_speed_int ? or just always do atoi(_clock_speed)
+    uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
+    if (!set_sys_clock_khz(freq_khz, false)) {
+        Serial.printf("ERROR: setup1(): RP2040 can't change clock to %lu Mhz. Using %lu instead" EOL,
+            PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+        write_FLASH();
         // check the default?
-        if (!set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, false)) {
-            Serial.println("ERROR: The DEFAULT_SYS_MHZ is not legal either. will use 125");
+        freq_khz = PLL_SYS_MHZ * 1000UL;
+        if (!set_sys_clock_khz(freq_khz, false)) {
+            Serial.println("ERROR: setup1() The DEFAULT_SYS_MHZ is not legal either. will use 125");
             PLL_SYS_MHZ = 125;
         }
     }
@@ -1042,7 +1041,8 @@ uint16_t  BATT_WAIT = 1;  // secs
 // increase to 70000
 // at 180mph we could move 3 horizontal miles in 1 minute? hmm. what about a descending balloon?
 // fixes could be 1 minute old? that's kind of like a cold fix time
-#define GPS_LOCATION_AGE_MAX 70000
+
+const uint32_t GPS_LOCATION_AGE_MAX = 70000;
 
 //
 // smallest seen
@@ -1055,7 +1055,8 @@ uint16_t  BATT_WAIT = 1;  // secs
 // we could make this bigger? needs to be at least 1 sec (a little more) since it
 // wants to grab a full burst, and we don't know where we are in the repeating
 // burst behavior when we start (idle or in the middle of a burst?)
-#define GPS_WAIT_FOR_NMEA_BURST_MAX 1100
+
+const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
 
 //*************************************************************************
 void loop1() {
@@ -1621,7 +1622,7 @@ bool alignMinute(int offset) {
     // this it the channel config minute to align to, plus an offset
     // we only use offsets -1, 0, 2, 4, 6
     // the telemetry and other prep is al done during -1.
-    // the u4b channel minutes should all be 
+    // the u4b channel minutes should all be
     int align_minute = atoi(_start_minute);
     switch (align_minute) {
         case 0: {;}
@@ -1629,7 +1630,7 @@ bool alignMinute(int offset) {
         case 4: {;}
         case 6: {;}
         case 8: align_minute = (align_minute + offset) % 10; break;
-        default: 
+        default:
             if (VERBY[0]) {
                 Serial.printf("ERROR: Illegal align_minute %d coming out of config for u4b channel" EOL, align_minute);
                 align_minute = 0;
@@ -1812,19 +1813,29 @@ int InitPicoClock(int PLL_SYS_MHZ) {
     Serial.println(F("InitPicoClock START"));
     // frequencies like 205 mhz will PANIC, System clock of 205000 kHz cannot be exactly achieved
     // should detect the failure and change the nvram, otherwise we're stuck even on reboot
-    if (!set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, false)) {
-      // won't work
-      Serial.printf("Can not set clock to %dMhz. 'pico 'Cannot be achieved''" EOL, PLL_SYS_MHZ);
+    uint32_t clk_khz = PLL_SYS_MHZ * 1000UL;
+    uint32_t clk_mhz = PLL_SYS_MHZ * 1000000UL;
+    if (!set_sys_clock_khz(clk_khz, false)) {
+      Serial.printf("ERROR: Can not set pico clock to %d Mhz. pico PLL mults cannot be achieved" EOL,
+        PLL_SYS_MHZ);
       return -1;
     }
 
-    Serial.printf("Attempt to set rp2040 clock to %dMhz (legal)" EOL, PLL_SYS_MHZ);
+    Serial.printf("Attempt to set rp2040 clock to %d Mhz (legal)" EOL, PLL_SYS_MHZ);
     // 2nd arg is "required"
-    set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, true);
+    set_sys_clock_khz(clk_khz, true);
+    // bool clock_configure ( enum clock_index clk_index, uint32_t src, uint32_t auxsrc, uint32_t src_freq, uint32_t freq ) 
+    // clk_index The clock to configure
+    // src The main clock source, can be 0.
+    // auxsrc The auxiliary clock source, which depends on which clock is being set. Can be 0
+    // src_freq Frequency of the input clock source
+    // freq Requested frequency
+
     clock_configure(clk_peri, 0,
-        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 
-        PLL_SYS_MHZ * 1000000UL,
-        PLL_SYS_MHZ * 1000000UL);
+        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
+        clk_mhz,
+        clk_mhz);
+
 
     return 0;
     Serial.println(F("InitPicoClock END"));

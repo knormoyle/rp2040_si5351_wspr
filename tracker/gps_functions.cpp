@@ -781,8 +781,8 @@ void GpsON(bool GpsColdReset) {
 
     // could be off or on already
     // Assume GpsINIT was already done (pins etc)
-
     Watchdog.reset();
+
     // don't care what the initial state is, for cold reset
     if (GpsColdReset) GpsFullColdReset();
     // does nothing if already on
@@ -793,6 +793,7 @@ void GpsON(bool GpsColdReset) {
         else Serial.printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, 
             GpsIsOn_state, GpsColdReset);
     }
+    Serial.flush();
 }
 
 //************************************************
@@ -854,6 +855,7 @@ void GpsOFF(void) {
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
 
+    Serial.flush();
     if (VERBY[0]) Serial.printf("GpsOFF END GpsIsOn_state %u" EOL, GpsIsOn_state);
 }
 

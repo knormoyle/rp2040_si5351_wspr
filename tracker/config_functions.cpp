@@ -75,6 +75,7 @@ extern char _id13[3];
 extern char _start_minute[2];
 extern char _lane[2];
 
+extern const uint32_t DEFAULT_PLL_SYS_MHZ;
 // decode of _clock_speed
 extern uint32_t PLL_SYS_MHZ;
 // decode of _devmode
@@ -128,16 +129,16 @@ void forceHACK(void) {
         // snprintf(buffer, sizeof(buffer), "%s", string);
 
         Serial.println(F("Forcing DEVMODE true, _devmode 1 (always for now)"));
-        strncpy(_devmode, "1", sizeof(_devmode));
+        snprintf(_devmode, sizeof(_devmode), "1");
         DEVMODE = true;
 
         // HACK FIX! always 9 now for debug
         Serial.println(F("Forcing _verbose to 9 (always for now)"));
-        strncpy(_verbose, "9", sizeof(_verbose));
+        snprintf(_verbose, sizeof(_verbose), "9");
         decodeVERBY();
 
         Serial.println(F("Forcing _go_when_rdy to 1 (always for now)"));
-        strncpy(_go_when_rdy, "1", sizeof(_go_when_rdy));
+        snprintf(_go_when_rdy, sizeof(_go_when_rdy), "1");
 
     }
 }
@@ -475,6 +476,8 @@ void user_interface(void) {
         if (c_char > 90) c_char -= 32;
 
         // FIX! can we case the int32_t to char. we might lost data with the cast
+        uint32_t freq_khz;
+        bool good;
         switch ( c_char ) {
             case '/':
                 Serial.print(F("Rebooting to bootloader mode..drag/drop a uf2 per normal\r\n"));
@@ -512,28 +515,62 @@ void user_interface(void) {
             case 'K':
                 get_user_input("Enter clock speed (100-250): ", _clock_speed, sizeof(_clock_speed));
                 write_FLASH();
+                PLL_SYS_MHZ = atoi(_clock_speed);
                 // frequencies like 205 mhz will PANIC,
                 // System clock of 205000 kHz cannot be exactly achieved
                 // should detect the failure and change the nvram, otherwise we're stuck even on reboot
                 // this is the only config where we don't let something bad get into flash
                 // don't change the pll, just check. change it on reboot
-                if (atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
-                    Serial.printf(EOL "_clock_speed %s not supported/legal, initting to " DEFAULT_PLL_SYS_MHZ_STRING EOL, _clock_speed);
+                if (PLL_SYS_MHZ < 100 || PLL_SYS_MHZ > 250) {
+                    Serial.printf("user_interface: _clock_speed %lu illegal. Using %lu instead" EOL, 
+                        PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
+
                     // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
                     // recommends to always
                     // snprintf(buffer, sizeof(buffer), "%s", string);
                     // I guess this is okay for when we source from fixed size string literals
-                    snprintf(_clock_speed, sizeof(_clock_speed), DEFAULT_PLL_SYS_MHZ_STRING);
+                    PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+                    snprintf(_clock_speed, sizeof(_clock_speed), "%lu",  PLL_SYS_MHZ);
                     write_FLASH();
-                    PLL_SYS_MHZ = atoi(_clock_speed) * 1000000UL;
                 }
 
-                if (!set_sys_clock_khz(PLL_SYS_MHZ / kHz, false)) {
-                    Serial.printf(EOL "RP2040 can't change clock to %luMhz. Using" \
-                        DEFAULT_PLL_SYS_MHZ_STRING " instead" EOL, PLL_SYS_MHZ);
-                    snprintf(_clock_speed, sizeof(_clock_speed), "%s", DEFAULT_PLL_SYS_MHZ_STRING);
+                // https://www.raspberrypi.com/documentation/pico-sdk/high_level.html#gab3a273e837ba1947bb5fd8fc97cf47e5 
+                // says "Note that not all clock frequencies are possible; 
+                // it is preferred that you use src/rp2_common/hardware_clocks/scripts/vcocalc.py 
+                // to calculate the parameters for use with set_sys_clock_pll".
+                // You probably want to have a read of section 2.15 of 
+                // https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf 
+                // for more information about the PLLs and clock dividers.
+                // do only full Mhz work?
+                // https://github.com/raspberrypi/pico-sdk/issues/1450
+                // None of the frequencies can be exactly matched exactly by the PLL so set_sys_clock_khz fails - 
+                // as per the docs, you can use vco_calc.py to find out settings 
+                // for set_sys_clock_pll for settings that are close.
+                // absolutely can do non Mhz frequencies (just not those between 125 and 126)
+                // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/scripts/vcocalc.py
+
+                // bool check_sys_clock_khz ( 
+                // uint32_t freq_khz, uint * vco_freq_out, uint * post_div1_out, uint * post_div2_out)
+                uint vco_freq_out[1];
+                uint post_div1_out[1];
+                uint post_div2_out[1]; 
+                freq_khz = PLL_SYS_MHZ * 1000UL;
+                Serial.printf("user_interface: checking with check_sys_clock_khz(%lu)" EOL, freq_khz);
+
+                good = check_sys_clock_khz(freq_khz, vco_freq_out, post_div1_out, post_div2_out);
+                if (good) 
+                    Serial.printf("user_interface: good with check_sys_clock_khz(%lu)" EOL, freq_khz);
+                else
+                    Serial.printf("user_interface: bad with check_sys_clock_khz(%lu)" EOL, freq_khz);
+
+                // use vcocalc.py to calculate parameters with set_sys_clock_pll()
+                // static bool set_sys_clock_khz ( uint32_t freq_khz, bool required 
+                if (!set_sys_clock_khz(freq_khz, false)) {
+                    Serial.printf("user_interface: RP2040 can't change clock to %lu Mhz. Using %lu instead" EOL, 
+                        PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
+                    PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+                    snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
                     write_FLASH();
-                    PLL_SYS_MHZ = atoi(_clock_speed) * 1000000UL;
                 }
                 break;
             case 'A':
@@ -592,6 +629,8 @@ void user_interface(void) {
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 #define FLASH_BYTES_USED 28
 int read_FLASH(void) {
+    Watchdog.reset();
+    if (VERBY[0]) Serial.print("read_FLASH START" EOL);
     // there is no internal eeprom on rp2040
     // Therefore, do not frequently update the EEPROM or you may prematurely wear out the flash.
     // https://arduino-pico.readthedocs.io/en/latest/eeprom.html
@@ -706,11 +745,14 @@ void decodeVERBY(void) {
         else Serial.printf("VERBY[%d] false" EOL, i);
     }
 
+    if (VERBY[0]) Serial.print("read_FLASH START" EOL);
 }
 //***************************************
 // Write the user entered data into FLASH
 void write_FLASH(void) {
-    // initializes all to zeroes
+    Watchdog.reset();
+    if (VERBY[0]) Serial.print("write_FLASH START" EOL);
+    // Flash is initially all zeroes
     char data_chunk[FLASH_BYTES_USED] = { 0 };  // enough to cover what we use here
     uint8_t udata_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
 
@@ -749,6 +791,7 @@ void write_FLASH(void) {
 
     flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
     restore_interrupts(ints);
+    if (VERBY[0]) Serial.print("write_FLASH END" EOL);
 }
 
 // Checks validity of user settings and if something is wrong,
@@ -811,8 +854,7 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     if (callsignBad) {
-        Serial.printf("%s\n_callsign %s is not supported/legal, initting to AB1CDE\n%s",
-            RED, _callsign, NORMAL);
+        Serial.printf(EOL "_callsign %s is not supported/legal, initting to AB1CDE" EOL, _callsign);
         snprintf(_callsign, sizeof(_callsign), "AB1CDE");
         write_FLASH();
         result = -1;
@@ -820,8 +862,7 @@ int check_data_validity_and_set_defaults(void) {
 
     // change to strcpy for null terminate
     if (_verbose[0] == 0 || _verbose[0] < '0' || _verbose[0] > '9') {
-        Serial.printf("%s\n_verbose %s is not supported/legal, initting to 1\n%s",
-            RED, _verbose, NORMAL);
+        Serial.printf(EOL "_verbose %s is not supported/legal, initting to 1" EOL, _verbose);
         snprintf(_verbose, sizeof(_verbose), "1");
         write_FLASH();
         result = -1;
@@ -834,13 +875,13 @@ int check_data_validity_and_set_defaults(void) {
         bad = true;
     }
     else {
-        for (int i = 1; i <= 3; ++i) {
+        for (int i = 0; i <= 3; i++) {
             if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i] != '-') bad = true;
         }
     }
     if (bad) {
-        Serial.printf("%s\n_TELEN_config %s is not supported/legal, initting to ---\n%s",
-            RED, _TELEN_config, NORMAL);
+        Serial.printf(EOL "_TELEN_config %s is not supported/legal, initting to ----" EOL,
+            _TELEN_config);
         snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
         write_FLASH();
         result = -1;
@@ -859,31 +900,32 @@ int check_data_validity_and_set_defaults(void) {
     // hmm. I suppose we could call this routine to fix nvram at the beginning, so if the
     // clock gets fixed, then the defaults will get fixed (where errors exist)
     // be sure to null terminate
-    if (_clock_speed[0] == 0 || atoi(_clock_speed) < 100 || atoi(_clock_speed) > 250) {
-        Serial.printf(EOL "_clock_speed %s is not supported/legal, initting to " \
-            DEFAULT_PLL_SYS_MHZ_STRING EOL, _clock_speed);
-        snprintf(_clock_speed, sizeof(_clock_speed), "%s", DEFAULT_PLL_SYS_MHZ_STRING);
+    
+    PLL_SYS_MHZ = atoi(_clock_speed);
+    if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 100 || PLL_SYS_MHZ > 250) {
+        Serial.printf(EOL "_clock_speed %lu is not legal, initting to %lu" EOL, 
+            PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
+        PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
         write_FLASH();
         result = -1;
     }
 
-    PLL_SYS_MHZ = atoi(_clock_speed) * 1000000UL;
-    if (!set_sys_clock_khz(PLL_SYS_MHZ / kHz, false)) {
+    if (!set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, false)) {
         // http://jhshi.me/2014/07/11/print-uint64-t-properly-in-c/index.html
-        Serial.printf(EOL "RP2040 can't change clock to %luMhz. Using " \
-            DEFAULT_PLL_SYS_MHZ_STRING " instead" EOL, PLL_SYS_MHZ);
-        snprintf(_clock_speed, sizeof(_clock_speed), "%s", DEFAULT_PLL_SYS_MHZ_STRING);
+        Serial.printf(EOL "check_data_validity...(): RP2040 can't change clock to %lu Mhz. initting to %lu" EOL,
+            PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
+        PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
         write_FLASH();
         result = -1;
-        PLL_SYS_MHZ = atoi(_clock_speed) * 1000000UL;
     }
 
     //*********
     // be sure to null terminate
     if (_U4B_chan[0] == 0 || atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
-        Serial.printf("%s\n_U4B_chan %s is not supported/legal, initting to 599\n%s",
-            RED, _U4B_chan, NORMAL);
-        snprintf(_U4B_chan, sizeof(_U4B_chan), "599");
+        Serial.printf(EOL "_U4B_chan %s is not supported/legal, initting to 599" EOL, _U4B_chan);
+        snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
         write_FLASH();
         // this will set _lane, _id13, _start_minute
         process_chan_num();
@@ -900,7 +942,7 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            Serial.printf("%s\n_Band %s is not supported/legal, initting to 20\n%s", RED, _Band, NORMAL);
+            Serial.printf("_Band %s is not supported/legal, initting to 20" EOL, _Band);
             snprintf(_Band, sizeof(_Band), "20");
             write_FLASH();
             // FIX! stop using _32_dialfreqhz
@@ -912,15 +954,13 @@ int check_data_validity_and_set_defaults(void) {
             break;
     }
     if (_tx_high[0] != '0' && _tx_high[0] != '1') {
-        Serial.printf("%s\n_tx_high %s is not supported/legal, initting to 1\n%s",
-            RED, _tx_high, NORMAL);
+        Serial.printf(EOL "_tx_high %s is not supported/legal, initting to 1" EOL, _tx_high);
         snprintf(_tx_high, sizeof(_tx_high), "1");
         write_FLASH();
         result = -1;
     }
     if (_devmode[0] != '0' && _devmode[0] != '1') {
-        Serial.printf("%s\n_devmode %s is not supported/legal, initting to 0\n%s",
-            RED, _devmode, NORMAL);
+        Serial.printf(EOL "_devmode %s is not supported/legal, initting to 0" EOL, _devmode);
         snprintf(_devmode, sizeof(_devmode), "0");
         write_FLASH();
         result = -1;
@@ -929,15 +969,13 @@ int check_data_validity_and_set_defaults(void) {
     // detect that case to get ascii 0 in there
     if (_correction[0]==0 || atoi(_correction) < -3000 || atoi(_correction) > 3000) {
         // left room for 6 bytes
-        Serial.printf("%s\n_correction %s is not supported/legal, initting to 0\n%s",
-            RED, _correction, NORMAL);
+        Serial.printf(EOL "_correction %s is not supported/legal, initting to 0" EOL, _correction);
         snprintf(_correction, sizeof(_correction), "0");
         write_FLASH();
         result = -1;
     }
     if (_go_when_rdy[0] != '0' && _go_when_rdy[0] != '1') {
-        Serial.printf("%s\n_go_when_rdy %s is not supported/legal, initting to 0\n%s",
-            RED, _go_when_rdy, NORMAL);
+        Serial.printf(EOL "_go_when_rdy %s is not supported/legal, initting to 0" EOL, _go_when_rdy);
         snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
         write_FLASH();
         result = -1;
@@ -955,10 +993,8 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     // Serial.printf("%s%s%s\r\n", CLEAR_SCREEN, UNDERLINE_ON, BRIGHT);
     // since these macros are "" strings in defines.h, they will just concat here
     // no commas necessary?
-    Serial.print(F(CLEAR_SCREEN UNDERLINE_ON BRIGHT "\r\n"));
 
     Serial.print(F("Current values:\r\n"));
-    Serial.printf("%s%s\r\n", UNDERLINE_OFF, NORMAL);
 
     Serial.printf("callsign:%s\r\n", _callsign);
     Serial.printf("U4B channel:%s", _U4B_chan);
@@ -974,7 +1010,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     Serial.printf("go_when_rdy:%s\r\n", _go_when_rdy);
     Serial.printf("XMIT_FREQUENCY:%lu\r\n", XMIT_FREQUENCY);
 
-    Serial.printf("%s%sValid commands: %s%s\r\n", UNDERLINE_ON, BRIGHT, UNDERLINE_OFF, NORMAL);
+    Serial.println(F(EOL "Valid commands:" EOL));
 
     // FIX! could we use Serial.printlnln and avoid the \r\n ?
     Serial.println(F("X: eXit configuration and reboot"));
@@ -984,7 +1020,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     Serial.println(F("A: change band (10,12,15,17,20 default 20)"));
     Serial.println(F("V: verbose (0 for no messages, 9 for all)"));
     Serial.println(F("T: TELEN config"));
-    Serial.println(F("K: clock speed  (default: " DEFAULT_PLL_SYS_MHZ_STRING));
+    Serial.printf(   "K: clock speed  (default: %lu" EOL,  DEFAULT_PLL_SYS_MHZ);
     Serial.println(F("D: DEVMODE to enable messaging (default: 0)"));
     Serial.println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     Serial.println(F("R: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)"));
