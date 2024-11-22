@@ -1457,10 +1457,13 @@ void alignAndDoAllSequentialTx (void) {
     // will sync up to the right minute and second == 0
     int txNum = 0;
     if (VERBY[0]) {
+        Serial.print(EOL);
         Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
         Serial.printf("hf_callsign %s" EOL, hf_callsign);
         Serial.printf("hf_grid4 %s" EOL, hf_grid4);
         Serial.printf("hf_power %s" EOL, hf_power);
+        Serial.print(EOL);
+        Serial.flush();
     }
     syncAndSendWspr(hf_freq, 0, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
     tx_cnt_0 += 1;
@@ -1480,10 +1483,12 @@ void alignAndDoAllSequentialTx (void) {
     }
     u4b_encode_std(hf_callsign, hf_grid4, hf_power, t_grid6, t_altitude, t_temp, t_voltage, t_speed);
     if (VERBY[0]) {
+        Serial.print(EOL);
         Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
         Serial.printf("hf_callsign %s" EOL, hf_callsign);
         Serial.printf("hf_grid4 %s" EOL, hf_grid4);
         Serial.printf("hf_power %s" EOL, hf_power);
+        Serial.print(EOL);
         Serial.flush();
     }
     syncAndSendWspr(hf_freq, 1, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
@@ -1507,10 +1512,12 @@ void alignAndDoAllSequentialTx (void) {
         }
         u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false);
         if (VERBY[0]) {
+            Serial.print(EOL);
             Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
             Serial.printf("hf_callsign %s" EOL, hf_callsign);
             Serial.printf("hf_grid4 %s" EOL, hf_grid4);
             Serial.printf("hf_power %s" EOL, hf_power);
+            Serial.print(EOL);
             Serial.flush();
         }
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
@@ -1529,10 +1536,12 @@ void alignAndDoAllSequentialTx (void) {
         }
         u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false);
         if (VERBY[0]) {
+            Serial.print(EOL);
             Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
             Serial.printf("hf_callsign %s" EOL, hf_callsign);
             Serial.printf("hf_grid4 %s" EOL, hf_grid4);
             Serial.printf("hf_power %s" EOL, hf_power);
+            Serial.print(EOL);
             Serial.flush();
         }
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, true);

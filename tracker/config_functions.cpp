@@ -1023,7 +1023,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     Serial.printf(   "K: clock speed  (default: %lu" EOL,  DEFAULT_PLL_SYS_MHZ);
     Serial.println(F("D: DEVMODE to enable messaging (default: 0)"));
     Serial.println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
-    Serial.println(F("R: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)"));
+    Serial.println(F("G: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)"));
     Serial.println(F("Z: run test: currently i2cReadTest()"));
 
     if (VERBY[0]) Serial.println(F("show_values() END"));
