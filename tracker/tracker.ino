@@ -434,7 +434,7 @@ char _start_minute[2] = { 0 };
 char _lane[2] = { 0 };
 
 // decode of _clock_speed
-extern const uint32_t DEFAULT_PLL_SYS_MHZ = 133;
+extern const uint32_t DEFAULT_PLL_SYS_MHZ = 125;
 uint32_t PLL_SYS_MHZ = 0; // should never try to use it while it's 0
 
 // decode of _devmode
@@ -865,7 +865,7 @@ void setup1() {
 
     // sets minute/lane/id from chan number.
     // FIX! is it redundant at this point?..remove?
-    process_chan_num();
+    XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
 
 
     //***************
@@ -901,7 +901,7 @@ void setup1() {
 
     // This should work now
     // FIX! don't do it for now
-    // InitPicoClock(PLL_SYS_MHZ);
+    // initPicoClock(PLL_SYS_MHZ);
 
     Watchdog.reset();
     bmp_init();
@@ -1459,7 +1459,7 @@ void alignAndDoAllSequentialTx (void) {
     if (VERBY[0]) {
         Serial.print(EOL);
         Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
-        Serial.printf("hf_callsign %s" EOL, hf_callsign);
+        Serial.printf("hf_callsign %-6s" EOL, hf_callsign);
         Serial.printf("hf_grid4 %s" EOL, hf_grid4);
         Serial.printf("hf_power %s" EOL, hf_power);
         Serial.print(EOL);
@@ -1468,7 +1468,7 @@ void alignAndDoAllSequentialTx (void) {
     syncAndSendWspr(hf_freq, 0, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
     tx_cnt_0 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
-    if (VERBY[0]) StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d", minute(), second());
+    if (VERBY[0]) StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d" EOL, minute(), second());
     
     // we don't loop around again caring about gps fix, because we've saved
     // telemetry (and sensor data in there) right before the callsign tx
@@ -1485,7 +1485,7 @@ void alignAndDoAllSequentialTx (void) {
     if (VERBY[0]) {
         Serial.print(EOL);
         Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
-        Serial.printf("hf_callsign %s" EOL, hf_callsign);
+        Serial.printf("hf_callsign %-6s" EOL, hf_callsign);
         Serial.printf("hf_grid4 %s" EOL, hf_grid4);
         Serial.printf("hf_power %s" EOL, hf_power);
         Serial.print(EOL);
@@ -1494,7 +1494,7 @@ void alignAndDoAllSequentialTx (void) {
     syncAndSendWspr(hf_freq, 1, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
-    if (VERBY[0]) StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d", minute(), second());
+    if (VERBY[0]) StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d" EOL, minute(), second());
     
     // have to send this if telen1 or telen2 is enabled
     if ( (_TELEN_config[0] != '-' || _TELEN_config[1] != '-') ||
@@ -1514,7 +1514,7 @@ void alignAndDoAllSequentialTx (void) {
         if (VERBY[0]) {
             Serial.print(EOL);
             Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
-            Serial.printf("hf_callsign %s" EOL, hf_callsign);
+            Serial.printf("hf_callsign %-6s" EOL, hf_callsign);
             Serial.printf("hf_grid4 %s" EOL, hf_grid4);
             Serial.printf("hf_power %s" EOL, hf_power);
             Serial.print(EOL);
@@ -1522,7 +1522,7 @@ void alignAndDoAllSequentialTx (void) {
         }
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
         tx_cnt_2 += 1;
-        if (VERBY[0]) StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d", minute(), second());
+        if (VERBY[0]) StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d" EOL, minute(), second());
     }
     // have to send this if telen2 is enabled
     if ( (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
@@ -1538,7 +1538,7 @@ void alignAndDoAllSequentialTx (void) {
         if (VERBY[0]) {
             Serial.print(EOL);
             Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
-            Serial.printf("hf_callsign %s" EOL, hf_callsign);
+            Serial.printf("hf_callsign %-6s" EOL, hf_callsign);
             Serial.printf("hf_grid4 %s" EOL, hf_grid4);
             Serial.printf("hf_power %s" EOL, hf_power);
             Serial.print(EOL);
@@ -1547,7 +1547,7 @@ void alignAndDoAllSequentialTx (void) {
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, true);
         tx_cnt_3 += 1;
         // we have 10 secs or so at the end of WSPR to get this off?
-        if (VERBY[0]) StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d", minute(), second());
+        if (VERBY[0]) StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d" EOL, minute(), second());
     }
 
     DoLogPrint();  // we might have to delay this?
@@ -1570,18 +1570,39 @@ void PWM4_Handler(void) {
         // is that 500 interrupts?
         cnt = 0;
         proceed = true;
+        // if (VERBY[0] && ((cnt % 100)==0)) Serial.print(".");
     }
     // if (VERBY[0]) Serial.println(F("PWM4_Handler() END"));
 }
 
+
+// The RP2040 PWM block has 8 identical slices, the RP2350 has 12.  Each slice can drive two PWM output signals, or
+// measure the frequency or duty cycle of an input signal. This gives a total of up to 16/24 controllable
+// PWM outputs. All 30 GPIOs can be driven by the PWM block.
+// 
+// The PWM hardware functions by continuously comparing the input value to a free-running counter. This produces a
+// toggling output where the amount of time spent at the high output level is proportional to the input value. The fraction of
+// time spent at the high signal level is known as the duty cycle of the signal.
+// 
+// The default behaviour of a PWM slice is to count upward until the wrap value (\ref pwm_config_set_wrap) is reached, and then
+// immediately wrap to 0. PWM slices also offer a phase-correct mode, where the counter starts to count downward after
+// reaching TOP, until it reaches 0 again.
+
+// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h
+// If the divide mode is free-running, the PWM counter runs at clk_sys / div.
+
 void zeroTimerSetPeriodMs(float ms) {
     // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
     static pwm_config wspr_pwm_config = pwm_get_default_config();
-    pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS
+    pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  // 2uS (at 125Mhz? does it need adjusting at other clks?)
+
+    // Set the highest value the counter will reach before returning to 0. Also known as TOP.
     pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)ms - 1));
     pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
+
     irq_set_exclusive_handler(PWM_IRQ_WRAP, PWM4_Handler);
     irq_set_enabled(PWM_IRQ_WRAP, true);
+
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
     pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
@@ -1681,7 +1702,7 @@ bool alignMinute(int offset) {
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhenDone) {
-    if (VERBY[0]) Serial.printf("sendWSPR() START now: minute() %d second() %d" EOL, minute(), second());
+    if (VERBY[0]) Serial.printf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
     Watchdog.reset();
 
     // FIX! use the u4b channel freq
@@ -1708,11 +1729,24 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     zeroTimerSetPeriodMs(tone_delay);
 
     uint8_t i;
+    absolute_time_t wsprStartTime = get_absolute_time(); // usecs
     for (i = 0; i < symbol_count; i++) {
+
+        uint8_t symbol = hf_tx_buffer[i];
+        switch (symbol) {
+            case 0: ;
+            case 1: ;
+            case 2: ;
+            case 3: break;
+            default :
+                if (VERBY[0]) Serial.printf("ERROR: bad symbol 0x%02x" EOL, symbol); 
+        }
+            
         uint32_t freq_x16 =
             (hf_freq << PLL_CALCULATION_PRECISION) +
-            (hf_tx_buffer[i] * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
+            (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
         // Serial.printf(__func__ " vfo_set_freq_x16(%u)" EOL, (freq_x16 >> PLL_CALCULATION_PRECISION));
+        // FIX! how long does it take to do this?
         vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
         // PWM handler sets proceed?
         proceed = false;
@@ -1727,8 +1761,14 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             // maybe monitor elapsed time for updateStatusLED() ??
             // updateStatusLED();
         }
+        if (VERBY[0] && ((i % 10)==1)) Serial.print("."); // one per symbol
         Watchdog.reset();
     }
+
+    absolute_time_t wsprEndTime = get_absolute_time(); // usecs
+    int64_t wsprDuration = absolute_time_diff_us(wsprEndTime, wsprStartTime);
+    Serial.printf(EOL "wsprDuration %" PRIu64 EOL EOL, wsprDuration);
+
     pwm_set_enabled(WSPR_PWM_SLICE_NUM, false);
     pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, false);
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
@@ -1737,11 +1777,11 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
     // FIX! leave on if we're going to do more telemetry?
     // or always turn off?
-    if (true || vfoOffWhenDone) {
+    if (false || vfoOffWhenDone) {
         vfo_turn_off();
     }
     Watchdog.reset();
-    if (VERBY[0]) Serial.println(F("sendWSPR() END"));
+    if (VERBY[0]) Serial.println(F("sendWspr() END"));
 }
 
 //**********************************
@@ -1826,14 +1866,14 @@ void freeMem() {
     Serial.println(F("freeMem() END"));
 }
 
-int InitPicoClock(int PLL_SYS_MHZ) {
-    Serial.println(F("InitPicoClock START"));
+int initPicoClock(int PLL_SYS_MHZ) {
+    Serial.println(F("initPicoClock START"));
     // frequencies like 205 mhz will PANIC, System clock of 205000 kHz cannot be exactly achieved
     // should detect the failure and change the nvram, otherwise we're stuck even on reboot
     uint32_t clk_khz = PLL_SYS_MHZ * 1000UL;
     uint32_t clk_mhz = PLL_SYS_MHZ * 1000000UL;
     if (!set_sys_clock_khz(clk_khz, false)) {
-      Serial.printf("ERROR: Can not set pico clock to %d Mhz. pico PLL mults cannot be achieved" EOL,
+      Serial.printf("ERROR: Can not set rp2040 clock to %d Mhz. pico PLL mults cannot be achieved" EOL,
         PLL_SYS_MHZ);
       return -1;
     }
@@ -1855,7 +1895,7 @@ int InitPicoClock(int PLL_SYS_MHZ) {
 
 
     return 0;
-    Serial.println(F("InitPicoClock END"));
+    Serial.println(F("initPicoClock END"));
 }
 
 //**********************

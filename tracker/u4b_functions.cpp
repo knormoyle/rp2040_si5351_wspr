@@ -109,7 +109,7 @@ char EncodeBase36(uint8_t val) {
 // _U4B_chan
 // _id13
 // _Band
-uint32_t init_rf_freq(void) {
+uint32_t init_rf_freq(char *_Band, char *_lane) {
     // base frequencies for different bands
     // 136000 474200 1836600 3568600 5364700 7038600 10138700
     // 14095600 18104600 21094600 24924600 28124600
@@ -149,8 +149,8 @@ uint32_t init_rf_freq(void) {
         }
 
         // printf uint32_t with %u
-        printf("\nrf_freq_init _Band %s BASE_FREQ_USED %lu XMIT_FREQUENCY %lu _clock_speed %s\n",
-            _Band, BASE_FREQ_USED, XMIT_FREQUENCY, _clock_speed);
+        if (VERBY[0]) Serial.printf(EOL "rf_freq_init _Band %s BASE_FREQ_USED %lu XMIT_FREQUENCY %lu " EOL,
+            _Band, BASE_FREQ_USED, XMIT_FREQUENCY);
         return XMIT_FREQUENCY;
 }
 
@@ -206,41 +206,47 @@ txBand is:
 14: 2m
 */
 
-void process_chan_num() {
-    if ((atoi(_U4B_chan) >= 0) && (atoi(_U4B_chan) < 600)) {
-        _id13[0]='1';
-        // Channels 0 - 199: '0'
-        // Channels 200-399: '1'
-        // Channels 400-599: 'Q'
-        if  (atoi(_U4B_chan) < 200) _id13[0]='0';
-        if  (atoi(_U4B_chan) > 399) _id13[0]='Q';
-
-        // (channel % 200) / 20
-        int id3 = (atoi(_U4B_chan) % 200) / 20;
-        _id13[1] = id3 + '0';
-
-        // Frequency discrimination:
-        // Frequency sector is
-        // (channel % 20) / 5
-        int lane = (atoi(_U4B_chan) % 20) / 5;
-        _lane[0] = lane+'1';
-
-        // The transmit slot (txSlot) is first calculated as (channel % 5).
-        // Then the start time in minutes past the hour, repeated every 10 minutes
-        // 2 * ((txSlot + 2 * txBand) % 5);
-        int txSlot = atoi(_U4B_chan) % 5;
-        int txBand;
-        switch (atoi(_Band)) {
-            case 20: txBand = 7;  break;  // 20m
-            case 17: txBand = 8;  break;  // 17m
-            case 15: txBand = 9;  break;  // 15m
-            case 12: txBand = 10; break;  // 12m
-            case 10: txBand = 11; break;  // 10m
-            default: txBand = 7;  break;  // default to 20M in case of error cases
+void process_chan_num(char *_id13, char *_start_minute, char *_lane, char *_Band, char *_U4B_chan) {
+    int u4bChannel = atoi(_U4B_chan);
+    if (u4bChannel < 0 || u4bChannel > 599) {
+        if (VERBY[0]) {
+            Serial.printf("ERROR: bad _U4B_chan %d ..using 599" EOL, u4bChannel);
+            u4bChannel = 599;
         }
-        // will be char 0, 2, 4, 6 or 8 only
-        _start_minute[0] = '0' + (2 * ((txSlot + (txBand*2)) % 5));
     }
+            
+    _id13[0]='1';
+    // Channels 0 - 199: '0'
+    // Channels 200-399: '1'
+    // Channels 400-599: 'Q'
+    if  (u4bChannel < 200) _id13[0]='0';
+    if  (u4bChannel > 399) _id13[0]='Q';
+
+    // (channel % 200) / 20
+    int id3 = u4bChannel % 200 / 20;
+    _id13[1] = id3 + '0';
+
+    // Frequency discrimination:
+    // Frequency sector is
+    // (channel % 20) / 5
+    int lane = (u4bChannel % 20) / 5;
+    _lane[0] = lane + '1';
+
+    // The transmit slot (txSlot) is first calculated as (channel % 5).
+    // Then the start time in minutes past the hour, repeated every 10 minutes
+    // 2 * ((txSlot + 2 * txBand) % 5);
+    int txSlot = u4bChannel % 5;
+    int txBand;
+    switch (atoi(_Band)) {
+        case 20: txBand = 7;  break;  // 20m
+        case 17: txBand = 8;  break;  // 17m
+        case 15: txBand = 9;  break;  // 15m
+        case 12: txBand = 10; break;  // 12m
+        case 10: txBand = 11; break;  // 10m
+        default: txBand = 7;  break;  // default to 20M in case of error cases
+    }
+    // will be char 0, 2, 4, 6 or 8 only
+    _start_minute[0] = '0' + (2 * ((txSlot + (txBand * 2)) % 5));
 }
 
 //*******************************************
@@ -257,6 +263,15 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
 
+    
+    if (t_grid6[4] < 'A' || t_grid6[4] > 'X') {
+        if (VERBY[0]) Serial.printf("ERROR: bad t_grid6[4] %s" EOL, t_grid6);
+        t_grid6[1] = 'A';
+    }
+    if (t_grid6[5] < 'A' || t_grid6[5] > 'X') {
+        if (VERBY[0]) Serial.printf("ERROR: bad t_grid6[5] %s" EOL, t_grid6);
+        t_grid6[5] = 'A';
+    }
     uint8_t grid5Val = t_grid6[4] - 'A';
     uint8_t grid6Val = t_grid6[5] - 'A';
 
@@ -327,8 +342,8 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     if (speedKnotsNum > 41) speedKnotsNum = 41;
 
     //****************
-    int gpsValidNum = 1;
     // traquito site won't show the 6 char grid if this bit is off.
+    int gpsValidNum = 1;
     // shift inputs into a big number
     val = 0;
     val *= 90; val += tempCNum;
@@ -361,6 +376,7 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     // null term is appended after the generated string
 
     // ah, can't use sizeof. size is lost
+    // everything should fill the print here..no spaces
     snprintf(hf_callsign, 7, "%6s", callsign);
     snprintf(hf_grid4, 5, "%4s", grid4);
     snprintf(hf_power, 3, "%2s", power);
