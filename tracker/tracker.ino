@@ -218,7 +218,8 @@ uint16_t tone_delay, tone_spacing;
 volatile bool proceed = false;
 
 //******************************  GPS SETTINGS   *********************************
-int GpsInvalidCnt = 0;
+int GpsInvalidAllCnt = 0;
+bool GpsInvalidAll = false;
 
 // gps_functions.cpp refers to this
 TinyGPSPlus gps;
@@ -1079,10 +1080,24 @@ const uint32_t GPS_LOCATION_AGE_MAX = 70000;
 const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
 
 //*************************************************************************
+uint32_t GpsInvalidAllCnt = 0
 void loop1() {
+//************************************************
+    // used to ignore TinyGps++ state for couple of iterations of GPS burst gathering after 
+    // turning Gps off then on.
+    if (GpsIsOn() {
+        if (GpsInvalidAllCnt > 0) GpsInvalidAllCnt--
+    }
+    GpsInvalidAll = GpsInvalidAllCnt > 0;
+        
+    // FIX! updated to have a global static int global GpsInvalidateAll
+    // I count that down during loop1() iterations and ignore all gps
+    // until it's zero. TinyGPS++ state should have transitioned by then
+    // based on new NMEA sentences. (should transition cleanly within 2 secs?)
     // if we were ready to go but not aligned, this is a computed delay into the next
     // minute to align better (not so good if we're only tx starting every 10 minutes
     // but good for test mode _go_when_ready that disables channel starting minute requirement.
+
     int SMART_WAIT;
     // getting 25 to 35 sec loop times from the BATT_WAIT/BEACON_WAIT ?? (baud 19200)
     // some loops were 775 millis
@@ -1177,7 +1192,7 @@ void loop1() {
         // this just handles led for time/fix and gps reboot check/execution
         // "%lu" or "%" PRIu32 " to use with printf?
         uint32_t fix_age = gps.location.age();
-        bool fix_valid = gps.location.isValid();
+        bool fix_valid = gps.location.isValid() && !GpsInvalidAll;
         // isUpdated() indicates whether the object’s value has been updated (not necessarily changed)
         // since the last time you queried it
         bool fix_updated = gps.location.isUpdated();
@@ -1186,7 +1201,7 @@ void loop1() {
         // all the data should be valid to consider it a good fix.
         // this doesn't need qualification on whether we got a good date/time
         // since we check that first, before we do any looking for a 3d fix
-        bool fix_valid_all =
+        bool fix_valid_all = !GpsInvalidAll &&
             gps.satellites.isValid() && (gps.satellites.values() >= 3) &&
             gps.hdop.isValid() &&
             gps.altitude.isValid() &&
@@ -2043,6 +2058,13 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, 
 
     // get all the message date outside this?
     // FIX! does this strip null terms? what about strlen(hf_all) < 6 ?
+
+    // FIX! updated to have a global static int globalGpsInvalidateAll
+    // I count that down during loop1() iterations and ignore all gps
+    // until it's zero. TinyGPS++ state should have transitioned by then
+    // based on new NMEA sentences. (should transition cleanly within 2 secs?)
+    
+    // that I manage and quality all TinyGPS++ valid signals
     /*
      * wspr_encode(const char * call, const char * loc, const uint8_t dbm, uint8_t * symbols)
      *

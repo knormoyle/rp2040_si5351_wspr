@@ -120,6 +120,9 @@ extern bool DEVMODE;
 // decode of verbose 0-9
 extern bool VERBY[10];
 
+extern bool GpsInvalidAllCnt;
+extern bool GpsInvalidAll;
+
 // FIX! gonna need an include for this? maybe note
 // # include <TimeLib.h>
 
@@ -841,9 +844,18 @@ void GpsOFF(void) {
     */
 
     // these three are the initial value
-    gps.date.valid = false;
-    gps.date.updated = false;
-    gps.date.date = 0;
+    // this should work without changing the TinyGPS++ library
+    if (true) {
+        GpsInvalidAllCnt = 2; // should get us at least 2 GPS broadcasts
+        GpsInvalidAll = true;
+    else
+        // how do we clear him?
+        // do we wait until we turn GpsON() on, beforre clearing GPSInvalidAll
+        // we can decrement the count only if gps is on? (in setup1())
+        gps.date.valid = false;
+        gps.date.updated = false;
+        gps.date.date = 0;
+    }
 
     // also has lastCommitTime = millis()
     // we don't change that?
@@ -1064,9 +1076,9 @@ void updateGpsDataAndTime(int ms) {
     }
 
     if (VERBY[9])
-        Serial.printf("gps.time.isValid():%u" EOL, gps.time.isValid());
+        Serial.printf("GpsInvalidAll:%u gps.time.isValid():%u" EOL, gpsInvalidAll, gps.time.isValid());
 
-    if (gps.time.isValid()) {
+    if (gps.time.isValid()&& !GpsInvalidAll) {
         // FIX! don't be updating this every time
         // this will end up checking every time we get a burst?
 
@@ -1204,17 +1216,17 @@ void gpsDebug() {
     Serial.println(F("          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail"));
     Serial.println(F("---------------------------------------------------------------------------------------------------------------------"));
 
-    printInt(gps.satellites.value(), gps.satellites.isValid(), 5);
-    printInt(gps.hdop.value(), gps.hdop.isValid(), 5);
-    printFloat(gps.location.lat(), gps.location.isValid(), 12, 6);
-    printFloat(gps.location.lng(), gps.location.isValid(), 12, 6);
+    printInt(gps.satellites.value(), gps.satellites.isValid() && !GpsInvalidAll, 5);
+    printInt(gps.hdop.value(), gps.hdop.isValid() && !GpsInvalidAll, 5);
+    printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
+    printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
 
-    printInt(gps.location.age(), gps.location.isValid(), 5);
+    printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 5);
     printDateTime(gps.date, gps.time);
-    printFloat(gps.altitude.meters(), gps.altitude.isValid(), 7, 2);
-    printFloat(gps.course.deg(), gps.course.isValid(), 7, 2);
-    printFloat(gps.speed.kmph(), gps.speed.isValid(), 6, 2);
-    printStr(gps.course.isValid() ? TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
+    printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
+    printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
+    printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);
+    printStr((gps.course.isValid() && !GpsInvalidAll)? TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
     printInt(gps.charsProcessed(), true, 6); // FIX! does this just wrap wround if it's more than 6 digits?
     printInt(gps.sentencesWithFix(), true, 10); // FIX! does this just wrap wround if it's more than 10 digits?
     printInt(gps.failedChecksum(), true, 9);
