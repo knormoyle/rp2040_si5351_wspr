@@ -90,7 +90,7 @@ extern bool DEVMODE;
 // decode of verbose 0-9
 extern bool VERBY[10];
 
-extern bool GpsInvalidAllCnt;
+extern uint32_t GpsInvalidAllCnt;
 extern bool GpsInvalidAll;
 
 // FIX! gonna need an include for this? maybe note
@@ -1022,10 +1022,14 @@ void updateGpsDataAndTime(int ms) {
         // seems like we get 12 sentences every time we call this function
         // should stay steady
         int diff = sentenceStartCnt - sentenceEndCnt;
+        // these 3 form a oneliner
+        Serial.print("updateGpsDataAndTime:");
         Serial.printf(
-            "start_millis %" PRIu64 " current_millis %" PRIu64 
-            " sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
-            start_millis, current_millis, sentenceStartCnt, sentenceEndCnt, diff);
+            " start_millis %" PRIu64 " current_millis %" PRIu64, start_millis, current_millis);
+        Serial.printf(
+            " sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL, sentenceStartCnt, sentenceEndCnt, diff);
+        Serial.flush();
+        
 
         // we can round up or down by adding 500 before the floor divide
         duration_millis = current_millis - start_millis;
@@ -1038,17 +1042,25 @@ void updateGpsDataAndTime(int ms) {
         // include the end stall detect (25 millis)
         // So it's an average over that period.
         float AvgCharRateSec;
+
         if (duration_millis == 0) AvgCharRateSec = 0; 
-        else AvgCharRateSec = 1000.0 * (((float) incomingCharCnt / (float) duration_millis));
-        Serial.printf(
-            "NMEA AvgCharRateSec %.1f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,  
+        else AvgCharRateSec = 1000.0 * ((float)incomingCharCnt / (float)duration_millis);
+        // can it get too big?
+        if (AvgCharRateSec > 999999.9) AvgCharRateSec = 999999.9;
+        if (false) { // FIX! why is this crashing?
+            Serial.printf(
+            "updateGpsDataAndTime: NMEA AvgCharRateSec %.f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,  
             AvgCharRateSec, duration_millis, incomingCharCnt);
+            Serial.flush();
+        }
     }
 
     if (VERBY[9])
-        Serial.printf("GpsInvalidAll:%u gps.time.isValid():%u" EOL, GpsInvalidAll, gps.time.isValid());
+        Serial.printf("updateGpsDataAndTime: GpsInvalidAll:%u gps.time.isValid():%u" EOL, 
+            GpsInvalidAll, gps.time.isValid());
+        Serial.flush();
 
-    if (gps.time.isValid()&& !GpsInvalidAll) {
+    if (gps.time.isValid() && !GpsInvalidAll) {
         // FIX! don't be updating this every time
         // this will end up checking every time we get a burst?
 
@@ -1205,22 +1217,25 @@ void gpsDebug() {
     Serial.println(F("GpsDebug END"));
 }
 
-// I was wondering why the HDOP was so high. it seems the 90 really means 90 / 100 = .9 HDOP 
+// Was wondering why the HDOP was so high. it seems the 90 really means 90 / 100 = .9 HDOP 
 // i.e. less than 1. so that's ideal. Yeah!
+
 // https://en.wikipedia.org/wiki/Dilution_of_precision_(navigation)
 
-// DOP Value	Rating[5]	Description
-// < 1	Ideal	Highest possible confidence level to be used for applications demanding the highest possible precision at all times.
-// 1–2	Excellent	At this confidence level, positional measurements are considered accurate enough to meet all but the most sensitive applications.
-// 2–5	Good	Represents a level that marks the minimum appropriate for making accurate decisions. Positional measurements could be used to make reliable in-route navigation suggestions to the user.
-// 5–10	Moderate	Positional measurements could be used for calculations, but the fix quality could still be improved. A more open view of the sky is recommended.
-// 10–20	Fair	Represents a low confidence level. Positional measurements should be discarded or used only to indicate a very rough estimate of the current location.
-// > 20	Poor	At this level, measurements should be discarded.
-
-// why I believe the TinyGPS++ number is hundredths:
+// DOP
+// < 1 Ideal Highest possible confidence
+// 1–2 Excellent
+// 2–5 Good Represents a level that marks the minimum appropriate
+// 5–10 Moderate 
+// 10–20 Fair Represents a low confidence level.
+// > 20 Poor At this level, measurements should be discarded.
 
 // https://github.com/mikalhart/TinyGPSPlus/issues/8
-// It was a design decision—possibly flawed—to deliver the HDOP exactly as reported by the NMEA string. NMEA reports HDOP in hundredths. We could have made this return a floating-point with the correct value, but at the time it seemed better to not introduce floating-point values. Just convert to float and divide by 100 and you should be good.
+// It was a design decision—possibly flawed—to deliver the HDOP exactly as reported by the NMEA string. 
+// NMEA reports HDOP in hundredths. 
+// We could have made this return a floating-point with the correct value, 
+// but at the time it seemed better to not introduce floating-point values. 
+// Just convert to float and divide by 100 and you should be good.
 // Mikal
 
 //*****************

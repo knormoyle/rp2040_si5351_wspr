@@ -24,6 +24,7 @@
 
 #include "defines.h"
 #include "print_functions.h"
+#include "debug_functions.h"
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
@@ -216,14 +217,15 @@ int PWM_WRAP_COUNT;
 // below we always loop thru the entire hf_tx_buffer?
 // so we always loop thru 162 symbols, but the last ones might not matter.
 // is this less than 256? probaby the real max?
-uint8_t hf_tx_buffer[255] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
+// just make it 162 so when we clear it, it's faster
+uint8_t hf_tx_buffer[162] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
 
 // FIX! why is this volatile?
 volatile bool proceed = false;
 
 //*********************************
-// if we need to ignore TinyGps++ state for a while, because 
-// we turned off the Gps, and then TinyGps++ won't change 
+// if we need to ignore TinyGps++ state for a while, because
+// we turned off the Gps, and then TinyGps++ won't change
 // state until we give it a full broadcast's worth of sentences (1 sec of broadcast)
 uint32_t GpsInvalidAllCnt = 0;
 bool GpsInvalidAll = false;
@@ -234,11 +236,11 @@ uint32_t GpsWatchdogCnt = 0;
 // gps_functions.cpp refers to this
 TinyGPSPlus gps;
 
-#include "debug_functions.h"
 #include "config_functions.h"
 #include "tele_functions.h"
 #include "mh_functions.h"
 #include "adc_functions.h"
+#include "wspr_functions.h"
 
 //*********************************
 // in AdaFruit_I2CDevice.h
@@ -941,7 +943,9 @@ void setup1() {
     calculateDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, WSPR_DELAY, 100);
     calculateDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, WSPR_DELAY, 133);
     calculateDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, WSPR_DELAY, 125);
-    Serial.printf("calculateDivAndWrap() if PLL_SYS_MHZ %lu -> WM_DIV %d PWM_WRAP_COUNT %d" EOL, 
+    // oneliner
+    Serial.printf("calculateDivAndWrap() ");
+    Serial.printf("if PLL_SYS_MHZ %d -> WM_DIV %d PWM_WRAP_COUNT %d" EOL,
         125, PWM_DIV, PWM_WRAP_COUNT);
 
     Serial.println(F("setup1() END"));
@@ -1086,11 +1090,11 @@ const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
 
 //*************************************************************************
 void loop1() {
-    // used to ignore TinyGps++ state for couple of iterations of GPS burst gathering after 
+    // used to ignore TinyGps++ state for couple of iterations of GPS burst gathering after
     // turning Gps off then on.
     if (GpsIsOn() && GpsInvalidAllCnt > 0) GpsInvalidAllCnt--;
     GpsInvalidAll = GpsInvalidAllCnt > 0;
-        
+
     // FIX! updated to have a global static int global GpsInvalidateAll
     // I count that down during loop1() iterations and ignore all gps
     // until it's zero. TinyGPS++ state should have transitioned by then
@@ -1211,10 +1215,10 @@ void loop1() {
             gps.speed.isValid() &&
             gps.course.isValid();
 
-        // note fix_valid_all includes sat cnt >= 3 now. 
+        // note fix_valid_all includes sat cnt >= 3 now.
         // so we won't update time until we get a valid 3d fix?
         // no..should we keep it looser for time?
-        // we'll get the minute alignment right sooner with the old 'gps.location.isValid' fix_valid 
+        // we'll get the minute alignment right sooner with the old 'gps.location.isValid' fix_valid
         // to update time
         if ( fix_valid && (fix_age < GPS_LOCATION_AGE_MAX) ) {
             GpsWatchdogCnt = 0;
@@ -1241,23 +1245,23 @@ void loop1() {
                 // Note HDOP was very large, and sat count was 0.
                 // Fix Age is in milliseconds
 
-                // Here's an interesting tidbit about deciding whether a "fix" is good, using TinyGPS++ arduino libray, 
+                // Here's an interesting tidbit about deciding whether a "fix" is good, using TinyGPS++ arduino libray,
                 // and the public methods they have on their internal state.
 
                 // I noticed in some code I'm using that they qualify the idea of a "fix" with whether the satellite count is 3.
                 // I wonder if I should also quality it with the relevant isValid() bit for the altitude also, or maybe all of the isValid() bits below..
                 // that might be best..i.e. could even include course and speed valid, although maybe not.
-                //  
-                // Interestingly, running for a while, I saw that there are cases where you would think you have a fix, 
-                // but HDOP is high and satellite count is 0. So either qualifying the notion of "fix" as to having 3 or more sats, 
+                //
+                // Interestingly, running for a while, I saw that there are cases where you would think you have a fix,
+                // but HDOP is high and satellite count is 0. So either qualifying the notion of "fix" as to having 3 or more sats,
                 // or a reasonable non-zero altitude or a reasonable HDOP, seems necessary.
                 // Requiring sat count > 3 seems like the right tradeoff.
 
                 // Background:
-                // TinyGps++ has these methods that return info, that reflects the accumulated info from the NMEA data 
+                // TinyGps++ has these methods that return info, that reflects the accumulated info from the NMEA data
                 // you've sent it (as individual chars, which it interprets as sentences)
-                // 
-                // The long print at the bottom uses these methods, qualified by the relevant isValid() ..note therre are different ones. 
+                //
+                // The long print at the bottom uses these methods, qualified by the relevant isValid() ..note therre are different ones.
                 // gps.date
                 // gps.time
                 // gps.satellites.value() qualified by gps.satellites.isValid()
@@ -1266,12 +1270,12 @@ void loop1() {
                 // gps.location.lat() qualified by gps.location.isValid()
                 // gps.location.lng() qualified by gps.location.isValid()
                 // gps.location.age() qualified by gps.location.isValid()
-                //  
+                //
                 // // heading
                 // gps.course.deg() qualified by gps.course.isValid()
                 // gps.course.value() qualified by gps.course.isValid()
                 // gps.speed.kmph() qualified by gps.speed.isValid()
-                //  
+                //
                 // gps.charsProcessed()
                 // gps.sentencesWithFix()
                 // gps.failedChecksum()
@@ -1281,18 +1285,18 @@ void loop1() {
 //           (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail
 // ---------------------------------------------------------------------------------------------------------------------
 // 0    2550 38.021000    -107.677071  4047 11/22/2024 22:08:34 65   0.00    237.54  11.50  N     20983 254       2
-// 
+//
 
 
 // Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course  Speed Card Chars FixSents  Checksum
 //          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail
 // ---------------------------------------------------------------------------------------------------------------------
-// 0    2550 38.021000    -107.677071  7814 11/22/2024 23:11:21 65   0.00    237.54  11.50  N     41149 254       3        
+// 0    2550 38.021000    -107.677071  7814 11/22/2024 23:11:21 65   0.00    237.54  11.50  N     41149 254       3
 
 // Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course  Speed Card Chars FixSents  Checksum
 //          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail
 // ---------------------------------------------------------------------------------------------------------------------
-// 0    2550 38.021000    -107.677071  1158 11/23/2024 00:14:07 74   0.00    237.54  11.50  N     61847 254       4        
+// 0    2550 38.021000    -107.677071  1158 11/23/2024 00:14:07 74   0.00    237.54  11.50  N     61847 254       4
 
 
 
@@ -1593,11 +1597,13 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         Serial.print(EOL);
         Serial.flush();
     }
+    // init to all zeroes just so we know what the encode is doing, when
+    // if we get bad symbols when we send the symbols
     syncAndSendWspr(hf_freq, 0, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
     tx_cnt_0 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
     if (VERBY[0]) StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d" EOL, minute(), second());
-    
+
     // we don't loop around again caring about gps fix, because we've saved
     // telemetry (and sensor data in there) right before the callsign tx
     setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
@@ -1623,7 +1629,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
     if (VERBY[0]) StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d" EOL, minute(), second());
-    
+
     // have to send this if telen1 or telen2 is enabled
     if ( (_TELEN_config[0] != '-' || _TELEN_config[1] != '-') ||
          (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
@@ -1688,7 +1694,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
 
 //*******************************************************
 extern const int WSPR_PWM_SLICE_NUM = 4;
-static const bool JUST_ONE_INTERRUPT = true;
+static const bool JUST_ONE_INTERRUPT = false;
 
 void PWM4_Handler(void) {
     // too much output!
@@ -1715,65 +1721,7 @@ void PWM4_Handler(void) {
 }
 
 
-// The RP2040 PWM block has 8 identical slices, the RP2350 has 12.  Each slice can drive two PWM output signals, or
-// measure the frequency or duty cycle of an input signal. This gives a total of up to 16/24 controllable
-// PWM outputs. All 30 GPIOs can be driven by the PWM block.
-// 
-// The PWM hardware functions by continuously comparing the input value to a free-running counter. This produces a
-// toggling output where the amount of time spent at the high output level is proportional to the input value. The fraction of
-// time spent at the high signal level is known as the duty cycle of the signal.
-// 
-// The default behaviour of a PWM slice is to count upward until the wrap value (\ref pwm_config_set_wrap) is reached, and then
-// immediately wrap to 0. PWM slices also offer a phase-correct mode, where the counter starts to count downward after
-// reaching TOP, until it reaches 0 again.
-
-// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h
-// If the divide mode is free-running, the PWM counter runs at clk_sys / div.
-
-// FIX! are these delays adjusted for compensation due to code delays? no?
-// WSPR_TONE_SPACING = 146;  // ~1.46 Hz
-// ths is what we're called with for symbol time (millis)
-// WSPR_DELAY = 683; 
-
 //*******************************************************
-// uses PLL_SYS_MHZ to figure a good div and wrap_cnt period for the PWM (subtract 1 for TOP)
-void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL_SYS_MHZ) {
-    int div;
-    // FIX! is float enough precision for odd pico frequencies?
-    float PLL_SYS_PERIOD = 1 / (float) PLL_SYS_MHZ;
-    float wrap_cnt_float;
-    int wrap_cnt;
-    // could check if PLL_SYS_PERIOD is integer aligned?
-    for (div = 250; div<301; div++) {
-        wrap_cnt_float = (PLL_SYS_PERIOD * (float) div); 
-        // does a floor
-        wrap_cnt = (int) wrap_cnt_float;
-
-        // an exact compare to float should be fine here?
-        // i.e. the float is also equal to an int
-        if (wrap_cnt_float != (float) wrap_cnt) continue;
-
-        // does this come close enough to total time for all symbols
-        float totalSymbolsTime = wrap_cnt * div * PLL_SYS_PERIOD * 162;
-        if (totalSymbolsTime > 110.585 &&  totalSymbolsTime < 110.60) break;
-        // The WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
-        // 0.68266666666
-        // 162 * 256/375 = 110.592 secs total
-    }
-    if (div == 301) {
-        Serial.printf("ERROR: didn't find a good div and wrap_cnt for PLL_SYS_MHZ %lu PLL_SYS_PERIOD %.f usecs" EOL,
-            PLL_SYS_MHZ, PLL_SYS_PERIOD);
-    }
-    else {
-        Serial.printf("GOOD: Found a good div and wrap_cnt for PLL_SYS_MHZ %lu PLL_SYS_PERIOD %.f usecs" EOL,
-            PLL_SYS_MHZ, PLL_SYS_PERIOD);
-        *PWM_DIV = div;
-        *PWM_WRAP_CNT = wrap_cnt;
-        Serial.printf("GOOD: PWM_DIV %d PWM_WRAP_CNT %d" EOL, div, wrap_cnt);
-    }
-}
-//*******************************************************
-
 void zeroTimerSetPeriodMs(float ms) {
     // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
 
@@ -1781,10 +1729,10 @@ void zeroTimerSetPeriodMs(float ms) {
     // 250 clocks at 125Mhz .008 uSec per clock, is 250 * .008 = 2 uSec
     // 2uS (at 125Mhz? does it need adjusting at other clks?)
     // so if we're count at 2uSec intervals to wrap at 683 millis.. that's 500*683 = 341500 counts?
-    pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);  
+    pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);
 
     // Set the highest value the counter will reach before returning to 0. Also known as TOP.
-    // this will be the tone_delay we're called with 
+    // this will be the tone_delay we're called with
     // FIX! this doesn't seem right. t should wrap at 683 millis, but * 500 ?
     // so instead of getting 500 interrupts, we get one interrupt?
     // also, subtracting 1 here is ??
@@ -1794,7 +1742,7 @@ void zeroTimerSetPeriodMs(float ms) {
     if (JUST_ONE_INTERRUPT) {
         // this will have 2 uSec accuracy ?
         // the count here plus the divider have to multiply to = ms
-        // depending on RP2040 clock rate, we want integer divider with no error 
+        // depending on RP2040 clock rate, we want integer divider with no error
         // after computing the wrap boundary? probably want to loop with dividers from 250 to 300
         // and pick the first one for the target ms
         pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)(ms * 500) - 1));
@@ -1946,9 +1894,9 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             case 2: ;
             case 3: break;
             default :
-                if (VERBY[0]) Serial.printf("ERROR: bad symbol 0x%02x" EOL, symbol); 
+                if (VERBY[0]) Serial.printf("ERROR: bad symbol i %u 0x%02x" EOL, i, symbol);
         }
-            
+
         uint32_t freq_x16 =
             (hf_freq << PLL_CALCULATION_PRECISION) +
             (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
@@ -1989,7 +1937,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         Serial.printf("ERROR: wsprDuration %" PRIu64 " usecs" EOL EOL, wsprDuration);
     }
     DoLogPrint();
-        
+
     pwm_set_enabled(WSPR_PWM_SLICE_NUM, false);
     pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, false);
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
@@ -2025,6 +1973,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // https://pubs.opengroup.org/onlinepubs/9699919799/functions/strtoumax.html
 
     // https://stackoverflow.com/questions/27260304/equivalent-of-atoi-for-unsigned-integers
+    // can we have spaces?
     set_hf_tx_buffer(hf_tx_buffer, hf_callsign, hf_grid4, (uint8_t)atoi(hf_power));
 
     // this should be fine even if we wait a long time
@@ -2054,10 +2003,10 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
 }
 
 //**********************************
-void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, uint8_t hf_power) {
+void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, uint8_t power) {
     if (VERBY[0]) Serial.println(F("set_hf_tx_buffer() START"));
     // Clear out the transmit buffer
-    memset(hf_tx_buffer, 0, 255);  // is this bigger than WSPR_SYMBOL_COUNT ?
+    memset(hf_tx_buffer, 0, 162);  // same number of bytes as hf_tx_buffer is declared 
 
     // Set the proper frequency and timer CTC
     // legalPower = [0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60]
@@ -2069,7 +2018,7 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, 
     // I count that down during loop1() iterations and ignore all gps
     // until it's zero. TinyGPS++ state should have transitioned by then
     // based on new NMEA sentences. (should transition cleanly within 2 secs?)
-    
+
     // that I manage and quality all TinyGPS++ valid signals
     /*
      * wspr_encode(const char * call, const char * loc, const uint8_t dbm, uint8_t * symbols)
@@ -2085,7 +2034,7 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, 
      *
     */
     // hf_power needs to be passed as uint8_t
-    jtencode.wspr_encode(hf_callsign, hf_grid4, hf_power, hf_tx_buffer);
+    jtencode.wspr_encode(hf_callsign, hf_grid4, power, hf_tx_buffer);
 
     // maybe useful python for testing wspr encoding
     // https://github.com/robertostling/wspr-tools/blob/master/README.md
@@ -2107,7 +2056,7 @@ int initPicoClock(int PLL_SYS_MHZ) {
     Serial.printf("Attempt to set rp2040 clock to %d Mhz (legal)" EOL, PLL_SYS_MHZ);
     // 2nd arg is "required"
     set_sys_clock_khz(clk_khz, true);
-    // bool clock_configure ( enum clock_index clk_index, uint32_t src, uint32_t auxsrc, uint32_t src_freq, uint32_t freq ) 
+    // bool clock_configure ( enum clock_index clk_index, uint32_t src, uint32_t auxsrc, uint32_t src_freq, uint32_t freq )
     // clk_index The clock to configure
     // src The main clock source, can be 0.
     // auxsrc The auxiliary clock source, which depends on which clock is being set. Can be 0
@@ -2171,8 +2120,8 @@ void freeMem() {
 //*****************************************************************
 
 // https://brainwagon.org/2015/05/14/its-about-time-with-some-wspr-updates/
-// The four tones needed by WSPR are 12000/8192 (or about 1.465 Hz) apart 
-// and are 8192 / 12000 seconds in duration. 
+// The four tones needed by WSPR are 12000/8192 (or about 1.465 Hz) apart
+// and are 8192 / 12000 seconds in duration.
 // 0.6826666666666666 secs
 
 // wsprry-pi still lives?
@@ -2186,7 +2135,7 @@ void freeMem() {
 
 
 // https://www.qrp-labs.com/ultimate3/u3info/dt.html
-// A reminder that according the protocol specification, 
+// A reminder that according the protocol specification,
 // WSPR transmissions ideally start on the 2nd second of even minutes. (??)
 // <I thought spec says 1 second in is the spec>
 // The WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
@@ -2201,8 +2150,16 @@ void freeMem() {
 // The Si5351A's delay to get the PLL locked on frequency etc
 
 // Conclusion
-// In case you don't have time to read all of the following, here's my conclusion first. The U3S with firmware v3.09c was tested. The timing is very close to perfect. The WSPR transmission starts 67ms late, and the overall message has a duration 25ms shorter than it should be. Considering the duration of a WSPR tone is 683ms, both these "errors" are a small fraction of a single WSPR tone. There is NO error which could explain any DT report in WSPR, except perhaps 0.1s since the resolution in WSPR is limited to 0.1 seconds. Any DT must arise elsewhere.
-// 
+// In case you don't have time to read all of the following, here's my conclusion first. 
+// The U3S with firmware v3.09c was tested. The timing is very close to perfect. 
+// The WSPR transmission starts 67ms late, and the overall message has a duration 25ms shorter 
+// than it should be. 
+// Considering the duration of a WSPR tone is 683ms, 
+// both these "errors" are a small fraction of a single WSPR tone. 
+// There is NO error which could explain any DT report in WSPR, 
+// except perhaps 0.1s since the resolution in WSPR is limited to 0.1 seconds. 
+// Any DT must arise elsewhere.
+//
 // Update 21-Sep-2016
 // I found this interesting thread, a discussion with Joe K1JT and Steve K9AN. Apparently there is an offset of 1 second already mistakenly built into the decoder program. See http://wsjt-devel.narkive.com/6FKsdW3r/wsjt-x-wspr-dt-error
 

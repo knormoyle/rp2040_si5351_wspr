@@ -28,7 +28,7 @@
 // Arduino IDE created by many
 // Adafruit libraries created by many
 // arduino-pico core https://github.com/earlephilhower/arduino-pico
-// JTEncode library: https://github.com/etherkit/JTEncode
+// JTEncode library: https://github.com/etherkit/JTEncode Jason Mildrum NT7S 
 // https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png
 // TinyGPSPlus library: //https://github.com/mikalhart/TinyGPSPlus
 // Time library: //https://github.com/PaulStoffregen/Time
