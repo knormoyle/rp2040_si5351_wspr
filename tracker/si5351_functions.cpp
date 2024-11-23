@@ -685,39 +685,36 @@ bool vfo_is_off(void) {
 
 //****************************************************
 void vfo_turn_on(uint8_t clk_num) {
+    // FIX! what if clk_num is not zero?
+    // turn on of 0 turns on 0 and 1 now
+    clk_num = 0; 
     if (VERBY[0]) Serial.printf("vfo_turn_on START clk_num %u" EOL, clk_num);
     // already on successfully
     // FIX! ..always turn it on now? for debug
     // if (vfo_is_on()) return;
 
     // could there be reset problems ..we need to off then on?
+    // FIX! we could remove the explict extra vfo_set_power_on(true) when callin vfo_turn_on()
     vfo_set_power_on(false);
     sleep_ms(1000);
     vfo_set_power_on(true);
+    sleep_ms(3000);
 
     vfo_turn_on_completed = false;
     vfo_turn_off_completed = false;
-    // sets state to be used later
-    if (_tx_high[0] == '0') {
-        // FIX! always high for now
-        // vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_2MA);
-        // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_2MA);
-        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
-        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
-    } else {
-        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
-        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
-    }
+    vfo_init();
+    // kevin 11/18/24
+    Watchdog.reset();
+    sleep_ms(3000);
 
-    // does Wire.begin() deal with all of this
+    // did full init above instead..since we toggled vfo power?
     if (false) {
+        // undo what vfo_turn_off() did! Everything else was left as is per vfo_init()?
         gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
         gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
     }
+    sleep_ms(1000);
 
-    // kevin 11/18/24
-    Watchdog.reset();
-    sleep_ms(5000);
 
     // too big a wait
     // busy_wait_us_32(100000);
@@ -733,11 +730,14 @@ void vfo_turn_on(uint8_t clk_num) {
     uint8_t reg;
     // Disable all CLK output drivers
     if (VERBY[0]) Serial.println(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
+    Serial.flush();
 
     // HACK ..don't iterate
     int tries = 0;
     // any error
     int res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff); 
+    if (VERBY[0]) Serial.printf("vfo_turn_on first res %d of i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL" EOL , res);
+    Serial.flush();
     while (res != 2) {
         if (tries > 5) {
             Serial.println("Rebooting because can't init VFO_I2C_INSTANCE after 5 tries");
@@ -786,6 +786,22 @@ void vfo_turn_on(uint8_t clk_num) {
     }
 
     if (VERBY[0]) Serial.print(F("vfo_turn_on done trying to init the I2C0 pins in loop" EOL));
+
+    // Moved this down here ..we don't know if we'll hang earlier
+    // sets state to be used later
+    if (_tx_high[0] == '0') {
+        // FIX! HACK so always high for now 11/23/24
+        // vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_2MA);
+        // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_2MA);
+
+        // this also clears the "prev" state, so we know we'll reload all state in the si5351
+        // i.e. no optimization based on knowing what we had sent before!
+        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
+    } else {
+        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
+    }
 
     // Powerdown CLK's
     for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) {

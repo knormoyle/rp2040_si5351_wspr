@@ -771,7 +771,8 @@ void setup1() {
 
     // FIX! HACK it on for now
     if (true) {
-        vfo_set_power_on(true);
+        // unnecessary 11/23/24 ..inside vfo_turn_on() now
+        // vfo_set_power_on(true);
         // FIX! don't turn off for now 11/18/24
         // vfo_turn_off();
         vfo_turn_on(WSPR_TX_CLK_NUM);
