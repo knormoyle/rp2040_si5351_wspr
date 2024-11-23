@@ -125,8 +125,9 @@ void printFloat(float val, bool valid, int len, int prec) {
 // got a "full" with 1024..had 996 things in it
 // from updateGpsDataAndTime()
 // #define LOG_BUFFER_SIZE 2048
-// #define LOG_BUFFER_SIZE 4096
-#define LOG_BUFFER_SIZE 8192
+#define LOG_BUFFER_SIZE 4096
+// was this too big and running out of memory?
+// #define LOG_BUFFER_SIZE 8192
 
 static char logBuffer[LOG_BUFFER_SIZE] = { 0 };
 
@@ -149,9 +150,19 @@ void StampPrintf(const char* pformat, ...) {
 
     char timestamp[64];
     // create timestamp
-    snprintf(timestamp, sizeof(timestamp),
-        "%02lud%02lu:%02lu:%02lu.%06llu [%04lu] ",
-        tm_day, tm_hour, tm_min, tm_sec, tm_us, sTick++);
+    // FIX! clean up old stuff
+    if (false) {
+        snprintf(timestamp, sizeof(timestamp),
+            "%02lud%02lu:%02lu:%02lu.%06llu [%04lu] ",
+            tm_day, tm_hour, tm_min, tm_sec, tm_us, sTick++);
+    } else {
+        // the min/sec are not aligned with the gps synchonied time
+        // but good for measuring delays between things
+        // don't need day.
+        snprintf(timestamp, sizeof(timestamp),
+            "%02lu:%02lu.%06llu [%04lu] ",
+            tm_min, tm_sec, tm_us, sTick++);
+    }
 
     // va_start stdarg https://www.tutorialspoint.com/c_standard_library/c_macro_va_start.htm
     va_list argptr;

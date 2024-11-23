@@ -72,8 +72,6 @@
 // #include "hardware/adc.h"
 // #include "hardware/clocks.h"
 
-
-
 //**************************
 // flash config
 #include "hardware/flash.h"
@@ -478,7 +476,6 @@ bool VERBY[10] = { false };
 //*********************************
 absolute_time_t GpsStartTime = 0;
 
-
 uint64_t GpsFixMillis = 0;
 uint64_t GpsStartMillis = 0;
 
@@ -628,9 +625,6 @@ void loop() {
         while (rp2040.fifo.available()) {
             // int32_t fifo_TOS;
             uint32_t rp2040_fifo_TOS;
-            // uint32_t *TOS_ptr;
-            // TOS_ptr = &rp2040_fifo_TOS;
-
             // send a reference to a string?
             // https://forum.arduino.cc/t/how-to-transfer-strings-between-two-cores-on-pico/1310533/3
 
@@ -1696,6 +1690,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
 extern const int WSPR_PWM_SLICE_NUM = 4;
 static const bool JUST_ONE_INTERRUPT = false;
 
+// How is this aligned to 1 sec in off the starting minute?
 void PWM4_Handler(void) {
     // too much output!
     // if (VERBY[0]) Serial.println(F("PWM4_Handler() START"));
@@ -1729,6 +1724,10 @@ void zeroTimerSetPeriodMs(float ms) {
     // 250 clocks at 125Mhz .008 uSec per clock, is 250 * .008 = 2 uSec
     // 2uS (at 125Mhz? does it need adjusting at other clks?)
     // so if we're count at 2uSec intervals to wrap at 683 millis.. that's 500*683 = 341500 counts?
+
+    // the 250 can be a uint? so can be pretty big? Can we make it 5 times bigger (1450 or maybe 1500)
+    // to bring down the sie of the wrap count
+    // or should we count 8 interrupts, and adjust for 1/8th the total target
     pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);
 
     // Set the highest value the counter will reach before returning to 0. Also known as TOP.
@@ -1745,6 +1744,7 @@ void zeroTimerSetPeriodMs(float ms) {
         // depending on RP2040 clock rate, we want integer divider with no error
         // after computing the wrap boundary? probably want to loop with dividers from 250 to 300
         // and pick the first one for the target ms
+        // can be 16 bits = 65535 max. ..we need 341333 with div 250 at 125 Mhz for a single interrupt.
         pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)(ms * 500) - 1));
     }
     else {
@@ -1808,8 +1808,8 @@ void sleepSeconds(int secs) {
 // FIX! should check what caller does if -1
 bool alignMinute(int offset) {
     bool aligned = false;
-    // need good time
-    if (timeStatus() != timeSet) return false;
+    // FIX! need good time. Does returning false help?
+    if (timeStatus() != timeSet) return true;
 
     // offset can be -1, 0, 1, 2, 3, 4, 5, 6 (3 messages)
     // if not one of those, set the start minute to -1?
@@ -1855,8 +1855,18 @@ bool alignMinute(int offset) {
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhenDone) {
-    if (VERBY[0]) Serial.printf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
+    if (VERBY[0]) {
+        Serial.printf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
+        // do a StampPrintf, so we can measure usec duration from here to the first symbol
+        // it's not aligned to the gps time.
+        StampPrintf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
+    }
     Watchdog.reset();
+    // startin a wee bit late?
+    // sendWspr() START now: minute() 42 second() 0
+    // 00d00:03:44.900535 [0004] sym: 0
+    // 00d00:03:51.730594 [0005] sym: 10
+
 
     // FIX! use the u4b channel freq
     // uint32_t hf_freq = XMIT_FREQUENCY;
@@ -1881,12 +1891,13 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // for when to switch tones
 
     // FIX! is there a delay between tones?
+    // does this align the interrupts after this 
+    // how long does this take
     zeroTimerSetPeriodMs(tone_delay);
 
     uint8_t i;
     absolute_time_t wsprStartTime = get_absolute_time(); // usecs
     for (i = 0; i < symbol_count; i++) {
-
         uint8_t symbol = hf_tx_buffer[i];
         switch (symbol) {
             case 0: ;
@@ -1894,7 +1905,10 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             case 2: ;
             case 3: break;
             default :
-                if (VERBY[0]) Serial.printf("ERROR: bad symbol i %u 0x%02x" EOL, i, symbol);
+                if (VERBY[0]) {
+                    Serial.printf("ERROR: bad symbol i %u 0x%02x" EOL, i, symbol);
+                    symbol = 0;
+                }
         }
 
         uint32_t freq_x16 =
@@ -1904,8 +1918,13 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // Serial.printf(__func__ " vfo_set_freq_x16(%u)" EOL, (freq_x16 >> PLL_CALCULATION_PRECISION));
         // FIX! how long does it take to do this? actually how long to get to here
         // for first symbol?
+
+        if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
         vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
-        StampPrintf("sym: %d" EOL, i);
+        // don't overfill the log buffer. can't make it bigger because of ram problems 
+        // with jtencode symbols going bad if so.
+        // only log every 10 symbols and the last three (160 161)
+        if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
         // PWM handler sets proceed?
         proceed = false;
         while (!proceed) {
@@ -1978,6 +1997,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
 
     // this should be fine even if we wait a long time
     int i = 2 * txNum;  // 0, 2, 4, 6
+    // FIX! in debug, why aren't we aligning to any even minute?
     while (!alignMinute(i) || (second() != 0)) {
         Watchdog.reset();
         // FIX! delay 1 sec? change to pico busy_wait_us()?
@@ -1993,8 +2013,8 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // Could wait until 900 millis into this zero second?
     // while ((second() != 1)) busy_wait_us(100);
 
-    // this should jump out at 900 millis into the current second, at .1 milli accuracy
-    while (((millis() % 1000) < 900)) busy_wait_us(100);
+    // this should jump out at 990 millis into the current second, at 10 usec accuracy
+    while (((millis() % 1000) < 990)) busy_wait_us(10);
 
     // now: at 900 millis within 0 to .1 millis
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);

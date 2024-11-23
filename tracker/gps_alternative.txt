@@ -1,0 +1,89 @@
+
+ can't seem to download from the simcom website, but it's available here:
+( the v1.05 2023-09-15 is an update to v1.00 ..be wary if you google search, the power in the V1.00 had wrong data)
+https://www.microchip.ua/simcom/GNSS/SIM65M/SIM65M%20Series_Hardware_Design_V1.05.pdf
+ 
+detailed power:
+https://www.microchip.ua/simcom/GNSS/SIM65M/SIM65M%20Series_Low_Power_Application%20Documentation%20_V1.01.pdf
+ 
+they seem to be $6.25 at lcsc, a typical supplier to jlcpcb
+https://www.lcsc.com/product-detail/GNSS-Modules_SIMCom-Wireless-Solutions-SIM65M_C7495025.html
+ 
+The V1.00 pdf had wrong power data, which the V1.05 pdf corrected, to be consistent with the "low power application" document
+ 
+
+//*****************
+// alternative GPS
+// SIM28ML
+// SIM28ML/9600 9.7x10.1mm
+
+https://en.simcom.com/product/SIM65M.html
+SIM68M
+Acquisition 18mA
+Tracking 18mA
+https://edworks.co.kr/wp-content/uploads/2024/08/SIM65M-C_Hardware_Design_V1.00.pdf
+SIM65M-C supports the following GNSS satellites:
+ GPS, BEIDOU, GLONASS, Galileo also supports QZSS , SBAS.
+Besides, module provides the following services:
+ Small footprint: 10.1x 9.7 x 2.5mm, 18-pin LCC package
+ Support Jamming Removing (AIC)
+ Low-noise amplifier has been integrated (LNA)
+ Support AGNSS assisted positioning
+ Fixed update rate 1Hz to 5Hz
+ Pulse-per-second (PPS) GPS time reference
+ Adjustable duty cycle
+Typical accuracy: +/- 20ns
+Interface: UART * 1
+Operating temperature: -40 ~ +85ºC
+
+Supply voltage VCC +1.7V~+3.6V typical:3.3V 
+
+
+
+// ATGM336H-5N11 9.7x10.1mm
+// https://www.lcsc.com/datasheet/lcsc_datasheet_2304140030_ZHONGKEWEI-ATGM336H-5N11_C90769.pdf
+// 5N-1X is gps only. saw + lnda
+// Ipeak = 100mA
+// ATGM336H-5N31 9.7x10.1mm
+// https://www.lcsc.com/datasheet/lcsc_datasheet_1810261521_ZHONGKEWEI-ATGM336H-5N31_C90770.pdf
+// 5N-3X is gps + bda. saw + lna
+
+// Ipeak = 100mA
+// ATGM336H-5NR32 10.1x9.7mm
+// https://www.lcsc.com/datasheet/lcsc_datasheet_2411041759_ZHONGKEWEI-ATGM336H-5NR32_C5117921.pdf
+// gps + bds. lna + saw
+
+// 6N-32 is gps + bd2/3. -74 has GLO. 115200baud
+// Ipeak = 100mA
+// ATGM336H-6N-74 10.1x9.7mm
+// https://www.lcsc.com/datasheet/lcsc_datasheet_2401121833_ZHONGKEWEI-ATGM336H-6N-74_C5804601.pdf
+
+// Quectel L70-RL 10.1x9.7x2.5mm
+// 18ma tracking compare to max-6x
+// 18 pin lcc
+// # protocol 2016 https://auroraevernet.ru/upload/iblock/6e6/6e624183292772f8dad0a6c327153eff.pdf
+// # presentation
+// https://auroraevernet.ru/upload/iblock/4bd/4bd89e299765c46248256cf6d9b8e0a7.pdf
+// 5H Quectel L70 GP* only?
+
+// L70B-M39 C6072279 SMD-18P
+// hard to find the datasheets. need user account
+// https://jlcpcb.com/partdetail/QUECTEL-L70BM39/C6072279
+// L70REL-M37 C5745045 SMD-18P End of Life but L70REL-M37-EIT 10.1x9.7x2.5mm is not EOL?
+// https://jlcpcb.com/partdetail/Quectel-L70RELM37/C5745045
+// mouser uses this datasheet (for the L70_R)
+// https://www.mouser.com/datasheet/2/1052/Quectel_L70_R_GPS_Specification_V2_2-1829911.pdf
+// L70RE-M37 L70REL-M37 L70REL-M37-EIT
+// https://www.quectel.com/gnss-iot-modules/
+/// L76 L76G single band
+
+//*******************
+// ATGM336 might not support this:
+// could use as PMTK_API_SET_PWR_SAV_MODE (elsewhere) rather than powering off?
+// would have to wait for ack or time, after changing
+// https://www.meme.au/nmea-checksum.html
+// power saving mod off: (should this really be checksum 2F?)
+// $PMTK320,0*26\r\n" manual has wrong checksum here?
+// power saving mod on:
+// $PMTK320,1*2E\r\n"
+//*******************

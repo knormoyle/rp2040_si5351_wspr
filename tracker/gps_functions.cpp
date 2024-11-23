@@ -1047,7 +1047,7 @@ void updateGpsDataAndTime(int ms) {
         else AvgCharRateSec = 1000.0 * ((float)incomingCharCnt / (float)duration_millis);
         // can it get too big?
         if (AvgCharRateSec > 999999.9) AvgCharRateSec = 999999.9;
-        if (false) { // FIX! why is this crashing?
+        if (true) { // FIX! why is this crashing?
             Serial.printf(
             "updateGpsDataAndTime: NMEA AvgCharRateSec %.f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,  
             AvgCharRateSec, duration_millis, incomingCharCnt);

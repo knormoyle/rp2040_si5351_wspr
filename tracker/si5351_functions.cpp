@@ -487,18 +487,30 @@ void si5351a_setup_multisynth0(uint32_t div) {
 
 
     // old #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
+/*
+    // was 11/23/24
+    // FIX! should we wrote 0's in stuff not being used?
+    // in case someone wrote them? noise?
     i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
     i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT |
                                   SI5351A_CLK1_MS1_SRC_PLLB |
                                   SI5351A_CLK1_CLK1_INV |
                                   SI5351A_CLK1_SRC_MULTISYNTH_1 |
                                   s_vfo_drive_strength[0]));
+*/
+    i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT |
+                                  SI5351A_CLK1_MS1_SRC_PLLB |
+                                  SI5351A_CLK1_SRC_MULTISYNTH_1 |
+                                  SI5351A_CLK1_CLK1_INV |
+                                  s_vfo_drive_strength[0]));
+    
     // old #endif
     if (VERBY[0]) Serial.printf("VFO_DRIVE_STRENGTH: %d" EOL, (int)s_vfo_drive_strength[0]);
     if (VERBY[0]) Serial.printf("si5351a_setup_multisynth0 END div %lu" EOL, div);
 }
 
 //****************************************************
+// never used?
 void si5351a_setup_multisynth1(uint32_t div) {
     if (VERBY[0]) Serial.printf("si5351a_setup_multisynth1 START div %lu" EOL, div);
 
@@ -566,11 +578,15 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
         // static global?
         prev_ms_div = ms_div;
 
-        if (clk_num == 0) si5351a_setup_multisynth0(ms_div);
-        // this used to be for setting up the aprs clock on clk_num == 1?
-        else {
-            Serial.println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
+        if (clk_num == 0) {
+            // settin up multisynth0 and multisynth1 
+            si5351a_setup_multisynth0(ms_div);
             si5351a_setup_multisynth1(ms_div);
+        } else {
+            Serial.println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
+            // this used to be for setting up the aprs clock on clk_num == 1?
+            // removed 11/23/24 (was working print)
+            // si5351a_setup_multisynth1(ms_div);
         }
 
         si5351a_reset_PLLB();
@@ -582,7 +598,12 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
 static uint8_t  si5351bx_clken = 0xff;
 void vfo_turn_on_clk_out(uint8_t clk_num) {
     if (VERBY[0]) Serial.printf("vfo_turn_on_clk_out START clk_num %u" EOL, clk_num);
+    if (clk_num != 0)
+        Serial.printf("ERROR: vfo_turn_on_clk_out called with clk_num %u" EOL, clk_num);
 
+
+    // enable clock 0 and 1
+    //  0 is enable
     uint8_t enable_bit = 1 << clk_num;
     // #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
     if (clk_num == 0) {
@@ -595,6 +616,8 @@ void vfo_turn_on_clk_out(uint8_t clk_num) {
 }
 
 void vfo_turn_off_clk_out(uint8_t clk_num) {
+    // FIX! are these enable bits inverted? Yes
+    // 1 is disable
     if (VERBY[0]) Serial.println(F("vfo_turn_off_clk_out START"));
     uint8_t enable_bit = 1 << clk_num;
     // always now
@@ -605,7 +628,7 @@ void vfo_turn_off_clk_out(uint8_t clk_num) {
     // #endif
     si5351bx_clken |= enable_bit;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
-    if (VERBY[0]) Serial.printf("vfo_turn_on_clk_out END clk_num %u" EOL, clk_num);
+    if (VERBY[0]) Serial.printf("vfo_turn_off_clk_out END clk_num %u" EOL, clk_num);
 }
 
 //****************************************************

@@ -1,0 +1,129 @@
+
+#*********************************************************************
+27.10.22
+Please note that SIMCOM offers a new navigation module - SIM65M.
+
+ Compared to the popular SIM68M, it is based on the new AG3352 chipset and has a number of advantages:
+  - support for GPS/GLONASS/BDS/Galileo/QZSS
+  - new input LNA with increased sensitivity
+  - 47 channels (instead of 33 in SIM68M)
+  - Improved anti-jamming
+  - reduced power consumption
+  - better price category
+
+ SIM65M is maximally compatible in terms of software and footprint with SIM68M/SIM28ML/SIM66M.
+
+The new generation of single-frequency GNSS, in addition to the continuation of the 3352 features, adds the B1C and L1C frequency bands of Beidou-3 and GPS, making the positioning accuracy close to the dual-frequency standard, and the package size is also 35% smaller than the previous generation, and the layout design is more flexible , to meet the cost-effective demand of single-frequency GNSS products in the market.
+
+Airoha Technology is a subsidiary of MediaTek Group
+in Taiwan.
+https://www.airoha.com/products/p/zy4r082hgNywp1bg
+AG3352
+L1 Band Multi-GNSS GPS/GLONASS/Galileo/BeiDou receiver
+Support for multi-GNSS including QZSS and SBAS ranging
+Integrated 12 multi-tone active interference cancellers
+ARM® Cortex®-M4 with FPU and MPU
+Embedded Flash 2MB
+Integrated LDO regulators with low quiescent current for RTC, RF frontend and GPIOs
+Operating temperature from -40°C to 85°C
+
+
+#*********************************************************************
+
+You can see AG3352 is used at Quectel also
+LC76G LC26G LC86G
+
+In this presentation/overview on page 7
+https://forums.quectel.com/uploads/short-url/uiWVolOA3FazSxSUqO8HYYzDY90.pdf
+
+
+#*********************************************************************
+latest at 
+https://www.simcom.com
+
+SIM65M
+SIM65M-U
+SIM65M-W (is this the 1.8v part)
+
+also
+SIM65M-C
+
+temporarily out of stock
+https://www.alibaba.com/product-detail/SIM68MD-SIM65M-C-SIM65M-SIM68D-SIM68VB_1601246008356.html?spm=a2700.galleryofferlist.normal_offer.d_title.1e2313a0Q9IDtQ
+
+package sizes all shown at:
+https://www.simcom.com/module/gnss.html
+(2 pages there..click at bottom for 2nd page)
+
+#***********************
+High Precision Dual Frequency
+GPS/BDS/GLONASS/Galileo/QZSS/SBAS
+L1+L5
+RTK
+SIM66MD specs https://www.simcom.com/product/SIM66MD.html after login
+SIM66MD-R 
+SIM66D (large package)
+SIM66D-R (large package) no integrated LNA?
+
+#***********************
+Standard Precision Dual Frequency
+GPS/BDS/GLONASS/Galileo/QZSS/SBAS
+L1+L5
+no RTK
+SIM68D (large package)
+SIM68MD no integrated LNA?
+SIM66MD NAVIC
+
+#***********************
+Standard Precision Single Frequency
+GPS/BDS/GLONASS/Galileo/QZSS/SBAS
+L1
+SIM65M 
+SIM68V (large package)
+
+#***********************
+Stand Precision Embedded Antenna
+GPS/BDS/GLONASS/Galileo/QZSS/SBAS
+L1
+SIM32ELA integrated antenna 0.5g Has BDS
+SIM33ELA integrated antenna 0.5g No BDS
+SIM33EAU integrated antenna 8.5g No BDS
+
+
+//*******************************************
+// 'SIM28_Hardware Design_V1.07.pdf'
+// https://simcom.ee/documents/SIM28/SIM28_Hardware%20Design_V1.07.pdf
+
+// 'SIM28@SIM68R@SIM68V_NMEA Messages Specification_V1.00.pdf'
+// https://simcom.ee/documents/SIM28/SIM28%40SIM68R%40SIM68V_NMEA%20Messages%20Specification_V1.00.pdf
+
+// 'MT3339 Platform NMEA Message Specification_V1.00.pdf'
+// https://simcom.ee/documents/SIM28/MT3339%20Platform%20NMEA%20Message%20Specification_V1.00.pdf
+
+// 'SIM28 Specification_1407.pdf'
+// https://simcom.ee/documents/SIM28/SIM28%20Specification_1407.pdf
+
+// 'SIM28ML SPEC_V1604.pdf'
+// https://simcom.ee/documents/SIM28ML/SIM28ML%20SPEC_V1604.pdf
+// 'SIM28M SPEC 140716.pdf'
+
+// 'SIM28 reference design with passive antenna(SAW+LNA+SAW).pdf'
+// https://simcom.ee/documents/SIM28/SIM28%20reference%20design%20with%20passive%20antenna%28SAW%2BLNA%2BSAW%29.pdf
+
+// 'SIM28M_Hardware Design_V1.00.pdf'
+// https://simcom.ee/documents/SIM28M/SIM28M_Hardware%20Design_V1.00.pdf
+// 'SIM28SIM68V_SMT_Application Note_V1.00.pdf'
+// 'https://simcom.ee/documents/SIM28/SIM28SIM68V_SMT_Application%20Note_V1.00.pdf'
+
+// Others:
+// old: MTK NMEA Packet User Manual Revision 0.3 2006/05/02
+// https://www.sparkfun.com/datasheets/GPS/Modules/PMTK_Protocol.pdf
+
+// 2016.05.30 revision 1.2 GlobalTop Tech Inc
+// has GPS and GLONASS BEIDOU GALILEO
+// https://cdn.sparkfun.com/assets/parts/1/2/2/8/0/PMTK_Packet_User_Manual.pdf
+
+// 2017-07-11 specification v1.03
+// SIM868_NME_Message_Specification_V1.03
+// https://simcom.ee/documents/SIM868E/SIM868_NMEA%20Message%20Specification_V1.03.pdf
+

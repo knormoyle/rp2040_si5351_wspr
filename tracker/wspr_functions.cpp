@@ -40,6 +40,11 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
     int div;
     // FIX! is float enough precision for odd pico frequencies?
     // usecs
+
+    // how many interrupts per total delay?
+    // the wrap count is limited to 16 bits
+    float INTERRUPTS = 8;
+    // 1/mhz is microseconds (1e-6)
     float PLL_SYS_USECS = 1.0 / (float)PLL_SYS_MHZ; 
     float wrap_cnt_float;
     int wrap_cnt;
@@ -53,20 +58,19 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
     // GOOD: PLL_SYS_MHZ 133 PWM_DIV 223 PWM_WRAP_CNT 407151
     // GOOD: PLL_SYS_MHZ 125 PWM_DIV 213 PWM_WRAP_CNT 400626
 
-    int DIV_MIN = 200; 
+    // we use 250 div now for 125 mhz so check with that first
+    int DIV_MIN = 250; 
     int DIV_MAX = 351; 
-    float symbolTime_us;
-    // float symbolTime_ms;
-    float symbolTime;
     float totalSymbolsTime;
 
     for (div = DIV_MIN; div <= DIV_MAX; div++) {
 
-        float possible_wrap_cnt = DESIRED_SECS / ((162 * div * PLL_SYS_USECS) / 1000000UL);
+        float div_float = (float)div;
+        float possible_wrap_cnt = DESIRED_SECS / (162 * INTERRUPTS * div_float * PLL_SYS_USECS * 1e-6);
 
         // wrap_cnt can't be too big (how big can the pwm thing count?
         // 32-bit limit?
-        if (possible_wrap_cnt > 2e9) continue;
+        if (possible_wrap_cnt > 65536) continue; // we -1 this for use
 
         Serial.printf("possible_wrap_cnt %.f div %d" EOL, possible_wrap_cnt, div);
         wrap_cnt_float = possible_wrap_cnt;
@@ -74,12 +78,8 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
         wrap_cnt = (int) wrap_cnt_float;
 
         // does this come close enough to total time for all symbols
-        
-        symbolTime_us = (wrap_cnt * div * PLL_SYS_USECS * 162);
-        // symbolTime_ms = symbolTime_us / 1000.0;
-        symbolTime    = symbolTime_us / 1000000.0;
-        totalSymbolsTime = 162 * symbolTime;
-        Serial.printf("totalSymbolsTime %.f wrp_cnt %d div %d" EOL, totalSymbolsTime, wrap_cnt, div);
+        totalSymbolsTime = 162 * INTERRUPTS * div_float * PLL_SYS_USECS * 1e-6 * (float) wrap_cnt;
+        Serial.printf("totalSymbolsTime %.f wrap_cnt %d div %d" EOL, totalSymbolsTime, wrap_cnt, div);
 
         // good enough total range
         if (totalSymbolsTime > 110.585 && totalSymbolsTime < 110.60) break;
@@ -101,7 +101,6 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
         Serial.printf("GOOD: Found a good div and wrap_cnt for PLL_SYS_MHZ %lu PLL_SYS_USECS %.f" EOL,
             PLL_SYS_MHZ, PLL_SYS_USECS);
         Serial.printf("GOOD: PLL_SYS_MHZ %lu PWM_DIV %d PWM_WRAP_CNT %d" EOL, PLL_SYS_MHZ, div, wrap_cnt);
-        Serial.printf("GOOD: symbolTime %.3f" EOL, symbolTime);
         Serial.printf("GOOD: totalSymbolsTime %.3f" EOL, totalSymbolsTime);
     }
 }

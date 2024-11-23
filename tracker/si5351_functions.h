@@ -12,9 +12,12 @@ const int SI5351_TCXO_FREQ =                26000000;
 const int SI5351A_OUTPUT_ENABLE_CONTROL =   3;
 const int SI5351A_CLK0_CONTROL =            16;
 const int SI5351A_CLK1_CONTROL =            17;
+
+// FIX! is there a clk2? does CLK7 drive it?
 const int SI5351A_CLK7_CONTROL =            23;
 const int SI5351A_PLLB_BASE =               34;
 const int SI5351A_MULTISYNTH0_BASE =        42;
+// FIX! how do we turn off multisynth 1?
 const int SI5351A_MULTISYNTH1_BASE =        50;
 const int SI5351A_PLL_RESET =               177;
 
@@ -24,10 +27,10 @@ const int SI5351A_CLK1_MS1_INT =            (1 << 6);
 const int SI5351A_CLK1_MS1_SRC_PLLB =       (1 << 5);
 
 const int SI5351A_CLK0_SRC_MULTISYNTH_0 =   (3 << 2);
-const int SI5351A_CLK1_SRC_MULTISYNTH_0 =   (2 << 2);
-
-const int SI5351A_CLK1_CLK1_INV =           (1 << 4);
+const int SI5351A_CLK0_CLK0_INV =           (1 << 4);
+// FIX! is using 2 undocumented? 
 const int SI5351A_CLK1_SRC_MULTISYNTH_1 =   (3 << 2);
+const int SI5351A_CLK1_CLK1_INV =           (1 << 4);
 
 const int SI5351A_CLK0_IDRV_8MA =           (3 << 0);
 const int SI5351A_CLK0_IDRV_6MA =           (2 << 0);
