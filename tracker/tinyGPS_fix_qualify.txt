@@ -1,0 +1,58 @@
+Here's an interesting tidbit about deciding whether a "fix" is good, using TinyGPS++ arduino libray, and the public methods they have on their internal state.
+
+I noticed in some code I'm using that they qualify the idea of a "fix" with whether the satellite count is 3. Interestingly, running for a while, I saw that there are cases where you would think you have a fix, but HDOP is high and satellite count is 0. So either qualifying the notion of "fix" as to having 3 or more sats, or a reasonable non-zero altitude or a reasonable HDOP, seems necessary.
+
+Requiring sat count > 3 seems like the right tradeoff.
+
+Background:
+TinyGps++ has these methods that return info, that reflects the accumulated info from the NMEA data you've sent it (as individual chars, which it interprets as sentences)
+
+
+The long print at the bottom uses these methods, qualified by the relevant isValid() ..note therre are different ones. 
+
+gps.date gps.time
+
+gps.satellites.value() qualified by gps.satellites.isValid()
+
+gps.hdop.value() qualified by gps.hdop.isValid()
+
+gps.altitude.meters() qualified by gps.altitude.isValid()
+
+gps.location.lat() qualified by gps.location.isValid()
+gps.location.lng() qualified by gps.location.isValid()
+gps.location.age() qualified by gps.location.isValid()
+
+// heading
+gps.course.deg() qualified by gps.course.isValid()
+gps.course.value() qualified by gps.course.isValid()
+
+gps.speed.kmph() qualified by gps.speed.isValid()
+
+gps.charsProcessed()
+
+gps.sentencesWithFix()
+gps.failedChecksum()
+
+
+***********************
+Here are 3 cases where the fix seems "valid" but it's not a good fix 
+
+// Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course  Speed Card Chars FixSents  Checksum
+//           (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail
+// ---------------------------------------------------------------------------------------------------------------------
+// 0    2550 38.021000    -107.677071  4047 11/22/2024 22:08:34 65   0.00    237.54  11.50  N     20983 254       2
+// 
+
+
+// Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course  Speed Card Chars FixSents  Checksum
+//          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail
+// ---------------------------------------------------------------------------------------------------------------------
+// 0    2550 38.021000    -107.677071  7814 11/22/2024 23:11:21 65   0.00    237.54  11.50  N     41149 254       3        
+
+// Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course  Speed Card Chars FixSents  Checksum
+//          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail
+// ---------------------------------------------------------------------------------------------------------------------
+// 0    2550 38.021000    -107.677071  1158 11/23/2024 00:14:07 74   0.00    237.54  11.50  N     61847 254       4        
+
+
+

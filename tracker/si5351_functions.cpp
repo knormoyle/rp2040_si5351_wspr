@@ -410,7 +410,6 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
 
  */
 
-
 static uint32_t prev_ms_div = 0;
 static uint8_t s_regs[8];
 // updated with config _tx_high during vfo_turn_on()
@@ -562,8 +561,9 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
     // FIX! this has sticky s_regs_prev state that it uses if called multiple times?
     si5351a_setup_PLLB(pll_mult, pll_num, PLL_DENOM_MAX);
 
-    // only if it changes
+    // only reset pll if ms_div changes?
     if (ms_div != prev_ms_div) {
+        // static global?
         prev_ms_div = ms_div;
 
         if (clk_num == 0) si5351a_setup_multisynth0(ms_div);
