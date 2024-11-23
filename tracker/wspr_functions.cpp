@@ -43,7 +43,9 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
 
     // how many interrupts per total delay?
     // the wrap count is limited to 16 bits
-    float INTERRUPTS = 8;
+    // this is enough to make it work. Can't make it work with just 1 interrupt
+    // float INTERRUPTS = 8;
+    // interesting frequencies seem to find solutions with 250 divider. and 8 interrupts
     // 1/mhz is microseconds (1e-6)
     float PLL_SYS_USECS = 1.0 / (float)PLL_SYS_MHZ; 
     float wrap_cnt_float;
@@ -52,11 +54,7 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
     const float DESIRED_SECS = 110.592;
     
     // found some ones: 
-    // for (div = 200; div<231; div++) {
-    // GOOD: PLL_SYS_MHZ 60 PWM_DIV 237 PWM_WRAP_CNT 172827
-    // GOOD: PLL_SYS_MHZ 100 PWM_DIV 233 PWM_WRAP_CNT 292990
-    // GOOD: PLL_SYS_MHZ 133 PWM_DIV 223 PWM_WRAP_CNT 407151
-    // GOOD: PLL_SYS_MHZ 125 PWM_DIV 213 PWM_WRAP_CNT 400626
+
 
     // we use 250 div now for 125 mhz so check with that first
     int DIV_MIN = 250; 
@@ -79,7 +77,7 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
 
         // does this come close enough to total time for all symbols
         totalSymbolsTime = 162 * INTERRUPTS * div_float * PLL_SYS_USECS * 1e-6 * (float) wrap_cnt;
-        Serial.printf("totalSymbolsTime %.f wrap_cnt %d div %d" EOL, totalSymbolsTime, wrap_cnt, div);
+        Serial.printf("totalSymbolsTime %.3f wrap_cnt %d div %d" EOL, totalSymbolsTime, wrap_cnt, div);
 
         // good enough total range
         if (totalSymbolsTime > 110.585 && totalSymbolsTime < 110.60) break;
@@ -98,12 +96,21 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
         *PWM_DIV = div;
         *PWM_WRAP_CNT = wrap_cnt;
 
-        Serial.printf("GOOD: Found a good div and wrap_cnt for PLL_SYS_MHZ %lu PLL_SYS_USECS %.f" EOL,
+        Serial.printf("GOOD: Found a good div and wrap_cnt for PLL_SYS_MHZ %lu PLL_SYS_USECS %.7f" EOL,
             PLL_SYS_MHZ, PLL_SYS_USECS);
         Serial.printf("GOOD: PLL_SYS_MHZ %lu PWM_DIV %d PWM_WRAP_CNT %d" EOL, PLL_SYS_MHZ, div, wrap_cnt);
         Serial.printf("GOOD: totalSymbolsTime %.3f" EOL, totalSymbolsTime);
     }
 }
+// GOOD: PLL_SYS_MHZ 60 PWM_DIV 250 PWM_WRAP_CNT 20479
+// GOOD: totalSymbolsTime 110.587
+// GOOD: PLL_SYS_MHZ 100 PWM_DIV 250 PWM_WRAP_CNT 34133
+// GOOD: totalSymbolsTime 110.591
+// GOOD: PLL_SYS_MHZ 133 PWM_DIV 250 PWM_WRAP_CNT 45397
+// GOOD: totalSymbolsTime 110.591
+// GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666
+// GOOD: totalSymbolsTime 110.590
+
 
 // The protocol specification states:
 // Each tone should last for 8192/12000 = 0.682666667 seconds, and transitions between

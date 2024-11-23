@@ -2008,13 +2008,12 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     }
     // Now align to 1 seconds in
     // We could adjust this so the wspr starts EXACTLY at 1 sec in or 2 sec in
-    // we know we should have still second()==0 at this point, so waiting for 1
-    // will take at most 1 second
-    // Could wait until 900 millis into this zero second?
-    // while ((second() != 1)) busy_wait_us(100);
+    // we know we should have still second()==0 at this point
 
-    // this should jump out at 990 millis into the current second, at 10 usec accuracy
-    while (((millis() % 1000) < 990)) busy_wait_us(10);
+    // can only delay an absolute number of milliseconds at this point
+    // delaying 800 ms seems good. Can adjust this to be 1 sec - (the amount of code delay)
+    // the StampPrintf's timestamps can be subtracted to see how much time the setup takes to first symbol
+    delay(800);
 
     // now: at 900 millis within 0 to .1 millis
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
