@@ -1205,7 +1205,6 @@ void loop1() {
             gps.hdop.isValid() &&
             gps.altitude.isValid() &&
             gps.location.isValid() &&
-            gps.course.isValid() &&
             gps.speed.isValid() &&
             gps.course.isValid();
 
@@ -1338,6 +1337,9 @@ void loop1() {
         if (!fix_valid_all || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
             if (VERBY[0])
                 Serial.printf("loop1() WARN: GPS fix issue ..stale or not valid ..fix_age %lu" EOL, fix_age);
+            // be sure!
+            vfo_turn_off();
+            GpsON(false);  // no gps cold reset
 
             // these are the waits that give us the long loop times
             // Looping with sleep
@@ -1351,6 +1353,9 @@ void loop1() {
                 Serial.println(F("loop1() WARN: GPS fix issues ..not enough sats ..2d only"));
 
             // these are the waits that give us 25-30 sec loop times?
+            // be sure!
+            vfo_turn_off();
+            GpsON(false);  // no gps cold reset
             sleepSeconds(BEACON_WAIT);
             // FIX! how much should we wait here?
 

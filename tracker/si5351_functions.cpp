@@ -690,7 +690,11 @@ void vfo_turn_on(uint8_t clk_num) {
     // FIX! ..always turn it on now? for debug
     // if (vfo_is_on()) return;
 
+    // could there be reset problems ..we need to off then on?
+    vfo_set_power_on(false);
+    sleep_ms(1000);
     vfo_set_power_on(true);
+
     vfo_turn_on_completed = false;
     vfo_turn_off_completed = false;
     // sets state to be used later
@@ -737,6 +741,7 @@ void vfo_turn_on(uint8_t clk_num) {
     while (res != 2) {
         if (tries > 5) {
             Serial.println("Rebooting because can't init VFO_I2C_INSTANCE after 5 tries");
+            Serial.flush();
             Watchdog.enable(1000);  // milliseconds
             for (;;) {
                 // FIX! put a bad status in the leds

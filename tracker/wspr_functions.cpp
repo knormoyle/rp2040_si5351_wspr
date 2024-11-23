@@ -9,19 +9,19 @@
 #include "print_functions.h"
 
 //*******************************************************
-// The RP2040 PWM block has 8 identical slices, the RP2350 has 12.  
+// The RP2040 PWM block has 8 identical slices, the RP2350 has 12.
 // Each slice can drive two PWM output signals, or
-// measure the frequency or duty cycle of an input signal. 
-// This gives a total of up to 16/24 controllable PWM outputs. 
+// measure the frequency or duty cycle of an input signal.
+// This gives a total of up to 16/24 controllable PWM outputs.
 // All 30 GPIOs can be driven by the PWM block.
-// 
-// The PWM hardware functions by continuously comparing the input value to a free-running counter. 
-// This produces a // toggling output where the amount of time spent at the high output level 
-// is proportional to the input value. 
+//
+// The PWM hardware functions by continuously comparing the input value to a free-running counter.
+// This produces a // toggling output where the amount of time spent at the high output level
+// is proportional to the input value.
 // The fraction of time spent at the high signal level is known as the duty cycle of the signal.
-// 
-// The default behaviour of a PWM slice is to count upward until the wrap value (\ref pwm_config_set_wrap) 
-// is reached, and then immediately wrap to 0. 
+//
+// The default behaviour of a PWM slice is to count upward until the wrap value (\ref pwm_config_set_wrap)
+// is reached, and then immediately wrap to 0.
 // PWM slices also offer a phase-correct mode, where the counter starts to count downward after
 // reaching TOP, until it reaches 0 again.
 
@@ -32,7 +32,7 @@
 // FIX! are these delays adjusted for compensation due to code delays? no?
 // WSPR_TONE_SPACING = 146;  // ~1.46 Hz
 // ths is what we're called with for symbol time (millis)
-// WSPR_DELAY = 683; 
+// WSPR_DELAY = 683;
 
 //*******************************************************
 // uses PLL_SYS_MHZ to figure a good div and wrap_cnt period for the PWM (subtract 1 for TOP)
@@ -44,21 +44,22 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
     // how many interrupts per total delay?
     // the wrap count is limited to 16 bits
     // this is enough to make it work. Can't make it work with just 1 interrupt
-    // float INTERRUPTS = 8;
+    float INTERRUPTS = 8;
+
     // interesting frequencies seem to find solutions with 250 divider. and 8 interrupts
     // 1/mhz is microseconds (1e-6)
-    float PLL_SYS_USECS = 1.0 / (float)PLL_SYS_MHZ; 
+    float PLL_SYS_USECS = 1.0 / (float)PLL_SYS_MHZ;
     float wrap_cnt_float;
     int wrap_cnt;
     // could check if PLL_SYS_PERIOD is integer aligned?
     const float DESIRED_SECS = 110.592;
-    
-    // found some ones: 
+
+    // found some ones:
 
 
     // we use 250 div now for 125 mhz so check with that first
-    int DIV_MIN = 250; 
-    int DIV_MAX = 351; 
+    int DIV_MIN = 250;
+    int DIV_MAX = 351;
     float totalSymbolsTime;
 
     for (div = DIV_MIN; div <= DIV_MAX; div++) {

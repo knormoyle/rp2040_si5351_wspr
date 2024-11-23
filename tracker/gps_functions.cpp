@@ -815,7 +815,8 @@ void GpsOFF(void) {
 
     // these three are the initial value
     // this should work without changing the TinyGPS++ library
-    if (true) {
+    // did this not work?
+    if (false) {
         GpsInvalidAllCnt = 2; // should get us at least 2 GPS broadcasts
         GpsInvalidAll = true;
     } else {
