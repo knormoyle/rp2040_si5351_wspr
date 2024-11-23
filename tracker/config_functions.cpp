@@ -741,8 +741,9 @@ void decodeVERBY(void) {
     }
     Serial.printf("decode _verbose %s to VERBY[9:0]" EOL, _verbose);
     for (int i = 0; i < 10 ; i++) {
-        if (VERBY[i]) Serial.printf("VERBY[%d] true" EOL, i);
-        else Serial.printf("VERBY[%d] false" EOL, i);
+        // if (VERBY[i]) Serial.printf("VERBY[%d] true" EOL, i);
+        // else Serial.printf("VERBY[%d] false" EOL, i);
+        ;
     }
 
     if (VERBY[0]) Serial.print("read_FLASH START" EOL);

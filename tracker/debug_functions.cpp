@@ -125,7 +125,8 @@ void printFloat(float val, bool valid, int len, int prec) {
 // got a "full" with 1024..had 996 things in it
 // from updateGpsDataAndTime()
 // #define LOG_BUFFER_SIZE 2048
-#define LOG_BUFFER_SIZE 4096
+// #define LOG_BUFFER_SIZE 4096
+#define LOG_BUFFER_SIZE 8192
 
 static char logBuffer[LOG_BUFFER_SIZE] = { 0 };
 

@@ -28,49 +28,19 @@
 // nRST can be low while power is transition on, or it can be asserted/deasserted afer power on
 // tcxo_xref needs to be running
 
-
-//*******************************************
-// 'SIM28_Hardware Design_V1.07.pdf'
-// https://simcom.ee/documents/SIM28/SIM28_Hardware%20Design_V1.07.pdf
-
-// 'SIM28@SIM68R@SIM68V_NMEA Messages Specification_V1.00.pdf'
-// https://simcom.ee/documents/SIM28/SIM28%40SIM68R%40SIM68V_NMEA%20Messages%20Specification_V1.00.pdf
-
-// 'MT3339 Platform NMEA Message Specification_V1.00.pdf'
-// https://simcom.ee/documents/SIM28/MT3339%20Platform%20NMEA%20Message%20Specification_V1.00.pdf
-
-// 'SIM28 Specification_1407.pdf'
-// https://simcom.ee/documents/SIM28/SIM28%20Specification_1407.pdf
-
-// 'SIM28ML SPEC_V1604.pdf'
-// https://simcom.ee/documents/SIM28ML/SIM28ML%20SPEC_V1604.pdf
-// 'SIM28M SPEC 140716.pdf'
-
-// 'SIM28 reference design with passive antenna(SAW+LNA+SAW).pdf'
-// https://simcom.ee/documents/SIM28/SIM28%20reference%20design%20with%20passive%20antenna%28SAW%2BLNA%2BSAW%29.pdf
-
-// 'SIM28M_Hardware Design_V1.00.pdf'
-// https://simcom.ee/documents/SIM28M/SIM28M_Hardware%20Design_V1.00.pdf
-// 'SIM28SIM68V_SMT_Application Note_V1.00.pdf'
-// 'https://simcom.ee/documents/SIM28/SIM28SIM68V_SMT_Application%20Note_V1.00.pdf'
-
-// Others:
-// old: MTK NMEA Packet User Manual Revision 0.3 2006/05/02
-// https://www.sparkfun.com/datasheets/GPS/Modules/PMTK_Protocol.pdf
-
-// 2016.05.30 revision 1.2 GlobalTop Tech Inc
-// has GPS and GLONASS BEIDOU GALILEO
-// https://cdn.sparkfun.com/assets/parts/1/2/2/8/0/PMTK_Packet_User_Manual.pdf
-
-// 2017-07-11 specification v1.03
-// SIM868_NME_Message_Specification_V1.03
-// https://simcom.ee/documents/SIM868E/SIM868_NMEA%20Message%20Specification_V1.03.pdf
-
 //*******************************************
 // Printing too much
-// Many programmers run into trouble because they try to print too much debug info. The Arduino Serial.print function will "block" until those output characters can be stored in a buffer. While the sketch is blocked at Serial.print, the GPS device is probably still sending data. The input buffer on an Arduino is only 64 bytes, about the size of one NMEA sentence. After 64 bytes have been received stored, all other data is dropped! Depending on the GPS baud rate and the Serial Monitor baud rate, it may be very easy to lose GPS characters.
+// Many programmers run into trouble because they try to print too much debug info. 
+// The Arduino Serial.print function will "block" until those output characters can be stored in a buffer. 
+// While the sketch is blocked at Serial.print, the GPS device is probably still sending data. 
+// The input buffer on an Arduino is only 64 bytes, about the size of one NMEA sentence. 
+// FIX! is is really just 32 bytes?
+// After 64 bytes have been received stored, all other data is dropped! 
+// Depending on the GPS baud rate and the Serial Monitor baud rate, it may be very easy to lose GPS characters.
 
-// It is crucial to call gps.available( gps_port ) or serial.read() frequently, and never to call a blocking function that takes more than (64*11/baud) seconds. If the GPS is running at 9600, you cannot block for more than 70ms. If your debug Serial is also running at 9600, you cannot write more than 64 bytes consecutively (i.e., in less than 70ms).
+// It is crucial to call gps.available( gps_port ) or serial.read() frequently, 
+// and never to call a blocking function that takes more than (64*11/baud) seconds. 
+// If the GPS is running at 9600, you cannot block for more than 70ms. 
 
 #include <Arduino.h>
 // for isprint()
@@ -848,7 +818,7 @@ void GpsOFF(void) {
     if (true) {
         GpsInvalidAllCnt = 2; // should get us at least 2 GPS broadcasts
         GpsInvalidAll = true;
-    else
+    } else {
         // how do we clear him?
         // do we wait until we turn GpsON() on, beforre clearing GPSInvalidAll
         // we can decrement the count only if gps is on? (in setup1())
@@ -1076,7 +1046,7 @@ void updateGpsDataAndTime(int ms) {
     }
 
     if (VERBY[9])
-        Serial.printf("GpsInvalidAll:%u gps.time.isValid():%u" EOL, gpsInvalidAll, gps.time.isValid());
+        Serial.printf("GpsInvalidAll:%u gps.time.isValid():%u" EOL, GpsInvalidAll, gps.time.isValid());
 
     if (gps.time.isValid()&& !GpsInvalidAll) {
         // FIX! don't be updating this every time
