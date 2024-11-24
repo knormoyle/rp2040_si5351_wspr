@@ -180,7 +180,7 @@ char comment[] = "tracker 1.0";
 
 
 //******************************
-// So it's a little bit of calculate to get interrupts 
+// So it's a little bit of calculate to get interrupts
 // at the right time and manipulate 'proceed' for advancing between symbols
 // for a given PLL_SYS_MHZ  (like 125, 60, or 133)
 // we solve for a total 162 symbols transmitted in desired 110.592 secs
@@ -190,10 +190,10 @@ char comment[] = "tracker 1.0";
 // That routine assumes 8 pwm wrap interrupts per symbol
 //
 // We can't do 1 interrupt per symbol because the wrap counter is just 16 bits
-// and we limited ourselves to a 250 to 300 divider on the clock 
-// that drives the wrap counter (we could use a bigger divider maybe?) 
-// It would have serve the same effect as counting 8 interrupts so we'd have 
-// have a  250 * 8 = 2000 divider? There's no constraints on divider, other 
+// and we limited ourselves to a 250 to 300 divider on the clock
+// that drives the wrap counter (we could use a bigger divider maybe?)
+// It would have serve the same effect as counting 8 interrupts so we'd have
+// have a  250 * 8 = 2000 divider? There's no constraints on divider, other
 // than being integer, and we account for that in the calculator. wrap_cnt
 // is also integer. We should be able to calculate and find a good perfect
 // match (well within the bounds check we have in the calculator comparing to
@@ -1252,7 +1252,7 @@ void loop1() {
         // no..should we keep it looser for time?
         // we'll get the minute alignment right sooner with the old 'gps.location.isValid' fix_valid
         // to update time
-        // fix_valid is a subset (just 2d location) of fix_valid_all. 
+        // fix_valid is a subset (just 2d location) of fix_valid_all.
         // what if we can't get a fix_valid_all, but get fix_valid..do we ever do gps cold reset?
         if ( fix_valid && (fix_age < GPS_LOCATION_AGE_MAX) ) {
             setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
@@ -1576,7 +1576,7 @@ void loop1() {
 //*******************************************************
 int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     // FIX! disabled for now
-    // only do the correction once, for subsequent use of hf_freq. 
+    // only do the correction once, for subsequent use of hf_freq.
     // is this the right place?
     if (false and atoi(_correction) != 0) {
         // this will be a floor divide
@@ -1606,7 +1606,15 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     GpsOFF();
 
     // start the vfo 30 seconds before needed
+    // if off beforehand, it will have no clocks running
+    // we could turn it off, then on, to guarantee always starting from reset state?
+    vfo_turn_off();
+    sleep_ms(2000);
+    // FIX! does this include a full init at the rp2040?
     vfo_turn_on(WSPR_TX_CLK_NUM);
+    startSymbolFreq(hf_freq, 3);
+    vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
+
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
     // GPS will stay off for all
@@ -1657,7 +1665,10 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     syncAndSendWspr(hf_freq, 0, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
     tx_cnt_0 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
-    if (VERBY[0]) StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d" EOL, minute(), second());
+    if (VERBY[0]) {
+        StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d" EOL, minute(), second());
+        DoLogPrint();
+    }
 
     // we don't loop around again caring about gps fix, because we've saved
     // telemetry (and sensor data in there) right before the callsign tx
@@ -1683,7 +1694,10 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     syncAndSendWspr(hf_freq, 1, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
-    if (VERBY[0]) StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d" EOL, minute(), second());
+    if (VERBY[0]) {
+        StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d" EOL, minute(), second());
+        DoLogPrint();
+    }
 
     // have to send this if telen1 or telen2 is enabled
     if ( (_TELEN_config[0] != '-' || _TELEN_config[1] != '-') ||
@@ -1711,7 +1725,10 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         }
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
         tx_cnt_2 += 1;
-        if (VERBY[0]) StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d" EOL, minute(), second());
+        if (VERBY[0]) {
+            StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d" EOL, minute(), second());
+            DoLogPrint();
+        }
     }
     // have to send this if telen2 is enabled
     if ( (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
@@ -1736,10 +1753,12 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, true);
         tx_cnt_3 += 1;
         // we have 10 secs or so at the end of WSPR to get this off?
-        if (VERBY[0]) StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d" EOL, minute(), second());
+        if (VERBY[0]) {
+            StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d" EOL, minute(), second());
+            DoLogPrint();
+        }
     }
 
-    DoLogPrint();  // we might have to delay this?
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     GpsON(false);  // no gps cold reset
 
@@ -1870,7 +1889,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // for when to switch tones
 
     // FIX! is there a delay between tones?
-    // does this align the interrupts after this 
+    // does this align the interrupts after this
     // how long does this take
 
     uint8_t i;
@@ -1906,8 +1925,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // 02:45.176708 [0007] b
         // 02:45.176801 [0008] sym: 10
         // 02:52.003268 [0009] b
-        // 02:52.003757 [0010] sym: 20 
-        // 02:58.829828 [0011] b 
+        // 02:52.003757 [0010] sym: 20
+        // 02:58.829828 [0011] b
         // 02:58.829912 [0012] sym: 30
 
         // time from sendWspr() to sym: 0: (668264 - 667663) 601 usecs (delay to first symbol)
@@ -1917,14 +1936,15 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
         if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
         startSymbolFreq(hf_freq, symbol);
-        // Are the clocks on at this point? 
+        // Are the clocks on at this point?
         // if we turned them off while seeding the frequency
         // turn them on now and leave them on
-        if (i==0) vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
+        // assume the clocks are on
+        // if (i==0) vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
 
         // moved to startSymbolFreq() 11/23/24
         // vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
-        // don't overfill the log buffer. can't make it bigger because of ram problems 
+        // don't overfill the log buffer. can't make it bigger because of ram problems
         // with jtencode symbols going bad if so.
         // only log every 10 symbols and the last three (160 161)
         if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
@@ -1939,15 +1959,15 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // FIX! ideally we sleep during the symbol time. but here we have to stay awake
         // looking at proceed. If it was all in the interrupt handler
         // we could sleep here for a little more than the full delivery of 192 symbols
-        // Then wakeup and spin loop on proceed which the interrupt handler would 
+        // Then wakeup and spin loop on proceed which the interrupt handler would
         // only assert when all done!
-        // we could watchdog reset if we don't get proceed, which means 
+        // we could watchdog reset if we don't get proceed, which means
         // something went wrong with the interrupt handler
         // but we'd have to send the first symbol out somehow without an interrupt?
         // FIX! we could sleep for a little less than the expected symbol time here
         // that would work..then check proceed on wakep (spin loop here)
-        // i.e. sleep a little less than this. 
-        // The symbol rate is approximately 1.4648 baud (4FSK symbols per second), 
+        // i.e. sleep a little less than this.
+        // The symbol rate is approximately 1.4648 baud (4FSK symbols per second),
         // or exactly 12,000 Hz / 8192
         // 8192 / 12000 = 0.6826666.. secs. So could sleep for 660 millisecs ?
 
@@ -1957,16 +1977,16 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__sleep.html
         // Sleep functions for delaying execution in a lower power state.
-        // These functions allow the calling core to sleep. 
-        // This is a lower powered sleep; 
+        // These functions allow the calling core to sleep.
+        // This is a lower powered sleep;
         // waking and re-checking time on every processor event (WFE)
         // These functions should not be called from an IRQ handler.
-        // Lower powered sleep requires use of the default alarm pool which 
-        // may be disabled by the PICO_TIME_DEFAULT_ALARM_POOL_DISABLED #define or 
+        // Lower powered sleep requires use of the default alarm pool which
+        // may be disabled by the PICO_TIME_DEFAULT_ALARM_POOL_DISABLED #define or
         // currently full in which case these functions become busy waits instead.
 
-        // Whilst sleep_ functions are preferable to busy_wait functions from 
-        // a power perspective, the busy_wait equivalent function may return 
+        // Whilst sleep_ functions are preferable to busy_wait functions from
+        // a power perspective, the busy_wait equivalent function may return
         // slightly sooner after the target is reached.
 
 
@@ -1989,9 +2009,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     int64_t wsprDuration = absolute_time_diff_us(wsprStartTime, wsprEndTime);
     // WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
     // 0.68266666666
-    // 162 * 256/375 = 110.592 secs total. So lets compare our duration to that
-    // add .5 secs and truncate to integer (for rounding) and divide by 1e6
-    // intermediate calcs fit in 32 bits for int
+    // 162 * 256/375 = 110.592 secs total. Compare our duration to that
     float wsprDurationSecs = (float) wsprDuration / 1000000UL;
 
     if (wsprDurationSecs < 110.0 || wsprDurationSecs > 111.0) {
@@ -2018,9 +2036,10 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     // this s copied from sendWspr() below). Keep it up to date or make routine
     // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
     // we turned the vfo on in the minute before 0, separately
-    
+
     // otherwise, normal use is for to start a symbol frequency
-    uint32_t freq_x16 = (hf_freq << PLL_CALCULATION_PRECISION) +
+    uint32_t freq_x16 = (
+        hf_freq << PLL_CALCULATION_PRECISION) +
         (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
 
     // FIX! does this change the state of the clock output enable?
@@ -2037,10 +2056,15 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // what if we started with 3? (0-3 are the choices)
 
     // leave all the clocks off?
-    vfo_turn_off_clk_out(WSPR_TX_CLK_NUM);
-    startSymbolFreq(hf_freq, 0);
+    // vfo_turn_off_clk_out(WSPR_TX_CLK_NUM);
     // FIX! does startSymbolFreq turn them on or ??
-    vfo_turn_off_clk_out(WSPR_TX_CLK_NUM);
+    // it should be on already?
+
+    // if we turn it on, do we trigger a pll reset?
+
+    // vfo_turn_on(WSPR_TX_CLK_NUM);
+    // startSymbolFreq(hf_freq, 3);
+    // vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
 
     // now encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
     // FIX! replace all atoi() because of no error handling defn. for atoi()
@@ -2061,7 +2085,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // this should be fine even if we wait a long time
     int i = 2 * txNum;  // 0, 2, 4, 6
     // FIX! in debug, why aren't we aligning to any even minute?
-    while (!alignMinute(i) || (second() != 0)) {
+    while (! (alignMinute(i) && (second() == 0)) ) {
         Watchdog.reset();
         // FIX! delay 1 sec? change to pico busy_wait_us()?
         sleep_ms(20);
@@ -2086,12 +2110,19 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // FIX! make a switch(PLL_SYS_MHZ) for hardwired choices?
     // we can hand-tweak the hardwire, if there any extra compensation due to instruction delay
     // but ideally that would just into our calculator (interrupt handler code delay? not much)
-    
+
     // FIX! when do we get the first interrupt at the end of the first symbol?
-    proceed = false;
     Watchdog.reset();
-    PWM_DIV = 250;
-    PWM_WRAP_CNT = 42666; // Full period value. gets a -1 before it's set as the wrap top value)
+    proceed = false;
+    // was ..just got telemetry
+    // PWM_DIV = 250;
+    // PWM_WRAP_CNT = 42666; 
+    PWM_DIV = 252;
+    PWM_WRAP_CNT = 42331;
+    // Full period value. gets a -1 before it's set as the wrap top value)
+    // D: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42331
+    // GOOD: totalSymbolsTime 110.600
+
     setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
 
     // each of these should just be symbol time delay
@@ -2100,7 +2131,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     proceed = false; // ? to 1 symbol time
     while (!proceed) { ; }
     proceed = false; // 1 symbol time
-    
+
     // removed 11/23/24
     // sleep_ms(1000);
 
@@ -2123,7 +2154,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
 void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, uint8_t power) {
     if (VERBY[0]) Serial.println(F("set_hf_tx_buffer() START"));
     // Clear out the transmit buffer
-    memset(hf_tx_buffer, 0, 162);  // same number of bytes as hf_tx_buffer is declared 
+    memset(hf_tx_buffer, 0, 162);  // same number of bytes as hf_tx_buffer is declared
 
     // Set the proper frequency and timer CTC
     // legalPower = [0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60]
@@ -2265,14 +2296,14 @@ void freeMem() {
 // The Si5351A's delay to get the PLL locked on frequency etc
 
 // Conclusion
-// In case you don't have time to read all of the following, here's my conclusion first. 
-// The U3S with firmware v3.09c was tested. The timing is very close to perfect. 
-// The WSPR transmission starts 67ms late, and the overall message has a duration 25ms shorter 
-// than it should be. 
-// Considering the duration of a WSPR tone is 683ms, 
-// both these "errors" are a small fraction of a single WSPR tone. 
-// There is NO error which could explain any DT report in WSPR, 
-// except perhaps 0.1s since the resolution in WSPR is limited to 0.1 seconds. 
+// In case you don't have time to read all of the following, here's my conclusion first.
+// The U3S with firmware v3.09c was tested. The timing is very close to perfect.
+// The WSPR transmission starts 67ms late, and the overall message has a duration 25ms shorter
+// than it should be.
+// Considering the duration of a WSPR tone is 683ms,
+// both these "errors" are a small fraction of a single WSPR tone.
+// There is NO error which could explain any DT report in WSPR,
+// except perhaps 0.1s since the resolution in WSPR is limited to 0.1 seconds.
 // Any DT must arise elsewhere.
 //
 // Update 21-Sep-2016

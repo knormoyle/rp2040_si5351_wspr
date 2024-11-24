@@ -18,9 +18,35 @@ const int WSPR_PWM_SLICE_NUM = 4;
 
 extern volatile bool proceed;
 
+// https://swharden.com/software/FSKview/wspr/
+// 110.6 sec continuous wave
+// Frequency shifts among 4 tones every 0.683 sec
+// Tones are separated by 1.46 Hz
+// Total bandwidth is about 6 Hz
+// 50 bits of information are packaged into a 162 bit message with FEC
+// Transmissions always begin 1 sec after even minutes (UTC)
+
+// There are 162 ((50 + K − 1) * 2) possible symbols.
+// Each conveys one sync bit (LSB) and one data bit (MSB).
+// Data Transmission Rate and Duration
+// Keying rate is: 12000⁄8192 = 1.4648 baud
+// Duration is: 162 * 192⁄12000 = 110.6 sec
+// Modulation Continuous phase 4 FSK, with 1.4648 Hz tone separation
+// Occupied bandwidth is about 6 Hz
+// Synchronization is via a 162 bit pseudo-random sync vector.
+// Transmissions nominally start one second into an even UTC minute (e.g., at hh:00:01, hh:02:01, etc.)
+
+// Modulation
+// Each symbol represents a frequency shift of 12000 / 8192 Hz (1.46Hz) 
+// per symbol value giving four-level multi-FSK modulation. 
+// The transmitted symbol length is the reciprocal of the tone spacing, 
+// or approximately 0.683 seconds, so the complete message of 162 symbols 
+// takes around 110.6 seconds to send and occupies a bandwidth of approximately 6Hz.
+
 // The protocol specification states:
 // Each tone should last for 8192/12000 = 0.682666667 seconds, and transitions between
 // tones should be done in a phase-continuous manner.
+
 
 //*******************************************************
 // The RP2040 PWM block has 8 identical slices, the RP2350 has 12.
@@ -164,13 +190,6 @@ void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     pwm_config_set_clkdiv_int(&wspr_pwm_config, PWM_DIV); // takes uint?
 
     // Set the highest value the counter will reach before returning to 0. Also known as TOP.
-    // this will be the tone_delay we're called with
-    // FIX! this doesn't seem right. t should wrap at 683 millis, but * 500 ?
-    // so instead of getting 500 interrupts, we get one interrupt?
-    // also, subtracting 1 here is ??
-
-    // if div is bigger we could have just 1 interrupt per symbol?
-    // less extra processing (interrupts) during symbol transmission?
     pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)PWM_WRAP_CNT - 1));
     pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
 
@@ -220,7 +239,9 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
 
     // FIX! is float enough precision for odd pico frequencies?
     // could check if PLL_SYS_PERIOD is integer aligned?
-    const float DESIRED_SECS = 110.592;
+    // const float DESIRED_SECS = 110.592;
+    // is it really 110.6 secs?
+    const float DESIRED_SECS = 110.6;
 
     // how many interrupts per total delay?
     // the wrap count is limited to 16 bits
@@ -250,7 +271,8 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
         float possible_wrap_cnt = DESIRED_SECS / timePerWrap;
 
 
-        Serial.printf("possible_wrap_cnt %.f div %d" EOL, possible_wrap_cnt, div);
+        // Serial.printf("possible_wrap_cnt %.f div %d" EOL, possible_wrap_cnt, div);
+
         wrap_cnt_float = possible_wrap_cnt;
         // does a floor..use that and see what we get for total time!
         wrap_cnt = (int) wrap_cnt_float;
@@ -265,7 +287,7 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
             totalSymbolsTime, wrap_cnt, div);
 
         // good enough total range
-        if (totalSymbolsTime > 110.585 && totalSymbolsTime < 110.60) break;
+        if (totalSymbolsTime > 110.599 && totalSymbolsTime < 110.601) break;
 
         // The WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
         // 0.68266666666
@@ -289,6 +311,8 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
         Serial.printf("calcPwmDivAndWrap END for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
         INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 }
+
+// out of date. updated the total time
 // GOOD: PLL_SYS_MHZ 60 PWM_DIV 250 PWM_WRAP_CNT 20479
 // GOOD: totalSymbolsTime 110.587
 // GOOD: PLL_SYS_MHZ 100 PWM_DIV 250 PWM_WRAP_CNT 34133
