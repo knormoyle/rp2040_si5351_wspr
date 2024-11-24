@@ -1611,6 +1611,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     // we could turn it off, then on, to guarantee always starting from reset state?
     vfo_turn_off();
     sleep_ms(2000);
+
     // FIX! does this include a full init at the rp2040?
     vfo_turn_on(WSPR_TX_CLK_NUM);
     startSymbolFreq(hf_freq, 0);
@@ -1896,7 +1897,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // from those results, seems like I want just 300 ms delay to get perfectly aligned for DT=0
     
     //*******************************
-    // did it fail with 2 and 3? no print
+    // this should still work? 
     const uint8_t PROCEEDS_TO_SYNC = 0;
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time, 
@@ -1907,7 +1908,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     }
     Watchdog.reset();
     // if (true) delay(300);  // this should give us DT=0 with PROCEEDS_TO_SYNC=0
-    if (true) delay(600);  // this should give us DT=0 with PROCEEDS_TO_SYNC=0
+    
     //*******************************
 
 
@@ -1918,6 +1919,14 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // it's not aligned to the gps time.
         StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
     }
+
+    static int ADDITIONAL_DELAY_AFTER_PROCEED = 300; // milliseconds
+    if (ADDITIONAL_DELAY_AFTER_PROCEED<0 || ADDITIONAL_DELAY_AFTER_PROCEED > 1000) {
+        Serial.printf("ERROR: bad ADDITIONAL_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
+            ADDITIONAL_DELAY_AFTER_PROCEED);
+        ADDITIONAL_DELAY_AFTER_PROCEED = 0;
+    }
+
     uint8_t symbol_count = WSPR_SYMBOL_COUNT; 
     uint8_t i;
     absolute_time_t wsprStartTime = get_absolute_time(); // usecs
@@ -1957,7 +1966,12 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         if (false && VERBY[0]) 
             if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
 
+        //****************************************************
+        // hmm. not updating led during this
+        // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
+        delay(ADDITIONAL_DELAY_AFTER_PROCEED);  
         startSymbolFreq(hf_freq, symbol);
+        //****************************************************
 
         // Don't make StampPrintf log buffer bigger to try to save more 
         // deferred printing during a whole wspr message, to avoid the slowdown effects of printing here.
