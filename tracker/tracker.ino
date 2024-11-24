@@ -178,11 +178,27 @@ extern const int BattPin = A3;
 // FIX! are these used now? remnants of APRS messaging
 char comment[] = "tracker 1.0";
 
-// extern so it links okay if we move stuff
-// are these timing's right?
-// do we not care about tone spacing?
-extern const int WSPR_TONE_SPACING = 146;  // ~1.46 Hz
-extern const int WSPR_DELAY = 683;         // Delay value for WSPR
+
+//******************************
+// So it's a little bit of calculate to get interrupts 
+// at the right time and manipulate 'proceed' for advancing between symbols
+// for a given PLL_SYS_MHZ  (like 125, 60, or 133)
+// we solve for a total 162 symbols transmitted in desired 110.592 secs
+// (as close as we can get to the exact amount
+// Using
+// void calcPwmDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL_SYS_MHZ)
+// That routine assumes 8 pwm wrap interrupts per symbol
+//
+// We can't do 1 interrupt per symbol because the wrap counter is just 16 bits
+// and we limited ourselves to a 250 to 300 divider on the clock 
+// that drives the wrap counter (we could use a bigger divider maybe?) 
+// It would have serve the same effect as counting 8 interrupts so we'd have 
+// have a  250 * 8 = 2000 divider? There's no constraints on divider, other 
+// than being integer, and we account for that in the calculator. wrap_cnt
+// is also integer. We should be able to calculate and find a good perfect
+// match (well within the bounds check we have in the calculator comparing to
+// 110.592 secs for 162 symbols)
+//******************************
 
 char telemetry_buff[100] = { 0 };  // telemetry buffer
 uint16_t Tx_0_cnt = 0;  // increase +1 after every callsign tx
@@ -209,8 +225,10 @@ uint16_t Tx_3_cnt = 0;  // increase +1 after every telen2 tx
 //*********************************
 // PWM stuff
 // have to declare before use in setup1?
-int PWM_DIV;
-int PWM_WRAP_COUNT;
+uint32_t PWM_DIV;
+uint32_t PWM_WRAP_COUNT;
+// we don't recalculate this. assume fixed.
+external const uint32_t INTERRUPTS_PER_SYMBOL = 8;
 
 // below we always loop thru the entire hf_tx_buffer?
 // so we always loop thru 162 symbols, but the last ones might not matter.
@@ -931,20 +949,48 @@ void setup1() {
 
     Watchdog.reset();
     // not used?
-    // calculateDivAndWrap(WSPR_TONE_SPACING);
+    // calcPwmDivAndWrap(WSPR_TONE_SPACING);
     // uses PLL_SYS_MHZ to figure out good div and wrap_cnt period (subtract 1 for TOP)
     // we'll just print these for now
-    calculateDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, WSPR_DELAY, 60);
-    calculateDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, WSPR_DELAY, 100);
-    calculateDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, WSPR_DELAY, 133);
-    calculateDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, WSPR_DELAY, 125);
+    // extern so it links okay if we move stuff
+    // are these timing's right?
+    // do we not care about tone spacing?
+    // not used
+    // extern const int WSPR_TONE_SPACING = 146;  // ~1.46 Hz
+
+    //********
+    // this was with PMW_DIV 250 and 500 INTERRUPTS_PER_SYMBOL
+    // worked for 125Mhz..but not exact total symbol time?
+    // extern const int WSPR_DELAY = 683;
+    //********
+
+    // calculate for different PLL_SYS_MHZ
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, INTERRUPTS_PER_SYMBOL, 60);
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, INTERRUPTS_PER_SYMBOL, 100);
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, INTERRUPTS_PER_SYMBOL, 133);
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, INTERRUPTS_PER_SYMBOL, 125);
+
     // oneliner
-    Serial.printf("calculateDivAndWrap() ");
-    Serial.printf("if PLL_SYS_MHZ %d -> WM_DIV %d PWM_WRAP_COUNT %d" EOL,
+    Serial.printf("calcPwmDivAndWrap() ");
+    Serial.printf("if PLL_SYS_MHZ %d -> WM_DIV %lu PWM_WRAP_COUNT %lu" EOL,
         125, PWM_DIV, PWM_WRAP_COUNT);
 
-    Serial.println(F("setup1() END"));
+    // choices:
+    // GOOD: PLL_SYS_MHZ 60 PWM_DIV 250 PWM_WRAP_CNT 20479 totalSymbolsTime 110.591
+    // GOOD: PLL_SYS_MHZ 100 PWM_DIV 250 PWM_WRAP_CNT 34133 totalSymbolsTime 110.591
+    // GOOD: PLL_SYS_MHZ 133 PWM_DIV 250 PWM_WRAP_CNT 45397 totalSymbolsTime 110.591
+    // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666 totalSymbolsTime 110.590
+
+    // FIX! hardwired for PLL_SYS_MHZ 125Mhz and INTERRUPTS_PER_SYMBOL = 8
+    // FIX! make a switch(PLL_SYS_MHZ) for hardwired choices?
+    // we can hand-tweak the hardwire, if there any extra compensation due to instruction delay
+    // but ideally that would just into our calculator (interrupt handler code delay? not much)
+    PWM_DIV = 250;
+    PWM_WRAP_CNT = 42666; // Full period value. gets a -1 before it's set as the wrap top value)
+    setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
     sleep_ms(1000);
+
+    Serial.println(F("setup1() END"));
 }
 
 //*************************************************************************
@@ -1380,9 +1426,9 @@ void loop1() {
             /// FIX! is this the same as GpsFixMillis ?
 
             // GpsStartTime is set by gps_functions.cpp
-            if (GpsTimeToLastFix == 0) {
-                // FIX! odd case. Did the GPS get turned off, but TinyGPS++
-                // still says it has valid fix?
+            // if (GpsTimeToLastFix == 0) {
+            if (true) {
+                // FIX! odd case. Did the GPS get turned off, but TinyGPS++ says it still has valid fix?
                 // until I figure out why, set GpsTimeToLastFix to 0 for this case
                 if (GpsStartTime == 0) {
                     GpsTimeToLastFix = 0;
@@ -1394,10 +1440,10 @@ void loop1() {
 
             // FIX! just need one or the other of these first fix numbers.
             // Just print this the first time we have a good fix
-            if (GpsFixMillis == 0) {
-                // FIX! odd case. Did the GPS get turned off, but TinyGPS++
-                // still says it has valid fix?
-                // until I figure out why, set GpsStartMillies would be 0 for this case
+            // if (GpsFixMillis == 0) {
+            if (true){
+                // FIX! odd case. Did the GPS get turned off, but TinyGPS++ says it still has valid fix?
+                // until I figure out why, set GpsStartMillis() would be 0 for this case
                 if (GpsStartMillis == 0) {
                     GpsFixMillis = 0;
                 } else {
@@ -1693,80 +1739,6 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
 }
 
 //*******************************************************
-extern const int WSPR_PWM_SLICE_NUM = 4;
-static const bool JUST_ONE_INTERRUPT = false;
-
-// How is this aligned to 1 sec in off the starting minute?
-void PWM4_Handler(void) {
-    // too much output!
-    // if (VERBY[0]) Serial.println(F("PWM4_Handler() START"));
-    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
-    static int cnt = 0;
-
-    // changed to get just one interrupt, not 500
-    if (JUST_ONE_INTERRUPT) {
-        // don't need cnt any more
-        proceed = true;
-        // why not wrap at (500*683) - 1 and just get 1 interrupt?
-        if (VERBY[0]) Serial.print(".");
-    } else {
-        if (++cnt >= 500) {
-            // every 500 times PMW4_Handler is called, we toggle proceed to true?
-            // is that 500 interrupts?
-            cnt = 0;
-            proceed = true;
-        }
-        // if (VERBY[0] && ((cnt % 100)==0)) Serial.print(".");
-    }
-    // if (VERBY[0]) Serial.println(F("PWM4_Handler() END"));
-}
-
-
-//*******************************************************
-void zeroTimerSetPeriodMs(float ms) {
-    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
-
-    static pwm_config wspr_pwm_config = pwm_get_default_config();
-    // 250 clocks at 125Mhz .008 uSec per clock, is 250 * .008 = 2 uSec
-    // 2uS (at 125Mhz? does it need adjusting at other clks?)
-    // so if we're count at 2uSec intervals to wrap at 683 millis.. that's 500*683 = 341500 counts?
-
-    // the 250 can be a uint? so can be pretty big? Can we make it 5 times bigger (1450 or maybe 1500)
-    // to bring down the sie of the wrap count
-    // or should we count 8 interrupts, and adjust for 1/8th the total target
-    pwm_config_set_clkdiv_int(&wspr_pwm_config, 250);
-
-    // Set the highest value the counter will reach before returning to 0. Also known as TOP.
-    // this will be the tone_delay we're called with
-    // FIX! this doesn't seem right. t should wrap at 683 millis, but * 500 ?
-    // so instead of getting 500 interrupts, we get one interrupt?
-    // also, subtracting 1 here is ??
-
-    // why not wrap at (500*683) - 1 and just get 1 interrupt?
-    // more accurate?
-    if (JUST_ONE_INTERRUPT) {
-        // this will have 2 uSec accuracy ?
-        // the count here plus the divider have to multiply to = ms
-        // depending on RP2040 clock rate, we want integer divider with no error
-        // after computing the wrap boundary? probably want to loop with dividers from 250 to 300
-        // and pick the first one for the target ms
-        // can be 16 bits = 65535 max. ..we need 341333 with div 250 at 125 Mhz for a single interrupt.
-        pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)(ms * 500) - 1));
-    }
-    else {
-        // this has how much accuracy?
-        pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)ms - 1));
-    }
-    pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
-
-    irq_set_exclusive_handler(PWM_IRQ_WRAP, PWM4_Handler);
-    irq_set_enabled(PWM_IRQ_WRAP, true);
-
-    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
-    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
-    pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
-    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() END"));
-}
 
 //***********************************************************
 void sleepSeconds(int secs) {

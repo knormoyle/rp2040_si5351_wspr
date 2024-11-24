@@ -6,6 +6,11 @@
 #ifndef WSPR_FUNCTIONS_H
 #define WSPR_FUNCTIONS_H
 #include <stdint.h>
-void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL_SYS_MHZ);
+void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, 
+    uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ);
+
+//*******************************************************
+void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
+void PWM4_Handler(uint32_t INTERRUPTS_PER_SYMBOL) {
 
 #endif

@@ -36,36 +36,38 @@
 
 //*******************************************************
 // uses PLL_SYS_MHZ to figure a good div and wrap_cnt period for the PWM (subtract 1 for TOP)
-void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL_SYS_MHZ) {
-    int div;
+void calcPwmDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, 
+    uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ) {
+    if (VERBY[0]) {
+        Serial.printf("calcPwmDivAndWrap START for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
+        INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
+        // do a StampPrintf, so we can measure usec duration from here to the first symbol
+
     // FIX! is float enough precision for odd pico frequencies?
-    // usecs
+    // could check if PLL_SYS_PERIOD is integer aligned?
+    const float DESIRED_SECS = 110.592;
 
     // how many interrupts per total delay?
     // the wrap count is limited to 16 bits
     // this is enough to make it work. Can't make it work with just 1 interrupt
-    float INTERRUPTS = 8;
+    float interrupts_per_symbol = (float) INTERRUPTS_PER_SYMBOL;
 
     // interesting frequencies seem to find solutions with 250 divider. and 8 interrupts
     // 1/mhz is microseconds (1e-6)
     float PLL_SYS_USECS = 1.0 / (float)PLL_SYS_MHZ;
     float wrap_cnt_float;
     int wrap_cnt;
-    // could check if PLL_SYS_PERIOD is integer aligned?
-    const float DESIRED_SECS = 110.592;
-
-    // found some ones:
-
+    float totalSymbolsTime;
 
     // we use 250 div now for 125 mhz so check with that first
     int DIV_MIN = 250;
     int DIV_MAX = 351;
-    float totalSymbolsTime;
 
+    int div;
     for (div = DIV_MIN; div <= DIV_MAX; div++) {
-
         float div_float = (float)div;
-        float possible_wrap_cnt = DESIRED_SECS / (162 * INTERRUPTS * div_float * PLL_SYS_USECS * 1e-6);
+        float timePerWrap = 162 * interrupts_per_symbol * div_float * PLL_SYS_USECS * 1e-6;
+        float possible_wrap_cnt = DESIRED_SECS / timePerWrap;
 
         // wrap_cnt can't be too big (how big can the pwm thing count?
         // 32-bit limit?
@@ -77,8 +79,10 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
         wrap_cnt = (int) wrap_cnt_float;
 
         // does this come close enough to total time for all symbols
-        totalSymbolsTime = 162 * INTERRUPTS * div_float * PLL_SYS_USECS * 1e-6 * (float) wrap_cnt;
-        Serial.printf("totalSymbolsTime %.3f wrap_cnt %d div %d" EOL, totalSymbolsTime, wrap_cnt, div);
+        float symbolTime = INTERRUPTS * div_float * PLL_SYS_USECS * 1e-6 * (float) wrap_cnt;
+        totalSymbolsTime = 162 * symbolTime;
+        Serial.printf("totalSymbolsTime %.3f wrap_cnt %d div %d" EOL, 
+            totalSymbolsTime, wrap_cnt, div);
 
         // good enough total range
         if (totalSymbolsTime > 110.585 && totalSymbolsTime < 110.60) break;
@@ -102,6 +106,9 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
         Serial.printf("GOOD: PLL_SYS_MHZ %lu PWM_DIV %d PWM_WRAP_CNT %d" EOL, PLL_SYS_MHZ, div, wrap_cnt);
         Serial.printf("GOOD: totalSymbolsTime %.3f" EOL, totalSymbolsTime);
     }
+    if (VERBY[0]) {
+        Serial.printf("calcPwmDivAndWrap END for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
+        INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 }
 // GOOD: PLL_SYS_MHZ 60 PWM_DIV 250 PWM_WRAP_CNT 20479
 // GOOD: totalSymbolsTime 110.587
@@ -116,3 +123,69 @@ void calculateDivAndWrap(int *PWM_DIV, int *PWM_WRAP_CNT, float ms, uint32_t PLL
 // The protocol specification states:
 // Each tone should last for 8192/12000 = 0.682666667 seconds, and transitions between
 // tones should be done in a phase-continuous manner.
+
+
+//*******************************************************
+void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
+    if (PWM_WRAP_CNT > 2**16) {
+        Serial.print("ERROR: illegal PWM_WRAP_CNT %lu is > 2**16 ..drops upper bits" EOL, 
+            PWM_WRAP_CNT)
+    }
+    // FIX! we could do bounds checking? or ??
+    // assumes the values are right for INTERRUPTS_PER_SYMBOL 
+    // which is now 8 (instead of 500)
+    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
+
+    static pwm_config wspr_pwm_config = pwm_get_default_config();
+    // 250 clocks at 125Mhz .008 uSec per clock, is 250 * .008 = 2 uSec
+    // 2uS (at 125Mhz? does it need adjusting at other clks?)
+    // so if we're count at 2uSec intervals to wrap at 683 millis.. that's 500*683 = 341500 counts?
+
+    // the 250 can be a uint? so can be pretty big? Can we make it 5 times bigger (1450 or maybe 1500)
+    // to bring down the sie of the wrap count
+    // or should we count 8 interrupts, and adjust for 1/8th the total target
+    pwm_config_set_clkdiv_int(&wspr_pwm_config, PMW_DIV) // takes uint?
+
+    // Set the highest value the counter will reach before returning to 0. Also known as TOP.
+    // this will be the tone_delay we're called with
+    // FIX! this doesn't seem right. t should wrap at 683 millis, but * 500 ?
+    // so instead of getting 500 interrupts, we get one interrupt?
+    // also, subtracting 1 here is ??
+
+    // if div is bigger we could have just 1 interrupt per symbol?
+    // less extra processing (interrupts) during symbol transmission?
+    pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)PWM_WRAP_CNT - 1));
+    pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
+
+    irq_set_exclusive_handler(PWM_IRQ_WRAP, PWM4_Handler);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+
+    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
+    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
+    pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
+    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() END"));
+}
+    // more accurate?
+
+
+//*******************************************************
+// How is this aligned to 1 sec in off the starting minute?
+const int WSPR_PWM_SLICE_NUM = 4;
+void PWM4_Handler(uint32_t INTERRUPTS_PER_SYMBOL) {
+    // too much output!
+    // if (VERBY[0]) Serial.println(F("PWM4_Handler() START"));
+    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
+    static int interrupt_cnt = 0;
+
+    } else {
+        if (++interrupt_cnt >= INTERRUPTS_PER_SYMBOL) {
+            // every 500 times PMW4_Handler is called, we toggle proceed to true?
+            // is that 500 interrupts?
+            interupt_cnt = 0;
+            // if (VERBY[0]) Serial.print(".");
+            proceed = true;
+        }
+        // if (VERBY[0] && ((cnt % 100)==0)) Serial.print(".");
+    }
+    // if (VERBY[0]) Serial.println(F("PWM4_Handler() END"));
+}
