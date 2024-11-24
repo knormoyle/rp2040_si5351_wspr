@@ -1582,6 +1582,8 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         // this will be a floor divide
         // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
         hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
+        // if (VERBY[0]) Serial.printf("WSPR desired freq: %lu used hf_freq %u with correction %s" EOL,
+        //    XMIT_FREQUENCY, hf_freq, _correction);
     }
 
     // if we called this too early, just return so we don't wait 10 minutes here
@@ -1868,30 +1870,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         StampPrintf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
     }
     Watchdog.reset();
-    // startin a wee bit late?
-    // sendWspr() START now: minute() 42 second() 0
-    // 00d00:03:44.900535 [0004] sym: 0
-    // 00d00:03:51.730594 [0005] sym: 10
-
-    // FIX! use the u4b channel freq
-    // uint32_t hf_freq = XMIT_FREQUENCY;
-    // hack! in si53531_functions.cpp also
-
-    // if (VERBY[0]) Serial.printf("WSPR desired freq: %lu used hf_freq %u with correction %s" EOL,
-    //    XMIT_FREQUENCY, hf_freq, _correction);
-
-    uint8_t symbol_count = WSPR_SYMBOL_COUNT;  // From the library defines
-    // tone_spacing = WSPR_TONE_SPACING;
-    // uint16_t tone_delay = WSPR_DELAY;
-    // zeroTimerSetPeriodMs(tone_delay);
-
-    // this should be right regardless of the clock speed we're running at
-    // for when to switch tones
-
-    // FIX! is there a delay between tones?
-    // does this align the interrupts after this
-    // how long does this take
-
+    uint8_t symbol_count = WSPR_SYMBOL_COUNT; 
     uint8_t i;
     absolute_time_t wsprStartTime = get_absolute_time(); // usecs
     for (i = 0; i < symbol_count; i++) {
@@ -1934,7 +1913,10 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // time to do 10th vfo_set* (176801 - 176708) = 93 usecs? // optimization only writes changed
         // time to do 30th vfo_set* (829912 - 829828) = 84 usecs?
 
-        if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
+        // Does this affect drift at sdr?
+        if (false && VERBY[0]) 
+            if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
+
         startSymbolFreq(hf_freq, symbol);
         // Are the clocks on at this point?
         // if we turned them off while seeding the frequency
@@ -1947,7 +1929,9 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // don't overfill the log buffer. can't make it bigger because of ram problems
         // with jtencode symbols going bad if so.
         // only log every 10 symbols and the last three (160 161)
-        if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
+        // Does this affect drift at sdr?
+        if (false && VERBY[0]) 
+            if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
 
         // FIX! rather than having proceed by interrupt driven, we could just look at usecs
         // and figure out the right boundaries given the initial read?
@@ -1955,6 +1939,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // That should be more accurate and not dependent on interrupts, and the startup lag
         // for getting interrupts going with PWM
         proceed = false;
+        // sleep_ms(600);
 
         // FIX! ideally we sleep during the symbol time. but here we have to stay awake
         // looking at proceed. If it was all in the interrupt handler
@@ -1971,7 +1956,6 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // or exactly 12,000 Hz / 8192
         // 8192 / 12000 = 0.6826666.. secs. So could sleep for 660 millisecs ?
 
-        // sleep_ms(600);
 
         // on sleeping: https://ghubcoder.github.io/posts/awaking-the-pico/
 
@@ -2047,39 +2031,15 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
 }
 
 //**********************************
-void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
-    if (VERBY[0]) Serial.printf("syncAndSendWSPR() START now: minute() %d second() %d" EOL, minute(), second());
+void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, 
+    char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
+    if (VERBY[0]) 
+        Serial.printf("syncAndSendWSPR() START now: minute() %d second() %d" EOL, 
+            minute(), second());
     if (txNum < 0 || txNum > 3) txNum = 0;
 
-    // start the symbol==0 frequency
-    // will this work? how does wspr decode decide when to start (time? or are there lead chars?)
-    // what if we started with 3? (0-3 are the choices)
-
-    // leave all the clocks off?
-    // vfo_turn_off_clk_out(WSPR_TX_CLK_NUM);
-    // FIX! does startSymbolFreq turn them on or ??
-    // it should be on already?
-
-    // if we turn it on, do we trigger a pll reset?
-
-    // vfo_turn_on(WSPR_TX_CLK_NUM);
-    // startSymbolFreq(hf_freq, 3);
-    // vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
-
     // now encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
-    // FIX! replace all atoi() because of no error handling defn. for atoi()
-    // atoi()
-    // strtol()
-    // strtoll()
-    // strtoul()
-    // https://pubs.opengroup.org/onlinepubs/9699919799/functions/strtoul.html
-    // strtoull()
-    // strtoimax()
-    // strtoumax()
-    // https://pubs.opengroup.org/onlinepubs/9699919799/functions/strtoumax.html
-
     // https://stackoverflow.com/questions/27260304/equivalent-of-atoi-for-unsigned-integers
-    // can we have spaces?
     set_hf_tx_buffer(hf_tx_buffer, hf_callsign, hf_grid4, (uint8_t)atoi(hf_power));
 
     // this should be fine even if we wait a long time
@@ -2097,61 +2057,56 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // We could adjust this so the wspr starts EXACTLY at 1 sec in or 2 sec in
     // we know we should have still second()==0 at this point
 
-    // can only delay an absolute number of milliseconds at this point
-    // delaying 800 ms seems good. Can adjust this to be 1 sec - (the amount of code delay)
-    // the StampPrintf's timestamps can be subtracted to see how much time the setup takes to first symbol
+    // can't align by looking for usec offset from realtime
+    // the usecs (or millis() we can read is not aligned 
+    // to the realtime gps time. those are "since program started running"
 
-    // removed 11/23/24
-    // delay(800);
-
-    // now: at 900 millis within 0 to .1 millis
-
-    // FIX! hardwired for PLL_SYS_MHZ 125Mhz and INTERRUPTS_PER_SYMBOL = 8
-    // FIX! make a switch(PLL_SYS_MHZ) for hardwired choices?
-    // we can hand-tweak the hardwire, if there any extra compensation due to instruction delay
-    // but ideally that would just into our calculator (interrupt handler code delay? not much)
-
-    // FIX! when do we get the first interrupt at the end of the first symbol?
     Watchdog.reset();
+    // various good enough combinations for 125 Mhz
+    // FIX! update for other clock frequencies
+    if (true) {
+        // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666
+        // GOOD: totalSymbolsTime 110.590
+        PWM_DIV = 250;
+        PWM_WRAP_CNT = 42666; 
+    } else {
+        // D: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42331
+        // GOOD: totalSymbolsTime 110.600
+        PWM_DIV = 252;
+        PWM_WRAP_CNT = 42331;
+    }
+    // PWM_WRAP_CNT is full period value. 
+    // -1 before it's set as the wrap top value.
     proceed = false;
-    // was ..just got telemetry
-    // PWM_DIV = 250;
-    // PWM_WRAP_CNT = 42666; 
-    PWM_DIV = 252;
-    PWM_WRAP_CNT = 42331;
-    // Full period value. gets a -1 before it's set as the wrap top value)
-    // D: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42331
-    // GOOD: totalSymbolsTime 110.600
-
     setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
 
+    // Instead of delaying in for 1 sec: we wait for 'proceed' here. 
+    // If we wait for 2 proceeds, it's okay if the first is short
+    // because of unknown PWM counter initial state?
+
+    // Two proceed delays kind of get us to the 1-1.5secs in
+    // target..so okay?
+    // Then we're going more closely interrupt to interrupt right from symbol[0]
     // each of these should just be symbol time delay
     // there will be two extra interrupts in our interrupt cnt in the handler?
+
+    // 0.68266666... per symbol
+    // so 2x -> 1.3653333..maybe a little shorter due to code delays 
+    // should we do one proceed plus a fixed delay?
+
     while (!proceed) { ; }
     proceed = false; // ? to 1 symbol time
     while (!proceed) { ; }
     proceed = false; // 1 symbol time
 
-    // removed 11/23/24
-    // sleep_ms(1000);
-
-    // Should we wait for 'proceed' here. If we wait for 2 proceeds, it's okay if the first is short
-    // because of unknown PWM counter initial state. Two proceed delays kind of get us to the 1-1.5secs in
-    // target..so okay?
-
-    // FIX! should we wait for the first "proceed from an interrupt"
-    // that would guarantee we're going interrupt to interrupt on delays
-    // and then clear proceed.
-    // the first wait would be less than one symbol time..so that could
-    // be good is it around .6secs or ??
-    // could elinate the 1 sec sleep above
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
-
     if (VERBY[0]) Serial.println(F("syncAndSendWSPR() END"));
 }
 
 //**********************************
-void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, uint8_t power) {
+void set_hf_tx_buffer(uint8_t *hf_tx_buffer, 
+    char *hf_callsign, char *hf_grid4, uint8_t power) {
+
     if (VERBY[0]) Serial.println(F("set_hf_tx_buffer() START"));
     // Clear out the transmit buffer
     memset(hf_tx_buffer, 0, 162);  // same number of bytes as hf_tx_buffer is declared
@@ -2162,49 +2117,53 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, 
     // get all the message date outside this?
     // FIX! does this strip null terms? what about strlen(hf_all) < 6 ?
 
-    // FIX! updated to have a global static int globalGpsInvalidateAll
+    // FIX! updated to (also) have a global static int globalGpsInvalidateAll
+
     // I count that down during loop1() iterations and ignore all gps
     // until it's zero. TinyGPS++ state should have transitioned by then
     // based on new NMEA sentences. (should transition cleanly within 2 secs?)
 
     // that I manage and quality all TinyGPS++ valid signals
-    /*
-     * wspr_encode(const char * call, const char * loc, const uint8_t dbm, uint8_t * symbols)
-     *
-     * Takes a callsign, grid locator, and power level and returns a WSPR symbol
-     * table for a Type 1, 2, or 3 message.
-     *
-     * call - Callsign (12 characters maximum.. we guarantee 6 max).
-     * loc - Maidenhead grid locator (6 characters maximum).
-     * dbm - Output power in dBm.
-     * symbols - Array of channel symbols to transmit returned by the method.
-     *  Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT to the method.
-     *
-    */
+    // wspr_encode(const char * call, const char * loc, const uint8_t dbm, uint8_t * symbols)
+    // Takes a callsign, grid locator, and power level and returns a WSPR symbol
+    // table for a Type 1, 2, or 3 message.
+    // call - Callsign (12 characters maximum.. we guarantee 6 max).
+    // loc - Maidenhead grid locator (6 characters maximum).
+    // dbm - Output power in dBm.
+    // symbols - Array of channel symbols to transmit returned by the method.
+    // Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT to the method.
+
     // hf_power needs to be passed as uint8_t
-    char hf_callsign_padded[7];
-    // were spaces on the left? (starting at 0
-    snprintf(hf_callsign_padded, 7, "%s", hf_callsign);
+    // were any spaces on the left due to snprintf to hf_callsign? (starting at hf_callsign[0])
     int l = strlen(hf_callsign);      
     if (VERBY[0])
-        Serial.printf("length check: hf_callsign %s before jtencode was strlen %d" EOL, hf_callsign, l);
+        Serial.printf("length check: hf_callsign %s before jtencode was strlen %d" EOL, 
+            hf_callsign, l);
 
-    // shouldn't be any spaces in hf_callsign
+    if (l < 3 || l > 6)
+        Serial.printf("ERROR: bad length: hf_callsign %s before jtencode was strlen %d" EOL, 
+            hf_callsign, l);
+
+    // shouldn't be any spaces in hf_callsign. possible due to wrong use of snprintf()
+    // already checked for any other badness
     for (uint8_t i; i <= sizeof(hf_callsign); i++) {
         if (hf_callsign[i] == ' ')
             Serial.printf("ERROR: hf_callsign '%s' has <space> at %u" EOL, hf_callsign, i);
     }
 
-    // FIX! does this change how jtencode generates? It shouldn't ..<null> isn't an option? 
+    // FIX! does this change how jtencode generates? 
+    // It shouldn't ..<null> isn't an option? 
     // bad with space if < 6
     // < 3 should be not supported and covered elsewhere
     // alway add space to the end
+    /*
     switch(l) {
         case 3: hf_callsign[3] = ' '; 
         case 4: hf_callsign[4] = ' ';
         case 5: hf_callsign[5] = ' '; break;
     }
     hf_callsign[6] = 0; // null term, just in case
+    */
     jtencode.wspr_encode(hf_callsign, hf_grid4, power, hf_tx_buffer);
 
     // maybe useful python for testing wspr encoding
@@ -2214,20 +2173,22 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, 
 
 int initPicoClock(int PLL_SYS_MHZ) {
     Serial.println(F("initPicoClock START"));
-    // frequencies like 205 mhz will PANIC, System clock of 205000 kHz cannot be exactly achieved
+    // frequencies like 205 mhz will PANIC, 
+    // System clock of 205000 kHz cannot be exactly achieved
     // should detect the failure and change the nvram, otherwise we're stuck even on reboot
     uint32_t clk_khz = PLL_SYS_MHZ * 1000UL;
     uint32_t clk_mhz = PLL_SYS_MHZ * 1000000UL;
     if (!set_sys_clock_khz(clk_khz, false)) {
-      Serial.printf("ERROR: Can not set rp2040 clock to %d Mhz. pico PLL mults cannot be achieved" EOL,
-        PLL_SYS_MHZ);
+      Serial.printf("ERROR: Can not set rp2040 clock to %d Mhz.", PLL_SYS_MHZ);
+      Serial.print(F("pico PLL mults cannot be achieved" EOL));
       return -1;
     }
 
     Serial.printf("Attempt to set rp2040 clock to %d Mhz (legal)" EOL, PLL_SYS_MHZ);
     // 2nd arg is "required"
     set_sys_clock_khz(clk_khz, true);
-    // bool clock_configure ( enum clock_index clk_index, uint32_t src, uint32_t auxsrc, uint32_t src_freq, uint32_t freq )
+    // bool clock_configure ( enum clock_index clk_index, uint32_t src, 
+    //     uint32_t auxsrc, uint32_t src_freq, uint32_t freq )
     // clk_index The clock to configure
     // src The main clock source, can be 0.
     // auxsrc The auxiliary clock source, which depends on which clock is being set. Can be 0
@@ -2249,7 +2210,8 @@ void freeMem() {
     Serial.println(F("freeMem() START"));
     if (!VERBY[0]) return;
     // Nice to use F() for strings that are constant
-    // compiled string stays in flash. does not get copied to SRAM during the C++ initialization
+    // compiled string stays in flash. 
+    // does not get copied to SRAM during the C++ initialization
     // string it has the PROGMEM property and runs from flash.
     Serial.print(F("Free RAM: "));
     Serial.print(freeMemory(), DEC);
@@ -2274,7 +2236,8 @@ void freeMem() {
 // char el[] = {'g', 'f', 'g', '10'}'
 // char* c = "geeksforgeeks"
 
-// c++ style string (string class in std library). don't bother with String
+// c++ style string (string class in std library). 
+// Don't bother with String
 // string str = ("gfg");
 // string str = "gfg";
 // string str; str = "gfg";
@@ -2282,7 +2245,6 @@ void freeMem() {
 //**********************
 // should I work on a local branch and commit to repo less often?
 // https://stackoverflow.com/questions/13276909/how-to-do-a-local-only-commit-in-git
-
 
 // interesting old benchmark testing wiggling gpio
 // should run it on the pi pico and see
@@ -2333,3 +2295,14 @@ void freeMem() {
 // I found this interesting thread, a discussion with Joe K1JT and Steve K9AN. Apparently there is an offset of 1 second already mistakenly built into the decoder program. See http://wsjt-devel.narkive.com/6FKsdW3r/wsjt-x-wspr-dt-error
 
 
+//*****************************************
+// FIX! should replace all atoi() because of no error handling defn. for atoi()
+// atoi()
+// strtol()
+// strtoll()
+// strtoul()
+// https://pubs.opengroup.org/onlinepubs/9699919799/functions/strtoul.html
+// strtoull()
+// strtoimax()
+// strtoumax()
+// https://pubs.opengroup.org/onlinepubs/9699919799/functions/strtoumax.html

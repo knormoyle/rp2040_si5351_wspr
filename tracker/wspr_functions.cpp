@@ -119,12 +119,9 @@ void PWM4_Handler() {
     pwm_interrupt_cnt++;
     pwm_interrupt_total_cnt++;
     if (pwm_interrupt_cnt >= INTERRUPTS_PER_SYMBOL) {
-        // every 500 times PWM4_Handler is called, we toggle proceed to true?
-        // is that 500 interrupts?
         pwm_interrupt_cnt = 0;
         // symbol rate is approximately 1.4648 baud (4fsk per sec), or exactly 12,000 Hz / 8192.
         // 0.6826 secs per symbol?
-
         proceed = true;
     }
     // FIX! remove this. redundant and slows down gettng to 'proceed' in tracker.ino
@@ -229,27 +226,39 @@ void disablePwmInterrupts(void) {
 
 
 //*******************************************************
-// uses PLL_SYS_MHZ to figure a good div and wrap_cnt period for the PWM (subtract 1 for TOP)
+// uses PLL_SYS_MHZ, INTERRUPTS_PER_SYMBOL 
+// to figure a good div and wrap cnt period for the PWM (subtract 1 for TOP)
+void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, 
+        uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ) {
 
-void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ) {
     if (VERBY[0])
-        Serial.printf("calcPwmDivAndWrap START for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
-        INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
-        // do a StampPrintf, so we can measure usec duration from here to the first symbol
+        Serial.print(F("calcPwmDivAndWrap START"));
+        Serial.printf(" for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
+            INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 
     // FIX! is float enough precision for odd pico frequencies?
-    // could check if PLL_SYS_PERIOD is integer aligned?
-    // const float DESIRED_SECS = 110.592;
-    // is it really 110.6 secs?
-    const float DESIRED_SECS = 110.6;
 
-    // how many interrupts per total delay?
+    // is it really 110.6 secs?
+
+    // symbol rate is ~1.4648 baud (4fsk per sec). Exactly: 12000 Hz / 8192. 
+    // 0.68266666... secs per symbol? (8192/12000). why is 256/375 the same?
+
+    // The WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
+    // 162 * 256/375 = 110.592 secs total
+    // 162 * 8192/12000 = 110.592 secs total
+
+    // why do some people quote 110.6 secs?
+    // const float DESIRED_SECS = 110.6;
+    const float DESIRED_SECS = 110.592;
+
     // the wrap count is limited to 16 bits
-    // this is enough to make it work. Can't make it work with just 1 interrupt
+    // this is enough to make it work. 
+    // Can't make it work with just 1 interrupt per symbol.
     float interrupts_per_symbol = (float) INTERRUPTS_PER_SYMBOL;
 
-    // interesting frequencies seem to find solutions with 250 divider. and 8 interrupts
-    // 1/mhz is microseconds (1e-6)
+    // interesting frequencies seem to find solutions with 250 divider. 
+    // and 8 interrupts
+    // 1/Mhz is microseconds (1e-6)
     float PLL_SYS_USECS = 1.0 / (float)PLL_SYS_MHZ;
     float wrap_cnt_float;
     int wrap_cnt;
@@ -258,7 +267,11 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
     // we use 250 div now for 125 mhz so check with that first
     // per 
     // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h#L156
-    // can't be bigger than 255? or is 256 legal? 256 wouldn't make sense? 
+    // can't be bigger than 255? or is 256 legal? 
+    // 256 would be odd?  (more than 8 bits to past as parameter?, 
+    // although as a divider it would make sense to support?
+
+    // yes, this says 255 max?
     // static inline void pwm_config_set_clkdiv_int(pwm_config *c, uint div) {
     // valid_params_if(HARDWARE_PWM, div >= 1 && div < 256);
     int DIV_MIN = 250;
@@ -270,9 +283,7 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
         float timePerWrap = 162 * interrupts_per_symbol * div_float * PLL_SYS_USECS * 1e-6;
         float possible_wrap_cnt = DESIRED_SECS / timePerWrap;
 
-
         // Serial.printf("possible_wrap_cnt %.f div %d" EOL, possible_wrap_cnt, div);
-
         wrap_cnt_float = possible_wrap_cnt;
         // does a floor..use that and see what we get for total time!
         wrap_cnt = (int) wrap_cnt_float;
@@ -288,12 +299,7 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
 
         // good enough total range
         if (totalSymbolsTime > 110.599 && totalSymbolsTime < 110.601) break;
-
-        // The WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
-        // 0.68266666666
-        // 162 * 256/375 = 110.592 secs total
     }
-
 
     if (div > DIV_MAX) {
         Serial.printf("ERROR: didn't find a good div and wrap_cnt for PLL_SYS_MHZ %lu PLL_SYS_USECS %.7f" EOL,
