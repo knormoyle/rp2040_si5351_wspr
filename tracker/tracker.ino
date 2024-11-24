@@ -1877,6 +1877,15 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // should we do one proceed plus a fixed delay?
 
     Watchdog.reset();
+    //*******************************
+    // Note we print this after the extra 'proceed' delay(s). (or any additional fixed delay)
+    if (VERBY[0]) {
+        Serial.printf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
+        // do a StampPrintf, so we can measure usec duration from here to the first symbol
+        // it's not aligned to the gps time.
+        StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
+    }
+    //*******************************
 
     // My absolute earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
     // Due to the code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
@@ -1896,9 +1905,17 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // 3 extra symbol delay to start, DT = 1.8 ?
     // from those results, seems like I want just 300 ms delay to get perfectly aligned for DT=0
     
+    // static int ADDITIONAL_DELAY_AFTER_PROCEED = 300; // milliseconds
+    static int ADDITIONAL_DELAY_AFTER_PROCEED = 0;
+    if (ADDITIONAL_DELAY_AFTER_PROCEED<0 || ADDITIONAL_DELAY_AFTER_PROCEED > 1000) {
+        Serial.printf("ERROR: bad ADDITIONAL_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
+            ADDITIONAL_DELAY_AFTER_PROCEED);
+        ADDITIONAL_DELAY_AFTER_PROCEED = 0;
+    }
+
     //*******************************
     // this should still work? 
-    const uint8_t PROCEEDS_TO_SYNC = 0;
+    const uint8_t PROCEEDS_TO_SYNC = 1;
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time, 
         // after a 'proceed' false -> true transition
@@ -1906,26 +1923,11 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         while (!proceed) { ; }
         proceed = false; // ? to 1 symbol time
     }
+    // hmm. not updating led during this
+    // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
+    delay(ADDITIONAL_DELAY_AFTER_PROCEED);  
     Watchdog.reset();
-    // if (true) delay(300);  // this should give us DT=0 with PROCEEDS_TO_SYNC=0
     
-    //*******************************
-
-
-    // Note we print this after the extra 'proceed' delay(s). (or any additional fixed delay)
-    if (VERBY[0]) {
-        Serial.printf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
-        // do a StampPrintf, so we can measure usec duration from here to the first symbol
-        // it's not aligned to the gps time.
-        StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
-    }
-
-    static int ADDITIONAL_DELAY_AFTER_PROCEED = 300; // milliseconds
-    if (ADDITIONAL_DELAY_AFTER_PROCEED<0 || ADDITIONAL_DELAY_AFTER_PROCEED > 1000) {
-        Serial.printf("ERROR: bad ADDITIONAL_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
-            ADDITIONAL_DELAY_AFTER_PROCEED);
-        ADDITIONAL_DELAY_AFTER_PROCEED = 0;
-    }
 
     uint8_t symbol_count = WSPR_SYMBOL_COUNT; 
     uint8_t i;
@@ -1967,9 +1969,6 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
 
         //****************************************************
-        // hmm. not updating led during this
-        // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
-        delay(ADDITIONAL_DELAY_AFTER_PROCEED);  
         startSymbolFreq(hf_freq, symbol);
         //****************************************************
 
@@ -2028,6 +2027,10 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             // leds won't blink right during tx?
             // updateStatusLED();
         }
+        // hmm. not updating led during this
+        // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
+        // note we have this same delay before the first symbol, above before the loop!
+        delay(ADDITIONAL_DELAY_AFTER_PROCEED);  
         // if (VERBY[0] && ((i % 10)==1)) Serial.print("."); // one per symbol
         Watchdog.reset();
     }
@@ -2049,7 +2052,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
     // FIX! leave on if we're going to do more telemetry?
     // or always turn off?
-    if (false || vfoOffWhenDone) {
+    if (vfoOffWhenDone) {
         vfo_turn_off();
     }
     Watchdog.reset();
