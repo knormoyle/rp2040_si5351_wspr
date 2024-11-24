@@ -249,6 +249,8 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
     // why do some people quote 110.6 secs?
     // const float DESIRED_SECS = 110.6;
     const float DESIRED_SECS = 110.592;
+    const float DESIRED_SECS_MIN = DESIRED_SECS - 0.001;
+    const float DESIRED_SECS_MAX = DESIRED_SECS + 0.001;
 
     // the wrap count is limited to 16 bits
     // this is enough to make it work. 
@@ -297,7 +299,7 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
             totalSymbolsTime, wrap_cnt, div);
 
         // good enough total range
-        if (totalSymbolsTime > 110.599 && totalSymbolsTime < 110.601) break;
+        if (totalSymbolsTime >= DESIRED_SECS_MIN && totalSymbolsTime <= DESIRED_SECS_MAX) break;
     }
 
     if (div > DIV_MAX) {

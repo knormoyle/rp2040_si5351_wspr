@@ -1892,7 +1892,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // 0 extra delay, DT = -0.3
     // 1 extra symbol delay to start, DT = 0.4 or 0.5 (increase of 0.7 or 0.8..matches symbol delay I added)
     // 2 extra symbol delay to start, DT = still 0.4 or 0.5
-    // 3 extra symbol delay to start, DT = 
+    // 3 extra symbol delay to start, DT = 1.8 ?
     // from those results, seems like I want just 300 ms delay to get perfectly aligned for DT=0
     
     //*******************************
@@ -1906,7 +1906,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         proceed = false; // ? to 1 symbol time
     }
     Watchdog.reset();
-    if (true) delay(300);  // this should give us DT=0 with PROCEEDS_TO_SYNC=0
+    // if (true) delay(300);  // this should give us DT=0 with PROCEEDS_TO_SYNC=0
+    if (true) delay(600);  // this should give us DT=0 with PROCEEDS_TO_SYNC=0
     //*******************************
 
 
@@ -2100,8 +2101,14 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     if (true) {
         // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666
         // GOOD: totalSymbolsTime 110.590
-        PWM_DIV = 250;
-        PWM_WRAP_CNT = 42666; 
+        // PWM_DIV = 250;
+        // PWM_WRAP_CNT = 42666; 
+
+        // GOOD: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42328
+        // GOOD: totalSymbolsTime 110.592
+        PWM_DIV = 252;
+        PWM_WRAP_CNT = 42328;
+
     } else {
         // D: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42331
         // GOOD: totalSymbolsTime 110.600

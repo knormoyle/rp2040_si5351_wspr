@@ -1,4 +1,18 @@
 
+LC26G (AB)&LC76G&LC86G Series Firmware Upgrade ...
+
+https://www.sigmaelectronica.net/wp-content/uploads/2024/07/quectel_lc26gablc76glc86g_series_firmware_upgrade_guide_v1-0.pdf
+If the firmware upgrade procedure fails or it is stopped by the user, no backup firmware can be
+executed; the only way to reprogram a non-working firmware is to reset the hardware and start a
+new upgrade procedure.
+2. Please be aware that firmware upgrade can be done as well by using a PC’s software utility. For
+Document Name
+[1] Quectel_LC86G_Series_EVB_User_Guide
+[2] Quectel_LC76G_Series_EVB_User_Guide
+[3] Quectel_LC26G(AB)_EVB_User_Guide
+[4] Quectel_LC26G(AB)&LC76G&LC86G_Series_GNSS_Protocol_Specification
+//*****************************
+
 https://forums.quectel.com/t/l76-l-fimware-update/4486/6
 
 is it possible to Update an L76-L (L76LNR01A03S) to a newer firmware to use NMEA 401? I’ve read about a newer version L76LNR02A02S but couldn’t spot it anywhere for download…
