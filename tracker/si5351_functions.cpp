@@ -847,7 +847,7 @@ void vfo_turn_on(uint8_t clk_num) {
 
 
     vfo_set_freq_x16(clk_num, freq);
-
+    // all clks off!
     si5351bx_clken = 0xff;
     vfo_turn_on_clk_out(clk_num);
     vfo_turn_on_completed = true;
@@ -865,8 +865,11 @@ void vfo_turn_off(void) {
     vfo_turn_off_completed = false;
 
     // disable all clk output
+    // FIX! this will fail if i2c is not working. hang if vfo is powered off?
+    // we ride thru it with a -2 return?
     si5351bx_clken = 0xff;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+
     // sleep_ms(10);
     busy_wait_us_32(10000);
     vfo_set_power_on(false);

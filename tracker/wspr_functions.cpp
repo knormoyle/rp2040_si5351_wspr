@@ -16,7 +16,11 @@ extern const uint32_t INTERRUPTS_PER_SYMBOL;
 
 const int WSPR_PWM_SLICE_NUM = 4;
 
-extern bool proceed;
+extern volatile bool proceed;
+
+// The protocol specification states:
+// Each tone should last for 8192/12000 = 0.682666667 seconds, and transitions between
+// tones should be done in a phase-continuous manner.
 
 //*******************************************************
 // The RP2040 PWM block has 8 identical slices, the RP2350 has 12.
@@ -45,6 +49,164 @@ extern bool proceed;
 // WSPR_DELAY = 683;
 
 //*******************************************************
+// FIX! what about just using hardware timers on pi pico. and migrating away
+// from the PWM interrupt timer. 
+// https://reference.arduino.cc/reference/en/libraries/rpi_pico_timerinterrupt
+// https://github.com/khoih-prog/RPI_PICO_TimerInterrupt
+// This library enables you to use Interrupt from Hardware Timers on on RP2040-based boards 
+// such as RASPBERRY_PI_PICO, using Earle Philhower's arduino-pico core. 
+
+// As Hardware Timers are rare, and very precious assets of any board, 
+// this library now enables you to use up to 16 ISR-based Timers, 
+// while consuming only 1 Hardware Timer. Timers' interval is very long (ulong millisecs).
+
+// Now with these new 16 ISR-based timers, the maximum interval 
+// is practically unlimited (limited only by unsigned long milliseconds) 
+// while the accuracy is nearly perfect compared to software timers.
+// The most important feature is they're ISR-based timers. 
+// Therefore, their executions are not blocked by bad-behaving functions / tasks. 
+// This important feature is absolutely necessary for mission-critical tasks.
+// Functions using normal software timers, relying on loop() and calling millis(), 
+// won't work if the loop() or setup() is blocked by certain operation. 
+
+// The catch is your function is now part of an ISR (Interrupt Service Routine), 
+// and must be lean / mean, and follow certain rules.
+// mportant Notes about ISR
+// Inside the attached function, delay() won’t work and the value returned by millis() will not increment. 
+// Serial data received while in the function may be lost. 
+// You should declare as volatile any variables that you modify within the attached function.
+
+// Typically global variables are used to pass data between an ISR and the main program. 
+// To make sure variables shared between an ISR and the main program are updated correctly, 
+// declare them as volatile.
+
+//*******************************************************
+
+// How is this aligned to 1 sec in off the starting minute?
+// can't have parameters?
+static uint32_t pwm_interrupt_cnt = 0;
+static uint32_t pwm_interrupt_total_cnt = 0;
+void PWM4_Handler() {
+    // too much output!
+    // if (VERBY[0]) Serial.println(F("PWM4_Handler() START"));
+    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
+    pwm_interrupt_cnt++;
+    pwm_interrupt_total_cnt++;
+    if (pwm_interrupt_cnt >= INTERRUPTS_PER_SYMBOL) {
+        // every 500 times PWM4_Handler is called, we toggle proceed to true?
+        // is that 500 interrupts?
+        pwm_interrupt_cnt = 0;
+        // symbol rate is approximately 1.4648 baud (4fsk per sec), or exactly 12,000 Hz / 8192.
+        // 0.6826 secs per symbol?
+
+        proceed = true;
+    }
+    // FIX! remove this. redundant and slows down gettng to 'proceed' in tracker.ino
+    if (false and VERBY[0]) {
+        uint32_t pwm_interrupt_cnt_162 = pwm_interrupt_total_cnt % 162;
+        if ((pwm_interrupt_total_cnt % 10) == 0) 
+            StampPrintf("sym: %lu %lu" EOL, pwm_interrupt_cnt_162, pwm_interrupt_cnt);
+
+        if ((pwm_interrupt_total_cnt % 162) == 161) {
+            StampPrintf("sym: %lu %lu" EOL, pwm_interrupt_cnt_162, pwm_interrupt_cnt);
+            DoLogPrint();
+        }
+    }
+    // if (VERBY[0]) Serial.println(F("PWM4_Handler() END"));
+
+}
+
+//*******************************************************
+void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
+    // valid_params_if(HARDWARE_PWM, div >= 1 && div < 256);
+    if (PWM_DIV >= 256)
+        Serial.printf("ERROR: illegal PWM_DIV  %lu is > 256 ..drops upper bits?" EOL, PWM_DIV);
+    if (PWM_DIV ==  0)
+        Serial.print(F("ERROR: illegal PWM_DIV is 0" EOL)); // 0 should be illegal also?
+
+    // gets passed as uint16_t
+    if (PWM_WRAP_CNT >= (1 << 16))
+        Serial.printf("ERROR: illegal PWM_WRAP_CNT %lu is > 2**16 ..drops upper bits?" EOL, PWM_WRAP_CNT);
+    if (PWM_WRAP_CNT == 0 )
+        Serial.print(F("ERROR: illegal PWM_WRAP_CNT is 0" EOL));
+    Serial.flush();
+
+    // side-note: per:
+    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h
+
+    // don't need to program this.. default is always-on (free-running PWM)
+    // static inline void pwm_config_set_clkdiv_mode(pwm_config *c, enum pwm_clkdiv_mode mode) {
+    // valid_params_if(HARDWARE_PWM, mode == PWM_DIV_FREE_RUNNING ||
+    // Configure which event gates the operation of the fractional divider.
+    // The default is always-on (free-running PWM). 
+
+    // FIX! we could do bounds checking? or ??
+    // assumes the values are right for INTERRUPTS_PER_SYMBOL 
+    // which is now 8 (instead of 500)
+    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
+
+    static pwm_config wspr_pwm_config = pwm_get_default_config();
+    // 250 clocks at 125Mhz .008 uSec per clock, is 250 * .008 = 2 uSec
+    // 2uS (at 125Mhz? does it need adjusting at other clks?)
+    // so if we're count at 2uSec intervals to wrap at 683 millis.. that's 500*683 = 341500 counts?
+
+    // the 250 can be a uint? so can be pretty big? Can we make it 5 times bigger (1450 or maybe 1500)
+    // to bring down the sie of the wrap count
+    // or should we count 8 interrupts, and adjust for 1/8th the total target
+
+    // per https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h#L156
+    // can't be bigger than 256!
+    // static inline void pwm_config_set_clkdiv_int(pwm_config *c, uint div) {
+    // valid_params_if(HARDWARE_PWM, div >= 1 && div < 256);
+    pwm_config_set_clkdiv_int(&wspr_pwm_config, PWM_DIV); // takes uint?
+
+    // Set the highest value the counter will reach before returning to 0. Also known as TOP.
+    // this will be the tone_delay we're called with
+    // FIX! this doesn't seem right. t should wrap at 683 millis, but * 500 ?
+    // so instead of getting 500 interrupts, we get one interrupt?
+    // also, subtracting 1 here is ??
+
+    // if div is bigger we could have just 1 interrupt per symbol?
+    // less extra processing (interrupts) during symbol transmission?
+    pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)PWM_WRAP_CNT - 1));
+    pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
+
+    irq_set_exclusive_handler(PWM_IRQ_WRAP, PWM4_Handler);
+    irq_set_enabled(PWM_IRQ_WRAP, true);
+
+    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
+
+    // global state that's changed on interrupts
+    pwm_interrupt_cnt = 0;
+    pwm_interrupt_total_cnt = 0;
+
+    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
+    // does this start it counting to interrupt and toggle 'proceed' after completion of first symbol?
+    // first symbol could be "short" as a result (the extra delay in getting first frequency setup)
+    // setup the base frequency earlier, so we don't see this extra variation on first symbol!
+    // due to the "change" optimization in the i2c writes.
+    pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
+    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() END"));
+}
+
+//*******************************************************
+void disablePwmInterrupts(void) {
+    // FIX! do we have to undo all of this? what if we had an parameter that 
+    // probably cause we have to start with everything at 0 when we start
+    // otherwise don't know where we are relative to the divider etc
+    pwm_set_enabled(WSPR_PWM_SLICE_NUM, false);
+    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, false);
+    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
+    irq_set_enabled(PWM_IRQ_WRAP, false);
+    irq_remove_handler(PWM_IRQ_WRAP, PWM4_Handler);
+
+    // global state that's changed on interrupts
+    pwm_interrupt_cnt = 0;
+    pwm_interrupt_total_cnt = 0;
+}
+
+
+//*******************************************************
 // uses PLL_SYS_MHZ to figure a good div and wrap_cnt period for the PWM (subtract 1 for TOP)
 
 void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ) {
@@ -70,7 +232,8 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
     float totalSymbolsTime;
 
     // we use 250 div now for 125 mhz so check with that first
-    // per https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h#L156
+    // per 
+    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h#L156
     // can't be bigger than 255? or is 256 legal? 256 wouldn't make sense? 
     // static inline void pwm_config_set_clkdiv_int(pwm_config *c, uint div) {
     // valid_params_if(HARDWARE_PWM, div >= 1 && div < 256);
@@ -132,99 +295,3 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT, uint32_t INTER
 // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666
 // GOOD: totalSymbolsTime 110.590
 
-
-// The protocol specification states:
-// Each tone should last for 8192/12000 = 0.682666667 seconds, and transitions between
-// tones should be done in a phase-continuous manner.
-
-//*******************************************************
-// How is this aligned to 1 sec in off the starting minute?
-// can't have parameters?
-void PWM4_Handler() {
-    // too much output!
-    // if (VERBY[0]) Serial.println(F("PWM4_Handler() START"));
-    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
-    static uint32_t interrupt_cnt = 0;
-
-    if (++interrupt_cnt >= INTERRUPTS_PER_SYMBOL) {
-        // every 500 times PWM4_Handler is called, we toggle proceed to true?
-        // is that 500 interrupts?
-        interrupt_cnt = 0;
-        // if (VERBY[0]) Serial.print(".");
-        proceed = true;
-    }
-    // if (VERBY[0] && ((cnt % 100)==0)) Serial.print(".");
-    // if (VERBY[0]) Serial.println(F("PWM4_Handler() END"));
-}
-
-//*******************************************************
-void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
-    // valid_params_if(HARDWARE_PWM, div >= 1 && div < 256);
-    if (PWM_DIV >= 256)
-        Serial.printf("ERROR: illegal PWM_DIV  %lu is > 256 ..drops upperr bits?" EOL, PWM_DIV);
-    if (PWM_DIV ==  0)
-        Serial.print(F("ERROR: illegal PWM_DIV is 0" EOL)); // 0 should be illegal also?
-
-    // gets passed as uint16_t
-    if (PWM_WRAP_CNT >= (1 << 16))
-        Serial.printf("ERROR: illegal PWM_WRAP_CNT %lu is > 2**16 ..drops upper bits?" EOL, PWM_WRAP_CNT);
-    if (PWM_WRAP_CNT == 0 )
-        Serial.print(F("ERROR: illegal PWM_WRAP_CNT is 0" EOL));
-
-    // side-note: per:
-    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h
-
-    // don't need to program this.. default is always-on (free-running PWM)
-    // static inline void pwm_config_set_clkdiv_mode(pwm_config *c, enum pwm_clkdiv_mode mode) {
-    // valid_params_if(HARDWARE_PWM, mode == PWM_DIV_FREE_RUNNING ||
-    // Configure which event gates the operation of the fractional divider.
-    // The default is always-on (free-running PWM). 
-
-    // FIX! we could do bounds checking? or ??
-    // assumes the values are right for INTERRUPTS_PER_SYMBOL 
-    // which is now 8 (instead of 500)
-    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() START"));
-
-    static pwm_config wspr_pwm_config = pwm_get_default_config();
-    // 250 clocks at 125Mhz .008 uSec per clock, is 250 * .008 = 2 uSec
-    // 2uS (at 125Mhz? does it need adjusting at other clks?)
-    // so if we're count at 2uSec intervals to wrap at 683 millis.. that's 500*683 = 341500 counts?
-
-    // the 250 can be a uint? so can be pretty big? Can we make it 5 times bigger (1450 or maybe 1500)
-    // to bring down the sie of the wrap count
-    // or should we count 8 interrupts, and adjust for 1/8th the total target
-
-    // per https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h#L156
-    // can't be bigger than 256!
-    // static inline void pwm_config_set_clkdiv_int(pwm_config *c, uint div) {
-    // valid_params_if(HARDWARE_PWM, div >= 1 && div < 256);
-    pwm_config_set_clkdiv_int(&wspr_pwm_config, PWM_DIV); // takes uint?
-
-    // Set the highest value the counter will reach before returning to 0. Also known as TOP.
-    // this will be the tone_delay we're called with
-    // FIX! this doesn't seem right. t should wrap at 683 millis, but * 500 ?
-    // so instead of getting 500 interrupts, we get one interrupt?
-    // also, subtracting 1 here is ??
-
-    // if div is bigger we could have just 1 interrupt per symbol?
-    // less extra processing (interrupts) during symbol transmission?
-    pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)PWM_WRAP_CNT - 1));
-    pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
-
-    irq_set_exclusive_handler(PWM_IRQ_WRAP, PWM4_Handler);
-    irq_set_enabled(PWM_IRQ_WRAP, true);
-
-    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
-    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
-    pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
-    // if (VERBY[0]) Serial.println(F("zeroTimerSetPeriodMs() END"));
-}
-
-//*******************************************************
-void disablePwmInterrupts(void) {
-    pwm_set_enabled(WSPR_PWM_SLICE_NUM, false);
-    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, false);
-    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
-    irq_set_enabled(PWM_IRQ_WRAP, false);
-    irq_remove_handler(PWM_IRQ_WRAP, PWM4_Handler);
-}

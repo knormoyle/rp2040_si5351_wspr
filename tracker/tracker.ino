@@ -236,9 +236,8 @@ extern const uint32_t INTERRUPTS_PER_SYMBOL = 8;
 // just make it 162 so when we clear it, it's faster
 uint8_t hf_tx_buffer[162] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
 
-// FIX! why is this volatile?
-// volatile bool proceed = false;
-bool proceed = false;
+// FIX! why is this volatile? Because it's set by the ISR for PWM interrupts?
+volatile bool proceed = false;
 
 
 //*********************************
@@ -983,14 +982,6 @@ void setup1() {
     // GOOD: PLL_SYS_MHZ 133 PWM_DIV 250 PWM_WRAP_CNT 45397 totalSymbolsTime 110.591
     // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666 totalSymbolsTime 110.590
 
-    // FIX! hardwired for PLL_SYS_MHZ 125Mhz and INTERRUPTS_PER_SYMBOL = 8
-    // FIX! make a switch(PLL_SYS_MHZ) for hardwired choices?
-    // we can hand-tweak the hardwire, if there any extra compensation due to instruction delay
-    // but ideally that would just into our calculator (interrupt handler code delay? not much)
-    PWM_DIV = 250;
-    PWM_WRAP_CNT = 42666; // Full period value. gets a -1 before it's set as the wrap top value)
-    setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
-    sleep_ms(1000);
 
     Serial.println(F("setup1() END"));
 }
@@ -1585,6 +1576,15 @@ void loop1() {
 
 //*******************************************************
 int alignAndDoAllSequentialTx (uint32_t hf_freq) {
+    // FIX! disabled for now
+    // only do the correction once, for subsequent use of hf_freq. 
+    // is this the right place?
+    if (false and atoi(_correction) != 0) {
+        // this will be a floor divide
+        // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
+        hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
+    }
+
     // if we called this too early, just return so we don't wait 10 minutes here
     // it should loop around in loop1() ..after how much of a wait? smartWait? (calculated delay above?)
     // at most wait up to a minute if called the minute before start time)
@@ -1748,8 +1748,6 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     return 0; // success
 }
 
-//*******************************************************
-
 //***********************************************************
 void sleepSeconds(int secs) {
     // this doesn't have an early out (although the updateGpsDataAndTime() can
@@ -1842,7 +1840,13 @@ bool alignMinute(int offset) {
 // if not in the minute before starting minute,
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3
+
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhenDone) {
+    // Are the clocks on at this point? 
+    // if we turned them off while seeding the frequency
+    // turn them on now!
+    vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
+
     if (VERBY[0]) {
         Serial.printf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
         // do a StampPrintf, so we can measure usec duration from here to the first symbol
@@ -1855,18 +1859,9 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // 00d00:03:44.900535 [0004] sym: 0
     // 00d00:03:51.730594 [0005] sym: 10
 
-
     // FIX! use the u4b channel freq
     // uint32_t hf_freq = XMIT_FREQUENCY;
     // hack! in si53531_functions.cpp also
-
-
-    // FIX! disabled for now
-    if (false and atoi(_correction) != 0) {
-        // this will be a floor divide
-        // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
-        hf_freq = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
-    }
 
     // if (VERBY[0]) Serial.printf("WSPR desired freq: %lu used hf_freq %u with correction %s" EOL,
     //    XMIT_FREQUENCY, hf_freq, _correction);
@@ -1899,22 +1894,84 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
                 }
         }
 
-        uint32_t freq_x16 =
-            (hf_freq << PLL_CALCULATION_PRECISION) +
-            (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
+        // moved to startSymbolFreq() 11/23/24
+        // uint32_t freq_x16 =
+        //     (hf_freq << PLL_CALCULATION_PRECISION) +
+        //     (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
+
+
 
         // Serial.printf(__func__ " vfo_set_freq_x16(%u)" EOL, (freq_x16 >> PLL_CALCULATION_PRECISION));
         // FIX! how long does it take to do this? actually how long to get to here
         // for first symbol?
 
+        // syncAndSendWSPR() START now: minute() 41 second() 38
+        // sendWspr() START now: minute() 42 second() 1
+        // 02:38.667663 [0004] sendWspr() START now: minute() 42 second() 1
+        // 02:38.667842 [0005] b
+        // 02:38.668264 [0006] sym: 0
+        // 02:45.176708 [0007] b
+        // 02:45.176801 [0008] sym: 10
+        // 02:52.003268 [0009] b
+        // 02:52.003757 [0010] sym: 20 
+        // 02:58.829828 [0011] b 
+        // 02:58.829912 [0012] sym: 30
+
+        // time from sendWspr() to sym: 0: (668264 - 667663) 601 usecs (delay to first symbol)
+        // time to do 1st vfo_set* (668264 - 667842) = 422 usecs?
+        // time to do 10th vfo_set* (176801 - 176708) = 93 usecs? // optimization only writes changed
+        // time to do 30th vfo_set* (829912 - 829828) = 84 usecs?
+
         if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
-        vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
+        startSymbolFreq(hf_freq, symbol);
+        // moved to startSymbolFreq() 11/23/24
+        // vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
         // don't overfill the log buffer. can't make it bigger because of ram problems 
         // with jtencode symbols going bad if so.
         // only log every 10 symbols and the last three (160 161)
         if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
+
+        // FIX! rather than having proceed by interrupt driven, we could just look at usecs
+        // and figure out the right boundaries given the initial read?
         // PWM handler sets proceed?
+        // That should be more accurate and not dependent on interrupts, and the startup lag
+        // for getting interrupts going with PWM
+
         proceed = false;
+        // FIX! ideally we sleep during the symbol time. but here we have to stay awake
+        // looking at proceed. If it was all in the interrupt handler
+        // we could sleep here for a little more than the full delivery of 192 symbols
+        // Then wakeup and spin loop on proceed which the interrupt handler would 
+        // only assert when all done!
+        // we could watchdog reset if we don't get proceed, which means 
+        // something went wrong with the interrupt handler
+        // but we'd have to send the first symbol out somehow without an interrupt?
+        // FIX! we could sleep for a little less than the expected symbol time here
+        // that would work..then check proceed on wakep (spin loop here)
+        // i.e. sleep a little less than this. 
+        // The symbol rate is approximately 1.4648 baud (4FSK symbols per second), 
+        // or exactly 12,000 Hz / 8192
+        // 8192 / 12000 = 0.6826666.. secs. So could sleep for 660 millisecs ?
+
+        // sleep_ms(600);
+
+        // on sleeping: https://ghubcoder.github.io/posts/awaking-the-pico/
+
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__sleep.html
+        // Sleep functions for delaying execution in a lower power state.
+        // These functions allow the calling core to sleep. 
+        // This is a lower powered sleep; 
+        // waking and re-checking time on every processor event (WFE)
+        // These functions should not be called from an IRQ handler.
+        // Lower powered sleep requires use of the default alarm pool which 
+        // may be disabled by the PICO_TIME_DEFAULT_ALARM_POOL_DISABLED #define or 
+        // currently full in which case these functions become busy waits instead.
+
+        // Whilst sleep_ functions are preferable to busy_wait functions from 
+        // a power perspective, the busy_wait equivalent function may return 
+        // slightly sooner after the target is reached.
+
+
         while (!proceed) {
             ;
             // whenever we have spin loops we need to updateStatusLED()
@@ -1943,8 +2000,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         Serial.printf(EOL "ERROR: 100.592 secs goal: wsprDurationSecs %.5f seems too big or small" EOL, wsprDurationSecs);
         Serial.printf("ERROR: wsprDuration %" PRIu64 " usecs" EOL EOL, wsprDuration);
     }
-    DoLogPrint();
 
+    DoLogPrint();
     disablePwmInterrupts();
 
     // FIX! leave on if we're going to do more telemetry?
@@ -1957,11 +2014,32 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 }
 
 //**********************************
+void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
+    // setup with the base frequency if symbol == 0, so the i2c writes have seeded the si5351
+    // so the first symbol won't have different delay than the subsequent symbols
+    // this s copied from sendWspr() below). Keep it up to date or make routine
+    // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
+    // we turned the vfo on in the minute before 0, separately
+    
+    // otherwise, normal use is for to start a symbol frequency
+    uint32_t freq_x16 = (hf_freq << PLL_CALCULATION_PRECISION) +
+        (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
+
+    vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
+}
+
+//**********************************
 void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
     if (VERBY[0]) Serial.printf("syncAndSendWSPR() START now: minute() %d second() %d" EOL, minute(), second());
     if (txNum < 0 || txNum > 3) txNum = 0;
-    // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
-    // we turned the vfo on in the minute before 0, separately
+
+    // start the symbol==0 frequency
+    // will this work? how does wspr decode decide when to start (time? or are there lead chars?)
+    // what if we started with 3? (0-3 are the choices)
+
+    // leave all the clocks off?
+    vfo_turn_off_clk_out(WSPR_TX_CLK_NUM);
+    startSymbolFreq(hf_freq, 0);
 
     // now encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
     // FIX! replace all atoi() because of no error handling defn. for atoi()
@@ -2000,6 +2078,19 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     delay(800);
 
     // now: at 900 millis within 0 to .1 millis
+
+    // FIX! hardwired for PLL_SYS_MHZ 125Mhz and INTERRUPTS_PER_SYMBOL = 8
+    // FIX! make a switch(PLL_SYS_MHZ) for hardwired choices?
+    // we can hand-tweak the hardwire, if there any extra compensation due to instruction delay
+    // but ideally that would just into our calculator (interrupt handler code delay? not much)
+    
+    // FIX! when do we get the first interrupt at the end of the first symbol?
+    PWM_DIV = 250;
+    PWM_WRAP_CNT = 42666; // Full period value. gets a -1 before it's set as the wrap top value)
+    setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
+    // FIX! should we have a separate enable on the PWM state?
+    sleep_ms(1000);
+
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
 
     if (VERBY[0]) Serial.println(F("syncAndSendWSPR() END"));
@@ -2129,8 +2220,6 @@ void freeMem() {
 
 // wsprry-pi still lives?
 // https://wsprry-pi.readthedocs.io/en/latest/About_Wsprry_Pi/index.html
-
-
 
 // 50 chars in 110.6 seconds. starting 1 sec after the minute
 // wsprry pi starts at 2 secs in
