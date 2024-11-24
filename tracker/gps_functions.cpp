@@ -785,17 +785,7 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 //************************************************
 bool ublox_high_alt_mode_enabled = false;
 
-void GpsOFF(void) {
-    if (VERBY[0]) Serial.printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
-
-    digitalWrite(GpsPwr, HIGH);
-    // Serial2.end()
-    // Disables serial communication, allowing the RX and TX pins to be used for general input and output.
-    // To re-enable serial communication, call Serial2.begin().
-    // FIX! do we really need or want to turn off Serial2? Remember to Serial2.begin() when we turn it back on
-    // (only if it was off)
-    Serial2.end();
-
+void invalidateTinyGpsState(void) {
     // gps.date.clear(); // kazu had done this method
     // are these declared private?
     // FIX! how can we clear these? Do we change the library to make them public?
@@ -817,7 +807,8 @@ void GpsOFF(void) {
     // this should work without changing the TinyGPS++ library
     // did this not work?
     if (false) {
-        GpsInvalidAllCnt = 2; // should get us at least 2 GPS broadcasts
+        // should get us ignoring least 2 GPS broadcasts? Two cycles through loop1() ?
+        GpsInvalidAllCnt = 2; 
         GpsInvalidAll = true;
     } else {
         // how do we clear him?
@@ -827,6 +818,24 @@ void GpsOFF(void) {
         gps.date.updated = false;
         gps.date.date = 0;
     }
+
+}
+
+//************************************************
+void GpsOFF(void) {
+    if (VERBY[0]) Serial.printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
+
+    digitalWrite(GpsPwr, HIGH);
+    // Serial2.end()
+    // Disables serial communication, allowing the RX and TX pins to be used for general input and output.
+    // To re-enable serial communication, call Serial2.begin().
+    // FIX! do we really need or want to turn off Serial2? Remember to Serial2.begin() when we turn it back on
+    // (only if it was off)
+    Serial2.end();
+    // unlike i2c to vfo, we don't tear down the Serial2 definition...just .end() 
+    // so we can just .begin() again later
+
+    invalidateTinyGpsState();
 
     // also has lastCommitTime = millis()
     // we don't change that?

@@ -480,41 +480,41 @@ void user_interface(void) {
         bool good;
         switch ( c_char ) {
             case '/':
-                Serial.print(F("Rebooting to bootloader mode..drag/drop a uf2 per normal\r\n"));
-                Serial.print(F("after reboot: drag/drop a uf2 the normal way to the drive that shows\r\n"));
-                Serial.print(F("You should be able to leave usb connected. If not, disconnect/connect\r\n%"));
+                Serial.print(F("Rebooting to bootloader mode..drag/drop a uf2 per normal" EOL));
+                Serial.print(F("after reboot: drag/drop a uf2 the normal way to the drive that shows" EOL));
+                Serial.print(F("You should be able to leave usb connected. If not, disconnect/connect%" EOL));
                 Serial.printf("Goodbye!%s", CLEAR_SCREEN);
                 Watchdog.enable(2000);  // milliseconds
                 for (;;) { ; }
             case 'X':
-                Serial.printf("%s\n\nGoodbye ..rebooting", CLEAR_SCREEN);
+                Serial.printf("%s\n\nGoodbye ..rebooting" EOL, CLEAR_SCREEN);
                 Watchdog.enable(500);  // milliseconds
                 for (;;) { ; }
             case 'C':
                 // FIX! will 1 char send wspr?
-                get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]",
+                get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]" EOL,
                     _callsign, sizeof(_callsign));
                 convertToUpperCase(_callsign);
                 write_FLASH();
                 break;
             case 'U':
-                get_user_input("Enter U4B channel (0-599): ", _U4B_chan, sizeof(_U4B_chan));
+                get_user_input("Enter U4B channel (0-599): " EOL, _U4B_chan, sizeof(_U4B_chan));
                 XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
 
                 write_FLASH();
                 break;
             case 'V':
-                get_user_input("Enter Verbosity level (0-9): ", _verbose, sizeof(_verbose));
+                get_user_input("Enter Verbosity level (0-9): " EOL, _verbose, sizeof(_verbose));
                 write_FLASH();
                 break;
             case 'T':
                 show_TELEN_msg();
-                get_user_input("Enter TELEN config: ", _TELEN_config, sizeof(_TELEN_config));
+                get_user_input("Enter TELEN config: " EOL, _TELEN_config, sizeof(_TELEN_config));
                 convertToUpperCase(_TELEN_config);
                 write_FLASH();
                 break;
             case 'K':
-                get_user_input("Enter clock speed (100-250): ", _clock_speed, sizeof(_clock_speed));
+                get_user_input("Enter clock speed (100-250): " EOL, _clock_speed, sizeof(_clock_speed));
                 write_FLASH();
                 PLL_SYS_MHZ = atoi(_clock_speed);
                 // frequencies like 205 mhz will PANIC,
@@ -567,38 +567,41 @@ void user_interface(void) {
                 // use vcocalc.py to calculate parameters with set_sys_clock_pll()
                 // static bool set_sys_clock_khz ( uint32_t freq_khz, bool required 
                 if (!set_sys_clock_khz(freq_khz, false)) {
-                    Serial.printf("user_interface: RP2040 can't change clock to %lu Mhz. Using %lu instead" EOL, 
-                        PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
+                    Serial.print("user_interface:");
+                    Serial.printf(" RP2040 can't change clock to %lu Mhz.", PLL_SYS_MHZ);
+                    Serial.printf(" Using %lu instead" EOL, DEFAULT_PLL_SYS_MHZ);
                     PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
                     snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
                     write_FLASH();
                 }
                 break;
             case 'A':
-                get_user_input("Enter Band (10,12,15,17,20): ", _Band, sizeof(_Band));
-                // redo channel selection if we change bands, since U4B definition changes per band
+                get_user_input("Enter Band (10,12,15,17,20):" EOL, _Band, sizeof(_Band));
+                // redo channel selection if we change bands, 
+                // since U4B definition changes per band
                 write_FLASH();
                 XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
                 break;
             case 'P':
-                get_user_input("Enter Tx high: (0 or 1) ", _tx_high, sizeof(_tx_high));
+                get_user_input("Enter Tx high: (0 or 1)" EOL, _tx_high, sizeof(_tx_high));
                 write_FLASH();
                 break;
             case 'D':
-                get_user_input("Enter DEVMODE to enable messaging: (0 or 1) ",
+                get_user_input("Enter DEVMODE to enable messaging: (0 or 1)" EOL,
                     _devmode, sizeof(_devmode));
                 write_FLASH();
                 break;
             case 'R':
-                Serial.printf("Don't cause more than approx. 43 hz 'correction' on a band. Effect varies per band?");
-                get_user_input("Enter ppb Correction to si5351: (-3000 to 3000) ",
+                Serial.print(F("Don't cause more than approx. 43 hz 'correction' on a band.")); 
+                Serial.print(F("effect varies per band?" EOL));
+                get_user_input("Enter ppb Correction to si5351: (-3000 to 3000)" EOL,
                     _correction, sizeof(_correction));
                 write_FLASH();
                 break;
             case 'G':
                 Serial.printf("test only: 1 means you don't wait for starting minute from _U4B_channel");
                 Serial.printf("does wait for any 2 minute alignment though");
-                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1) ",
+                get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1):",
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
                 break;
@@ -609,7 +612,7 @@ void user_interface(void) {
             case 13:  break;
             case 10:  break;
             default:
-                Serial.printf("%s\nYou pressed: %c - (0x%02x), invalid choice! ", CLEAR_SCREEN, c_char, c_char);
+                Serial.printf("%s\nYou pressed: %c - (0x%02x), invalid choice!", CLEAR_SCREEN, c_char, c_char);
                 sleep_ms(1000);
                 break;
         }

@@ -226,9 +226,9 @@ uint16_t Tx_3_cnt = 0;  // increase +1 after every telen2 tx
 // PWM stuff
 // have to declare before use in setup1?
 uint32_t PWM_DIV;
-uint32_t PWM_WRAP_COUNT;
+uint32_t PWM_WRAP_CNT;
 // we don't recalculate this. assume fixed.
-external const uint32_t INTERRUPTS_PER_SYMBOL = 8;
+extern const uint32_t INTERRUPTS_PER_SYMBOL = 8;
 
 // below we always loop thru the entire hf_tx_buffer?
 // so we always loop thru 162 symbols, but the last ones might not matter.
@@ -237,7 +237,9 @@ external const uint32_t INTERRUPTS_PER_SYMBOL = 8;
 uint8_t hf_tx_buffer[162] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
 
 // FIX! why is this volatile?
-volatile bool proceed = false;
+// volatile bool proceed = false;
+bool proceed = false;
+
 
 //*********************************
 // if we need to ignore TinyGps++ state for a while, because
@@ -965,15 +967,15 @@ void setup1() {
     //********
 
     // calculate for different PLL_SYS_MHZ
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, INTERRUPTS_PER_SYMBOL, 60);
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, INTERRUPTS_PER_SYMBOL, 100);
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, INTERRUPTS_PER_SYMBOL, 133);
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_COUNT, INTERRUPTS_PER_SYMBOL, 125);
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 60);
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 100);
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 125);
 
     // oneliner
     Serial.printf("calcPwmDivAndWrap() ");
-    Serial.printf("if PLL_SYS_MHZ %d -> WM_DIV %lu PWM_WRAP_COUNT %lu" EOL,
-        125, PWM_DIV, PWM_WRAP_COUNT);
+    Serial.printf("if PLL_SYS_MHZ %d -> WM_DIV %lu PWM_WRAP_CNT %lu" EOL,
+        125, PWM_DIV, PWM_WRAP_CNT);
 
     // choices:
     // GOOD: PLL_SYS_MHZ 60 PWM_DIV 250 PWM_WRAP_CNT 20479 totalSymbolsTime 110.591
@@ -1260,8 +1262,9 @@ void loop1() {
         // no..should we keep it looser for time?
         // we'll get the minute alignment right sooner with the old 'gps.location.isValid' fix_valid
         // to update time
+        // fix_valid is a subset (just 2d location) of fix_valid_all. 
+        // what if we can't get a fix_valid_all, but get fix_valid..do we ever do gps cold reset?
         if ( fix_valid && (fix_age < GPS_LOCATION_AGE_MAX) ) {
-            GpsWatchdogCnt = 0;
             setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
         } else {
             // FIX! at what rate is this incremented? ..once per loop iteration (time varies)
@@ -1339,7 +1342,6 @@ void loop1() {
 // 0    2550 38.021000    -107.677071  1158 11/23/2024 00:14:07 74   0.00    237.54  11.50  N     61847 254       4
 
 
-
 // ERROR: loop1() GpsWatchdogCnt > 60 ..gps full cold reset
 
                 Serial.println(F("ERROR: loop1() GpsWatchdogCnt > 60 ..gps full cold reset"));
@@ -1384,8 +1386,11 @@ void loop1() {
         if (!fix_valid_all || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
             if (VERBY[0])
                 Serial.printf("loop1() WARN: GPS fix issue ..stale or not valid ..fix_age %lu" EOL, fix_age);
-            // be sure!
+            // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
+            // FIX! do we ever determine to do a gps cold reset here?
+
             vfo_turn_off();
+            invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
 
             // these are the waits that give us the long loop times
@@ -1400,14 +1405,19 @@ void loop1() {
                 Serial.println(F("loop1() WARN: GPS fix issues ..not enough sats ..2d only"));
 
             // these are the waits that give us 25-30 sec loop times?
-            // be sure!
+            // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
             vfo_turn_off();
+            invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
             sleepSeconds(BEACON_WAIT);
+            // FIX! do we ever determine to do a gps cold reset here?
             // FIX! how much should we wait here?
 
         } else {
             if (VERBY[0]) Serial.println(F("loop1() Good recent 3d fix"));
+            // GpsWatchdog doesn't get cleared unti we got a 3d fix here!
+            // so we can get a gps cold reset if we never get here!
+            GpsWatchdogCnt = 0;
             // snapForTelemetry (all the t_* state) right before we do all the WSPRing
             // we can update the telemetry buffer any minute we're not tx'ing
 
@@ -1863,7 +1873,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
     uint8_t symbol_count = WSPR_SYMBOL_COUNT;  // From the library defines
     // tone_spacing = WSPR_TONE_SPACING;
-    uint16_t tone_delay = WSPR_DELAY;
+    // uint16_t tone_delay = WSPR_DELAY;
+    // zeroTimerSetPeriodMs(tone_delay);
 
     // this should be right regardless of the clock speed we're running at
     // for when to switch tones
@@ -1871,7 +1882,6 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // FIX! is there a delay between tones?
     // does this align the interrupts after this 
     // how long does this take
-    zeroTimerSetPeriodMs(tone_delay);
 
     uint8_t i;
     absolute_time_t wsprStartTime = get_absolute_time(); // usecs
@@ -1935,11 +1945,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     }
     DoLogPrint();
 
-    pwm_set_enabled(WSPR_PWM_SLICE_NUM, false);
-    pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, false);
-    pwm_clear_irq(WSPR_PWM_SLICE_NUM);
-    irq_set_enabled(PWM_IRQ_WRAP, false);
-    irq_remove_handler(PWM_IRQ_WRAP, PWM4_Handler);
+    disablePwmInterrupts();
 
     // FIX! leave on if we're going to do more telemetry?
     // or always turn off?
