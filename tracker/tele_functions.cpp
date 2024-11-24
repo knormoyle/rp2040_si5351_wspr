@@ -228,7 +228,7 @@ void snapForTelemetry(void) {
 
     snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
     // just for consistency with everything else
-    snprintf(t_callsign, sizeof(t_callsign), "%6s", _callsign);
+    snprintf(t_callsign, sizeof(t_callsign), "%s", _callsign);
 
     // string literals are null terminated
     int power_int;

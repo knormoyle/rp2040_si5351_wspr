@@ -1612,7 +1612,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     sleep_ms(2000);
     // FIX! does this include a full init at the rp2040?
     vfo_turn_on(WSPR_TX_CLK_NUM);
-    startSymbolFreq(hf_freq, 3);
+    startSymbolFreq(hf_freq, 0);
     vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
 
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
@@ -2040,7 +2040,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     // otherwise, normal use is for to start a symbol frequency
     uint32_t freq_x16 = (
         hf_freq << PLL_CALCULATION_PRECISION) +
-        (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
+        ((symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L);
 
     // FIX! does this change the state of the clock output enable?
     vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
@@ -2182,6 +2182,29 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer, char *hf_callsign, char *hf_grid4, 
      *
     */
     // hf_power needs to be passed as uint8_t
+    char hf_callsign_padded[7];
+    // were spaces on the left? (starting at 0
+    snprintf(hf_callsign_padded, 7, "%s", hf_callsign);
+    int l = strlen(hf_callsign);      
+    if (VERBY[0])
+        Serial.printf("length check: hf_callsign %s before jtencode was strlen %d" EOL, hf_callsign, l);
+
+    // shouldn't be any spaces in hf_callsign
+    for (uint8_t i; i <= sizeof(hf_callsign); i++) {
+        if (hf_callsign[i] == ' ')
+            Serial.printf("ERROR: hf_callsign '%s' has <space> at %u" EOL, hf_callsign, i);
+    }
+
+    // FIX! does this change how jtencode generates? It shouldn't ..<null> isn't an option? 
+    // bad with space if < 6
+    // < 3 should be not supported and covered elsewhere
+    // alway add space to the end
+    switch(l) {
+        case 3: hf_callsign[3] = ' '; 
+        case 4: hf_callsign[4] = ' ';
+        case 5: hf_callsign[5] = ' '; break;
+    }
+    hf_callsign[6] = 0; // null term, just in case
     jtencode.wspr_encode(hf_callsign, hf_grid4, power, hf_tx_buffer);
 
     // maybe useful python for testing wspr encoding
