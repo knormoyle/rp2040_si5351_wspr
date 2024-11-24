@@ -1169,16 +1169,15 @@ void loop1() {
     // copied from loop_us_end while in the loop (at bottom)
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
     updateStatusLED();
-    // always make sure tx is off?
-    // does nothing if already off
 
-    // kevin 11/18/24
-    // FIX! why are we turing off
-    // vfo_turn_off();
+    // always make sure tx is off when we're expecting to be doing Gps fix.
+    // does nothing if already off
+    // FIX! why are we turning off. Is this just a double-check in case of bugs?
+    vfo_turn_off();
 
     //******************
-    // Gps may already be on
-    // this loads the voltage
+    // Gps may already be on, this loads the voltage, so when we read the voltage
+    // to decide if we want to tx, that's a good thing for deciding "is our solar/battery good?"
     if (!GpsIsOn()) {
         GpsFixMillis = 0;
         GpsTimeToLastFix = 0;
@@ -1458,7 +1457,7 @@ void loop1() {
             // voltage is captured when we write the buff? So it's before GPS is turned off?
             // should we look at the live voltage instead?
             if (VERBY[0]) Serial.printf(
-                "loop1() After snapTelemetry() timeStatus():%u minute():%u second():%u" EOL,
+                "loop1() After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
                 timeStatus(), minute(), second());
 
             // FIX! does this cause a reboot?
@@ -1485,14 +1484,14 @@ void loop1() {
                     if (second() > 30) {
                         // to late..don't try to send
                         // minute() second() come from Time.h as ints
-                        Serial.printf("WARN: wspr no send, past 30 secs in pre-minute: minute() %d *second() %d* alignMinute(-1) %u" EOL,
+                        Serial.printf("WARN: wspr no send, past 30 secs in pre-minute: minute: %d *second: %d* alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
                         SMART_WAIT = (60 - second() + 20);
                         Serial.printf("(1) will sleepSeconds() 20 secs into the next minute with SMART_WAIT %d" EOL, SMART_WAIT);
                         sleepSeconds(SMART_WAIT);
 
                     } else {
-                        Serial.printf("wspr? wait until 30 secs before the aligned starting minute now: minute() %d *second() %d*" EOL,
+                        Serial.printf("wspr? wait until 30 secs before the aligned starting minute now: minute: %d *second: %d*" EOL,
                             minute(), second());
                         while (second() < 30) {
                             Watchdog.reset();
@@ -1502,7 +1501,7 @@ void loop1() {
                         }
                         // will call this with less than or equal to 30 secs to go
                         Serial.println("wspr? have 30 secs to go till the aligned starting minute");
-                        Serial.printf("wspr? get the vfo going now: minute() %d second %d" EOL, minute(), second());
+                        Serial.printf("wspr? get the vfo going now: minute: %d second: %d" EOL, minute(), second());
 
                         uint32_t hf_freq = 14097100UL;
                         int res = alignAndDoAllSequentialTx(hf_freq);
@@ -1514,7 +1513,7 @@ void loop1() {
                         }
                     }
                 } else {
-                    Serial.printf("WARN: wspr no send. because minute() %d second() %d *alignMinute(-1) %u*" EOL,
+                    Serial.printf("WARN: wspr no send. because minute() %d second: %d *alignMinute(-1) %u*" EOL,
                         minute(), second(), alignMinute(-1));
                     // we fall thru and can get another gps fix or just try again.
                     // sleep because we don't want to cycle endlessly waiting to align
@@ -1590,12 +1589,12 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     // it should loop around in loop1() ..after how much of a wait? smartWait? (calculated delay above?)
     // at most wait up to a minute if called the minute before start time)
     if (!alignMinute(-1)) {
-        if (VERBY[0]) Serial.printf("FAIL: alignAndDoAllSequentialTX END early out: alignment wrong! now: minute() %d second %d" EOL,
+        if (VERBY[0]) Serial.printf("FAIL: alignAndDoAllSequentialTX END early out: alignment wrong! now: minute: %d second: %d" EOL,
             minute(), second());
         return -1;
     }
 
-    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute() %d second() %d" EOL, minute(), second());
+    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute: %d second: %d" EOL, minute(), second());
     while (second() < 30)  {
         Watchdog.reset();
         delay(5); // 5 millis
@@ -1603,7 +1602,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         updateStatusLED();
     }
 
-    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute() %d second() %d" EOL, minute(), second());
+    if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute: %d second: %d" EOL, minute(), second());
     // don't want gps power and tx power together
     GpsOFF();
 
@@ -1668,7 +1667,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     tx_cnt_0 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
     if (VERBY[0]) {
-        StampPrintf("WSPR callsign Tx sent. now: minute() %d second() %d" EOL, minute(), second());
+        StampPrintf("WSPR callsign Tx sent. now: minute: %d second: %d" EOL, minute(), second());
         DoLogPrint();
     }
 
@@ -1697,7 +1696,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
     if (VERBY[0]) {
-        StampPrintf("WSPR telemetry Tx sent. minutes %d secs %d" EOL, minute(), second());
+        StampPrintf("WSPR telemetry Tx sent. minute: %d second: %d" EOL, minute(), second());
         DoLogPrint();
     }
 
@@ -1728,7 +1727,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
         tx_cnt_2 += 1;
         if (VERBY[0]) {
-            StampPrintf("WSPR telen1 Tx sent. minutes %d secs %d" EOL, minute(), second());
+            StampPrintf("WSPR telen1 Tx sent. minute: %d second: %d" EOL, minute(), second());
             DoLogPrint();
         }
     }
@@ -1756,7 +1755,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         tx_cnt_3 += 1;
         // we have 10 secs or so at the end of WSPR to get this off?
         if (VERBY[0]) {
-            StampPrintf("WSPR telen2 Tx sent. minutes %d secs %d" EOL, minute(), second());
+            StampPrintf("WSPR telen2 Tx sent. minute: %d second: %d" EOL, minute(), second());
             DoLogPrint();
         }
     }
@@ -1814,7 +1813,7 @@ void sleepSeconds(int secs) {
 // FIX! should check what caller does if -1
 bool alignMinute(int offset) {
     bool aligned = false;
-    // FIX! need good time. Does returning false help?
+    // FIX! need good time. Does returning false help (i.e. not do any TX)
     if (timeStatus() != timeSet) return true;
 
     // offset can be -1, 0, 1, 2, 3, 4, 5, 6 (3 messages)
@@ -1876,20 +1875,47 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // so 2x -> 1.3653333..maybe a little shorter due to code delays 
     // should we do one proceed plus a fixed delay?
 
-    while (!proceed) { ; }
-    proceed = false; // ? to 1 symbol time
-    if (false) {
+    Watchdog.reset();
+
+    // My absolute earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
+    // Due to the code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
+
+    // Assuming both gps/tracker and pc are time-synchronized:
+    // With no extra tx delay: wsjt-x/sdr says DT = -0.3 .. I guess telling  me I start that much before 1 sec in?
+
+    // If I wait additional "symbol time" delays before tx (most precise running timer I have, interrupt driven)
+    // Each additional "symbol time" delay is 0.682666... seconds 
+    // (symbol time: that's the duration for 1 wspr symbol tx 8192/12000 or equivalently 256/375)
+
+    // summary:
+
+    // 0 extra delay, DT = -0.3
+    // 1 extra symbol delay to start, DT = 0.4 or 0.5 (increase of 0.7 or 0.8..matches symbol delay I added)
+    // 2 extra symbol delay to start, DT = still 0.4 or 0.5
+    // 3 extra symbol delay to start, DT = 
+    // from those results, seems like I want just 300 ms delay to get perfectly aligned for DT=0
+    
+    //*******************************
+    // did it fail with 2 and 3? no print
+    const uint8_t PROCEEDS_TO_SYNC = 0;
+    for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
+        // we can sleep a little less than the symbol time, 
+        // after a 'proceed' false -> true transition
+        sleep_ms(660); // as big as we can go safely and not be too big. save power!
         while (!proceed) { ; }
-        proceed = false; // 1 symbol time
+        proceed = false; // ? to 1 symbol time
     }
     Watchdog.reset();
+    if (true) delay(300);  // this should give us DT=0 with PROCEEDS_TO_SYNC=0
+    //*******************************
+
 
     // Note we print this after the extra 'proceed' delay(s). (or any additional fixed delay)
     if (VERBY[0]) {
-        Serial.printf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
+        Serial.printf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
         // do a StampPrintf, so we can measure usec duration from here to the first symbol
         // it's not aligned to the gps time.
-        StampPrintf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
+        StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
     }
     uint8_t symbol_count = WSPR_SYMBOL_COUNT; 
     uint8_t i;
@@ -1908,7 +1934,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
                 }
         }
 
-        // old:
+        // FIX! old data..should replace with current data.
         // syncAndSendWSPR() START now: minute() 41 second() 38
         // sendWspr() START now: minute() 42 second() 1
         // 02:38.667663 [0004] sendWspr() START now: minute() 42 second() 1
@@ -2036,7 +2062,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
 void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, 
     char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
     if (VERBY[0]) 
-        Serial.printf("syncAndSendWSPR() START now: minute() %d second() %d" EOL, 
+        Serial.printf("syncAndSendWSPR() START now: minute: %d second: %d" EOL, 
             minute(), second());
 
     if (txNum < 0 || txNum > 3) {
@@ -2088,7 +2114,6 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     proceed = false;
     setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
 
-
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
     if (VERBY[0]) Serial.println(F("syncAndSendWSPR() END"));
 }
@@ -2101,11 +2126,6 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     // Clear out the transmit buffer
     memset(hf_tx_buffer, 0, 162);  // same number of bytes as hf_tx_buffer is declared
 
-    // FIX! updated to (also) have a global static int globalGpsInvalidateAll
-    // I count that down during loop1() iterations and ignore all gps
-    // until it's zero. TinyGPS++ state should have transitioned by then
-    // based on new NMEA sentences. (should transition cleanly within 2 secs?)
-    // that I manage and quality all TinyGPS++ valid signals
 
     // wspr_encode(const char * call, const char * loc, const uint8_t dbm, uint8_t * symbols)
     // Takes a callsign, grid locator, and power level and returns a WSPR symbol

@@ -1,0 +1,81 @@
+
+https://forums.quectel.com/t/l76-l-fimware-update/4486/6
+
+is it possible to Update an L76-L (L76LNR01A03S) to a newer firmware to use NMEA 401? I’ve read about a newer version L76LNR02A02S but couldn’t spot it anywhere for download…
+
+//*****************************
+Berton.Peng-Q
+Support
+May 2020
+Dear Irswss,
+FW version L76LNR02A02S doesn’t support NMEA4.10, while L76LNR02A02SC supports. The main difference between the 2 FWs is that the latter supports NMEA output via IIC as well.
+I added the 2 FWs and the update tool in the link for your reference.
+
+https://cnquectel-my.sharepoint.com/:f:/g/personal/europe-fae_quectel_com/Enqg4IC5nApEkNW_yn1P_3kBX8BBvdspZmUD2ZGt2r6OUg?e=xZsrFD 
+
+https://cnquectel-my.sharepoint.com/:f:/g/personal/europe-fae_quectel_com/ErlCnv8aHC9Dnph54_xvCW4Bk3lKBhZ1-G8fnzlXiHST4g?e=xZlBhC 
+
+
+Berton.Peng-Q
+Support
+May 2020
+
+Dear Irswss,
+Sorry, FW version L76LNR02A02S supports NMEA4.10.
+
+//*****************************
+Thank you for providing the new firmware versions for the L76-L. I managed to flash the GPS module on a Pycom PyTrack v1.1 expansion board with both versions (02S and 02SC). However both versions seem to break I2C communication on the PyTrack. The expansion board doesn’t respond anymore, the LoPy throws exceptions complaining about I2C errors. Could you please post a link to the previous version L76LNR01A03S hoping that a downgrade will restore the PyTrack…Thank you!
+
+Greetings
+Lars
+//*****************************
+
+Berton.Peng-Q
+Support
+Jun 2020
+Dear Irswss,
+I added L76LNR01A04S in above link. It should satisfy your requirement.
+
+BR
+
+//*****************************
+Wow…thank you for the quick response! I’ll try L76LNR01A04S and keep you updated…
+
+Just looking at another PyTrack (firmware 0.0.8) board that I bought recently I found that it’s using firmware L76LNR02A01SC…one that hasn’t come into play yet. I haven’t used that board that much since it very often gives me I2C errors when trying to access to L76-L via I2C commands. But that I’m not sure if it’s actually related to the GPS module firmware.
+
+Greetings
+Lars
+
+//*****************************
+Switching to L76LNR01A04S didn’t help…the PyTrack is still not responding. As a last resort: could you please upload version L76LNR01A03S. Thank you!
+
+Greetings
+Lars
+
+//*****************************
+Dear Irswss,
+Since L76LNR01A03S is unofficial version for samples, I didn’t find it on official firmware server. Also, L76LNR01A04S is compatible with L76LNR01A03S. If the firmware you ever used is L76LNR01A03S, the newer version should be no problem. Maybe it’s caused by other reasons.
+
+BR
+
+
+//*********************************************
+https://forums.quectel.com/t/altitude-speed-limits/15467
+dpsiu
+North America
+Jun 2022
+I am looking for clarification on Quectel GPS and GNSS receivers, regarding their operation beyond the altitude (18,000 m) / speed (515 m/s) limits: (1) Do the limits apply when both limits are exceeded, or when either limit is exceeded; (2) What is the speed limit when operating in “balloon mode” (80,000 m altitude limit). The modules in question are L70 and L76. Thank you.
+
+
+//*********************
+Berton.Peng-Q
+Support
+
+Dear Sir,
+Please refer to the latest HD doc, where the maximum altitude is updated to 10 km instead of previous 18 km.
+Quectel_L76&L76-L_Hardware_Design_V3.2.pdf
+
+Regarding to your questions:
+1, When either limit is exceeded, the receiver will have unstable positioning feature, losing location for several seconds and then getting location for several seconds.
+2, Speed limit is the same when in “balloon mode”.
+Regards
