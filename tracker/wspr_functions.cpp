@@ -103,11 +103,14 @@ void PWM4_Handler() {
     }
     // FIX! remove this. redundant and slows down gettng to 'proceed' in tracker.ino
     if (false and VERBY[0]) {
+        // we have two extra 'proceeds' sychroniations -> 2 * INTERRUPTS_PER_SYMBOL 
+        // before we start a message now
         uint32_t pwm_interrupt_cnt_162 = pwm_interrupt_total_cnt % 162;
-        if ((pwm_interrupt_total_cnt % 10) == 0) 
+        if ((pwm_interrupt_total_cnt % 10) == 6) { // instead of 0
             StampPrintf("sym: %lu %lu" EOL, pwm_interrupt_cnt_162, pwm_interrupt_cnt);
+        }
 
-        if ((pwm_interrupt_total_cnt % 162) == 161) {
+        if ((pwm_interrupt_total_cnt % 162) == 16) { // instead of 161
             StampPrintf("sym: %lu %lu" EOL, pwm_interrupt_cnt_162, pwm_interrupt_cnt);
             DoLogPrint();
         }

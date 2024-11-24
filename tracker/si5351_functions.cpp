@@ -61,6 +61,8 @@ extern const int PLL_CALCULATION_PRECISION;
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
 
+static uint8_t  si5351bx_clken = 0xff;
+
 // https://wellys.com/posts/rp2040_arduino_i2c/
 // how to use the Pico’s 10 I2C interfaces, given the following issues with Arduino Wire:
 // There can only be two Wire interfaces, Wire and Wire1
@@ -553,6 +555,8 @@ void si5351a_reset_PLLB(void) {
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
     // if (VERBY[0]) Serial.printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
+    // looks like this doesn't change the state of the output enables
+    // just the freq
     const int PLL_MAX_FREQ  = 900000000;
     const int PLL_MIN_FREQ  = 600000000;
 
@@ -595,12 +599,10 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
 }
 
 //****************************************************
-static uint8_t  si5351bx_clken = 0xff;
 void vfo_turn_on_clk_out(uint8_t clk_num) {
     if (VERBY[0]) Serial.printf("vfo_turn_on_clk_out START clk_num %u" EOL, clk_num);
     if (clk_num != 0)
         Serial.printf("ERROR: vfo_turn_on_clk_out called with clk_num %u" EOL, clk_num);
-
 
     // enable clock 0 and 1
     //  0 is enable
@@ -843,7 +845,6 @@ void vfo_turn_on(uint8_t clk_num) {
     freq = 14097000UL << PLL_CALCULATION_PRECISION;
     // should it be this from tracker.ino?
     freq = 14097100UL << PLL_CALCULATION_PRECISION;
-
 
 
     vfo_set_freq_x16(clk_num, freq);

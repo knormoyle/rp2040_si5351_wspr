@@ -239,7 +239,6 @@ uint8_t hf_tx_buffer[162] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
 // FIX! why is this volatile? Because it's set by the ISR for PWM interrupts?
 volatile bool proceed = false;
 
-
 //*********************************
 // if we need to ignore TinyGps++ state for a while, because
 // we turned off the Gps, and then TinyGps++ won't change
@@ -1842,10 +1841,6 @@ bool alignMinute(int offset) {
 // txNum can be 0, 1, 2, 3
 
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhenDone) {
-    // Are the clocks on at this point? 
-    // if we turned them off while seeding the frequency
-    // turn them on now!
-    vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
 
     if (VERBY[0]) {
         Serial.printf("sendWspr() START now: minute() %d second() %d" EOL, minute(), second());
@@ -1899,8 +1894,6 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         //     (hf_freq << PLL_CALCULATION_PRECISION) +
         //     (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
 
-
-
         // Serial.printf(__func__ " vfo_set_freq_x16(%u)" EOL, (freq_x16 >> PLL_CALCULATION_PRECISION));
         // FIX! how long does it take to do this? actually how long to get to here
         // for first symbol?
@@ -1924,6 +1917,11 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
         if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
         startSymbolFreq(hf_freq, symbol);
+        // Are the clocks on at this point? 
+        // if we turned them off while seeding the frequency
+        // turn them on now and leave them on
+        if (i==0) vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
+
         // moved to startSymbolFreq() 11/23/24
         // vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
         // don't overfill the log buffer. can't make it bigger because of ram problems 
@@ -1936,8 +1934,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // PWM handler sets proceed?
         // That should be more accurate and not dependent on interrupts, and the startup lag
         // for getting interrupts going with PWM
-
         proceed = false;
+
         // FIX! ideally we sleep during the symbol time. but here we have to stay awake
         // looking at proceed. If it was all in the interrupt handler
         // we could sleep here for a little more than the full delivery of 192 symbols
@@ -2025,6 +2023,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     uint32_t freq_x16 = (hf_freq << PLL_CALCULATION_PRECISION) +
         (symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L;
 
+    // FIX! does this change the state of the clock output enable?
     vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
 }
 
@@ -2040,6 +2039,8 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // leave all the clocks off?
     vfo_turn_off_clk_out(WSPR_TX_CLK_NUM);
     startSymbolFreq(hf_freq, 0);
+    // FIX! does startSymbolFreq turn them on or ??
+    vfo_turn_off_clk_out(WSPR_TX_CLK_NUM);
 
     // now encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
     // FIX! replace all atoi() because of no error handling defn. for atoi()
@@ -2075,7 +2076,9 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // can only delay an absolute number of milliseconds at this point
     // delaying 800 ms seems good. Can adjust this to be 1 sec - (the amount of code delay)
     // the StampPrintf's timestamps can be subtracted to see how much time the setup takes to first symbol
-    delay(800);
+
+    // removed 11/23/24
+    // delay(800);
 
     // now: at 900 millis within 0 to .1 millis
 
@@ -2085,12 +2088,32 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, char *h
     // but ideally that would just into our calculator (interrupt handler code delay? not much)
     
     // FIX! when do we get the first interrupt at the end of the first symbol?
+    proceed = false;
+    Watchdog.reset();
     PWM_DIV = 250;
     PWM_WRAP_CNT = 42666; // Full period value. gets a -1 before it's set as the wrap top value)
     setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
-    // FIX! should we have a separate enable on the PWM state?
-    sleep_ms(1000);
 
+    // each of these should just be symbol time delay
+    // there will be two extra interrupts in our interrupt cnt in the handler?
+    while (!proceed) { ; }
+    proceed = false; // ? to 1 symbol time
+    while (!proceed) { ; }
+    proceed = false; // 1 symbol time
+    
+    // removed 11/23/24
+    // sleep_ms(1000);
+
+    // Should we wait for 'proceed' here. If we wait for 2 proceeds, it's okay if the first is short
+    // because of unknown PWM counter initial state. Two proceed delays kind of get us to the 1-1.5secs in
+    // target..so okay?
+
+    // FIX! should we wait for the first "proceed from an interrupt"
+    // that would guarantee we're going interrupt to interrupt on delays
+    // and then clear proceed.
+    // the first wait would be less than one symbol time..so that could
+    // be good is it around .6secs or ??
+    // could elinate the 1 sec sleep above
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
 
     if (VERBY[0]) Serial.println(F("syncAndSendWSPR() END"));
