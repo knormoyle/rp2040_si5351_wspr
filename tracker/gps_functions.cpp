@@ -822,7 +822,7 @@ void invalidateTinyGpsState(void) {
 }
 
 //************************************************
-void GpsOFF(void) {
+void GpsOFF(bool keepTinyGpsState) {
     if (VERBY[0]) Serial.printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
 
     digitalWrite(GpsPwr, HIGH);
@@ -832,10 +832,11 @@ void GpsOFF(void) {
     // FIX! do we really need or want to turn off Serial2? Remember to Serial2.begin() when we turn it back on
     // (only if it was off)
     Serial2.end();
+
     // unlike i2c to vfo, we don't tear down the Serial2 definition...just .end() 
     // so we can just .begin() again later
-
-    invalidateTinyGpsState();
+    if (!keepTinyGpsState)
+        invalidateTinyGpsState();
 
     // also has lastCommitTime = millis()
     // we don't change that?

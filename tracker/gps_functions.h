@@ -17,7 +17,8 @@ void GpsINIT(void);
 void GpsFullColdReset(void);
 void invalidateTinyGpsState(void);
 void GpsON(bool GpsColdReset);
-void GpsOFF(void);
+void GpsOFF(bool keepTinyGpsState);
+
 void updateGpsDataAndTime(int ms);
 void sendUBX(uint8_t *MSG, uint8_t len);
 void setGPS_DynamicModel6();

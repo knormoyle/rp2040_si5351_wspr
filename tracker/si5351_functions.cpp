@@ -731,7 +731,10 @@ bool vfo_is_on(void) {
     // Returns
     // true if the GPIO output level is high, false if low.
     // return (!gpio_get_out_level(Si5351Pwr) && vfo_turn_on_completed);
-    return (!gpio_get(Si5351Pwr) && vfo_turn_on_completed);
+    // return (!gpio_get(Si5351Pwr) && vfo_turn_on_completed);
+
+    // safer?
+    return (!gpio_get(Si5351Pwr));
 }
 
 //****************************************************
@@ -925,16 +928,19 @@ void vfo_turn_on(uint8_t clk_num) {
 //****************************************************
 void vfo_turn_off(void) {
     if (VERBY[0]) Serial.println(F("vfo_turn_off START"));
+    vfo_turn_on_completed = false;
     // if (VERBY[0]) Serial.println(F("NEVER TURNING VFO OFF (DEBU)"));
     // return;
     // already off successfully?
-    if (vfo_is_off()) return;
-    vfo_turn_on_completed = false;
-    vfo_turn_off_completed = false;
+    if (vfo_is_off()) {
+        vfo_turn_off_completed = true;
+        return;
+    }
 
     // disable all clk output
-    // FIX! this will fail if i2c is not working. hang if vfo is powered off?
-    // we ride thru it with a -2 return?
+    // should never do this if it's powered off
+    // if we do, we ride thru it with a -2 return?
+    // could occur if we try this too soon after it was powered on?
     si5351bx_clken = 0xff;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
 

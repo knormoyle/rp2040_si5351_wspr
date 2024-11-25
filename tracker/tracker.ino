@@ -246,6 +246,9 @@ volatile bool proceed = false;
 uint32_t GpsInvalidAllCnt = 0;
 bool GpsInvalidAll = false;
 
+// so we can see how often we get on long runs
+uint64_t staleOrNotValidCnt = 0;                
+
 // when should do a gps cold reset? when not getting a new fix we can use, for a while
 uint32_t GpsWatchdogCnt = 0;
 
@@ -735,6 +738,7 @@ void loop() {
 //***********************************************************
 
 void setup1() {
+
     Watchdog.enable(30000);
     Watchdog.reset();
     // this is a don't care because USB
@@ -847,7 +851,7 @@ void setup1() {
 
     Watchdog.reset();
     GpsINIT(); // also turns on and checks for output
-    GpsOFF();
+    GpsOFF(false); // don't keep TinyGPS state
 
     GpsFixMillis = 0;
     GpsStartMillis = millis();
@@ -1124,6 +1128,7 @@ const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
 
 //*************************************************************************
 void loop1() {
+
     // used to ignore TinyGps++ state for couple of iterations of GPS burst gathering after
     // turning Gps off then on.
     if (GpsIsOn() && GpsInvalidAllCnt > 0) GpsInvalidAllCnt--;
@@ -1337,7 +1342,7 @@ void loop1() {
                 Serial.println(F("ERROR: loop1() GpsWatchdogCnt > 60 ..gps full cold reset"));
                 // FIX! have to send cold gps reset, in case ephemeris is corrupted? since vbat is always there
                 // otherwise this is a warm reset?
-                GpsOFF();
+                GpsOFF(false); // don't keep TinyGPS state
                 // note that GpsOFF() has public access to TinyGPS++ now and clears these 3 which is sufficient
                 // for "reset TinyGPS++ stuff"
                 // gps.date.valid = false;
@@ -1374,8 +1379,12 @@ void loop1() {
         }
         // if (!fix_valid || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
         if (!fix_valid_all || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
+            staleOrNotValidCnt++;
             if (VERBY[0])
-                Serial.printf("loop1() WARN: GPS fix issue ..stale or not valid ..fix_age %lu" EOL, fix_age);
+                // oneliner
+                Serial.print(F("loop1() WARN: GPS fix issue ..stale or not valid"));
+                Serial.printf(" ..fix_age %lu staleOrNotValidCnt %" PRIu64 EOL, 
+                    fix_age, staleOrNotValidCnt);
             // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
             // FIX! do we ever determine to do a gps cold reset here?
 
@@ -1605,7 +1614,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
 
     if (VERBY[0]) Serial.printf("alignAndDoAllSequentialTX START now: minute: %d second: %d" EOL, minute(), second());
     // don't want gps power and tx power together
-    GpsOFF();
+    GpsOFF(true); // keep TinyGPS state
 
     // start the vfo 30 seconds before needed
     // if off beforehand, it will have no clocks running
@@ -1657,10 +1666,11 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     int txNum = 0;
     if (VERBY[0]) {
         Serial.print(EOL);
-        Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
-        Serial.printf("hf_callsign %-6s" EOL, hf_callsign);
-        Serial.printf("hf_grid4 %s" EOL, hf_grid4);
-        Serial.printf("hf_power %s" EOL, hf_power);
+        // oneliner to grep. txNum id's the type of tx (0-3)
+        Serial.printf("WSPR txNum %d Prepared:", txNum);
+        Serial.printf(" hf_callsign %s", hf_callsign);
+        Serial.printf(" hf_grid4 %s", hf_grid4);
+        Serial.printf(" hf_power %s" EOL, hf_power);
         Serial.print(EOL);
         Serial.flush();
     }
@@ -1688,10 +1698,10 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     u4b_encode_std(hf_callsign, hf_grid4, hf_power, t_grid6, t_altitude, t_temp, t_voltage, t_speed);
     if (VERBY[0]) {
         Serial.print(EOL);
-        Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
-        Serial.printf("hf_callsign %-6s" EOL, hf_callsign);
-        Serial.printf("hf_grid4 %s" EOL, hf_grid4);
-        Serial.printf("hf_power %s" EOL, hf_power);
+        Serial.printf("WSPR txNum %d Prepared:", txNum);
+        Serial.printf(" hf_callsign %s", hf_callsign);
+        Serial.printf(" hf_grid4 %s", hf_grid4);
+        Serial.printf(" hf_power %s" EOL, hf_power);
         Serial.print(EOL);
         Serial.flush();
     }
@@ -1720,10 +1730,10 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false);
         if (VERBY[0]) {
             Serial.print(EOL);
-            Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
-            Serial.printf("hf_callsign %-6s" EOL, hf_callsign);
-            Serial.printf("hf_grid4 %s" EOL, hf_grid4);
-            Serial.printf("hf_power %s" EOL, hf_power);
+            Serial.printf("WSPR txNum %d Prepared:", txNum);
+            Serial.printf(" hf_callsign %s", hf_callsign);
+            Serial.printf(" hf_grid4 %s", hf_grid4);
+            Serial.printf(" hf_power %s" EOL, hf_power);
             Serial.print(EOL);
             Serial.flush();
         }
@@ -1747,10 +1757,10 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
         u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false);
         if (VERBY[0]) {
             Serial.print(EOL);
-            Serial.printf("WSPR txNum %d Prepared.." EOL, txNum);
-            Serial.printf("hf_callsign %-6s" EOL, hf_callsign);
-            Serial.printf("hf_grid4 %s" EOL, hf_grid4);
-            Serial.printf("hf_power %s" EOL, hf_power);
+            Serial.printf("WSPR txNum %d Prepared:", txNum);
+            Serial.printf(" hf_callsign %s", hf_callsign);
+            Serial.printf(" hf_grid4 %s", hf_grid4);
+            Serial.printf(" hf_power %s" EOL, hf_power);
             Serial.print(EOL);
             Serial.flush();
         }
@@ -1785,11 +1795,10 @@ void sleepSeconds(int secs) {
         // can power off gps depending on voltage
         // normally keep gps on, tracking after first fix. we are moving!
         // uint32_t usec = time_us_32();
-        GpsON(false);
 
         solar_voltage = readVoltage();
-        if (solar_voltage < BattMin) GpsOFF();
-        if (solar_voltage < GpsMinVolt) GpsOFF();
+        if (solar_voltage < BattMin || solar_voltage < GpsMinVolt) 
+            GpsOFF(false); // don't keep TinyGPS state
         // FIX! should we unload/use GPS data during this?
         // gps could be on or off, so no?
         // whenever we have spin loops we need to updateStatusLED()
@@ -1805,8 +1814,36 @@ void sleepSeconds(int secs) {
         }
         current_millis = millis();
     } while ((current_millis - start_millis) < duration_millis);
-
     Watchdog.reset();
+
+    // all the data should be valid to consider it a good fix.
+    // this doesn't need qualification on whether we got a good date/time
+    // since we check that first, before we do any looking for a 3d fix
+    bool fix_valid_all = !GpsInvalidAll &&
+        gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
+        gps.hdop.isValid() &&
+        gps.altitude.isValid() &&
+        gps.location.isValid() &&
+        gps.speed.isValid() &&
+        gps.course.isValid();
+
+    // hmm. maybe we just toggle the current state
+    // if it's off, we turn it on. If it's on, we turn it off
+    // that should be good for power
+    if (solar_voltage < BattMin || solar_voltage < GpsMinVolt) {
+        GpsOFF(false); // don't keep TinyGPS state
+    } else {
+        // I suppose we really want to know how long it's been off
+        // shouldn't keep it off if we don't have a valid fix
+        // and shouldn't keep it off for more than 1 minute.
+        if (!GpsIsOn()) GpsON(false);
+        else {
+            // keep it on if we don't have a solid fix
+            // otherwise save power for a cycle?
+            if (fix_valid_all) GpsOFF(true); // but keep TinyGPS state!
+            // should hot fix within secs after we turn it back on?
+        }
+    }
     // Gps gets left off it the voltage was low at any point
     if (VERBY[0]) Serial.println(F("sleepSeconds() END"));
 }
@@ -1908,7 +1945,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // from those results, seems like I want just 300 ms delay to get perfectly aligned for DT=0
     
     // static int EXTRA_DELAY_AFTER_PROCEED = 300; // milliseconds
-    static int EXTRA_DELAY_AFTER_PROCEED = 0;
+    static int EXTRA_DELAY_AFTER_PROCEED = 300;
     if (EXTRA_DELAY_AFTER_PROCEED<0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
         Serial.printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
             EXTRA_DELAY_AFTER_PROCEED);
@@ -1917,11 +1954,11 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
     //*******************************
     // this should still work? 
-    const uint8_t PROCEEDS_TO_SYNC = 1;
+    const uint8_t PROCEEDS_TO_SYNC = 0;
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time, 
         // after a 'proceed' false -> true transition
-        sleep_ms(660); // as big as we can go safely and not be too big. save power!
+        sleep_ms(650); // as big as we can go safely and not be too big. save power!
         while (!proceed) { ; }
         proceed = false; // ? to 1 symbol time
     }
@@ -1992,7 +2029,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // this won't affect alignment by doing it here
         updateStatusLED();
         // FIX! ideally we sleep during the symbol time. (a little less than symbol time)
-        sleep_ms(650);
+        // sleep_ms(650);
 
         // Will watchdog reset if we don't get 'proceed', which means
         // something went wrong with the interrupt handler
@@ -2038,6 +2075,13 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
     absolute_time_t wsprEndTime = get_absolute_time(); // usecs
     int64_t wsprDuration = absolute_time_diff_us(wsprStartTime, wsprEndTime);
+
+    // what happened here when I added EXTRA_DELAY_AFTER_PROCEED?
+    // or maybe it was the sleep_ms during the symbol times?
+    // ERROR: 100.592 secs goal: wsprDurationSecs 154.81723 seems too big or small
+    // ERROR: wsprDuration 154817237 usecs
+
+
     // WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
     // 0.68266666666
     // 162 * 256/375 = 110.592 secs total. Compare our duration to that

@@ -19,7 +19,8 @@ extern bool VERBY[10];
 
 //********************************
 // t_* (was: telemetry_buff) is a snapshot of consistent-in-time data used to
-// generated encoded telemetry, spread out over a later time. (like 1 to 3 more tx)
+// generated encoded telemetry, spread out over a later time. 
+// (like 1 to 3 more tx)
 
 // multiple wspr transmissions then can be combined to recreate the single
 // consistent snapshot grid4 plus subsquare for grid6,
@@ -148,10 +149,9 @@ uint32_t init_rf_freq(char *_Band, char *_lane) {
             default: XMIT_FREQUENCY += 100UL;
         }
 
-        // printf uint32_t with %u
-        if (VERBY[0]) Serial.printf(EOL "rf_freq_init _Band %s BASE_FREQ_USED %lu XMIT_FREQUENCY %lu " EOL,
-            _Band, BASE_FREQ_USED, XMIT_FREQUENCY);
-        return XMIT_FREQUENCY;
+    if (VERBY[0]) Serial.printf(EOL "rf_freq_init _Band %s BASE_FREQ_USED %lu XMIT_FREQUENCY %lu" EOL,
+        _Band, BASE_FREQ_USED, XMIT_FREQUENCY);
+    return XMIT_FREQUENCY;
 }
 
 /*
@@ -263,7 +263,6 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
 
-    
     if (t_grid6[4] < 'A' || t_grid6[4] > 'X') {
         if (VERBY[0]) Serial.printf("ERROR: bad t_grid6[4] %s" EOL, t_grid6);
         t_grid6[1] = 'A';
@@ -276,8 +275,8 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     uint8_t grid6Val = t_grid6[5] - 'A';
 
     // modulo 20 for altitude. integer
-    // decimal
-    int altitudeVal = (int) t_altitude / 20;
+    // t_altitude is saved as ascii decimal 
+    int altitudeVal = (atoi(t_altitude) / 20);
     // there are only 1068 encodings for altitude..clamp to max (or min)
     if (altitudeVal < 0) altitudeVal = 0; 
     // this will be a floor divide: t_altitude is int
@@ -318,6 +317,8 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     // these are stored as float strings (so is pressure)
     double tempC   = atof(t_temp);
     double voltage = atof(t_voltage);
+    // these are stored as integer strings
+    int speed = atoi(t_speed);
 
     // handle possible illegal range (double wrap on tempC?).
     // should it clamp at the bounds? Yes
@@ -333,9 +334,9 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     int voltageNum = (int) (round ((voltage - 3.00) / .05) + 20) % 40; // should only 3 to 4.95
 
     // FIX! kl3cbr did encoding # of satelites into knots.
-    // t_speed is integer
+    // t_speed is 3 ascii digits representing integer
     // max t_speed could be 999 ?
-    int speedKnotsNum = (int)t_speed / 2;
+    int speedKnotsNum = speed / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
     if (speedKnotsNum < 0) speedKnotsNum = 0; 
