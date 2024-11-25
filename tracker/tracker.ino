@@ -791,8 +791,6 @@ void setup1() {
     if (true) {
         // unnecessary 11/23/24 ..inside vfo_turn_on() now
         // vfo_set_power_on(true);
-        // FIX! don't turn off for now 11/18/24
-        // vfo_turn_off();
         vfo_turn_on(WSPR_TX_CLK_NUM);
     }
 
@@ -959,7 +957,7 @@ void setup1() {
     // extern const int WSPR_TONE_SPACING = 146;  // ~1.46 Hz
 
     //********
-    // this was with PMW_DIV 250 and 500 INTERRUPTS_PER_SYMBOL
+    // old: PMW_DIV=250 and INTERRUPTS_PER_SYMBOL=500
     // worked for 125Mhz..but not exact total symbol time?
     // extern const int WSPR_DELAY = 683;
     //********
@@ -967,12 +965,15 @@ void setup1() {
     // calculate for different PLL_SYS_MHZ
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 60);
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 100);
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 125);
+    // calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
+    // have the last one be the current PLL_SYS_MHZ, 
+    // so we could just use PMW_DIV, PWM_WRAP_CNT to set below
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 
     // oneliner
     Serial.printf("calcPwmDivAndWrap() ");
-    Serial.printf("if PLL_SYS_MHZ %d -> WM_DIV %lu PWM_WRAP_CNT %lu" EOL,
+    Serial.printf("if PLL_SYS_MHZ %d ...use PWM_DIV %lu PWM_WRAP_CNT %lu" EOL,
         125, PWM_DIV, PWM_WRAP_CNT);
 
     // choices:
@@ -1611,10 +1612,11 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     // we could turn it off, then on, to guarantee always starting from reset state?
     vfo_turn_off();
     sleep_ms(2000);
-
     // FIX! does this include a full init at the rp2040?
+    // vfo_turn_on() doesn't turn on the clk outputs!
     vfo_turn_on(WSPR_TX_CLK_NUM);
     startSymbolFreq(hf_freq, 0);
+    // this turns on the clk outputs
     vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
 
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
@@ -1905,12 +1907,12 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // 3 extra symbol delay to start, DT = 1.8 ?
     // from those results, seems like I want just 300 ms delay to get perfectly aligned for DT=0
     
-    // static int ADDITIONAL_DELAY_AFTER_PROCEED = 300; // milliseconds
-    static int ADDITIONAL_DELAY_AFTER_PROCEED = 0;
-    if (ADDITIONAL_DELAY_AFTER_PROCEED<0 || ADDITIONAL_DELAY_AFTER_PROCEED > 1000) {
-        Serial.printf("ERROR: bad ADDITIONAL_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
-            ADDITIONAL_DELAY_AFTER_PROCEED);
-        ADDITIONAL_DELAY_AFTER_PROCEED = 0;
+    // static int EXTRA_DELAY_AFTER_PROCEED = 300; // milliseconds
+    static int EXTRA_DELAY_AFTER_PROCEED = 0;
+    if (EXTRA_DELAY_AFTER_PROCEED<0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
+        Serial.printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
+            EXTRA_DELAY_AFTER_PROCEED);
+        EXTRA_DELAY_AFTER_PROCEED = 0;
     }
 
     //*******************************
@@ -1925,9 +1927,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     }
     // hmm. not updating led during this
     // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
-    delay(ADDITIONAL_DELAY_AFTER_PROCEED);  
+    delay(EXTRA_DELAY_AFTER_PROCEED);  
     Watchdog.reset();
-    
 
     uint8_t symbol_count = WSPR_SYMBOL_COUNT; 
     uint8_t i;
@@ -1970,8 +1971,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
         //****************************************************
         startSymbolFreq(hf_freq, symbol);
-        //****************************************************
 
+        //****************************************************
         // Don't make StampPrintf log buffer bigger to try to save more 
         // deferred printing during a whole wspr message, to avoid the slowdown effects of printing here.
         // Can't make it bigger than 4096 because of ram problems!
@@ -2030,7 +2031,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // hmm. not updating led during this
         // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
         // note we have this same delay before the first symbol, above before the loop!
-        delay(ADDITIONAL_DELAY_AFTER_PROCEED);  
+        delay(EXTRA_DELAY_AFTER_PROCEED);  
         // if (VERBY[0] && ((i % 10)==1)) Serial.print("."); // one per symbol
         Watchdog.reset();
     }

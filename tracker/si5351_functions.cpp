@@ -62,6 +62,22 @@ static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
 
 static uint8_t  si5351bx_clken = 0xff;
+static bool s_is_on = false;
+
+// updated with config _tx_high during vfo_turn_on()
+// 0:2mA, 1:4mA, 2:6mA, 3:8mA
+static uint8_t s_vfo_drive_strength[3] = { 0 };
+
+// set MS0-2 for div_4 mode (min. division)
+static const uint8_t s_ms_values[] = { 0, 1, 0x0C, 0, 0, 0, 0, 0 };
+// set PLLA-B for div_16 mode (minimum even integer division)
+static const uint8_t s_pll_values[] = { 0, 0, 0, 0x05, 0x00, 0, 0, 0 };
+
+static uint8_t s_PLLB_regs_prev[8] = { 0 };
+
+// FIX! should we clear all the statics at some point?
+// there's no valid bits on them..typically oay?
+static uint32_t s_ms_div_prev = 0;
 
 // https://wellys.com/posts/rp2040_arduino_i2c/
 // how to use the Pico’s 10 I2C interfaces, given the following issues with Arduino Wire:
@@ -77,6 +93,13 @@ static uint8_t  si5351bx_clken = 0xff;
 // removed static
 void vfo_init(void) {
     if (VERBY[0]) Serial.println(F("vfo_init START"));
+
+    // clear any old remembered state we have outside of the si5351
+    // hmm. maybe not this
+    // si5351bx_clken = 0xff;
+    s_ms_div_prev = 0;
+    memset(s_PLLB_regs_prev, 0, 8);
+    memset(s_vfo_drive_strength, 0, 3);
 
     // this is also pin 4
     // do the init first
@@ -103,7 +126,8 @@ void vfo_init(void) {
 //****************************************************
 // removed static
 void vfo_set_power_on(bool turn_on) {
-    static bool s_is_on = false;
+    // this works even if s_is_on is wrong relative to current on state
+    // doesn't turn off/on first
     if (VERBY[0]) Serial.printf("vfo_set_power_on START %u" EOL, turn_on);
     Serial.flush();
 
@@ -133,6 +157,14 @@ void vfo_set_power_on(bool turn_on) {
     // huh? don't change the direction when it's on vs off
     // we can just read the level
     // gpio_set_dir(Si5351Pwr, (turn_on ? GPIO_OUT : GPIO_IN));
+
+    // FIX! we don't clear any old remembered state we have outside of the si5351 ??
+    // in case we didn't transition off-> on
+    // maybe we should ?
+    // s_ms_div_prev = 0;
+    // memset(s_PLLB_regs_prev, 0, 8);
+    // si5351bx_clken = 0xff;
+    // memset(s_vfo_drive_strength, 0, 4);
 
     if (VERBY[0]) Serial.printf("vfo_set_power_on END %u" EOL, s_is_on);
     Serial.flush();
@@ -412,59 +444,68 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
 
  */
 
-static uint32_t prev_ms_div = 0;
-static uint8_t s_regs[8];
-// updated with config _tx_high during vfo_turn_on()
-// 0:2mA, 1:4mA, 2:6mA, 3:8mA
-static uint8_t s_vfo_drive_strength[3];
 
 //****************************************************
 // FIX! removed static. hmm maybe add back..should only call from this file?
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     // if (VERBY[0]) Serial.printf("si5351a_setup_PLLB START mult %u num %lu denom %lu" EOL, mult, num, denom);
-
-    static uint8_t s_regs_prev[8];
+    uint8_t PLLB_regs[8] = { 0 };
 
     uint32_t p1 = 128 * mult + ((128 * num) / denom) - 512;
     uint32_t p2 = 128 * num - denom * ((128 * num) / denom);
     uint32_t p3 = denom;
 
-    s_regs[0] = (uint8_t)(p3 >> 8);
-    s_regs[1] = (uint8_t)p3;
-    s_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
-    s_regs[3] = (uint8_t)(p1 >> 8);
-    s_regs[4] = (uint8_t)p1;
-    s_regs[5] = ((uint8_t)(p3 >> 12) & 0xf0) | ((uint8_t)(p2 >> 16) & 0x0f);
-    s_regs[6] = (uint8_t)(p2 >> 8);
-    s_regs[7] = (uint8_t)p2;
+    PLLB_regs[0] = (uint8_t)(p3 >> 8);
+    PLLB_regs[1] = (uint8_t)p3;
+    PLLB_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
+    PLLB_regs[3] = (uint8_t)(p1 >> 8);
+    PLLB_regs[4] = (uint8_t)p1;
+    PLLB_regs[5] = ((uint8_t)(p3 >> 12) & 0xf0) | ((uint8_t)(p2 >> 16) & 0x0f);
+    PLLB_regs[6] = (uint8_t)(p2 >> 8);
+    PLLB_regs[7] = (uint8_t)p2;
 
-    // start and end are looked at below, if prev_ms_div = 0
+    // start and end are looked at below, if s_ms_div_prev = 0
     // so these are out of the for loops
     uint8_t start = 0;
     uint8_t end = 7;
+
     // is this just looking for a range of bits that changed?
     // the i2cWriten writes as burst below..maybe that's why?
     // we could keep a static copy of what was written , and only write
     // when values change.
-    if (prev_ms_div != 0) {
+    if (s_ms_div_prev != 0) {
         for (; start < 8; start++) {
-            if (s_regs[start] != s_regs_prev[start]) break;
+            if (PLLB_regs[start] != s_PLLB_regs_prev[start]) break;
         }
         // FIX! is this detecting a non-change?
         if (start == 8) return;
 
         for (; end > start; end--) {
             // is this so we just write the start to end that has changed?
-            if (s_regs[end] != s_regs_prev[end]) break;
+            if (PLLB_regs[end] != s_PLLB_regs_prev[end]) break;
         }
     }
 
     uint8_t reg = SI5351A_PLLB_BASE + start;
     uint8_t len = end - start + 1;
-    i2cWriten(reg, &s_regs[start], len);
-    *((uint64_t *)s_regs_prev) = *((uint64_t *)s_regs);
+
+    // FIX! does this really need to be &PLLB_regs[start] to get the pointer, not the value? I guess?
+    i2cWriten(reg, &PLLB_regs[start], len);
+
+    // this can't be swap..so how could it have worked?
+    // maybe PLLB_regs memory always got reallocated on the next call?  not sure
+    // old:
+    // *((uint64_t *)s_PLLB_regs_prev) = *((uint64_t *)PLLB_regs);
+    memcpy(s_PLLB_regs_prev, PLLB_regs, 8);
+
     // if (VERBY[0]) Serial.printf("si5351a_setup_PLLB END mult %u num %lu denom %lu" EOL, mult, num, denom);
 }
+
+//****************************************************
+// swapping pointers instead of memcpy:
+// both should be static or global, so no mem allocaiton issue
+// https://stackoverflow.com/questions/8403447/swapping-pointers-in-c-char-int
+// best/obvious to just memcpy for just 8 bytes
 
 //****************************************************
 // div must be even number
@@ -472,6 +513,7 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
 void si5351a_setup_multisynth0(uint32_t div) {
     if (VERBY[0]) Serial.printf("si5351a_setup_multisynth0 START div %lu" EOL, div);
 
+    uint8_t s_regs[8] = { 0 };
     uint32_t p1 = 128 * div - 512;
     s_regs[0] = 0;
     s_regs[1] = 1;
@@ -504,7 +546,7 @@ void si5351a_setup_multisynth0(uint32_t div) {
                                   SI5351A_CLK1_MS1_SRC_PLLB |
                                   SI5351A_CLK1_SRC_MULTISYNTH_1 |
                                   SI5351A_CLK1_CLK1_INV |
-                                  s_vfo_drive_strength[0]));
+                                  s_vfo_drive_strength[1]));
     
     // old #endif
     if (VERBY[0]) Serial.printf("VFO_DRIVE_STRENGTH: %d" EOL, (int)s_vfo_drive_strength[0]);
@@ -512,10 +554,11 @@ void si5351a_setup_multisynth0(uint32_t div) {
 }
 
 //****************************************************
-// never used?
+// now this is used for antiphase (differential tx: clk0/clk1
 void si5351a_setup_multisynth1(uint32_t div) {
     if (VERBY[0]) Serial.printf("si5351a_setup_multisynth1 START div %lu" EOL, div);
 
+    uint8_t s_regs[8] = { 0 };
     uint32_t p1 = 128 * div - 512;
     s_regs[0] = 0;
     s_regs[1] = 1;
@@ -578,9 +621,9 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
     si5351a_setup_PLLB(pll_mult, pll_num, PLL_DENOM_MAX);
 
     // only reset pll if ms_div changes?
-    if (ms_div != prev_ms_div) {
+    if (ms_div != s_ms_div_prev) {
         // static global?
-        prev_ms_div = ms_div;
+        s_ms_div_prev = ms_div;
 
         if (clk_num == 0) {
             // settin up multisynth0 and multisynth1 
@@ -636,11 +679,27 @@ void vfo_turn_off_clk_out(uint8_t clk_num) {
 //****************************************************
 void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     if (VERBY[0]) Serial.printf("vfo_set_drive_strength START clk_num %u" EOL, clk_num);
+
     // only called during the initial vfo_turn_on()
     s_vfo_drive_strength[clk_num] = strength;
-    // reset the prev_ms_div to force vfo_set_freq_x16()
+
+    //**********************
+    // reset the s_ms_div_prev to force vfo_set_freq_x16()
     // to call si5351a_setup_multisynth1() next time
-    prev_ms_div = 0;
+    s_ms_div_prev = 0;
+    // new 11/24/24 ..maybe clear all this old state too!
+    memset(s_PLLB_regs_prev, 0, 8);
+    // not these though?
+    // si5351bx_clken = 0xff;
+    // memset(s_vfo_drive_strength, 0, 4);
+
+    // triggering a pll reset requires some delay afterwards
+    // so we don't want that to happen or be required (to retain 180 degree antiphase)
+    // if we change enough, and don't pll reset, we can lose the 180 degree phase relationship
+    // between CLK0 and CLK1. see comments from Hans. (not well documented when a 
+    // pll reset is required. Not for the small Hz shifts during symbol tx
+    //**********************
+
     if (VERBY[0]) Serial.printf("vfo_set_drive_strength END clk_num %u" EOL, clk_num);
 }
 
@@ -687,6 +746,7 @@ bool vfo_is_off(void) {
 
 //****************************************************
 void vfo_turn_on(uint8_t clk_num) {
+
     // FIX! what if clk_num is not zero?
     // turn on of 0 turns on 0 and 1 now
     clk_num = 0; 
@@ -809,12 +869,13 @@ void vfo_turn_on(uint8_t clk_num) {
     for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) {
         i2cWrite(reg, 0xCC);
     }
-    static const uint8_t s_ms_values[] = { 0, 1, 0x0C, 0, 0, 0, 0, 0 };
-    i2cWriten(42, (uint8_t *)s_ms_values, 8);   // set MS0 for div_4 mode (min. division)
-    i2cWriten(50, (uint8_t *)s_ms_values, 8);   // set MS1 for div_4 mode (min. division)
-    i2cWriten(58, (uint8_t *)s_ms_values, 8);   // set MS2 for div_4 mode (min.division)
+    // set MS0 for div_4 mode (min. division)
+    i2cWriten(42, (uint8_t *)s_ms_values, 8);   
+    // set MS1 for div_4 mode (min. division)
+    i2cWriten(50, (uint8_t *)s_ms_values, 8);   
+    // set MS2 for div_4 mode (min.division)
+    i2cWriten(58, (uint8_t *)s_ms_values, 8);   
 
-    static const uint8_t s_pll_values[] = { 0, 0, 0, 0x05, 0x00, 0, 0, 0 };
     // set PLLA for div_16 mode (minimum even integer division)
     i2cWriten(26, (uint8_t *)s_pll_values, 8);
     // set PLLB for div_16 mode (minimum even integer division)
@@ -824,7 +885,13 @@ void vfo_turn_on(uint8_t clk_num) {
     i2cWrite(177, 0xA0);  // Reset PLLA and PLLB
     i2cWrite(187, 0x00);  // Disable all fanout
 
-    prev_ms_div = 0;
+    //***********************
+    s_ms_div_prev = 0;
+    // new 11/24/24 ..maybe clear all this old state
+    memset(s_PLLB_regs_prev, 0, 8);
+    si5351bx_clken = 0xff;
+    memset(s_vfo_drive_strength, 0, 3);
+    //***********************
 
     // do a parts per billion correction?
     uint32_t freq = XMIT_FREQUENCY;
@@ -848,7 +915,7 @@ void vfo_turn_on(uint8_t clk_num) {
 
 
     vfo_set_freq_x16(clk_num, freq);
-    // all clks off!
+    // The final state is all clks running but outputs not on
     si5351bx_clken = 0xff;
     vfo_turn_on_clk_out(clk_num);
     vfo_turn_on_completed = true;
