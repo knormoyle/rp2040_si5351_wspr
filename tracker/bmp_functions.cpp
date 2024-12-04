@@ -22,7 +22,6 @@
 
 // Like the BME280 & BMP280, this precision sensor from Bosch can measure humidity with ±3% accuracy, barometric pressure with ±1 hPa absolute accuracy, and temperature with ±1.0°C accuracy. Because pressure changes with altitude, and the pressure measurements are so good, you can also use it as an altimeter with  ±1 meter or better accuracy!
 
-// The BME680 is the first gas sensor that integrates high-linearity and high-accuracy gas, pressure, humidity and temperature sensors.
 // Personal air quality tracker
 // Air quality mapping
 // Air quality inside cars & public transport
@@ -142,6 +141,7 @@ BMP280_U32_t bmp280_compensate_P_int64(BMP280_S32_t adc_P) {
 // do we need a Wire1.begin() in tracker.ino
 #define BMP280_I2C_INSTANCE i2c1
 #include "bmp_functions.h"
+#include "print_functions.h"
 #include <Wire.h>
 
 extern const int BMP280_I2C1_SDA_PIN;
@@ -159,7 +159,7 @@ extern bool VERBY[10];
 const int BMP280_I2C1_SCL_HZ = (1000 * 1000);
 
 void bmp_init(void) {
-    if (VERBY[0]) Serial.println(F("bmp_init START"));
+    V1_println(F("bmp_init START"));
     return;
     // always on? these pins don't exist
     // gpio_init(BMP280_VDD_ON_N_PIN)
@@ -174,7 +174,7 @@ void bmp_init(void) {
 
     gpio_set_function(BMP280_I2C1_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(BMP280_I2C1_SCL_PIN, GPIO_FUNC_I2C);
-    if (VERBY[0]) Serial.println(F("bmp_init END"));
+    V1_println(F("bmp_init END"));
 }
 
 
@@ -198,24 +198,24 @@ bmp.setSampling(
 // FIX! have to add humidity code
 // FIX! change this to bme_280?
 float bmp_read_temperature(void) {
-    if (VERBY[0]) Serial.println(F("bmp_read_temperature START"));
+    V1_println(F("bmp_read_temperature START"));
     return 0.0;
-    if (VERBY[0]) Serial.println(F("bmp_read_temperature END"));
+    V1_println(F("bmp_read_temperature END"));
     return bmp.readTemperature();
 }
 
 float bmp_read_pressure(void) {
-    if (VERBY[0]) Serial.println(F("bmp_read_pressure START"));
+    V1_println(F("bmp_read_pressure START"));
     return 0.0;
-    if (VERBY[0]) Serial.println(F("bmp_read_pressure END"));
+    V1_println(F("bmp_read_pressure END"));
     return bmp.readPressure();
 }
 
 float bmp_read_humidity(void) {
     // FIX! need to switch to bme280
     // return bmp.readHumidity();
-    if (VERBY[0]) Serial.println(F("bmp_read_humidity START"));
-    if (VERBY[0]) Serial.println(F("bmp_read_humidity END"));
+    V1_println(F("bmp_read_humidity START"));
+    V1_println(F("bmp_read_humidity END"));
     return 0.0;
 }
 

@@ -3,15 +3,71 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-// besides comparing to the arduino library, can compare to:
-// "Multipurpose signal generator with SI5351"
-// https://github.com/pu2clr/SI5351
+// nice api/functions (for comparison) at:
+// https://github.com/pu2clr/SI5351 "Multipurpose signal generator with SI5351"
+// https://github.com/pu2clr/SI5351/blob/master/source/si5351_signal_generator2/si5351wire.cpp
+// the Arduino si5351 library is also useful
+// https://github.com/etherkit/Si5351Arduino
 
-// for busy_wait_us_32()
+// another source for programming comparison
+// https://dk7ih.de/a-simple-software-to-control-the-si5351a-generator-chip/
+// also, examples from hans
+// https://qrp-labs.com/synth/si5351ademo.html
+
+// https://cdn-shop.adafruit.com/datasheets/Si5351.pdf
+
+// FIX! do we set crystal load capacitance anywhere? default 10pf is good (the tcxo is spec'ed for 10pf?)
+// like this in pu2clr library:
+// si5351wire_write(SI5351wire_CRYSTAL_LOAD, (xtal_load_c & SI5351wire_CRYSTAL_LOAD_MASK) | 0b00010010);
+
+// Manually Generating an Si5351 Register Map for 10-MSOP and 20-QFN Devices
+// https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/application-notes/AN619.pdf
+// AN1234 Manually Generating an Si5351 Register Map for 16QFN Devices
+// https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/application-notes/an1234-si5351-16qfn-register-map.pdf
+// CRYSTAL SELECTION GUIDE FOR Si5350/51 DEVICES
+// https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/application-notes/AN551.pdf
+
+// an alternative flowchart for programming si5351
+// https://nt7s.com/2018/02/si5351-programming-flowchart/
+
+
+// FIX! we're using default 10pf load capacitance?
+// Register 183. Crystal Internal Load Capacitance
+// Bit
+// Reset value = 11xx xxxx
+// Type R/WR/W
+// 7:6 XTAL_CL[1:0]
+// 
+// Crystal Load Capacitance Selection.
+// These 2 bits determine the internal load capacitance value for the crystal. 
+// See the Crystal Inputs section in the Si5351 data sheet.
+// 00: Reserved. Do not select this option.
+// 01: Internal CL = 6 pF.
+// 10: Internal CL = 8 pF.
+// 11: Internal CL = 10 pF (default).
+
+// 5:0 Reserved
+// Bits 5:0 should be written to 010010b.
+
+//****************************************************
+// Si5351A related functions
+// Developed by Kazuhisa "Kazu" Terasaki AG6NS
+// https://github.com/kaduhi/AFSK_to_FSK_VFO ..last update afsk_to_fsk_vfo.ino 6/30/21
+// https://github.com/kaduhi/AFSK_to_FSK_VFO/tree/main
+// 
+// This code was developed originally for QRPGuys AFP-FSK Digital Transceiver III kit
+// https://qrpguys.com/qrpguys-digital-fsk-transceiver-iii
+// https://qrpguys.com/wp-content/uploads/2022/09/ft8_v1.4_092522-1.zip
+// description:
+// https://qrpguys.com/wp-content/uploads/2021/06/afp_fsk_061921.pdf
+//****************************************************
+
 #include <Arduino.h>
 #include <stdlib.h>
 #include <cstring>
 #include "hardware/gpio.h"
+// for i2c0
+#include "hardware/i2c.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 #include "defines.h"
@@ -24,16 +80,11 @@
 #include <SPI.h>
 #include <Wire.h>
 
-// for i2c0
-#include "hardware/i2c.h"
-#define VFO_I2C_INSTANCE i2c0
-
-// FIX! should these be in tracker.ino (for consistency?)
+// from tracker.ino 
 extern const int SI5351A_I2C_ADDR;
 extern const int VFO_I2C0_SCL_HZ;
 
 extern uint32_t XMIT_FREQUENCY;
-extern bool DEVMODE;
 // decode of _verbose 0-9
 extern bool VERBY[10];
 
@@ -42,14 +93,15 @@ extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 
 extern const int Si5351Pwr;
 // FIX! are these just used on the Wire.begin?
+// FIX! should this be a extern const. Or: only used here?
+#define VFO_I2C_INSTANCE i2c0
 extern const int VFO_I2C0_SDA_PIN;
 extern const int VFO_I2C0_SCL_PIN;
 
 // when we set both?
 extern const int WSPR_TX_CLK_NUM;
-extern const int WSPR_TX_CLK_1_NUM;
-// this is the other differential clock for wspr? (was aprs)
 extern const int WSPR_TX_CLK_0_NUM;
+extern const int WSPR_TX_CLK_1_NUM;
 
 extern const int SI5351A_CLK_IDRV_8MA;
 extern const int SI5351A_CLK_IDRV_6MA;
@@ -61,66 +113,62 @@ extern const int PLL_CALCULATION_PRECISION;
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
 
-static uint8_t  si5351bx_clken = 0xff;
+static uint8_t si5351bx_clken = 0xff;
 static bool s_is_on = false;
 
 // updated with config _tx_high during vfo_turn_on()
 // 0:2mA, 1:4mA, 2:6mA, 3:8mA
 static uint8_t s_vfo_drive_strength[3] = { 0 };
 
+// FIX! are these just initial values?
+// what about the higher frequencies
 // set MS0-2 for div_4 mode (min. division)
 static const uint8_t s_ms_values[] = { 0, 1, 0x0C, 0, 0, 0, 0, 0 };
+
 // set PLLA-B for div_16 mode (minimum even integer division)
 static const uint8_t s_pll_values[] = { 0, 0, 0, 0x05, 0x00, 0, 0, 0 };
 
 static uint8_t s_PLLB_regs_prev[8] = { 0 };
-
-// FIX! should we clear all the statics at some point?
-// there's no valid bits on them..typically oay?
 static uint32_t s_ms_div_prev = 0;
 
-// https://wellys.com/posts/rp2040_arduino_i2c/
-// how to use the Pico’s 10 I2C interfaces, given the following issues with Arduino Wire:
-// There can only be two Wire interfaces, Wire and Wire1
-// All devices on a Wire/Wire1 interface needs to have its own address
 //****************************************************
+// https://wellys.com/posts/rp2040_arduino_i2c/
+// If thinking about using Wire/Wire1
+// There can only be two Wire interfaces, Wire and Wire1
+// should have unique addresses for everything on a Wire*
 // pi pico can have two Wire
 // only one Wire and Wire pair can be active at a time
-
 // https://github.com/lkoepsel/I2C/blob/main/Arduino/Pico/I2C_Scanner/I2C_Scanner.ino
-
+//****************************************************
 
 // removed static
 void vfo_init(void) {
-    if (VERBY[0]) Serial.println(F("vfo_init START"));
+    V1_println(F("vfo_init START"));
 
     // clear any old remembered state we have outside of the si5351
-    // hmm. maybe not this
+    // hmm. maybe not this though
     // si5351bx_clken = 0xff;
     s_ms_div_prev = 0;
     memset(s_PLLB_regs_prev, 0, 8);
     memset(s_vfo_drive_strength, 0, 3);
 
-    // this is also pin 4
-    // do the init first
-    gpio_init(Si5351Pwr);
     // turn ON VFO VDD
     // pin 4 ?
+    // do the init first
+    gpio_init(Si5351Pwr);
     pinMode(Si5351Pwr, OUTPUT);
-    // FIX! remove pull_up to save power:w
 
+    // FIX! remove pull_up to save power. Don't need it? 
     gpio_pull_up(Si5351Pwr);
     gpio_put(Si5351Pwr, 0);
 
-    // FIX! does Wire.begin() take care of this?
     // init I2C0 for VFO
     i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
     gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
     gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
     gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
-
-    if (VERBY[0]) Serial.println(F("vfo_init END"));
+    V1_println(F("vfo_init END"));
 }
 
 //****************************************************
@@ -128,27 +176,35 @@ void vfo_init(void) {
 void vfo_set_power_on(bool turn_on) {
     // this works even if s_is_on is wrong relative to current on state
     // doesn't turn off/on first
-    if (VERBY[0]) Serial.printf("vfo_set_power_on START %u" EOL, turn_on);
-    Serial.flush();
+    V1_printf("vfo_set_power_on START %u" EOL, turn_on);
+    V0_flush();
 
-    // FIX! 
+    // don't make it dependent on s_is_on state
     // if (turn_on == s_is_on) return;
 
-    if ( turn_on) {
-        Serial.printf("set Si5351Pwr %d LOW (power on) before" EOL, Si5351Pwr);
-        Serial.println("power on Si5351");
+    if (turn_on) {
+        V1_printf("set Si5351Pwr %d LOW (power on) before" EOL, Si5351Pwr);
+        V1_println("power on Si5351");
         gpio_init(Si5351Pwr);
         pinMode(Si5351Pwr, OUTPUT_4MA);
         digitalWrite(Si5351Pwr, LOW);
-        Serial.printf("set Si5351Pwr %d LOW (power on) after" EOL, Si5351Pwr);
+        V1_printf("set Si5351Pwr %d LOW (power on) after" EOL, Si5351Pwr);
+
     } else {
-        // Serial.printf("set VDD_ON_N_PIN %d HIGH (power off)" EOL, Si5351Pwr);
+        V1_printf("set VDD_ON_N_PIN %d HIGH (power off)" EOL, Si5351Pwr);
         digitalWrite(Si5351Pwr, HIGH);
-        // HACK..don't ever turn off!
-        Serial.printf("IGNORING (power stays on) ..set VDD_ON_N_PIN %d HIGH (power off)" EOL, Si5351Pwr);
     }
-    Serial.flush();
-    Serial.println("After Serial.flush()");
+
+    // FIX! always? or should we only do it if was not on?
+    // clear any old remembered state we have outside of the si5351
+    // hmm. maybe not this though
+    // si5351bx_clken = 0xff;
+    s_ms_div_prev = 0;
+    memset(s_PLLB_regs_prev, 0, 8);
+    memset(s_vfo_drive_strength, 0, 3);
+
+    V0_flush();
+    V1_println(F("vfo_set_power_on After V0_flush()"));
 
     // always just turn it on!
     s_is_on = turn_on;
@@ -158,16 +214,8 @@ void vfo_set_power_on(bool turn_on) {
     // we can just read the level
     // gpio_set_dir(Si5351Pwr, (turn_on ? GPIO_OUT : GPIO_IN));
 
-    // FIX! we don't clear any old remembered state we have outside of the si5351 ??
-    // in case we didn't transition off-> on
-    // maybe we should ?
-    // s_ms_div_prev = 0;
-    // memset(s_PLLB_regs_prev, 0, 8);
-    // si5351bx_clken = 0xff;
-    // memset(s_vfo_drive_strength, 0, 4);
-
-    if (VERBY[0]) Serial.printf("vfo_set_power_on END %u" EOL, s_is_on);
-    Serial.flush();
+    V1_printf("vfo_set_power_on END %u" EOL, s_is_on);
+    V0_flush();
 }
 
 //****************************************************
@@ -201,10 +249,11 @@ bool reserved_reg(uint8_t reg) {
     switch (reg) {
         case 0: ; // has some status bits
         case 1: ; bad = true; break; // has some status bits
+
         // FIX! we should check these rules for bad multisynth?
         // multisynth3 thru multisynth7 ??
         // do invalid numbers write ? what happens?
-        // This 8-bit number is the Multisynth6 divide ratio. Multisynth6 divide ratio 
+        // This 8-bit number is the Multisynth divide ratio.
         // can only be even integers greater than or equal to 6. All other divide values are invalid.
         // Si5351B and C are 8-outputs. Si5351a we use is only 3. (there is 8 output version) that's why.
         default: if (reg >= 66 && reg <= 91) bad = true;
@@ -218,7 +267,7 @@ bool reserved_reg(uint8_t reg) {
 
 //****************************************************
 int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
-    // if (VERBY[0]) Serial.printf("i2cWrite START reg %02x val %02x" EOL, reg, val);
+    // V1_printf("i2cWrite START reg %02x val %02x" EOL, reg, val);
     // FIX! shouldn't this be local ? or does it setup data for i2cWriten
     // moved here to be local, and not static (shared) anymore
     // only need length 2!
@@ -229,27 +278,24 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
     int res;
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
-        // if (VERBY[0]) Serial.printf("i2cWrRead reserved reg %u", reg);
+        // V1_printf("i2cWrRead reserved reg %u", reg);
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     }
     else {
-        // if (VERBY[0]) Serial.printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
+        // V1_printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
         // res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false, 1000);
         res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false);
 
-        if (VERBY[0]) {
-            if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
-            else if (res == 2) ; // Serial.printf("GOOD: res %d after i2cWrite" EOL, res);
-            else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWrite" EOL, res);
-            else Serial.printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
-        }
+        if (res == 127) V1_printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
+        else if (res == 2) ; // V1_printf("GOOD: res %d after i2cWrite" EOL, res);
+        else if (res == PICO_ERROR_GENERIC) V1_printf("ERROR: res %d after i2cWrite" EOL, res);
+        else V1_printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
     }
-    // if (VERBY[0]) Serial.printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
+    // V1_printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
     return res;
 }
 
-    
 //****************************************************
 // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
 // i2c_read_timeout_us
@@ -272,10 +318,13 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
 // addr	7-bit address of device to read from
 // dst	Pointer to buffer to receive data
 // len	Length of data in bytes to receive
-// nostop	If true, master retains control of the bus at the end of the transfer (no Stop is issued), and the next transfer will begin with a Restart rather than a Start.
+// nostop	If true, master retains control of the bus at 
+// the end of the transfer (no Stop is issued), 
+// and the next transfer will begin with a Restart rather than a Start.
 // timeout_us	The time that the function will wait for the entire transaction to complete
 // Returns
-// Number of bytes read, or PICO_ERROR_GENERIC if address not acknowledged, no device present, or PICO_ERROR_TIMEOUT if a timeout occurred.
+// Number of bytes read, or PICO_ERROR_GENERIC if address not acknowledged, 
+// no device present, or PICO_ERROR_TIMEOUT if a timeout occurred.
 
 // per https://github.com/earlephilhower/arduino-pico/discussions/1059
 // uint8_t _address = SI5351A_I2C_ADDR;
@@ -286,8 +335,8 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
 //     Wire.write(myRegister);
 //     Wire.write(myValue);
 //     error = Wire.endTransmission();
-//     if (error == 0) Serial.print("I2C device found at address 0x");
-//     if (error == 4) Serial.print("Unknown error at address 0x");
+//     if (error == 0) V1_print("I2C device found at address 0x");
+//     if (error == 4) V1_print("Unknown error at address 0x");
 // }
 // 
 // byte readRegister(uint8_t myRegister) {
@@ -297,8 +346,8 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
 //     Wire.beginTransmission(_address);
 //     Wire.write(myRegister);
 //     error = Wire.endTransmission();
-//     if (error == 0) Serial.print("I2C device found at address 0x");
-//     if (error == 4) Serial.print("Unknown error at address 0x");
+//     if (error == 0) V1_print("I2C device found at address 0x");
+//     if (error == 4) V1_print("Unknown error at address 0x");
 // 
 //     Wire.requestFrom(_address, 1, true);
 //     // blocking
@@ -314,15 +363,10 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
 // static uint8_t reg = 0;
 // res = i2cWrRead(reg, &val) ;
 
-
 // just reads two byte
-// FIX! done need to read a stream of bytes? i2cWrReadn()?
+// FIX! don't need to read a stream of bytes? i2cWrReadn()?
 int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
-    if (VERBY[0]) Serial.printf("i2cWrRead START reg %02x val %02x" EOL, reg, *val);
-
-    // FIX! shouldn't this be local ? or does it setup data for i2cWriten
-    // moved here to be local, and not static (shared) anymore
-    // only need length 2!
+    V1_printf("i2cWrRead START reg %02x val %02x" EOL, reg, *val);
     uint8_t i2c_buf[2];
     i2c_buf[0] = reg;
     i2c_buf[1] = 254; // a fixed value that should be overwritten?
@@ -346,12 +390,12 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
 
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
-        Serial.printf("i2cWrRead reserved reg %u", reg);
+        V1_printf("i2cWrRead reserved reg %u", reg);
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     }
     else {
-        if (VERBY[0]) Serial.print(F("i2cWrRead doing i2c_write_blockin then i2c_read_blocking" EOL));
+        V1_print(F("i2cWrRead doing i2c_write_blockin then i2c_read_blocking" EOL));
         int res1, res2;
         // FIX! should these be _timeout_us instead?
         res1 = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, &reg, 1, true);  
@@ -371,84 +415,61 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
             res = 1; // good one byte read! both parts
     }
 
-    if (VERBY[0]) {
-        // cover all - errors above
-        if (res == 127) ; // my decode for reserved
-        else if (res == PICO_ERROR_GENERIC || res < 0)
-            Serial.printf("ERROR: i2cRead() got bad res %d reg %02x val %02x" EOL, res, reg, *val);
-        else if (res==1)
-            Serial.printf("GOOD: i2cRead() got good res %d reg %02x val %02x" EOL, res, reg, *val);
-        else
-            Serial.printf("UNEXPECTED: i2cRead() got unexpected res %d reg %02x val %02x" EOL, res, reg, *val);
-    }
+    // cover all - errors above
+    if (res == 127) ; // my decode for reserved
+    else if (res == PICO_ERROR_GENERIC || res < 0)
+        V1_printf("ERROR: i2cWrRead() got bad res %d reg %02x val %02x" EOL, res, reg, *val);
+    else if (res==1)
+        V1_printf("GOOD: i2cWrRead() got good res %d reg %02x val %02x" EOL, res, reg, *val);
+    else
+        V1_printf("UNEXPECTED: i2cWrRead() got unexpected res %d reg %02x val %02x" EOL, res, reg, *val);
 
-    if (VERBY[0]) Serial.printf("i2cWrRead END reg %02x val %02x" EOL, reg, *val);
+    V1_printf("i2cWrRead END reg %02x val %02x" EOL, reg, *val);
     return res;
+
     // https://pschatzmann.github.io/pico-arduino/doc/html/class_pico_hardware_i2_c.html
     // https://github.com/earlephilhower/arduino-pico/discussions/1059
 }
 
-
 //****************************************************
 int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
-    if (false && VERBY[0]) {
-        Serial.printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
+    if (false && VERBY[1]) {
+        V1_printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
         for (uint8_t i = 0; i < vcnt; i++) {
-            Serial.printf("val i %d %u" EOL, i, *(vals + i));
+            V1_printf("val i %d %u" EOL, i, *(vals + i));
         }
     }
         
-    // FIX! shouldn't this be local ? or does it use the data from i2cWrite
     uint8_t i2c_buf[16];
-    // moved here to be local, and not static (shared) anymore
     i2c_buf[0] = reg;
-
     // because of the large vcnt, the buf is length 16?
     memcpy(&i2c_buf[1], vals, vcnt);
 
     int res;
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
-        Serial.printf("i2cWrRead reserved reg %u", reg);
+        V1_printf("i2cWrRead reserved reg %u", reg);
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     } else {
-        // if (VERBY[0]) Serial.printf("i2cWriten doing i2c_write_blocking reg %02x " EOL, reg);
+        // V1_printf("i2cWriten doing i2c_write_blocking reg %02x " EOL, reg);
         // res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
         res = i2c_write_blocking(VFO_I2C_INSTANCE,
             SI5351A_I2C_ADDR, i2c_buf, (vcnt + 1), false); // addr + data (byte)
 
-        if (VERBY[0]) {
-            if (res == 127) Serial.printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
-            else if (res == (1 + (int) vcnt)) ; // Serial.printf("GOOD: res %d after i2cWriten" EOL, res);
-            else if (res == PICO_ERROR_GENERIC) Serial.printf("ERROR: res %d after i2cWriten" EOL, res);
-            else Serial.printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
-        }
+        if (res == 127) V1_printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
+        else if (res == (1 + (int) vcnt)) ; // V1_printf("GOOD: res %d after i2cWriten" EOL, res);
+        else if (res == PICO_ERROR_GENERIC) V1_printf("ERROR: res %d after i2cWriten" EOL, res);
+        else V1_printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
     }
 
-
-    // if (VERBY[0]) Serial.printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
+    // V1_printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);
     return res;
 }
 
 //****************************************************
-/*
-    Si5351A related functions
-    Developed by Kazuhisa "Kazu" Terasaki AG6NS
-    https://github.com/kaduhi/AFSK_to_FSK_VFO ..last update afsk_to_fsk_vfo.ino 6/30/21
-    This code was developed originally for QRPGuys AFP-FSK Digital Transceiver III kit
-    https://qrpguys.com/qrpguys-digital-fsk-transceiver-iii
-    https://qrpguys.com/wp-content/uploads/2022/09/ft8_v1.4_092522-1.zip
-    description:
-    https://qrpguys.com/wp-content/uploads/2021/06/afp_fsk_061921.pdf
-
- */
-
-
-//****************************************************
-// FIX! removed static. hmm maybe add back..should only call from this file?
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
-    // if (VERBY[0]) Serial.printf("si5351a_setup_PLLB START mult %u num %lu denom %lu" EOL, mult, num, denom);
+    // V1_printf("si5351a_setup_PLLB START mult %u num %lu denom %lu" EOL, mult, num, denom);
     uint8_t PLLB_regs[8] = { 0 };
 
     uint32_t p1 = 128 * mult + ((128 * num) / denom) - 512;
@@ -493,12 +514,14 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     i2cWriten(reg, &PLLB_regs[start], len);
 
     // this can't be swap..so how could it have worked?
-    // maybe PLLB_regs memory always got reallocated on the next call?  not sure
+    // was it a pointer copy? 
+    // maybe PLLB_regs memory always got reallocated on the next call? 
+    // wouldn't if it was static?
     // old:
     // *((uint64_t *)s_PLLB_regs_prev) = *((uint64_t *)PLLB_regs);
     memcpy(s_PLLB_regs_prev, PLLB_regs, 8);
 
-    // if (VERBY[0]) Serial.printf("si5351a_setup_PLLB END mult %u num %lu denom %lu" EOL, mult, num, denom);
+    // V1_printf("si5351a_setup_PLLB END mult %u num %lu denom %lu" EOL, mult, num, denom);
 }
 
 //****************************************************
@@ -509,9 +532,11 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
 
 //****************************************************
 // div must be even number
-// removed static
-void si5351a_setup_multisynth0(uint32_t div) {
-    if (VERBY[0]) Serial.printf("si5351a_setup_multisynth0 START div %lu" EOL, div);
+void si5351a_setup_multisynth01(uint32_t div) {
+    V1_printf("si5351a_setup_multisynth01 START div %lu" EOL, div);
+    if ((div % 2) != 0) {
+        V1_printf("ERROR: si5351a_setup_multisynth01 div %lu isn't even" EOL, div);
+    }
 
     uint8_t s_regs[8] = { 0 };
     uint32_t p1 = 128 * div - 512;
@@ -523,61 +548,28 @@ void si5351a_setup_multisynth0(uint32_t div) {
     s_regs[5] = 0;
     s_regs[6] = 0;
     s_regs[7] = 0;
+
     i2cWriten(SI5351A_MULTISYNTH0_BASE, s_regs, 8);
-    i2cWrite(SI5351A_CLK0_CONTROL, (SI5351A_CLK0_MS0_INT |
-                                  SI5351A_CLK0_MS0_SRC_PLLB |
-                                  SI5351A_CLK0_SRC_MULTISYNTH_0 |
-                                  s_vfo_drive_strength[0]));
+    i2cWrite(SI5351A_CLK0_CONTROL,
+        SI5351A_CLK0_MS0_INT |
+        SI5351A_CLK0_MS0_SRC_PLLB |
+        SI5351A_CLK0_SRC_MULTISYNTH_0 |
+        s_vfo_drive_strength[0]);
 
-
-    // old #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
-/*
-    // was 11/23/24
-    // FIX! should we wrote 0's in stuff not being used?
-    // in case someone wrote them? noise?
+    // this is used for antiphase (differential tx: clk0/clk1)
     i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
-    i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT |
-                                  SI5351A_CLK1_MS1_SRC_PLLB |
-                                  SI5351A_CLK1_CLK1_INV |
-                                  SI5351A_CLK1_SRC_MULTISYNTH_1 |
-                                  s_vfo_drive_strength[0]));
-*/
-    i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT |
-                                  SI5351A_CLK1_MS1_SRC_PLLB |
-                                  SI5351A_CLK1_SRC_MULTISYNTH_1 |
-                                  SI5351A_CLK1_CLK1_INV |
-                                  s_vfo_drive_strength[1]));
+    i2cWrite(SI5351A_CLK1_CONTROL,
+        SI5351A_CLK1_MS1_INT |
+        SI5351A_CLK1_MS1_SRC_PLLB |
+        SI5351A_CLK1_SRC_MULTISYNTH_1 |
+        SI5351A_CLK1_CLK1_INV |
+        s_vfo_drive_strength[1]);
     
     // old #endif
-    if (VERBY[0]) Serial.printf("VFO_DRIVE_STRENGTH: %d" EOL, (int)s_vfo_drive_strength[0]);
-    if (VERBY[0]) Serial.printf("si5351a_setup_multisynth0 END div %lu" EOL, div);
-}
+    V1_printf("VFO_DRIVE_STRENGTH CLK0: %d" EOL, (int)s_vfo_drive_strength[0]);
+    V1_printf("VFO_DRIVE_STRENGTH CLK1: %d" EOL, (int)s_vfo_drive_strength[1]);
 
-//****************************************************
-// now this is used for antiphase (differential tx: clk0/clk1
-void si5351a_setup_multisynth1(uint32_t div) {
-    if (VERBY[0]) Serial.printf("si5351a_setup_multisynth1 START div %lu" EOL, div);
-
-    uint8_t s_regs[8] = { 0 };
-    uint32_t p1 = 128 * div - 512;
-    s_regs[0] = 0;
-    s_regs[1] = 1;
-    s_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
-    s_regs[3] = (uint8_t)(p1 >> 8);
-    s_regs[4] = (uint8_t)p1;
-    s_regs[5] = 0;
-    s_regs[6] = 0;
-    s_regs[7] = 0;
-    i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
-
-    i2cWrite(SI5351A_CLK1_CONTROL, (SI5351A_CLK1_MS1_INT |
-                                  SI5351A_CLK1_MS1_SRC_PLLB |
-                                  SI5351A_CLK1_SRC_MULTISYNTH_1 |
-                                  s_vfo_drive_strength[1]));
-    if (VERBY[0]) {
-        Serial.printf("VFO_DRIVE_STRENGTH: %d" EOL, (int)s_vfo_drive_strength[1]);
-    }
-    if (VERBY[0]) Serial.printf("si5351a_setup_multisynth1 END div %lu" EOL, div);
+    V1_printf("si5351a_setup_multisynth01 END div %lu" EOL, div);
 }
 
 // FIX! compare to https://github.com/etherkit/Si5351Arduino
@@ -590,14 +582,15 @@ void si5351a_setup_multisynth1(uint32_t div) {
 //****************************************************
 // we don't user PLLA ?
 void si5351a_reset_PLLB(void) {
+    V1_println(F("si5351a_reset_PLLB START"));
     i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
-    if (VERBY[0]) Serial.println(F("si5351a_reset_PLLB END"));
+    V1_println(F("si5351a_reset_PLLB END"));
 }
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
-    // if (VERBY[0]) Serial.printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
+    // V1_printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
     // looks like this doesn't change the state of the output enables
     // just the freq
     const int PLL_MAX_FREQ  = 900000000;
@@ -611,13 +604,12 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
     ms_div &= 0xfffffffe;   // make it even number
 
     uint32_t pll_freq = ((uint64_t)freq * ms_div) >> PLL_CALCULATION_PRECISION;
-
     uint32_t tcxo_freq = SI5351_TCXO_FREQ;
     uint32_t pll_mult   = pll_freq / tcxo_freq;
     uint32_t pll_remain = pll_freq - (pll_mult * tcxo_freq);
     uint32_t pll_num    = (uint64_t)pll_remain * PLL_DENOM_MAX / tcxo_freq;
 
-    // FIX! this has sticky s_regs_prev state that it uses if called multiple times?
+    // this has sticky s_regs_prev state that it uses if called multiple times?
     si5351a_setup_PLLB(pll_mult, pll_num, PLL_DENOM_MAX);
 
     // only reset pll if ms_div changes?
@@ -625,60 +617,56 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
         // static global?
         s_ms_div_prev = ms_div;
 
-        if (clk_num == 0) {
-            // settin up multisynth0 and multisynth1 
-            si5351a_setup_multisynth0(ms_div);
-            si5351a_setup_multisynth1(ms_div);
-        } else {
-            Serial.println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
-            // this used to be for setting up the aprs clock on clk_num == 1?
-            // removed 11/23/24 (was working print)
-            // si5351a_setup_multisynth1(ms_div);
+        if (clk_num != 0) {
+            V1_println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
         }
-
+        // setting up multisynth0 and multisynth1 
+        si5351a_setup_multisynth01(ms_div);
         si5351a_reset_PLLB();
     }
-    // if (VERBY[0]) Serial.printf("vfo_set_freq_x16 END clk_num %u freq %lu" EOL, clk_num, freq);
+    // V1_printf("vfo_set_freq_x16 END clk_num %u freq %lu" EOL, clk_num, freq);
 }
 
 //****************************************************
+// FIX! hans says we need pll reset whenever we turn clocks off/on
+// to retain 180 degree phase relationship (CLK0/CLK1)
 void vfo_turn_on_clk_out(uint8_t clk_num) {
-    if (VERBY[0]) Serial.printf("vfo_turn_on_clk_out START clk_num %u" EOL, clk_num);
+    V1_printf("vfo_turn_on_clk_out START clk_num %u" EOL, clk_num);
     if (clk_num != 0)
-        Serial.printf("ERROR: vfo_turn_on_clk_out called with clk_num %u" EOL, clk_num);
+        V1_printf("ERROR: vfo_turn_on_clk_out should only have clk_num 0 not %u" EOL, clk_num);
 
     // enable clock 0 and 1
     //  0 is enable
     uint8_t enable_bit = 1 << clk_num;
-    // #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
-    if (clk_num == 0) {
-        enable_bit |= 1 << 1;
-    }
-    // #endif
+    // clk0 implies clk1 also
+    if (clk_num == 0) enable_bit |= 1 << 1;
+
     si5351bx_clken &= ~enable_bit;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
-    if (VERBY[0]) Serial.println(F("vfo_turn_on_clk_out END"));
+    V1_println(F("vfo_turn_on_clk_out END"));
 }
 
+//****************************************************
+// FIX! hans says we need pll reset whenever we turn clocks off/on
+// to retain 180 degree phase relationship (CLK0/CLK1)
+// Suppose we don't do this without a pll reset for some reason
+// when clocks are turned back on
 void vfo_turn_off_clk_out(uint8_t clk_num) {
-    // FIX! are these enable bits inverted? Yes
-    // 1 is disable
-    if (VERBY[0]) Serial.println(F("vfo_turn_off_clk_out START"));
+    // are these enable bits inverted? Yes, 1 is disable
+    V1_println(F("vfo_turn_off_clk_out START"));
     uint8_t enable_bit = 1 << clk_num;
-    // always now
-    // #ifdef ENABLE_DIFFERENTIAL_TX_OUTPUT
+    // clk0 implies clk1 also
     if (clk_num == 0) {
         enable_bit |= 1 << 1;
     }
-    // #endif
     si5351bx_clken |= enable_bit;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
-    if (VERBY[0]) Serial.printf("vfo_turn_off_clk_out END clk_num %u" EOL, clk_num);
+    V1_printf("vfo_turn_off_clk_out END clk_num %u" EOL, clk_num);
 }
 
 //****************************************************
 void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
-    if (VERBY[0]) Serial.printf("vfo_set_drive_strength START clk_num %u" EOL, clk_num);
+    V1_printf("vfo_set_drive_strength START clk_num %u" EOL, clk_num);
 
     // only called during the initial vfo_turn_on()
     s_vfo_drive_strength[clk_num] = strength;
@@ -693,33 +681,35 @@ void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     // si5351bx_clken = 0xff;
     // memset(s_vfo_drive_strength, 0, 4);
 
-    // triggering a pll reset requires some delay afterwards
+    // Triggering a pll reset requires some delay afterwards
     // so we don't want that to happen or be required (to retain 180 degree antiphase)
     // if we change enough, and don't pll reset, we can lose the 180 degree phase relationship
     // between CLK0 and CLK1. see comments from Hans. (not well documented when a 
-    // pll reset is required. Not for the small Hz shifts during symbol tx
+    // pll reset is required). Not for the small Hz shifts during symbol tx
     //**********************
 
-    if (VERBY[0]) Serial.printf("vfo_set_drive_strength END clk_num %u" EOL, clk_num);
+    V1_printf("vfo_set_drive_strength END clk_num %u" EOL, clk_num);
 }
 
 //****************************************************
 bool vfo_is_on(void) {
     // power on and completed successfully
-    // FIX! in vs out doesn't make sense
+    //*********************************
+    // FIX! switching in/out direction on the gpio power pin doesn't make sense.
 
-    // static bool gpio_is_dir_out	(	uint 	gpio	)	
+    // old code changed the dir of the gpio
+    // static bool gpio_is_dir_out ( uint gpio )	
     // Check if a specific GPIO direction is OUT.
-    // gpio	GPIO number
-    // returns
-    // true if the direction for the pin is OUT
+    // gpio GPIO number
+    // returns // true if the direction for the pin is OUT
 
-    // can use gpio_get_out_level()
-
+    // can use this? decided not to.
     // gpio_get_out_level()
     // static bool gpio_get_out_level	(uint gpio )	
     // Determine whether a GPIO is currently driven high or low
-    // This function returns the high/low output level most recently assigned to a GPIO via gpio_put() or similar. 
+    // This function returns the high/low output level most recently assigned to                        
+    // a GPIO via gpio_put() or similar. 
+
     // This is the value that is presented outward to the IO muxing, 
     // not the input level back from the pad (which can be read using gpio_get()).
     // 
@@ -727,14 +717,14 @@ bool vfo_is_on(void) {
     // instead functions like gpio_put() should be used to atomically update GPIOs. 
     // This accessor is intended for debug use only.
 
-    // gpio	GPIO number
+    // gpio GPIO number
     // Returns
     // true if the GPIO output level is high, false if low.
     // return (!gpio_get_out_level(Si5351Pwr) && vfo_turn_on_completed);
-    // return (!gpio_get(Si5351Pwr) && vfo_turn_on_completed);
+    //*********************************
 
-    // safer?
-    return (!gpio_get(Si5351Pwr));
+    // can do this sample of input on an output gpio?
+    return (!gpio_get(Si5351Pwr) && vfo_turn_on_completed);
 }
 
 //****************************************************
@@ -744,17 +734,16 @@ bool vfo_is_off(void) {
     return (gpio_get(Si5351Pwr) && vfo_turn_off_completed);
 }
 
-// what is vfo_clk2 ? is that another PLL? is that used for calibration?
-
+// we don't deal with clk2 in any of this. Goes to rp2040 for calibration.
 
 //****************************************************
 void vfo_turn_on(uint8_t clk_num) {
-
     // FIX! what if clk_num is not zero?
     // turn on of 0 turns on 0 and 1 now
     clk_num = 0; 
-    if (VERBY[0]) Serial.printf("vfo_turn_on START clk_num %u" EOL, clk_num);
-    // already on successfully
+    V1_printf("vfo_turn_on START clk_num %u" EOL, clk_num);
+
+    // already on successfully?
     // FIX! ..always turn it on now? for debug
     // if (vfo_is_on()) return;
 
@@ -768,9 +757,9 @@ void vfo_turn_on(uint8_t clk_num) {
     vfo_turn_on_completed = false;
     vfo_turn_off_completed = false;
     vfo_init();
-    // kevin 11/18/24
     Watchdog.reset();
-    sleep_ms(3000);
+    // 2 secs enough?
+    sleep_ms(2000);
 
     // did full init above instead..since we toggled vfo power?
     if (false) {
@@ -778,61 +767,62 @@ void vfo_turn_on(uint8_t clk_num) {
         gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
         gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
     }
-    sleep_ms(1000);
+    // sleep_ms(1000);
 
-
-    // too big a wait
+    // do these use a specific timer?
     // busy_wait_us_32(100000);
+    // busy_wait_ms_32(1000);
 
+    // what timer to use?
     // timer_busy_wait_ms
-    // void timer_busy_wait_ms (timer_hw_t * timer, uint32_t delay_ms)
+    // void timer_busy_wait_ms (timer_hw_t *timer, uint32_t delay_ms)
     // Busy wait wasting cycles for the given number of milliseconds using the given timer instance.
-    // Parameters
-    // timer	
-    // the timer instance
+    // Parameters timer	the timer instance
 
     // output 7MHz on CLK0
     uint8_t reg;
     // Disable all CLK output drivers
-    if (VERBY[0]) Serial.println(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
-    Serial.flush();
+    V1_println(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
+    V0_flush();
 
     // HACK ..don't iterate
     int tries = 0;
     // any error
     int res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff); 
-    if (VERBY[0]) Serial.printf("vfo_turn_on first res %d of i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL" EOL , res);
-    Serial.flush();
+    V1_printf("vfo_turn_on first res %d of i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL" EOL , res);
+    V0_flush();
     while (res != 2) {
         if (tries > 5) {
-            Serial.println("Rebooting because can't init VFO_I2C_INSTANCE after 5 tries");
-            Serial.flush();
+            V1_println("Rebooting because couldn't init VFO_I2C_INSTANCE after 5 tries");
+            V0_flush();
             Watchdog.enable(1000);  // milliseconds
             for (;;) {
-                // FIX! put a bad status in the leds
+                // FIX! put a bad status in the leds?
                 updateStatusLED();
             }
         }
         Watchdog.reset();
         tries++;
-        Serial.println("VFO_I2C_INSTANCE trying re-init, after trying a i2cWrite and it failed");
-        Serial.flush();
+        V1_println("VFO_I2C_INSTANCE trying re-init, after trying a i2cWrite and it failed");
+        V0_flush();
 
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
-        // i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
-        Serial.println("i2c_deinit() start");
+        V1_println("i2c_deinit() start");
         i2c_deinit(VFO_I2C_INSTANCE);
-        Serial.println("i2c_deinit() complete");
+        V1_println("i2c_deinit() complete");
         busy_wait_ms(1000);
 
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
-        Serial.println("i2c_init() start");
+        V1_println("i2c_init() start");
         i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
-        Serial.println("i2c_init() complete");
+        V1_println("i2c_init() complete");
         busy_wait_ms(1000);
 
-        gpio_pull_up(VFO_I2C0_SDA_PIN);
-        gpio_pull_up(VFO_I2C0_SCL_PIN);
+        // gpio_pull_up(VFO_I2C0_SDA_PIN);
+        // gpio_pull_up(VFO_I2C0_SCL_PIN);
+        // don't use pullups or pulldowns since there are external pullups
+        gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
+        gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
         gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
         gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
         i2c_set_slave_mode(VFO_I2C_INSTANCE, false, 0);
@@ -844,26 +834,23 @@ void vfo_turn_on(uint8_t clk_num) {
         digitalWrite(Si5351Pwr, LOW);
         busy_wait_ms(2000);
 
-        if (VERBY[0]) Serial.printf("vfo_turn_on re-iinit the I2C0 pins inside loop. tries %d" EOL, tries);
+        V1_printf("vfo_turn_on re-iinit the I2C0 pins inside loop. tries %d" EOL, tries);
+        // all clocks off?
         res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff); 
-        Serial.flush();
-
+        V0_flush();
     }
 
-    if (VERBY[0]) Serial.print(F("vfo_turn_on done trying to init the I2C0 pins in loop" EOL));
+    V1_print(F("vfo_turn_on done trying to init the I2C0 pins in loop" EOL));
 
     // Moved this down here ..we don't know if we'll hang earlier
     // sets state to be used later
     if (_tx_high[0] == '0') {
-        // FIX! HACK so always high for now 11/23/24
-        // vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_2MA);
-        // vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_2MA);
-
         // this also clears the "prev" state, so we know we'll reload all state in the si5351
         // i.e. no optimization based on knowing what we had sent before!
-        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
-        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_2MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_2MA);
     } else {
+        // FIX! make sure this is default in config
         vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
         vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
     }
@@ -872,6 +859,7 @@ void vfo_turn_on(uint8_t clk_num) {
     for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) {
         i2cWrite(reg, 0xCC);
     }
+
     // set MS0 for div_4 mode (min. division)
     i2cWriten(42, (uint8_t *)s_ms_values, 8);   
     // set MS1 for div_4 mode (min. division)
@@ -894,69 +882,82 @@ void vfo_turn_on(uint8_t clk_num) {
     memset(s_PLLB_regs_prev, 0, 8);
     si5351bx_clken = 0xff;
     memset(s_vfo_drive_strength, 0, 3);
+
     //***********************
-
-    // do a parts per billion correction?
-    uint32_t freq = XMIT_FREQUENCY;
-    if (atoi(_correction) != 0) {
-        // this will be a floor divide
-        // FIX! what range _correction will be ? -3000 to 3000
-        uint32_t orig_freq = freq;
-        freq = freq + (atoi(_correction) * freq / 1000000000UL);
-        if (VERBY[0]) {
-            Serial.printf("correction shifts %d orig freq %lu, to new freq, %lu" EOL,
-                atoi(_correction), orig_freq, freq);
-        }
-    }
-
     // FIX! HACK it to 20M
-    // freq = (uint32_t) freq << PLL_CALCULATION_PRECISION;
     // this is what it was?
-    freq = 14097000UL << PLL_CALCULATION_PRECISION;
-    // should it be this from tracker.ino?
-    freq = 14097100UL << PLL_CALCULATION_PRECISION;
-
-
+    // freq = 14097000UL
+    uint32_t freq = 14097100UL;
+    // FIX! change to XMIT_FREQUENCY..is it set at this point?
+    // freq = XMIT_FREQUENCY ; // is this freq centered in the u4b channel?
+    // do any (default 0) parts per billion correction?
+    freq = doCorrection(freq);
+    V1_printf("initial freq for vfo_set_freq_x16(), after correction, is %lu" EOL, freq);
+    freq = freq << PLL_CALCULATION_PRECISION;
     vfo_set_freq_x16(clk_num, freq);
-    // The final state is all clks running but outputs not on
+
+    // The final state is clk0/clk1 running but outputs not on
     si5351bx_clken = 0xff;
     vfo_turn_on_clk_out(clk_num);
+
+    // FIX! hmm. we need a pll reset if we turn on the clk_out
+    // where does that happen? Do one here (do we have to wait?) just in case?
+    // it was done in vfo_set_freq_x16 if we didn't have initial state
+    // or didn't change initial state?
+    // new 11/28/24
+    si5351a_reset_PLLB();
+    // wait for the pll reset?
+    sleep_ms(2000);
+
     vfo_turn_on_completed = true;
-    if (VERBY[0]) Serial.printf("vfo_turn_on END clk_num %u" EOL, clk_num);
+    V1_printf("vfo_turn_on END clk_num %u" EOL, clk_num);
 }
 
 //****************************************************
+uint32_t doCorrection(uint32_t hf_freq) {
+    uint32_t hf_freq_corrected = hf_freq;
+    if (false and atoi(_correction) != 0) {
+        // this will be a floor divide
+        // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
+        hf_freq_corrected = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
+        // if (VERBY[0]) Serial.printf("WSPR desired freq: %lu used hf_freq %u with correction %s" EOL,
+        //    XMIT_FREQUENCY, hf_freq, _correction);
+    }
+    return hf_freq_corrected;
+}
+//****************************************************
 void vfo_turn_off(void) {
-    if (VERBY[0]) Serial.println(F("vfo_turn_off START"));
-    vfo_turn_on_completed = false;
-    // if (VERBY[0]) Serial.println(F("NEVER TURNING VFO OFF (DEBU)"));
+    V1_println(F("vfo_turn_off START"));
+    // V1_println(F("NEVER TURNING VFO OFF (DEBU)"));
     // return;
     // already off successfully?
-    if (vfo_is_off()) {
-        vfo_turn_off_completed = true;
-        return;
-    }
+    if (vfo_is_off()) return;
+    vfo_turn_on_completed = false;
+    vfo_turn_off_completed = false;
 
     // disable all clk output
-    // should never do this if it's powered off
-    // if we do, we ride thru it with a -2 return?
-    // could occur if we try this too soon after it was powered on?
+    // FIX! this will fail if i2c is not working. hang if vfo is powered off?
+    // we ride thru it with a -2 return?
     si5351bx_clken = 0xff;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
 
     // sleep_ms(10);
+    // void busy_wait_us_32 (uint32_t delay_us)
+    // Busy wait wasting cycles for the given (32 bit) number 
+    // of microseconds using the default timer instance.
+
     busy_wait_us_32(10000);
     vfo_set_power_on(false);
+
     // disable the i2c
     gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
     vfo_turn_off_completed = true;
-    if (VERBY[0]) Serial.println(F("vfo_turn_off END"));
+    V1_println(F("vfo_turn_off END"));
 }
 
 //*****************************************************
 // random notes for reference, from other code
-
 // The Si5351 consists of two main stages:
 // two PLLs which are locked to the reference oscillator (a 25/27 MHz crystal)
 // and which can be set from 600 to 900 MHz,
@@ -975,14 +976,14 @@ void vfo_turn_off(void) {
 // The easiest way to determine this correction factor is to measure a 14 MHz signal
 // from one of the clock outputs (in Hz, or better resolution if you can measure it),
 // scale it to parts-per-billion,
-// then use it in the set_correction() method in future use of this particular
+// Then use it in the set_correction() method in future use of this particular
 // reference oscillator.
 
 // Once this correction factor is determined, it should not need to be measured again
 // for the same reference oscillator/Si5351 pair unless you want to redo the
 // calibration.
 // With an accurate measurement at one frequency,
-// this calibration should be good across the entire tuning range.
+// This calibration should be good across the entire tuning range.
 
 // The calibration method is called like this:
 // si5351.set_correction(-6190, SI5351_PLL_INPUT_XO);
@@ -993,10 +994,7 @@ void vfo_turn_off(void) {
 
 // One thing to note: the library is set for a 25 MHz reference crystal
 
-// correction is parts per billion for the frequency used/measured
+// Correction is parts per billion for the frequency used/measured
 // Could try a number of correction values and decide which to use
 // (try 10 WSPR with correction 10/20/50/100/500/1000?)
 
-// another source for programming comparison
-// https://dk7ih.de/a-simple-software-to-control-the-si5351a-generator-chip/
-// https://cdn-shop.adafruit.com/datasheets/Si5351.pdf

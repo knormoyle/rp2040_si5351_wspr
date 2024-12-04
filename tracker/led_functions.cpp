@@ -68,4 +68,3 @@ void flipLED(void) {
 // https://github.com/ArduinoGetStarted/output
 // https://github.com/ArduinoGetStarted/output/tree/master/examples
 
-

@@ -46,8 +46,9 @@ const int SI5351A_PLL_RESET_PLLB_RST =      (1 << 7);
 
 // FIX! why were these static?
 // static would mean you can only call it from within this translation unit
+bool reserved_reg(uint8_t reg);
 int i2cWrite(uint8_t reg, uint8_t val);     // write reg via i2c
-int i2cReadTest(uint8_t reg, uint8_t val);  // read reg via i2c
+int i2cWrRead(uint8_t reg, uint8_t val);  // read reg via i2c
 
 void vfo_init(void);  // removed static
 void vfo_set_power_on(bool turn_on);  // removed static
@@ -63,7 +64,9 @@ void si5351a_setup_multisynth0(uint32_t div);
 void vfo_set_freq_x16(uint8_t clk_number, uint32_t freq);
 void vfo_turn_on_clk_out(uint8_t clk_number);
 void vfo_turn_off_clk_out(uint8_t clk_number);
-
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength);
+
+uint32_t doCorrection(uint32_t hf_freq);
+
 
 #endif  // SI5351_FUNCTIONS_H

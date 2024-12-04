@@ -18,17 +18,19 @@
 void forceHACK(void);
 void decodeVERBY(void);
 int read_FLASH(void);
+void printFLASH(const uint8_t *buf, size_t len);
+void write_FLASH(void);
 int check_data_validity_and_set_defaults(void);
 
 void user_interface(void);
-void get_user_input(const char *prompt, char *input_variable, int max_length);
+void config_intro(void);
 void display_intro(void);
 void show_values(void);
-
-void printFLASH(const uint8_t *buf, size_t len);
-void write_FLASH(void);
 void show_TELEN_msg(void);
+void get_user_input(const char *prompt, char *input_variable, int max_length);
 
 void convertToUpperCase(char *str);
+void do_i2c_tests(void);
+void doFactoryReset();
 
 #endif

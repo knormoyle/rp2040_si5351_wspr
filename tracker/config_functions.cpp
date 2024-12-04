@@ -3,70 +3,63 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 #include <Arduino.h>
-
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "pico/stdio.h"
-// #include "class/cdc/cdc_device.h"
+#include"pico/stdlib.h"
+#include"hardware/flash.h"
 
 // for isprint()
 #include <ctype.h>
-
-#include"pico/stdlib.h"
-#include"hardware/flash.h"
 
 // my stuff
 #include "defines.h"
 #include "print_functions.h"
 #include "led_functions.h"
 #include "u4b_functions.h"
-#include "config_functions.h"
-
+#include "keyboard_functions.h"
 // just so we can do some tests?
 #include "si5351_functions.h"
 #include "i2c_functions.h"
 
+#include "config_functions.h"
 //*****************************************************
-// include the SI5351Arduino library and Wire for it
-#include "si5351.h"
-#include <Wire.h>
+// include the SI5351Arduino library and Wire for it (for testing?)
+// #include "si5351.h"
+// #include <Wire.h>
+#include <Adafruit_I2CDevice.h>
+
 //*****************************************************
-
-
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-// FIX! is the program bigger than 256K
-
-// this is 256K from start of flash
-// #define FLASH_TARGET_OFFSET (256 * 1024) // leaves 256K of space for the program
+// FIX! is the program bigger than 1M ?
 // this is 1M from start of flash
-
 #define FLASH_TARGET_OFFSET (4 * 256 * 1024) // leaves 1M of space for the program
 
 // already defined?
 // #define FLASH_SECTOR_SIZE 4096
 // #define FLASH_PAGE_SIZE 256
 
-
 //**************************************
 extern char _callsign[7];
-extern char _suffix[2];
-extern char _verbose[2];
+extern char _verbose[2]; // 0 is used to disable all. 1 is all printing for now. 2:9 same
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];
 extern char _Band[3];     // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
-extern char _devmode[2];
+extern char _devmode[2]; // unused for now
+
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
 extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 // traquito: 500 correction does  ~7 hz lower on 20M (14095.600 base freq)
 // traquito: 500 correction does ~14 hz lower on 10M (28124.600 base freq)
 
-// test only: 1 means you don't wait for starting minute from _U4B_channel ;
+// test only: 1 means you don't wait for starting minute from _U4B_channel
 // does wait for any 2 minute alignment though
 extern char _go_when_rdy[2];
+extern char _factory_reset_done[2];
 
 //**************************************
 // decodes from _Band _U4B_chan
@@ -76,35 +69,16 @@ extern char _start_minute[2];
 extern char _lane[2];
 
 extern const uint32_t DEFAULT_PLL_SYS_MHZ;
-// decode of _clock_speed
-extern uint32_t PLL_SYS_MHZ;
-// decode of _devmode
-extern bool DEVMODE;
-// decode of verbose 0-9
-extern bool VERBY[10];
+extern uint32_t PLL_SYS_MHZ; // decode of _clock_speed
+extern bool DEVMODE; // decode of _devmode
+extern bool VERBY[10]; // decode of verbose 0-9. disabled if BALLOON_MODE
+extern bool BALLOON_MODE; // this is set by setup() when it detects no USB/Serial
 
 //**************************************
-
-
-/*
-Verbosity:
-0: none
-1: temp/volts every second, message if no gps
-2: GPS status every second
-3: messages when a Tx started
-4: x-tended messages when a Tx started
-5: dump context every 20 secs
-6: show PPB every second
-7: Display GxRMC and GxGGA messages
-8: display ALL NMEA sentences from GPS module
-9: same as 8
-*/
-
-
-// #include <string.h>
-// #include <ctype.h>
-// #include <defines.h>
-// #include "pico/stdlib.h"
+// Verbosity:
+// 0: none. no use of Serial
+// 1: currently, all Serial.print*() and V0_flush()
+// 2:9 same as 1
 
 //***************************************
 // Converts string to upper case
@@ -117,32 +91,24 @@ void convertToUpperCase(char *str) {
     }
 }
 
-
 //***************************************
 // HACK for debug (force config)
 void forceHACK(void) {
     static bool HACK = true;
-    if (HACK) {
-        // HACK FIX! always true now for debug
+
+    if (HACK and not BALLOON_MODE) {
         // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
-        // recommends to always
-        // snprintf(buffer, sizeof(buffer), "%s", string);
+        // recommends to always snprintf(buffer, sizeof(buffer), "%s", string);
 
-        Serial.println(F("Forcing DEVMODE true, _devmode 1 (always for now)"));
-        snprintf(_devmode, sizeof(_devmode), "1");
-        DEVMODE = true;
-
-        // HACK FIX! always 9 now for debug
-        Serial.println(F("Forcing _verbose to 9 (always for now)"));
-        snprintf(_verbose, sizeof(_verbose), "9");
+        // HACK FIX! always 1 now for debug
+        V1_println(F("Forcing _verbose to 1 (always for now)"));
+        snprintf(_verbose, sizeof(_verbose), "1");
         decodeVERBY();
 
-        Serial.println(F("Forcing _go_when_rdy to 1 (always for now)"));
+        V1_println(F("Forcing _go_when_rdy to 1 (always for now)"));
         snprintf(_go_when_rdy, sizeof(_go_when_rdy), "1");
-
     }
 }
-
 
 //***************************************
 // Echo user input to stdout and set input_variable
@@ -150,24 +116,27 @@ void forceHACK(void) {
 // input_variable: Variable to which we want to read input <output>
 // max_length: Maximum length of input string <input>
 void get_user_input(const char *prompt, char *input_variable, int max_length) {
+    V0_println(F("get_user_input() START"));
     Watchdog.reset();
     updateStatusLED();
 
+    // BALLOON_MODE will just create an empty string, if we ever come here?
     int index = 0;
     int ch;
     // Display the prompt to the user
-    Serial.printf("%s", prompt);
-    Serial.flush();
-    while (true) {
+    V0_printf("%s", prompt);
+    V0_flush();
+    while (!BALLOON_MODE) {
         int timeout_ms = 0;
         Watchdog.reset();
+        // FIX! disable this if BALLOON_MODE
         while (!Serial.available()) {
             sleep_ms(100);
             timeout_ms += 100;
             // this will eventually watchdog reset timeout if no character?
             updateStatusLED();
             if (timeout_ms > 60 * 1000) { // 60 secs
-                Serial.println(F("ERROR: exceeded 60 secs timeout waiting for input, rebooting" EOL));
+                V0_println(F("ERROR: exceeded 60 secs timeout waiting for input, rebooting" EOL));
                 Watchdog.enable(50);  // milliseconds
                 while (true) { ; }
             }
@@ -180,61 +149,65 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
         } else if (ch == 127 || ch == 8) {
             if (index > 0) {
                 index--;
-                Serial.printf("\b \b");  // Move back, print space, move back again
+                V0_printf("\b \b");  // Move back, print space, move back again
             }
         } else if (isprint(ch)) {
             if (index < max_length - 1) {  // Ensure room for null terminator
                 input_variable[index++] = ch;
-                Serial.printf("%c", ch);  // Echo character
+                V0_printf("%c", ch);  // Echo character
             }
         }
-        Serial.flush();
+        V0_flush();
         // whenever something might have taken a long time like printing the big buffer
         updateStatusLED();
     }
-    input_variable[index] = '\0';  // Null-terminate the string
-    Serial.printf("\n");
-}
 
+    input_variable[index] = '\0';  // Null-terminate the string
+    V0_print(F(EOL));
+    V0_println(F("get_user_input() END"));
+}
 
 //***************************************
 // Hex listing of the settings FLASH to stdout
 // buf: Address of FLASH to list <input>
 // len: Length of storage to list <input>
 void printFLASH(const uint8_t *buf, size_t len) {
-    Serial.print(F(CLEAR_SCREEN BRIGHT BOLD_ON UNDERLINE_ON EOL));
-    Serial.print(F("printFLASH:" EOL));
-    Serial.print(F(BOLD_OFF UNDERLINE_OFF));
+    V0_print(F(CLEAR_SCREEN BRIGHT BOLD_ON UNDERLINE_ON EOL));
+    V0_print(F("printFLASH:" EOL));
+    V0_print(F(BOLD_OFF UNDERLINE_OFF));
 
     for (size_t i = 0; i < len; ++i) {
-        Serial.printf("%02x", buf[i]);
-        if (i % 16 == 15) Serial.print(F(EOL));
-        else Serial.print(F(" "));
+        V0_printf("%02x", buf[i]);
+        if (i % 16 == 15) {
+            V0_print(F(EOL));
+        }
+        else {
+            V0_print(F(" "));
+        }
     }
-    Serial.print(F(NORMAL));
+    V0_print(F(NORMAL));
 }
 
 //***************************************
 void config_intro(void) {
-    Serial.println(F("config_intro() START"));
+    V0_println(F("config_intro() START"));
 
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
-    Serial.println(F("test Serial.println config_intro() Serial.println()"));
+    V0_println(F("test Serial.println config_intro() Serial.println()"));
 
     // re-read the NVRAM just to see if we have any errors, and to see the VERBY decode
-
-    Serial.print(F(CLEAR_SCREEN CURSOR_HOME BRIGHT));
-    for (int i = 0; i < 10; i++) Serial.println();
-    Serial.print(F(UNDERLINE_ON));
-    Serial.println("tracker: AD6Z firmware, AG6NS 0.04 pcb, JLCPCB with *kbn* or *kbn2* bom/cpl mod");
-    Serial.println("https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker");
-    Serial.println("tracker.ino firmware version: " __DATE__ " "  __TIME__);
-    Serial.println("support: knormoyle@gmail.com or https://groups.io/g/picoballoon");
-    Serial.print(F(UNDERLINE_OFF));
-    Serial.print(F(RED));
-    Serial.println("press any key to continue");
-    Serial.print(F(NORMAL));
+    V0_print(F(CLEAR_SCREEN CURSOR_HOME BRIGHT));
+    for (int i = 0; i < 10; i++) V0_println();
+    V0_print(F(UNDERLINE_ON));
+    V0_println("tracker: AD6Z firmware, AG6NS 0.04 pcb, JLCPCB with *kbn* or *kbn2* bom/cpl mod");
+    V0_println("https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker");
+    V0_println("tracker.ino firmware version: " __DATE__ " "  __TIME__);
+    V0_println("support: knormoyle@gmail.com or https://groups.io/g/picoballoon");
+    V0_print(F(UNDERLINE_OFF));
+    V0_print(F(RED));
+    V0_println("press any key to continue");
+    V0_print(F(NORMAL));
 
     //***************
     // get all the _* config state set and fix any bad values (to defaults)
@@ -243,40 +216,21 @@ void config_intro(void) {
     // if anything got fixed to defaults, no read again
     Watchdog.reset();
     if (result == -1) {
-        Serial.println(F("WARN: read_FLASH got result -1 first time, redo. ..errors were fixed to default"));
+        V0_println(F("WARN: read_FLASH got result -1 first time, redo. ..errors were fixed to default"));
         result = read_FLASH();
     }
     Watchdog.reset();
     if (result == -1) {
-        Serial.println(F("ERROR: read_FLASH got result -1 a second time, ignore"));
+        V0_println(F("ERROR: read_FLASH got result -1 a second time, ignore"));
     }
-    //***************
 
+    //**************
+    // FIX! what happens when BALLOON_MODE and Serial isn't there .. just reboot eventually?
+    // (timeout)
+    // char drainSerialTo_CRorNL (uint32_t millis_max) {
+    // clear out any old stuff in serial input
+    char c_char = drainSerialTo_CRorNL(1000);
 
-    // wait..don't need the char user interrupted with
-    // int c = getchar_timeout_us(60000000);
-    // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
-    // int c = getchar_timeout_us(0);
-
-    int i;
-    char incomingByte = { 0 };
-    for (i = 0; i < 10*5; i++) {
-        Watchdog.reset();
-        if (!Serial.available()) {
-            sleep_ms(100);
-        }
-        else {
-            incomingByte = Serial.read();
-            Serial.println(incomingByte);
-            if (incomingByte != 13) {
-                Serial.readStringUntil(13); // empty readbuffer after good data
-            }
-            break;
-        }
-    }
-    if (i == 10*5) {
-        Serial.println("(2) Must have timed out looking for input char(s) on Serial");
-    }
     // FIX! assume this is the state it was in before config menu?
     // not always right. but loop will self-correct?
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -284,192 +238,106 @@ void config_intro(void) {
 
     Watchdog.reset();
     // string concat works here with defines.sh special strings
-    Serial.print(F("config_intro() END" CLEAR_SCREEN));
-
+    V0_print(F("config_intro() END" CLEAR_SCREEN));
 }
 
 //***************************************
 void show_TELEN_msg() {
-    Serial.print(F("show_TELEN_msg()"));
-    Serial.print(F(EOL "Telen Types:" EOL EOL));
-    Serial.print(F(BRIGHT UNDERLINE_ON));
-    Serial.print(F(EOL EOL EOL EOL "TELEN CONFIG INSTRUCTIONS:" EOL EOL));
-    Serial.print(F(UNDERLINE_OFF NORMAL));
-    Serial.print(F("* There are 4 possible TELEN values, corresponding to TELEN 1 value 1," EOL));
-    Serial.print(F("  TELEN 1 value 2, TELEN 2 value 1 and TELEN 2 value 2." EOL));
-    Serial.print(F("* Enter 4 characters (legal 0-9 or -) in TELEN_config." EOL));
-    Serial.print(F("  use a '-' (minus) to disable one or more values." EOL));
-    Serial.print(F("  example:" EOL));
-    Serial.print(F("  '----' disables all telen " EOL));
-    Serial.print(F("* example:" EOL));
-    Serial.print(F("  '01--'" EOL));
-    Serial.print(F("    Telen 1 value 1 to type 0" EOL));
-    Serial.print(F("    Telen 1 value 2 to type 1" EOL));
-    Serial.print(F("    disables all of TELEN 2" EOL));
+    V0_print(F("show_TELEN_msg()"));
+    V0_print(F(EOL "Telen Types:" EOL EOL));
+    V0_print(F(BRIGHT UNDERLINE_ON));
+    V0_print(F(EOL EOL EOL EOL "TELEN CONFIG INSTRUCTIONS:" EOL EOL));
+    V0_print(F(UNDERLINE_OFF NORMAL));
+    V0_print(F("* There are 4 possible TELEN values, corresponding to TELEN 1 value 1," EOL));
+    V0_print(F("  TELEN 1 value 2, TELEN 2 value 1 and TELEN 2 value 2." EOL));
+    V0_print(F("* Enter 4 characters (legal 0-9 or -) in TELEN_config." EOL));
+    V0_print(F("  use a '-' (minus) to disable one or more values." EOL));
+    V0_print(F("  example:" EOL));
+    V0_print(F("  '----' disables all telen " EOL));
+    V0_print(F("* example:" EOL));
+    V0_print(F("  '01--'" EOL));
+    V0_print(F("    Telen 1 value 1 to type 0" EOL));
+    V0_print(F("    Telen 1 value 2 to type 1" EOL));
+    V0_print(F("    disables all of TELEN 2" EOL));
 
-    Serial.print(F(BRIGHT UNDERLINE_ON));
-    Serial.print(F(EOL "Telen Types:" EOL EOL));
-    Serial.print(F(UNDERLINE_OFF NORMAL));
-    Serial.print(F("-: disabled, 0: ADC0, 1: ADC1, 2: ADC2, 3: ADC3" EOL));
+    V0_print(F(BRIGHT UNDERLINE_ON));
+    V0_print(F(EOL "Telen Types:" EOL EOL));
+    V0_print(F(UNDERLINE_OFF NORMAL));
+    V0_print(F("-: disabled, 0: ADC0, 1: ADC1, 2: ADC2, 3: ADC3" EOL));
 
-    Serial.print(F("4: minutes since boot, 5: minutes since GPS fix aquired" EOL));
-    Serial.print(F("6-9: OneWire temperature sensors 1 though 4" EOL));
-    Serial.print(F("A: custom: OneWire temperature sensor 1 hourly low/high" EOL));
-    Serial.print(F("B-Z: reserved for future I2C devices etc" EOL));
-    Serial.print(F(EOL "(ADC values are in units of mV)" EOL));
-    Serial.print(F("See the Wiki for more info.n" EOL));
-}
-
-//*****************************************************
-void do_test_si5351() {
-    if (VERBY[0]) Serial.println(F("do_test_si5351() START" EOL));
-    Serial.flush();
-    bool i2c_found;
-
-    // be sure to disable all the other nonsense we have
-    // modify the library to start Wire with our SDA/SCL pins
-    Si5351 si5351;
-    if (VERBY[0]) Serial.println(F("do_test_si5351() si5351 object created" EOL));
-    Serial.flush();
-    // do we crash here after creating the object?
-
-    if (VERBY[0]) Serial.println(F("do_test_si5351() si5351 object init starting" EOL));
-    Serial.flush();
-    sleep_ms(1000);
-
-    i2c_found = si5351.init(SI5351_CRYSTAL_LOAD_8PF, 0, 0);
-    if (VERBY[0]) Serial.println(F("do_test_si5351() si5351 object init completed" EOL));
-    Serial.flush();
-    if (!i2c_found) Serial.println(F("Device not found on I2C bus!" EOL));
-    Serial.flush();
-
-    // Set CLK0 to output 14 MHz
-    si5351.set_freq(1400000000ULL, SI5351_CLK0);
-
-    // Set CLK1 to output 175 MHz
-    si5351.set_ms_source(SI5351_CLK1, SI5351_PLLB);
-    si5351.set_freq_manual(17500000000ULL, 70000000000ULL, SI5351_CLK1);
-
-    // Query a status update and wait a bit to let the Si5351 populate the
-    // status flags correctly.
-    si5351.update_status();
-    if (VERBY[0]) Serial.println(F("do_test_si5351() END"));
+    V0_print(F("4: minutes since boot, 5: minutes since GPS fix aquired" EOL));
+    V0_print(F("6-9: OneWire temperature sensors 1 though 4" EOL));
+    V0_print(F("A: custom: OneWire temperature sensor 1 hourly low/high" EOL));
+    V0_print(F("B-Z: reserved for future I2C devices etc" EOL));
+    V0_print(F(EOL "(ADC values are in units of mV)" EOL));
+    V0_print(F("See the Wiki for more info.n" EOL));
 }
 
 //********************************************
-// 'Z' command causes this to execute
-void do_i2c_scan_tests(void) {
+// '@' command causes this to execute
+void do_i2c_tests(void) {
     // quick and dirty way to execute some different tests
     if (true) {
-        do_test_si5351();
-    } else if (false) {
-        // in i2c_functions.cpp
-        i2c_scan();
-    } else if (false) {
-        // in i2c_functions.cpp
-        i2c_scanner_setup();
+        i2c_scan_both();
     } else {
+        V0_println(F(EOL "Can we read and write these?"));
 
-        // FIX! should I do readback/compare on the first couple
-        // writes? to make sure the vfo is powered on and the writes complete?
-        // pass the read back for the compare? or pass a bool back for pass/fail
-        Serial.println(F(EOL "Can we read and write this one:"));
-
-
-        Serial.println(F(EOL "SI5351A_MULTISYNTH0_BASE reset state 0xe8 ?"));
+        // FIX! should we update this to the actual read+write test in i2c_test
+        V0_println(F(EOL "SI5351A_MULTISYNTH0_BASE reset state 0xe8 ?"));
+        // FIX! are these comparing to expected read value?
+        // or should I use i2c_function.cpp's i2cWrReadTest()
         i2cWrite(SI5351A_MULTISYNTH0_BASE, 0x55);
-        i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0x00);
+        i2cWrRead(SI5351A_MULTISYNTH0_BASE, 0x00);
         i2cWrite(SI5351A_MULTISYNTH0_BASE, 0xaa);
-        i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0x00);
+        i2cWrRead(SI5351A_MULTISYNTH0_BASE, 0x00);
         i2cWrite(SI5351A_MULTISYNTH0_BASE, 0xe8);
-        i2cReadTest(SI5351A_MULTISYNTH0_BASE, 0x00);
+        i2cWrRead(SI5351A_MULTISYNTH0_BASE, 0x00);
 
+        V0_println(F(EOL "Other reads:"));
+        V0_println(F(EOL "SI5351A_MULTISYNTH1_BASE"));
+        i2cWrRead(SI5351A_MULTISYNTH1_BASE, 0);
+        V0_println(F(EOL "SI5351A_CLK0_CONTROL"));
+        i2cWrRead(SI5351A_CLK0_CONTROL, 0);
+        V0_println(F(EOL "SI5351A_CLK1_CONTROL"));
+        i2cWrRead(SI5351A_CLK1_CONTROL, 0);
+        V0_println(F(EOL "SI5351A_OUTPUT_ENABLE_CONTROL"));
+        i2cWrRead(SI5351A_OUTPUT_ENABLE_CONTROL, 0);
 
-        Serial.println(F(EOL "Other reads:"));
-        Serial.println(F(EOL "SI5351A_MULTISYNTH1_BASE"));
-        i2cReadTest(SI5351A_MULTISYNTH1_BASE, 0);
-        Serial.println(F(EOL "SI5351A_CLK0_CONTROL"));
-        i2cReadTest(SI5351A_CLK0_CONTROL, 0);
-        Serial.println(F(EOL "SI5351A_CLK1_CONTROL"));
-        i2cReadTest(SI5351A_CLK1_CONTROL, 0);
-        Serial.println(F(EOL "SI5351A_OUTPUT_ENABLE_CONTROL"));
-        i2cReadTest(SI5351A_OUTPUT_ENABLE_CONTROL, 0);
-
-        Serial.println(F(EOL "SI5351A read reg 0x00"));
-        i2cReadTest(0, 0x00); // Device Status. D7 should be 1
-        Serial.println(F(EOL "SI5351A read reg 0x00"));
-        i2cReadTest(0, 0x00); // Device Status. D7 should be 1
+        V0_println(F(EOL "SI5351A read reg 0x00"));
+        i2cWrRead(0, 0x00); // Device Status. D7 should be 1
+        V0_println(F(EOL "SI5351A read reg 0x00"));
+        i2cWrRead(0, 0x00); // Device Status. D7 should be 1
     }
 }
 
 //***************************************
 void user_interface(void) {
-    // Does println do better compared to my Serial.print() with LINEND as \r\n ??
-    // Serial.println()
-    // Prints data to the serial port as human-readable ASCII text
-    // followed by a carriage return character (ASCII 13, or '\r')
-    // and a newline character (ASCII 10, or '\n').
-    // Serial.println(val)
-    // Serial.println(val, format)
-    // Serial: serial port object.
-    // val: the value to print - any data type
-
-    // format can be DEC, HEX, OCT, BIN ..prints as ASCII-encoded.
-    // format: specifies the number base (for integral data types)
-    // or number of decimal places (for floating point types)
-
-    // seems like we can use it
-    Serial.println(F("user_interface() START"));
+    // Does println do better compared to my V0_print() with LINEND as \r\n ??
+    // V0_println() does \r\n line ending?
+    V0_println(F("user_interface() START"));
     sleep_ms(100);
-    // we have a different blinking pattern now?
-    // turnOnLED(true);
+    // FIX! do we change the led blink pattern during config?
     config_intro();
     show_values();
 
-    for (;;) {
-        Serial.print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
+    while (!BALLOON_MODE) {
+        V0_print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
         // no comma to concat strings
         // F() to keep string in flash, not ram
-        Serial.println(F("(println) Enter single char command: /, X, C, U, V, T, K, A, P, D, R, G"));
-        Serial.print(F(UNDERLINE_OFF NORMAL));
+        V0_println(F("Enter single char command: /, X, C, U, V, T, K, A, P, D, R, G"));
+        V0_print(F(UNDERLINE_OFF NORMAL));
 
-        // getchar_timeout_us(): doesn't work linker problem
-        // int c = getchar_timeout_us(60000000);
-        // PICO_ERROR_GENERIC PICO_ERROR_TIMEOUT ??
-        // int c = getchar_timeout_us(0);
-        // look at c for error
-
-        int i;
-        char incomingByte = '\0';
-        for (i = 0; i < 100*5; i++) {
-            Watchdog.reset();
-            if (!Serial.available()) {
-                sleep_ms(100);
-            }
-            else {
-                incomingByte = Serial.read();
-                Serial.println(incomingByte);
-                if (incomingByte != 13) {
-                    Serial.readStringUntil(13); // empty readbuffer if there's data
-                }
-                break;
-            }
-        }
-        if (i == 100*5) {
-            Serial.println("(2) Must have timed out looking for input char(s) on Serial");
-        }
         Watchdog.reset();
-        char c_char = (char) incomingByte;
+        // char drainSerialTo_CRorNL (uint32_t millis_max);
+        char c_char = getOneChar(15000);
 
-        // FIX! how does this timeout
-        // Serial.printf("%s\n", c_char);
-
-        // if (c == PICO_ERROR_TIMEOUT) {
+        // V0_printf("%s" EOL, c_char);
         if (c_char == 0) {
-            Serial.printf("%s\n\n (3) Timeout waiting for input, ..rebooting\n", CLEAR_SCREEN);
+            V0_print(F(CLEAR_SCREEN EOL));
+            V0_print(F("(3) Timeout waiting for input, ..rebooting" EOL));
             sleep_ms(100);
-            Watchdog.enable(500);  // milliseconds
-            for (;;) { ; }
+            // milliseconds
+            Watchdog.enable(500);  for (;;) { ; }
         }
 
         // make char capital either way
@@ -480,14 +348,20 @@ void user_interface(void) {
         bool good;
         switch ( c_char ) {
             case '/':
-                Serial.print(F("Rebooting to bootloader mode..drag/drop a uf2 per normal" EOL));
-                Serial.print(F("after reboot: drag/drop a uf2 the normal way to the drive that shows" EOL));
-                Serial.print(F("You should be able to leave usb connected. If not, disconnect/connect%" EOL));
-                Serial.printf("Goodbye!%s", CLEAR_SCREEN);
+                V0_print(F("Rebooting to bootloader mode..drag/drop a uf2 per normal" EOL));
+                V0_print(F("after reboot: drag/drop a uf2 the normal way to the drive that shows" EOL));
+                V0_print(F("You should be able to leave usb connected. If not, disconnect/connect%" EOL));
+                V0_print(F("Goodbye ..rebooting after '/' command" EOL));
+                V0_print(F(CLEAR_SCREEN EOL));
                 Watchdog.enable(2000);  // milliseconds
                 for (;;) { ; }
+            case '*':
+                V0_print(F("Do factory reset of config state to default values (and reboot)" EOL));
+                doFactoryReset(); // doesn't return, reboots
+                break;
             case 'X':
-                Serial.printf("%s\n\nGoodbye ..rebooting" EOL, CLEAR_SCREEN);
+                V0_print(F("Goodbye ..rebooting after 'X' command" EOL));
+                V0_print(F(CLEAR_SCREEN EOL));
                 Watchdog.enable(500);  // milliseconds
                 for (;;) { ; }
             case 'C':
@@ -523,53 +397,55 @@ void user_interface(void) {
                 // this is the only config where we don't let something bad get into flash
                 // don't change the pll, just check. change it on reboot
                 if (PLL_SYS_MHZ < 100 || PLL_SYS_MHZ > 250) {
-                    Serial.printf("user_interface: _clock_speed %lu illegal. Using %lu instead" EOL, 
+                    V0_printf("user_interface: _clock_speed %lu illegal. Using %lu instead" EOL,
                         PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
 
                     // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
                     // recommends to always
                     // snprintf(buffer, sizeof(buffer), "%s", string);
-                    // I guess this is okay for when we source from fixed size string literals
                     PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
                     snprintf(_clock_speed, sizeof(_clock_speed), "%lu",  PLL_SYS_MHZ);
                     write_FLASH();
                 }
 
-                // https://www.raspberrypi.com/documentation/pico-sdk/high_level.html#gab3a273e837ba1947bb5fd8fc97cf47e5 
-                // says "Note that not all clock frequencies are possible; 
-                // it is preferred that you use src/rp2_common/hardware_clocks/scripts/vcocalc.py 
+                // https://www.raspberrypi.com/documentation/pico-sdk/high_level.html#gab3a273e837ba1947bb5fd8fc97cf47e5
+                // says "Note that not all clock frequencies are possible;
+                // it is preferred that you use src/rp2_common/hardware_clocks/scripts/vcocalc.py
                 // to calculate the parameters for use with set_sys_clock_pll".
-                // You probably want to have a read of section 2.15 of 
-                // https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf 
+                // Probably want to have a read of section 2.15 of
+                // https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
                 // for more information about the PLLs and clock dividers.
+
                 // do only full Mhz work?
                 // https://github.com/raspberrypi/pico-sdk/issues/1450
-                // None of the frequencies can be exactly matched exactly by the PLL so set_sys_clock_khz fails - 
-                // as per the docs, you can use vco_calc.py to find out settings 
+                // None of the frequencies can be exactly matched exactly by the PLL so set_sys_clock_khz fails -
+                // as per the docs, you can use vco_calc.py to find out settings
                 // for set_sys_clock_pll for settings that are close.
                 // absolutely can do non Mhz frequencies (just not those between 125 and 126)
                 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/scripts/vcocalc.py
 
-                // bool check_sys_clock_khz ( 
+                // bool check_sys_clock_khz (
                 // uint32_t freq_khz, uint * vco_freq_out, uint * post_div1_out, uint * post_div2_out)
                 uint vco_freq_out[1];
                 uint post_div1_out[1];
-                uint post_div2_out[1]; 
+                uint post_div2_out[1];
                 freq_khz = PLL_SYS_MHZ * 1000UL;
-                Serial.printf("user_interface: checking with check_sys_clock_khz(%lu)" EOL, freq_khz);
+                V0_printf("user_interface: checking with check_sys_clock_khz(%lu)" EOL, freq_khz);
 
                 good = check_sys_clock_khz(freq_khz, vco_freq_out, post_div1_out, post_div2_out);
-                if (good) 
-                    Serial.printf("user_interface: good with check_sys_clock_khz(%lu)" EOL, freq_khz);
-                else
-                    Serial.printf("user_interface: bad with check_sys_clock_khz(%lu)" EOL, freq_khz);
+                if (good) {
+                    V0_printf("user_interface: good with check_sys_clock_khz(%lu)" EOL, freq_khz);
+                }
+                else {
+                    V0_printf("user_interface: bad with check_sys_clock_khz(%lu)" EOL, freq_khz);
+                }
 
                 // use vcocalc.py to calculate parameters with set_sys_clock_pll()
-                // static bool set_sys_clock_khz ( uint32_t freq_khz, bool required 
+                // static bool set_sys_clock_khz ( uint32_t freq_khz, bool required
                 if (!set_sys_clock_khz(freq_khz, false)) {
-                    Serial.print("user_interface:");
-                    Serial.printf(" RP2040 can't change clock to %lu Mhz.", PLL_SYS_MHZ);
-                    Serial.printf(" Using %lu instead" EOL, DEFAULT_PLL_SYS_MHZ);
+                    V0_print("user_interface:");
+                    V0_printf(" RP2040 can't change clock to %lu Mhz.", PLL_SYS_MHZ);
+                    V0_printf(" Using %lu instead" EOL, DEFAULT_PLL_SYS_MHZ);
                     PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
                     snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
                     write_FLASH();
@@ -577,7 +453,7 @@ void user_interface(void) {
                 break;
             case 'A':
                 get_user_input("Enter Band (10,12,15,17,20):" EOL, _Band, sizeof(_Band));
-                // redo channel selection if we change bands, 
+                // redo channel selection if we change bands,
                 // since U4B definition changes per band
                 write_FLASH();
                 XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
@@ -592,48 +468,48 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'R':
-                Serial.print(F("Don't cause more than approx. 43 hz 'correction' on a band.")); 
-                Serial.print(F("effect varies per band?" EOL));
+                V0_print(F("Don't cause more than approx. 43 hz 'correction' on a band." EOL));
+                V0_print(F("effect varies per band?" EOL));
                 get_user_input("Enter ppb Correction to si5351: (-3000 to 3000)" EOL,
                     _correction, sizeof(_correction));
                 write_FLASH();
                 break;
             case 'G':
-                Serial.printf("test only: 1 means you don't wait for starting minute from _U4B_channel");
-                Serial.printf("does wait for any 2 minute alignment though");
+                V0_print(F("test only: 1 means you don't wait for starting minute from _U4B_channel" EOL));
+                V0_print(F("does wait for any 2 minute alignment though" EOL));
                 get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1):",
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
                 break;
-            case 'Z':
-                do_i2c_scan_tests();
+            case '@':
+                do_i2c_tests();
                 break;
 
             case 13:  break;
             case 10:  break;
             default:
-                Serial.printf("%s\nYou pressed: %c - (0x%02x), invalid choice!", CLEAR_SCREEN, c_char, c_char);
+                V0_printf("You pressed: %c - (0x%02x), invalid choice!" EOL, c_char, c_char);
+                V0_print(F(CLEAR_SCREEN));
                 sleep_ms(1000);
                 break;
         }
         check_data_validity_and_set_defaults();
         show_values();
-        Serial.println(F("user_interface() END"));
+        V0_println(F("user_interface() END"));
     }
 }
 
 //********************************************
-
 // Reads flash where the user settings are saved
 // prints hexa listing of data
 // calls function which check data validity
 
 // background
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
-#define FLASH_BYTES_USED 28
+#define FLASH_BYTES_USED 29
 int read_FLASH(void) {
     Watchdog.reset();
-    if (VERBY[0]) Serial.print("read_FLASH START" EOL);
+    V0_print("read_FLASH START" EOL);
     // there is no internal eeprom on rp2040
     // Therefore, do not frequently update the EEPROM or you may prematurely wear out the flash.
     // https://arduino-pico.readthedocs.io/en/latest/eeprom.html
@@ -696,6 +572,7 @@ int read_FLASH(void) {
     strncpy(_devmode,      flash_target_contents + 20, 1); _devmode[1] = 0;
     strncpy(_correction,   flash_target_contents + 21, 6); _correction[6] = 0;
     strncpy(_go_when_rdy,  flash_target_contents + 27, 1); _go_when_rdy[1] = 0;
+    strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
 
@@ -722,40 +599,51 @@ int read_FLASH(void) {
     return result;
 }
 
+//**************************************
 void decodeVERBY(void) {
-    // additional decodes from the base nvram state variables
+    // can't use Serial at all, if BALLOON_MODE
+    // VERBY[0] guarantees that, even for config
+    // Currently VERBY[1] covers everything else
+    if (BALLOON_MODE) {
+        for (int i = 0; i < 10 ; i++) VERBY[i] = false;
+        return;
+    }
+    // always set VERBY[0] if not BALLOON_MODE, so we 
+    // can see the config output
+    VERBY[0] = true;
+
+    // if _verbose is currently illegal (haven't updated NVRAM?, set everything
     if (_verbose[0] < '0' && _verbose[0] > '9') {
         // set everything if it's illegal ascii
-        for (int i = 0; i < 10 ; i++) {
-            VERBY[i] = true;
-        }
+        for (int i = 0; i < 10 ; i++) VERBY[i] = true;
+        return;
     }
-    else {
-        int j = _verbose[0] - '0' ; // '0' is 48
-        // j and everything below
-        // 0 is ascii 48
-        // decode '0' to '9' to thermometer code VERBY
-        for (int i = 0; i < 10 ; i++) {
-            // so for verbose 9, we'' get 0 thru 9 set to true
-            // for verbose 0 we'll just get 0
-            if (i <= j) VERBY[i] = true;
-            else VERBY[i] = false;
-        }
-    }
-    Serial.printf("decode _verbose %s to VERBY[9:0]" EOL, _verbose);
-    for (int i = 0; i < 10 ; i++) {
-        // if (VERBY[i]) Serial.printf("VERBY[%d] true" EOL, i);
-        // else Serial.printf("VERBY[%d] false" EOL, i);
-        ;
+    int j = _verbose[0] - '0' ; // '0' is 48
+    // j and everything below
+    // 0 is ascii 48
+    // decode '1' to '9' to thermometer code VERBY
+    for (int i = 1; i < 10 ; i++) {
+        // so for verbose 9, we'' get 0 thru 9 set to true
+        // for verbose 0 we'll just get 0
+        if (i <= j) VERBY[i] = true;
+        else VERBY[i] = false;
     }
 
-    if (VERBY[0]) Serial.print("read_FLASH START" EOL);
+    V0_printf("decoded _verbose %s to VERBY[9:0]" EOL, _verbose);
+    if (false) {
+        for (int i = 0; i < 10 ; i++) {
+            V0_printf("VERBY[%d] %x" EOL, i, VERBY[i]);
+        }
+    }
+
+    V0_print("read_FLASH START" EOL);
 }
+
 //***************************************
 // Write the user entered data into FLASH
 void write_FLASH(void) {
     Watchdog.reset();
-    if (VERBY[0]) Serial.print("write_FLASH START" EOL);
+    V0_print("write_FLASH START" EOL);
     // Flash is initially all zeroes
     char data_chunk[FLASH_BYTES_USED] = { 0 };  // enough to cover what we use here
     uint8_t udata_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
@@ -771,6 +659,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 20, _devmode, 1);
     strncpy(data_chunk + 21, _correction, 6);
     strncpy(data_chunk + 27, _go_when_rdy, 1);
+    strncpy(data_chunk + 28, _factory_reset_done, 1);
 
     // you could theoretically write 16 pages at once (a whole sector).
     // don't interrupt
@@ -795,9 +684,10 @@ void write_FLASH(void) {
 
     flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
     restore_interrupts(ints);
-    if (VERBY[0]) Serial.print("write_FLASH END" EOL);
+    V0_print("write_FLASH END" EOL);
 }
 
+//**************************************
 // Checks validity of user settings and if something is wrong,
 // sets "factory defaults" and writes it back to FLASH
 // create result to return
@@ -805,9 +695,10 @@ int check_data_validity_and_set_defaults(void) {
     int result = 1;
     // set reasonable defaults if memory was uninitialized or has bad values
     // create 'result' to return
+
+    //*****************
     // do full legal callsign check? (including spaces at end)
     // be sure to null terminate so we can print the callsign
-
     // space is not legal in the callsign here? but can have nulls.
     // make shortest legal callsign == 4 chars?
     // https://dxplorer.net/wspr/msgtypes.html
@@ -820,8 +711,8 @@ int check_data_validity_and_set_defaults(void) {
     // 5 - can only be a letter or left blank <space>
     // 6 - can only be a letter or left blank <space>
 
-    // when you send to wspr
-    // JTEncode handles this
+    // JTEncode handles the cases that need leading or trailing spaces for wspr validity
+    // we don't create spaces here
     // A6ZZZ needs a leading space when you send it
     // 99 needs a leading space
     // 99A needs a leading space
@@ -832,7 +723,6 @@ int check_data_validity_and_set_defaults(void) {
     // 999ABC is legal
 
     // work from the back until you find the first number
-
     // don't allow <space> to be legal anywhere
     // ignore extra trailing nulls
     int clength = strlen(_callsign);
@@ -858,20 +748,22 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     if (callsignBad) {
-        Serial.printf(EOL "_callsign %s is not supported/legal, initting to AB1CDE" EOL, _callsign);
+        V0_printf(EOL "_callsign %s is not supported/legal, initting to AB1CDE" EOL, _callsign);
         snprintf(_callsign, sizeof(_callsign), "AB1CDE");
         write_FLASH();
         result = -1;
     }
 
+    //*****************
     // change to strcpy for null terminate
     if (_verbose[0] == 0 || _verbose[0] < '0' || _verbose[0] > '9') {
-        Serial.printf(EOL "_verbose %s is not supported/legal, initting to 1" EOL, _verbose);
+        V0_printf(EOL "_verbose %s is not supported/legal, initting to 1" EOL, _verbose);
         snprintf(_verbose, sizeof(_verbose), "1");
         write_FLASH();
         result = -1;
     }
 
+    //*****************
     // 0-9 and - are legal. _
     // make sure to null terminate
     bool bad = false;
@@ -884,13 +776,14 @@ int check_data_validity_and_set_defaults(void) {
         }
     }
     if (bad) {
-        Serial.printf(EOL "_TELEN_config %s is not supported/legal, initting to ----" EOL,
+        V0_printf(EOL "_TELEN_config %s is not supported/legal, initting to ----" EOL,
             _TELEN_config);
         snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
         write_FLASH();
         result = -1;
     }
 
+    //*****************
     // _clock_speed
     // keep the upper limit at 250 to avoid nvram getting
     // a freq that won't work. will have to load flash nuke uf2 to clear nram
@@ -904,31 +797,45 @@ int check_data_validity_and_set_defaults(void) {
     // hmm. I suppose we could call this routine to fix nvram at the beginning, so if the
     // clock gets fixed, then the defaults will get fixed (where errors exist)
     // be sure to null terminate
-    
-    PLL_SYS_MHZ = atoi(_clock_speed);
-    if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 100 || PLL_SYS_MHZ > 250) {
-        Serial.printf(EOL "_clock_speed %lu is not legal, initting to %lu" EOL, 
-            PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
+    clength = strlen(_clock_speed);
+    bool clock_speedBad = false;
+    // this also covers the null case (strlen 0)
+    if (clength > 3) {
+        clock_speedBad = true;
+    } else {
+        for (int i = 0; i <= 2; i++) {
+            if (_clock_speed[i] < '0' && _clock_speed[i] > '9') {
+                V0_printf(EOL "check_data_validity...(): (1) illegal _clock_speed: %s" EOL, _clock_speed);
+                clock_speedBad = true;
+            }
+        }
+    }
+    if (!clock_speedBad) {
+        PLL_SYS_MHZ = atoi(_clock_speed);
+        if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 100 || PLL_SYS_MHZ > 250) {
+            V0_printf(EOL "check_data_validity...(): (2) illegal _clock_speed: %s" EOL,_clock_speed);
+            clock_speedBad = true;
+        }
+
+        if (!set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, false)) {
+            // http://jhshi.me/2014/07/11/print-uint64-t-properly-in-c/index.html
+            V0_printf(EOL "check_data_validity...(): RP2040 can't change clock to %lu Mhz" EOL, PLL_SYS_MHZ);
+            clock_speedBad = true;
+        }
+    }
+
+    if (clock_speedBad) {
+        V0_printf(EOL "_clock_speed %s is not legal, initting to %lu" EOL, _clock_speed, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
         snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
         write_FLASH();
         result = -1;
     }
 
-    if (!set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, false)) {
-        // http://jhshi.me/2014/07/11/print-uint64-t-properly-in-c/index.html
-        Serial.printf(EOL "check_data_validity...(): RP2040 can't change clock to %lu Mhz. initting to %lu" EOL,
-            PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
-        PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
-        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
-        write_FLASH();
-        result = -1;
-    }
-
-    //*********
+    //*****************
     // be sure to null terminate
     if (_U4B_chan[0] == 0 || atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
-        Serial.printf(EOL "_U4B_chan %s is not supported/legal, initting to 599" EOL, _U4B_chan);
+        V0_printf(EOL "_U4B_chan %s is not supported/legal, initting to 599" EOL, _U4B_chan);
         snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
         write_FLASH();
         // this will set _lane, _id13, _start_minute
@@ -936,8 +843,7 @@ int check_data_validity_and_set_defaults(void) {
         XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
         result = -1;
     }
-    //****************
-    // kevin 10_30_24
+    //*****************
     // null returns 0
     switch (atoi(_Band)) {
         case 10: break;
@@ -946,7 +852,7 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            Serial.printf("_Band %s is not supported/legal, initting to 20" EOL, _Band);
+            V0_printf("_Band %s is not supported/legal, initting to 20" EOL, _Band);
             snprintf(_Band, sizeof(_Band), "20");
             write_FLASH();
             // FIX! stop using _32_dialfreqhz
@@ -957,81 +863,114 @@ int check_data_validity_and_set_defaults(void) {
             result = -1;
             break;
     }
+    //*****************
     if (_tx_high[0] != '0' && _tx_high[0] != '1') {
-        Serial.printf(EOL "_tx_high %s is not supported/legal, initting to 1" EOL, _tx_high);
+        V0_printf(EOL "_tx_high %s is not supported/legal, initting to 1" EOL, _tx_high);
         snprintf(_tx_high, sizeof(_tx_high), "1");
         write_FLASH();
         result = -1;
     }
+    //*****************
     if (_devmode[0] != '0' && _devmode[0] != '1') {
-        Serial.printf(EOL "_devmode %s is not supported/legal, initting to 0" EOL, _devmode);
+        V0_printf(EOL "_devmode %s is not supported/legal, initting to 0" EOL, _devmode);
         snprintf(_devmode, sizeof(_devmode), "0");
         write_FLASH();
         result = -1;
     }
+    //*****************
     // what does atoi() when null is first char? returns 0
     // detect that case to get ascii 0 in there
     if (_correction[0]==0 || atoi(_correction) < -3000 || atoi(_correction) > 3000) {
         // left room for 6 bytes
-        Serial.printf(EOL "_correction %s is not supported/legal, initting to 0" EOL, _correction);
+        V0_printf(EOL "_correction %s is not supported/legal, initting to 0" EOL, _correction);
         snprintf(_correction, sizeof(_correction), "0");
         write_FLASH();
         result = -1;
     }
+    //*****************
     if (_go_when_rdy[0] != '0' && _go_when_rdy[0] != '1') {
-        Serial.printf(EOL "_go_when_rdy %s is not supported/legal, initting to 0" EOL, _go_when_rdy);
+        V0_printf(EOL "_go_when_rdy %s is not supported/legal, initting to 0" EOL, _go_when_rdy);
         snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
         write_FLASH();
         result = -1;
     }
-
-
+    //*****************
+    if (_factory_reset_done[0] != '0' && _factory_reset_done[0] != '1') {
+        V0_printf(EOL "_factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, _factory_reset_done);
+        doFactoryReset(); // no return, reboots
+    }
     return result;
 }
 
 //***************************************
-// Function that writes out the current set values of parameters
+// print the current config
 void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
-    if (VERBY[0]) Serial.println(F("show_values() START" EOL));
+    V0_println(F("show_values() START" EOL));
 
-    // Serial.printf("%s%s%s\r\n", CLEAR_SCREEN, UNDERLINE_ON, BRIGHT);
+    // V0_print(F(EOL, CLEAR_SCREEN, UNDERLINE_ON, BRIGHT));
     // since these macros are "" strings in defines.h, they will just concat here
     // no commas necessary?
 
-    Serial.print(F("Current values:\r\n"));
+    V0_print(F("Current values:" EOL));
 
-    Serial.printf("callsign:%s\r\n", _callsign);
-    Serial.printf("U4B channel:%s", _U4B_chan);
-    Serial.printf(" (id13:%s", _id13);
-    Serial.printf(" start Minute:%s", _start_minute);
-    Serial.printf(" lane:%s)\r\n", _lane);
-    Serial.printf("verbose:%s\r\n", _verbose);
-    Serial.printf("TELEN config:%s\r\n", _TELEN_config);
-    Serial.printf("clock speed:%sMhz\r\n", _clock_speed);
-    Serial.printf("band:%s\r\n", _Band);
-    Serial.printf("DEVMODE:%s\r\n", _devmode);
-    Serial.printf("correction:%s\r\n", _correction);
-    Serial.printf("go_when_rdy:%s\r\n", _go_when_rdy);
-    Serial.printf("XMIT_FREQUENCY:%lu\r\n", XMIT_FREQUENCY);
+    V0_printf("callsign:%s" EOL, _callsign);
+    V0_printf("U4B channel:%s", _U4B_chan);
+    V0_printf(" (id13:%s", _id13);
+    V0_printf(" start Minute:%s", _start_minute);
+    V0_printf(" lane:%s)" EOL, _lane);
+    V0_printf("verbose:%s" EOL, _verbose);
+    V0_printf("TELEN config:%s" EOL, _TELEN_config);
+    V0_printf("clock speed:%sMhz" EOL, _clock_speed);
+    V0_printf("band:%s" EOL, _Band);
+    V0_printf("DEVMODE:%s" EOL, _devmode);
+    V0_printf("correction:%s" EOL, _correction);
+    V0_printf("go_when_rdy:%s" EOL, _go_when_rdy);
+    V0_printf("factory_reset_done:%s" EOL, _factory_reset_done);
+    V0_printf("XMIT_FREQUENCY:%lu" EOL, XMIT_FREQUENCY);
 
-    Serial.println(F(EOL "Valid commands:" EOL));
+    V0_println(F(EOL "Valid commands:" EOL));
 
-    // FIX! could we use Serial.printlnln and avoid the \r\n ?
-    Serial.println(F("X: eXit configuration and reboot"));
-    Serial.println(F("/: reboot to bootloader mode to drag/drop new .uf2"));
-    Serial.println(F("C: change Callsign (6 char max)"));
-    Serial.println(F("U: change U4b channel # (0-599)"));
-    Serial.println(F("A: change band (10,12,15,17,20 default 20)"));
-    Serial.println(F("V: verbose (0 for no messages, 9 for all)"));
-    Serial.println(F("T: TELEN config"));
-    Serial.printf(   "K: clock speed  (default: %lu" EOL,  DEFAULT_PLL_SYS_MHZ);
-    Serial.println(F("D: DEVMODE to enable messaging (default: 0)"));
-    Serial.println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
-    Serial.println(F("G: go_when_ready (callsign tx starts with any modulo 2 starting minute (default: 0)"));
-    Serial.println(F("Z: run test: currently i2cReadTest()"));
+    V0_println(F("X: eXit configuration and reboot"));
+    V0_println(F("/: reboot to bootloader mode to drag/drop new .uf2"));
+    V0_println(F("*: factory reset all config values"));
+    V0_println(F("@: run i2c test or scan: which, currently?"));
+    V0_println(F("C: change Callsign (6 char max)"));
+    V0_println(F("U: change U4b channel # (0-599)"));
+    V0_println(F("A: change band (10,12,15,17,20 default 20)"));
+    V0_println(F("V: verbose (0 for no messages, 9 for all)"));
+    V0_println(F("T: TELEN config"));
+    V0_printf(   "K: clock speed  (default: %lu" EOL,  DEFAULT_PLL_SYS_MHZ);
+    V0_println(F("D: DEVMODE to enable messaging (default: 0)"));
+    V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
+    V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));
 
-    if (VERBY[0]) Serial.println(F("show_values() END"));
+    V0_println(F("show_values() END"));
 }
 
+//*****************************************************
+void doFactoryReset() {
+    V0_print(F("doFactoryReset() START"));
+    snprintf(_callsign, sizeof(_callsign), "AB1CDE");
+    snprintf(_verbose, sizeof(_verbose), "1");
+    snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
+    snprintf(_clock_speed, sizeof(_clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
+    snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
+    snprintf(_Band, sizeof(_Band), "20");
+    snprintf(_tx_high, sizeof(_tx_high), "1");
+    snprintf(_devmode, sizeof(_devmode), "0");
+    snprintf(_correction, sizeof(_correction), "0");
+    snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
+    // when we read_FLASH, if this is 0, we set everything to default
+    // or if user command is '*'
+    snprintf(_factory_reset_done, sizeof(_go_when_rdy), "1");
 
+    // What about the side decodes? Don't worry, just reboot
+    write_FLASH();
+    V0_print(F("doFactoryReset() END"));
+
+    // reboot
+    V0_print(F("Goodbye ..rebooting after doFactorReset()" EOL));
+    Watchdog.enable(500);  // milliseconds
+    for (;;) { ; }
+}
 //*****************************************************

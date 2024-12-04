@@ -7,7 +7,7 @@
 #define KEYBOARD_FUNCTIONS_H
 #include <stdint.h>
 
-bool drainSerialTo_CRorNL (void);
+char drainSerialTo_CRorNL (uint32_t millis_max);
+char getOneChar (uint32_t millis_max);
 
 #endif
-

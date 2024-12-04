@@ -15,7 +15,6 @@
 
 #include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
 
-extern const int BattPin;
 extern uint64_t GpsTimeToLastFix; // milliseconds
 
 extern char t_course[4];      // 3 bytes
@@ -56,6 +55,7 @@ extern int TELEN1_val2;
 extern int TELEN2_val1;
 extern int TELEN2_val2;
 extern char _TELEN_config[5];
+
 extern char _tx_high[2];      // 1 byte
 extern char _callsign[7];     // 6 bytes
 
@@ -72,7 +72,7 @@ int legalPowerSize = 19;
 
 //****************************************************
 void snapForTelemetry(void) {
-    if (VERBY[0]) Serial.println(F("snapForTelemetry START"));
+    V1_println(F("snapForTelemetry START"));
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
     if (!gps.location.isValid()) return;
@@ -101,8 +101,8 @@ void snapForTelemetry(void) {
     int adc_val_a = 0;
 
     // FIX! does this not apply to pi pico?
-    // Reads the value from the specified analog pin. 
-    // The input range can be changed using analogReference(), 
+    // Reads the value from the specified analog pin.
+    // The input range can be changed using analogReference(),
     // While the resolution can be changed analogReadResolution().
     // takes 100usec
 
@@ -128,7 +128,6 @@ void snapForTelemetry(void) {
     // library PicoAnalogCorrection
     // linear calibration and arithmetic mean of an analog pin
 
-    //*********************************
     // okay (it's getting analogReadTemp() from readTemp())
     // readTemp does 30 analogReadTemp() and averages
     float tempC_c = readTemp();
@@ -138,11 +137,9 @@ void snapForTelemetry(void) {
     // readTemp END tempC_a 82 tempC_b 24
     //  tempC_a 437 tempC_b 24 tempC_c 24
 
-    //*********************************
-    if (VERBY[0]) Serial.printf("tempC_a %.f tempC_b %.f tempC_c %.f" EOL,
+    V1_printf("tempC_a %.f tempC_b %.f tempC_c %.f" EOL,
         tempC_a, tempC_b, tempC_c);
     float tempC = tempC_c;
-    //*********************************
 
     // tempC_c is best? 10*3 = 30 reads though ..tempC_b is just 3 reads
     // turn floats into strings
@@ -151,6 +148,7 @@ void snapForTelemetry(void) {
     if (tempC > 999.9) tempC = 999.9;
     snprintf(t_temp, sizeof(t_temp), "%6.1f", tempC);
 
+    //*********************************
     // examples
     // 1 hPA = 100 PA
     // 11 km (36,000 ft): 226 hPa
@@ -178,11 +176,13 @@ void snapForTelemetry(void) {
     if (voltage > 99.99) voltage = 99.99;
     snprintf(t_voltage, sizeof(t_voltage), "%5.2f", voltage);
 
+    // FIX! could use this for some TELEN telemetry?
     int hdop = gps.hdop.isValid() ? (int) gps.hdop.value() : 0;
-    if (hdop < 0) hdop = 0; // hundredths. < 100 is very good
-    if (hdop > 999) hdop = 999;
+    if (hdop < 0) hdop = 0; // hundredths. <100 is very good
+    if (hdop > 999) hdop = 999; // can get >999 from the gps, but we don't tx it (usually?)
     snprintf(t_hdop, sizeof(t_hdop), "%3d", hdop);
 
+    // FIX! could use this for some TELEN telemetry?
     int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
     if (sat_count < 0) sat_count = 0;
     if (sat_count > 99) sat_count = 99;
@@ -201,20 +201,23 @@ void snapForTelemetry(void) {
     if (lon > 180) lon = 180;
     snprintf(t_lon, sizeof(t_lon), "%.7f", lon);
 
+    //*********************************
     char grid6[7] = { 0 };
-    // FIX! are lat/lon double
-    // get_mh_6 modifies grid6 here with the grid6_ptr
-    // foo(char* s) and foo(char s[]) are exactly equivalent to one another. 
+    // get_mh_6 modifies grid6 here with the grid6 ptr
+
+    // Note passing char array to function:
+    // foo(char* s) and foo(char s[]) are exactly equivalent to one another.
     // In both cases, you pass the array with its name:
     // char array[4];
     // foo(array); // regardless of whether foo accepts a char* or a char[]
 
+    // the gps.location.lat/lng are double
     get_mh_6(grid6, gps.location.lat(), gps.location.lng());
-    
+
     // two letters, two digits, two letters
     // base 18, base 18, base 10, base 10, base 24, base 24
     // [A-R][A-R][0-9][0-9][A-X][A-X]
-    // I guess clamp to AA00AA if illegal? (easy to find errors?)
+    // I guess clamp to AA00AA if illegal? (will be easy to find errors in website reports?)
     bool bad_grid = false;
     if (grid6[0] < 'A' || grid6[0] > 'R') bad_grid = true;
     if (grid6[1] < 'A' || grid6[1] > 'R') bad_grid = true;
@@ -227,10 +230,12 @@ void snapForTelemetry(void) {
         snprintf(grid6, 7, "%6s", "AA00AA");
 
     snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
-    // just for consistency with everything else
+
+    //*********************************
+    // snap callsign just for consistency with everything else
     snprintf(t_callsign, sizeof(t_callsign), "%s", _callsign);
 
-    // string literals are null terminated
+    //*********************************
     int power_int;
     if (_tx_high[0] == '1') power_int = 7; // legal
     else power_int = 3; // legal
@@ -252,51 +257,56 @@ void snapForTelemetry(void) {
     if (!found) power_int = 0;
     snprintf(t_power, sizeof(t_power), "%2d", power_int);
 
+    //*********************************
     int tx_cnt_0_val = tx_cnt_0;
     if (tx_cnt_0 < 0) tx_cnt_0_val = 0;
+    // do we need to count more than 99 in a day?
     if (tx_cnt_0 > 99) tx_cnt_0_val = 99;
+    // we have room for 999
     snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%3d", tx_cnt_0_val);
 
+    //*********************************
     // snap for consistency with everything else (all at one instant in time)
     t_TELEN1_val1 = TELEN1_val1;
     t_TELEN1_val2 = TELEN1_val2;
     t_TELEN2_val1 = TELEN2_val1;
     t_TELEN2_val2 = TELEN2_val2;
 
-    if (VERBY[0]) {
-        Serial.printf("t_************" EOL);
-        Serial.printf("t_tx_count_0 %3s " EOL, t_tx_count_0);
-        Serial.printf("t_callsign %6s" EOL, t_callsign);
-        Serial.printf("t_grid6 %6s" EOL, t_grid6);
-        Serial.printf("t_power %2s" EOL, t_power);
-        Serial.printf("t_sat_count %2s " EOL, t_sat_count);
-        Serial.printf("t_lat %12s " EOL, t_lat);
-        Serial.printf("t_lon %12s " EOL, t_lon);
-        Serial.printf("t_altitude %6s " EOL, t_altitude);
-        Serial.printf("t_voltage %5s " EOL, t_voltage);
-        Serial.printf("t_temp %6s" EOL, t_temp);
-        Serial.printf("t_course %3s " EOL, t_course);
-        Serial.printf("t_speed %3s " EOL, t_speed);
-        Serial.printf("t_temp_ext %7s" EOL, t_temp);
-        Serial.printf("t_pressure %7s " EOL, t_pressure);
-        Serial.printf("t_TELEN1_val1 %d " EOL, t_TELEN1_val1);
-        Serial.printf("t_TELEN1_val2 %d " EOL, t_TELEN1_val2);
-        Serial.printf("t_TELEN2_val1 %d " EOL, t_TELEN2_val1);
-        Serial.printf("t_TELEN2_val2 %d " EOL, t_TELEN2_val2);
-        Serial.printf("t_************" EOL);
-    }
-    if (VERBY[0]) Serial.println(F("snapForTelemetry END"));
+    //*********************************
+    V1_printf("t_************" EOL);
+    V1_printf("t_tx_count_0 %3s " EOL, t_tx_count_0);
+    V1_printf("t_callsign %6s" EOL, t_callsign);
+    V1_printf("t_grid6 %6s" EOL, t_grid6);
+    V1_printf("t_power %2s" EOL, t_power);
+    V1_printf("t_sat_count %2s " EOL, t_sat_count);
+    V1_printf("t_lat %12s " EOL, t_lat);
+    V1_printf("t_lon %12s " EOL, t_lon);
+    V1_printf("t_altitude %6s " EOL, t_altitude);
+    V1_printf("t_voltage %5s " EOL, t_voltage);
+    V1_printf("t_temp %6s" EOL, t_temp);
+    V1_printf("t_course %3s " EOL, t_course);
+    V1_printf("t_speed %3s " EOL, t_speed);
+    V1_printf("t_temp_ext %7s" EOL, t_temp);
+    V1_printf("t_pressure %7s " EOL, t_pressure);
+    V1_printf("t_TELEN1_val1 %d " EOL, t_TELEN1_val1);
+    V1_printf("t_TELEN1_val2 %d " EOL, t_TELEN1_val2);
+    V1_printf("t_TELEN2_val1 %d " EOL, t_TELEN2_val1);
+    V1_printf("t_TELEN2_val2 %d " EOL, t_TELEN2_val2);
+    V1_printf("t_************" EOL);
+
+    V1_println(F("snapForTelemetry END"));
 }
 
 //****************************************************
+// FIX! are these assigned by anything yet? No?
 static float onewire_values[10] = { 0 };
 
 void process_TELEN_data(void) {
-    if (VERBY[0]) Serial.println(F("process_TELEN_data START"));
-    // FIX! where do these come from
-    // minutes_since_boot
+    V1_println(F("process_TELEN_data START"));
     // minutes_since_GPS_acquistion (should this be last time to fix);
-    // we don't send stuff out if we don't get gps acquistion. so minutes since fix doesn't really matter?
+    // we don't send stuff out if we don't get gps acquistion.
+    // so minutes since fix doesn't really matter?
+
     // 3.3 * 1000. the 3.3 is from vref,
     // the 1000 is to convert to mV.
     // the 12 bit shift is because thats resolution of ADC
@@ -321,13 +331,22 @@ void process_TELEN_data(void) {
                 telen_values[i] = round((float)analogRead(3) * conversionFactor * 3.0f);
                 break;
             case '4':
-                telen_values[i] = timeSinceBoot_secs; break;  // seconds since running
+                telen_values[i] = timeSinceBoot_secs; // seconds since running
                 break;
-            case '5': telen_values[i] = GpsTimeToLastFix; break;
-            case '6': { ; }
-            case '7': { ; }
-            case '8': { ; }
+            case '5':
+                telen_values[i] = GpsTimeToLastFix; // FIX! is always time to fix, now?
+                break;
+            case '6':
+                telen_values[i] = tx_cnt_0;
+                break;
+            case '7':
+                telen_values[i] = atoi(t_sat_count);
+                break;
+            case '8':
+                telen_values[i] = atoi(t_hdop); // hundredths 
+                break;
             case '9': { ; }
+                // FIX! what are these onewire_values?
                 if (onewire_values[_TELEN_config[i]-'6'] > 0)
                     telen_values[i] = onewire_values[_TELEN_config[i] -'6'] * 100;
                 else
@@ -335,7 +354,6 @@ void process_TELEN_data(void) {
                 break;
         }
     }
-    // onewire_values
     // will get sent as TELEN #1 (extended Telemetry) (a third packet in the U4B protocol)
     TELEN1_val1 = telen_values[0];
     // max values are 630k and 153k for val and val2
@@ -344,5 +362,5 @@ void process_TELEN_data(void) {
     TELEN2_val1 = telen_values[2];
     // max values are 630k and 153k for val and val2
     TELEN2_val2 = telen_values[3];
-    if (VERBY[0]) Serial.println(F("process_TELEN_data END"));
+    V1_println(F("process_TELEN_data END"));
 }

@@ -60,4 +60,23 @@ void yPrintln(const char* pformat, ...);
 #define BOLD_OFF ""
 #endif
 
+
+#define V0_println if (VERBY[0]) Serial.println
+#define V0_printf if (VERBY[0]) Serial.printf
+#define V0_print if (VERBY[0]) Serial.print
+#define V0_flush if (VERBY[0]) Serial.flush
+#define V0_chars_available VERBY[0] && Serial.available
+
+
+#define V1_println if (VERBY[1]) Serial.println
+#define V1_printf if (VERBY[1]) Serial.printf
+#define V1_print if (VERBY[1]) Serial.print
+#define V1_flush if (VERBY[1]) Serial.flush
+
+#define V2_println if (VERBY[2]) Serial.println
+#define V2_printf if (VERBY[2]) Serial.printf
+#define V2_print if (VERBY[2]) Serial.print
+#define V2_flush if (VERBY[2]) Serial.flush
+
 #endif
+

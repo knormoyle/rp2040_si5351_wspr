@@ -10,6 +10,12 @@
 
 #include "print_functions.h"
 
+// possible alternatives to V0_print* defines that look at VERBY[*] state
+// 1) not using of these, but just in case of change
+// define macros. this would not be dynamic
+// https://github.com/107-systems/107-Arduino-Debug/blob/main/src/107-Arduino-Debug.hpp
+
+// 2) call a function? complicated?
 // va_start stdarg https://www.tutorialspoint.com/c_standard_library/c_macro_va_start.htm
 // https://en.wikipedia.org/wiki/Variadic_macro_in_the_C_preprocessor
 

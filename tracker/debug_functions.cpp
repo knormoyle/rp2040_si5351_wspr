@@ -31,7 +31,7 @@ extern bool VERBY[10];
 // why was this static?
 // is this used for signed or unsigned?
 void printInt(uint64_t val, bool valid, int len) {
-    if (!VERBY[0]) return;
+    if (!VERBY[1]) return;
     char sz[32] = "*****************";
 
     // FIX! should this really be %ld? why not %d
@@ -52,29 +52,29 @@ void printInt(uint64_t val, bool valid, int len) {
     // puts blanks after the null char for the rest of the buffer?
     for (int i = strlen(sz); i < len; ++i) sz[i] = ' ';
     if (len > 0) sz[len - 1] = ' ';
-    Serial.print(sz);
+    V1_print(sz);
 
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }
 
 // why was this static
-// with arduino, can't we just use printf to stdout rather than Serial.print() ?
+// with arduino, can't we just use printf to stdout rather than V1_print() ?
 void printDateTime(TinyGPSDate &d, TinyGPSTime &t) {
-    if (!VERBY[0]) return;
+    if (!VERBY[1]) return;
     char sz[32];
     if (!d.isValid()) {
-        Serial.print(F("********** "));
+        V1_print(F("********** "));
     } else {
         snprintf(sz, sizeof(sz), "%02d/%02d/%02d ", d.month(), d.day(), d.year());
-        Serial.print(sz);
+        V1_print(sz);
     }
 
     if (!t.isValid()) {
-        Serial.print(F("******** "));
+        V1_print(F("******** "));
     } else {
         snprintf(sz, sizeof(sz), "%02d:%02d:%02d ", t.hour(), t.minute(), t.second());
-        Serial.print(sz);
+        V1_print(sz);
     }
     printInt(d.age(), d.isValid(), 5);
     // whenever something might have taken a long time like printing
@@ -82,11 +82,11 @@ void printDateTime(TinyGPSDate &d, TinyGPSTime &t) {
 }
 
 // why was this static
-// with arduino, can't we just use printf to stdout rather than Serial.print() ?
+// with arduino, can't we just use printf to stdout rather than V1_print() ?
 void printStr(const char *str, int len) {
-    if (!VERBY[0]) return;
+    if (!VERBY[1]) return;
     int slen = strlen(str);
-    for (int i = 0; i < len; ++i) Serial.print(i < slen ? str[i] : ' ');
+    for (int i = 0; i < len; ++i) V1_print(i < slen ? str[i] : ' ');
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }
@@ -94,24 +94,24 @@ void printStr(const char *str, int len) {
 
 // why was this static?
 void printFloat(float val, bool valid, int len, int prec) {
-    if (!VERBY[0]) return;
+    if (!VERBY[1]) return;
 
     if (!valid) {
-    while (len-- > 1) Serial.print('*');
-        Serial.print(' ');
+    while (len-- > 1) V1_print('*');
+        V1_print(' ');
         // add 1 more space? (to cover too many digits?)
-        Serial.print(' ');
+        V1_print(' ');
     } else {
-        Serial.print(val, prec);
+        V1_print(val, prec);
         int vi = abs((int)val);
         int flen = prec + (val < 0.0 ? 2 : 1);  // . and -
         flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
 
         // FIX! should this be <= ? (kevin)
-        for (int i = flen; i < len; ++i) Serial.print(' ');
+        for (int i = flen; i < len; ++i) V1_print(' ');
     }
     // kevin add 1 more space? we somehow did too many digits above?
-    Serial.print(' ');
+    V1_print(' ');
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }
@@ -136,6 +136,7 @@ static char logBuffer[LOG_BUFFER_SIZE] = { 0 };
 // pformat: printf style format
 // ... argument list to print
 void StampPrintf(const char* pformat, ...) {
+    if (!VERBY[1]) return;
     static uint32_t sTick = 0;
 
     uint64_t tm_us = to_us_since_boot(get_absolute_time());
@@ -183,7 +184,7 @@ void StampPrintf(const char* pformat, ...) {
     // will the message fit even and empty buffer?
     bool ignore = false;
     if ((j + j2 + 1) > LOG_BUFFER_SIZE) {
-        Serial.printf(
+        V1_printf(
             EOL "ERROR: LOG_BUFFER_SIZE %d, is too small for j + j2 + 1 = %d, "
             "timestamp %s message %s and EOL. ..ignoring" EOL EOL,
             LOG_BUFFER_SIZE, j + j2 + 1, timestamp, message);
@@ -196,11 +197,11 @@ void StampPrintf(const char* pformat, ...) {
     snprintf(timestamp, sizeof(timestamp),
         "%02lud%02lu:%02lu:%02lu.%06llu [%04lu] ",
         tm_day, tm_hour, tm_min, tm_sec, tm_us, sTick++);
-    Serial.printf(
+    V1_printf(
             EOL "ERROR: LOG_BUFFER_SIZE %d, i %d, adding j + j2 + 1 = %d, "
             "has no room for timestamp %s message %s (+ EOL)" EOL EOL,
             LOG_BUFFER_SIZE, i, j + j2 + 1, timestamp, message);
-        Serial.println(F("..flushing by discarding all of logBuffer first"));
+        V1_println(F("..flushing by discarding all of logBuffer first"));
         logBuffer[0] = 0;
         i = 0;
     }
@@ -216,9 +217,10 @@ void StampPrintf(const char* pformat, ...) {
 // Direct output to UART is very slow so we will do it in CPU idle times
 // and not in time critical functions
 void DoLogPrint() {
+    if (!VERBY[1]) return;
     Watchdog.reset();
     if (logBuffer[0] != 0) {
-        Serial.println(logBuffer);
+        V1_println(logBuffer);
         logBuffer[0] = 0;  // Clear the buffer. no need to zero the whole thing.
     }
     // whenever something might have taken a long time like printing the big buffer

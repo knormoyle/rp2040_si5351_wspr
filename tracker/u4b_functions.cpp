@@ -14,13 +14,11 @@
 //********************************
 // the key output that is used to pwm rf ..162 symbols that are 4-FSK
 extern uint32_t XMIT_FREQUENCY;
-extern bool DEVMODE;
 extern bool VERBY[10];
 
 //********************************
 // t_* (was: telemetry_buff) is a snapshot of consistent-in-time data used to
-// generated encoded telemetry, spread out over a later time. 
-// (like 1 to 3 more tx)
+// generated encoded telemetry, spread out over a later time. (like 1 to 3 more tx)
 
 // multiple wspr transmissions then can be combined to recreate the single
 // consistent snapshot grid4 plus subsquare for grid6,
@@ -149,9 +147,10 @@ uint32_t init_rf_freq(char *_Band, char *_lane) {
             default: XMIT_FREQUENCY += 100UL;
         }
 
-    if (VERBY[0]) Serial.printf(EOL "rf_freq_init _Band %s BASE_FREQ_USED %lu XMIT_FREQUENCY %lu" EOL,
-        _Band, BASE_FREQ_USED, XMIT_FREQUENCY);
-    return XMIT_FREQUENCY;
+        // printf uint32_t with %u
+        V1_printf(EOL "rf_freq_init _Band %s BASE_FREQ_USED %lu XMIT_FREQUENCY %lu " EOL,
+            _Band, BASE_FREQ_USED, XMIT_FREQUENCY);
+        return XMIT_FREQUENCY;
 }
 
 /*
@@ -209,10 +208,8 @@ txBand is:
 void process_chan_num(char *_id13, char *_start_minute, char *_lane, char *_Band, char *_U4B_chan) {
     int u4bChannel = atoi(_U4B_chan);
     if (u4bChannel < 0 || u4bChannel > 599) {
-        if (VERBY[0]) {
-            Serial.printf("ERROR: bad _U4B_chan %d ..using 599" EOL, u4bChannel);
-            u4bChannel = 599;
-        }
+        V1_printf("ERROR: bad _U4B_chan %d ..using 599" EOL, u4bChannel);
+        u4bChannel = 599;
     }
             
     _id13[0]='1';
@@ -256,27 +253,27 @@ void process_chan_num(char *_id13, char *_start_minute, char *_lane, char *_Band
 void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power, 
     char *t_grid6, char *t_altitude, char *t_temp, char *t_voltage, char *t_speed) {
 
-    if (VERBY[0]) Serial.printf( 
+    V1_printf( 
         "u4b_encode_char START t_grid6 %s t_altitude %s t_temp %s 5_voltage %s t_speed %s" EOL,
         t_grid6, t_altitude, t_temp, t_voltage, t_speed);
 
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
-
+    
     if (t_grid6[4] < 'A' || t_grid6[4] > 'X') {
-        if (VERBY[0]) Serial.printf("ERROR: bad t_grid6[4] %s" EOL, t_grid6);
+        V1_printf("ERROR: bad t_grid6[4] %s" EOL, t_grid6);
         t_grid6[1] = 'A';
     }
     if (t_grid6[5] < 'A' || t_grid6[5] > 'X') {
-        if (VERBY[0]) Serial.printf("ERROR: bad t_grid6[5] %s" EOL, t_grid6);
+        V1_printf("ERROR: bad t_grid6[5] %s" EOL, t_grid6);
         t_grid6[5] = 'A';
     }
     uint8_t grid5Val = t_grid6[4] - 'A';
     uint8_t grid6Val = t_grid6[5] - 'A';
 
     // modulo 20 for altitude. integer
-    // t_altitude is saved as ascii decimal 
-    int altitudeVal = (atoi(t_altitude) / 20);
+    // decimal
+    int altitudeVal = (int) t_altitude / 20;
     // there are only 1068 encodings for altitude..clamp to max (or min)
     if (altitudeVal < 0) altitudeVal = 0; 
     // this will be a floor divide: t_altitude is int
@@ -317,8 +314,6 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     // these are stored as float strings (so is pressure)
     double tempC   = atof(t_temp);
     double voltage = atof(t_voltage);
-    // these are stored as integer strings
-    int speed = atoi(t_speed);
 
     // handle possible illegal range (double wrap on tempC?).
     // should it clamp at the bounds? Yes
@@ -334,9 +329,9 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     int voltageNum = (int) (round ((voltage - 3.00) / .05) + 20) % 40; // should only 3 to 4.95
 
     // FIX! kl3cbr did encoding # of satelites into knots.
-    // t_speed is 3 ascii digits representing integer
+    // t_speed is integer
     // max t_speed could be 999 ?
-    int speedKnotsNum = speed / 2;
+    int speedKnotsNum = (int)t_speed / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
     if (speedKnotsNum < 0) speedKnotsNum = 0; 
@@ -382,9 +377,8 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     snprintf(hf_grid4, 5, "%4s", grid4);
     snprintf(hf_power, 3, "%2s", power);
 
-    if (VERBY[0]) Serial.printf("u4b_encode_std created: hf_callsign %s hf_grid %s hf_power %s)" EOL,
+    V1_printf("u4b_encode_std created: hf_callsign %s hf_grid %s hf_power %s)" EOL,
         hf_callsign, hf_grid4, hf_power);
-
 }
 
 //********************************************************************
@@ -392,7 +386,7 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
 void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power, 
     uint32_t t_telen_val1, uint32_t t_telen_val2, bool for_telen2) {
 
-    if (VERBY[0]) Serial.printf("u4b_encode_telen() START t_telen_val1 %lu t_telen_val2 %lu" EOL,
+    V1_printf("u4b_encode_telen() START t_telen_val1 %lu t_telen_val2 %lu" EOL,
             t_telen_val1, t_telen_val2);
 
     //********************************************
@@ -468,8 +462,6 @@ void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power,
     snprintf(hf_grid4, 5, "%4s", grid4);
     snprintf(hf_power, 3, "%2s", power);
 
-    if (VERBY[0]) Serial.printf("u4b_encode_telen() END hf_callsign %s hf_grid4 %s hf_power %s" EOL,
+    V1_printf("u4b_encode_telen() END hf_callsign %s hf_grid4 %s hf_power %s" EOL,
         hf_callsign, hf_grid4, hf_power);
-
 }
-
