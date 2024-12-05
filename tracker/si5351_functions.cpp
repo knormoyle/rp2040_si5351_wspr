@@ -998,3 +998,26 @@ void vfo_turn_off(void) {
 // Could try a number of correction values and decide which to use
 // (try 10 WSPR with correction 10/20/50/100/500/1000?)
 
+
+
+/*
+re: 25 or 26 or 27mhz into si5351a
+
+The reference oscillator may be 25 or 27MHz. I have not found much information on which to use and why. I am sure that it has to do with the multiple frequencies that may be derived.
+
+QRP Labs states: "In [our] module, a 27MHz crystal is used. This frequency is chosen because it is possible to configure the chip to produce the exact 1.46Hz tone spacing for WSPR, on any amateur radio band from 2200m (136kHz) to 2m (145MHz). A 25MHz crystal cannot provide WSPR tone spacing on the 2m band.
+
+I am sure that there are many more considerations that are outside of my knowledge base. My use is to supplement the frequency range of my Rigol DG822 Function Generator = 25MHz for general hobbyist use.
+
+
+Re: Si5351A Freq Synth- 25MHz or 27MHz Reference Oscillator and Why? Arduino Project
+« Reply #1 on: March 02, 2023, 07:42:24 pm »
+You need to look at the Si5351 divider structure to understand this, but here's a quick overview:
+The '5351 has a PLL with a range from 600 to 900 MHz, and two dividers.  These are "fractional dividers", where the divisor is in the form of A + (B / C), and in most cases can provide a high degree of resolution.  One divider is in the PLL feedback loop, and the other divides the PLL output to provide the desired clock output.  This output fractional divider has a minimum value of 8, which limits the output frequency to 900/8 or 112.5 MHz. 
+
+But there are also integer output divisors available: 4, and 6.  Setting the output divider to 4 gives you a max output freq of 225 MHz.  You are now limited to using the PLL feedback divider for frequency adjustment, and while there are tricks you can play with the divider fractions, some reference frequencies make this easier than others.
+
+So 27 MHz is a good frequency, but unless you care about exact WSPR tone step frequencies 25 MHz is probably just as good.  I know the Si5351 spec doesn't say I can do it, but I usually use a 10 MHz external oscillator to drive the chip and that also works great.  You need to understand the dividers when you choose a frequency.
+
+BTW, there are two identical PLL/divider sections in this chip (I only described one of them), and additional dividers used to drop the output frequency beyond what the fractional divider can do by itself.  And The PLL range typically goes beyond the guaranteed range, by quite a bit.  It also has settable output delay (useful for phase control), settable output drive strength, and some very effective jitter attenuators.  
+*/

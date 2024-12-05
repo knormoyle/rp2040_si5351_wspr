@@ -21,6 +21,7 @@
 #include "keyboard_functions.h"
 // just so we can do some tests?
 #include "si5351_functions.h"
+#include "wspr_functions.h"
 #include "i2c_functions.h"
 
 #include "config_functions.h"
@@ -70,6 +71,13 @@ extern char _lane[2];
 
 extern const uint32_t DEFAULT_PLL_SYS_MHZ;
 extern uint32_t PLL_SYS_MHZ; // decode of _clock_speed
+
+// PWM stuff gets recalc'ed if PLL_SYS_MHZ changes
+extern uint32_t PWM_DIV;
+extern uint32_t PWM_WRAP_CNT;
+// this is fixed
+extern const uint32_t INTERRUPTS_PER_SYMBOL;
+
 extern bool DEVMODE; // decode of _devmode
 extern bool VERBY[10]; // decode of verbose 0-9. disabled if BALLOON_MODE
 extern bool BALLOON_MODE; // this is set by setup() when it detects no USB/Serial
@@ -94,7 +102,7 @@ void convertToUpperCase(char *str) {
 //***************************************
 // HACK for debug (force config)
 void forceHACK(void) {
-    static bool HACK = true;
+    static bool HACK = false;
 
     if (HACK and not BALLOON_MODE) {
         // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
@@ -206,7 +214,6 @@ void config_intro(void) {
     V0_println("support: knormoyle@gmail.com or https://groups.io/g/picoballoon");
     V0_print(F(UNDERLINE_OFF));
     V0_print(F(RED));
-    V0_println("press any key to continue");
     V0_print(F(NORMAL));
 
     //***************
@@ -229,6 +236,7 @@ void config_intro(void) {
     // (timeout)
     // char drainSerialTo_CRorNL (uint32_t millis_max) {
     // clear out any old stuff in serial input
+    // V0_println("press any key to continue");
     char c_char = drainSerialTo_CRorNL(1000);
 
     // FIX! assume this is the state it was in before config menu?
@@ -388,7 +396,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'K':
-                get_user_input("Enter clock speed (100-250): " EOL, _clock_speed, sizeof(_clock_speed));
+                get_user_input("Enter clock speed (45-250): " EOL, _clock_speed, sizeof(_clock_speed));
                 write_FLASH();
                 PLL_SYS_MHZ = atoi(_clock_speed);
                 // frequencies like 205 mhz will PANIC,
@@ -396,7 +404,7 @@ void user_interface(void) {
                 // should detect the failure and change the nvram, otherwise we're stuck even on reboot
                 // this is the only config where we don't let something bad get into flash
                 // don't change the pll, just check. change it on reboot
-                if (PLL_SYS_MHZ < 100 || PLL_SYS_MHZ > 250) {
+                if (PLL_SYS_MHZ < 45 || PLL_SYS_MHZ > 250) {
                     V0_printf("user_interface: _clock_speed %lu illegal. Using %lu instead" EOL,
                         PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
 
@@ -407,6 +415,7 @@ void user_interface(void) {
                     snprintf(_clock_speed, sizeof(_clock_speed), "%lu",  PLL_SYS_MHZ);
                     write_FLASH();
                 }
+
 
                 // https://www.raspberrypi.com/documentation/pico-sdk/high_level.html#gab3a273e837ba1947bb5fd8fc97cf47e5
                 // says "Note that not all clock frequencies are possible;
@@ -575,6 +584,8 @@ int read_FLASH(void) {
     strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
+    // recalc
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 
     // FIX! we should decode the _Band/_U4B_chan and set any ancillary decode vars?
     // any XMIT_FREQUENCY ?
@@ -812,7 +823,7 @@ int check_data_validity_and_set_defaults(void) {
     }
     if (!clock_speedBad) {
         PLL_SYS_MHZ = atoi(_clock_speed);
-        if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 100 || PLL_SYS_MHZ > 250) {
+        if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 45 || PLL_SYS_MHZ > 250) {
             V0_printf(EOL "check_data_validity...(): (2) illegal _clock_speed: %s" EOL,_clock_speed);
             clock_speedBad = true;
         }
@@ -827,10 +838,15 @@ int check_data_validity_and_set_defaults(void) {
     if (clock_speedBad) {
         V0_printf(EOL "_clock_speed %s is not legal, initting to %lu" EOL, _clock_speed, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+        // recalc
+
         snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
         write_FLASH();
         result = -1;
     }
+
+    // always recalc these for the current PLL_SYS_MHZ
+    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 
     //*****************
     // be sure to null terminate
@@ -939,7 +955,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_println(F("A: change band (10,12,15,17,20 default 20)"));
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
-    V0_printf(   "K: clock speed  (default: %lu" EOL,  DEFAULT_PLL_SYS_MHZ);
+    V0_printf(   "K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
     V0_println(F("D: DEVMODE to enable messaging (default: 0)"));
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));

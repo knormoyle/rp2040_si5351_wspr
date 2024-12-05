@@ -89,7 +89,6 @@
 // setTime() use moved to gps_functions.cpp
 // libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 
-// do we use minute() here?
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 
 #include <MemoryFree.h>
@@ -260,7 +259,8 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // works going from 9600 to 19200
 // reduced broadcast works now, with 3 constellations
 // 670 chars with 396 ms duration. going back to 9600
-extern const int SERIAL2_BAUD_RATE = 19200;
+extern const int SERIAL2_BAUD_RATE = 9600;
+// extern const int SERIAL2_BAUD_RATE = 19200;
 
 // can't seem to recover to 9600 after trying 38400? full cold reset not working?
 // need to unplug usb to get back to 9600
@@ -439,13 +439,16 @@ void setup() {
     // absolute_time_diff_us (Depends on Children, Looks SMP Safe/Thread Safe)
     // get_absolute_time (Depends on Children, Looks SMP Safe/Thread Safe)
 
+    // to_ms_since_boot (absolute_time_t t)
+ 	// Convert a timestamp into a number of milliseconds since boot.
+
     // to_us_since_boot (Looks SMP Safe/Thread Safe)
-    // update_us_since_boot (Looks SMP Safe/Thread Safe)
+
+    // static bool time_reached (absolute_time_t t)
+ 	// Check if the specified timestamp has been reached.
+
     // time_reached (Depends on Children, Looks SMP Safe/Thread Safe)
     // busy_wait_until (Depends on Children, Looks SMP Safe/Thread Safe)
-    // tight_loop_contents (NoOp, SMP Safe/Thread Safe)
-    // make_timeout_time_us (Depends on Children, Looks SMP Safe/Thread Safe)
-    // delayed_by_us (Depends on Children, Looks SMP Safe/Thread Safe)
 
     // loop on this and leave if once we get Serial.available()
     // otherwise just stay here! This will give us a test
@@ -454,22 +457,16 @@ void setup() {
 
     // FIX! this forces going to the user interface always on boot. don't want this
     // for balloon, although it will time out there eventually
+
     // FIX! in case user is frantically trying to get to the config menu to avoid setting clock speed or ??
     // if anything was found by incomingByte above, go to the config menu
     // (potentially a balloon weird case would timeout)
 
-    // wait 10 secs for Serial to exist
-    //turn off VERBY[9:0] and DEVMODE
-    // if it doesn't exist, then leave them VERBY[9:0] and DEVMODE off
-    // if it does exist read nvram and set decode VERBY and DEVMODE
-    // set CORE1_PROCEED true, to let core1 start going in setup.
-    // CORE1_PROCEED starts as false
-    // set BALLOON_MODE true (to affect VERBY decode later (disables all)
     BALLOON_MODE = true;
     decodeVERBY(); // BALLOON_MODE forces all false
     DEVMODE = false;
     while (!Serial) {
-        // hmm is Watchdog threadsafe? maybe watch out for that!
+        // hmmm.. is Watchdog threadsafe? maybe watch out for that!
         Watchdog.reset();
         updateStatusLED();
         // No race here with anyone looking at it
@@ -481,15 +478,27 @@ void setup() {
     updateStatusLED();
     bool found_any = false;
     if (Serial) {
+        V0_print(F(EOL "SETUP() ..Found Serial. BALLOON_MODE false" EOL));
         BALLOON_MODE = false;
         // read the nvram and decode VERBY and DEVMODE. This will control printing
         read_FLASH();
         forceHACK();
         Watchdog.reset();
         found_any = drainSerialTo_CRorNL(1000);
-        if (!found_any) CORE1_PROCEED = true;
+        // how to compare char: ..== 'R' is the same as == 82 (ascii value)
+        if (!found_any) {
+            CORE1_PROCEED = true;
+        } else {
+            // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
+            V0_print(F(EOL "SETUP() ..LEAVING AFTER NOT SEEING Serial.available()" EOL EOL));
+            updateStatusLED();
+            // sleep_ms(1000);
+            user_interface();
+            // won't return here, since all exits from user_interface reboot
+        }
     }
     else {
+        V0_print(F(EOL "SETUP() ..did not find Serial. BALLOON_MODE true" EOL));
         Watchdog.reset();
         // proceeding with no Serial
         // Serial on core1 is only used for printing
@@ -500,15 +509,6 @@ void setup() {
     // from here on, if this code hangs, we just don't get keyboard input
     // but that's not an issue if BALLOON_MODE
 
-    // how to compare char: ..== 'R' is the same as == 82 (ascii value)
-    if (found_any) {
-        // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
-        V0_print(F(EOL "SETUP() ..LEAVING AFTER NOT SEEING Serial.available()" EOL EOL));
-        updateStatusLED();
-        // sleep_ms(1000);
-        user_interface();
-        // won't return here, since all exits from user_interface reboot
-    }
     // freeMem();
     V0_print(F(EOL "SETUP() ..LEAVING SETUP() AFTER NOT SEEING Serial.available()" EOL EOL));
 
@@ -546,6 +546,8 @@ void setup() {
 //**************************************
 absolute_time_t loop_us_start = 0;
 
+// FIX! is there a watchdog for this core?
+bool core1_idled = false;
 //**********************************************************
 void loop() {
     if (BALLOON_MODE) {
@@ -554,9 +556,6 @@ void loop() {
         // just return, loop will be called again
         return;
     }
-    
-    // FIX! is there a watchdog for this core?
-    bool core1_idled = false;
 
     // FIX! musing: should never get any usb/serial input while balloon is flying
     // Could disable this if we knew we're flying.
@@ -566,7 +565,6 @@ void loop() {
 
     while (true) {
         // don't use watchog reset..not thread safe?
-
         if (core1_idled) {
             V0_print(F(EOL "loop() LOOPING QUICKLY WITH core1_idled()" EOL EOL));
             sleep_ms(1000);
@@ -608,7 +606,6 @@ void loop() {
                 user_interface();
                 // won't return here, since all exits from user_interface reboot
             }
-
             // so will never resume the other core if we idled it?
             // rp2040.resumeOtherCore();
 
@@ -624,6 +621,7 @@ void setup1() {
         sleep_ms(10);
     }
 
+    V1_println(F("setup1() START"));
     Watchdog.enable(30000);
     Watchdog.reset();
     // any use for Watchdog.sleep() from SleepyDog library?
@@ -642,15 +640,7 @@ void setup1() {
     //**********************
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-
     Watchdog.reset();
-    uint64_t serial_millis = millis();
-    // wait 10 secs looking for Serial
-    while (((millis() - serial_millis) < 10000) && !Serial) {
-        // whenever we have spin loops we need to updateStatusLED()
-        updateStatusLED();
-    }
-    V1_println(F("setup1() START"));
 
     //**********************
     // Apparently I don't need to init the usb serial port? (the pi pico core does that)
@@ -795,11 +785,13 @@ void setup1() {
     updateStatusLED();
     Watchdog.reset();
 
-    // calculate for different PLL_SYS_MHZ
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 60);
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 100);
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 125);
-    calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
+    // calculate for different PLL_SYS_MHZ..just to see if we get a good PWM div/wrap cnt for different freqs.
+    if (false) {
+        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 60);
+        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 100);
+        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 125);
+        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
+    }
 
     // have the last one be the current PLL_SYS_MHZ,
     // so we could just use PMW_DIV, PWM_WRAP_CNT to set below
@@ -807,14 +799,42 @@ void setup1() {
 
     // oneliner
     V1_printf("calcPwmDivAndWrap() ");
-    V1_printf("if PLL_SYS_MHZ %d ...use PWM_DIV %lu PWM_WRAP_CNT %lu" EOL,
-        125, PWM_DIV, PWM_WRAP_CNT);
+    V1_printf("for PLL_SYS_MHZ %d ...calculated best PWM_DIV %lu PWM_WRAP_CNT %lu" EOL,
+        PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT);
 
     // choices
     // GOOD: PLL_SYS_MHZ 60 PWM_DIV 250 PWM_WRAP_CNT 20479 totalSymbolsTime 110.591
     // GOOD: PLL_SYS_MHZ 100 PWM_DIV 250 PWM_WRAP_CNT 34133 totalSymbolsTime 110.591
     // GOOD: PLL_SYS_MHZ 133 PWM_DIV 250 PWM_WRAP_CNT 45397 totalSymbolsTime 110.591
     // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666 totalSymbolsTime 110.590
+
+    //***********************************************
+    // various good enough combinations for 125 Mhz
+    // FIX! update for other clock frequencies
+
+    // just calc once in setup? recalc if we change clock frequency in config
+    if (false) {
+        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
+    }
+    if (false) {
+        // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666
+        // GOOD: totalSymbolsTime 110.590
+        // PWM_DIV = 250;
+        // PWM_WRAP_CNT = 42666;
+
+        // GOOD: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42328
+        // GOOD: totalSymbolsTime 110.592
+        PWM_DIV = 252;
+        PWM_WRAP_CNT = 42328;
+    }
+    if (false) {
+        // D: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42331
+        // GOOD: totalSymbolsTime 110.600
+        PWM_DIV = 252;
+        PWM_WRAP_CNT = 42331;
+    }
+
+    //***********************************************
 
     V1_println(F("setup1() END"));
 }
@@ -1028,7 +1048,6 @@ void loop1() {
         // no..should we keep it looser for time?
         // to update time
         // fix_valid is a subset (just 2d location) of fix_valid_all.
-        // what if we can't get a fix_valid_all, but get fix_valid..do we ever do gps cold reset?
         if ( fix_valid && (fix_age < GPS_LOCATION_AGE_MAX) ) {
             setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
         } else {
@@ -1041,7 +1060,6 @@ void loop1() {
             // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime()
             // so don't here. Only update LED state here, though
             if (gps.date.year() >= 2024 && gps.date.year() <= 2034)
-                // FIX! where do we grab the time
                 setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
             else
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -1157,8 +1175,6 @@ void loop1() {
         if (!fix_valid_all || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
             V1_printf("loop1() WARN: GPS fix issue ..stale or not valid ..fix_age %lu" EOL, fix_age);
             // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
-            // FIX! do we ever determine to do a gps cold reset here?
-
             vfo_turn_off();
             invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
@@ -1179,8 +1195,6 @@ void loop1() {
             invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
             sleepSeconds(BEACON_WAIT);
-            // FIX! do we ever determine to do a gps cold reset here?
-            // FIX! how much should we wait here?
 
         } else {
             V1_println(F("loop1() Good recent 3d fix"));
@@ -1685,7 +1699,6 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
     }
     //*******************************
-
     // My absolute earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
     // Due to the code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
 
@@ -1876,6 +1889,14 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     }
     Watchdog.reset();
 
+    // PWM_WRAP_CNT is full period value.
+    // -1 before it's set as the wrap top value.
+    proceed = false;
+    // we constantly reset this for every wspr message, 
+    // so we know the first interrupt is a little ways 
+    // out from where we are now, then?
+    setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
+
     // Now align to 1 seconds in
     // We could adjust this so the wspr starts EXACTLY at 1 sec in or 2 sec in
     // we know we should have still second()==0 at this point
@@ -1883,37 +1904,6 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // can't align by looking for usec offset from realtime
     // the usecs (or millis() we can read is not aligned
     // to the realtime gps time. those are "since program started running"
-
-    // various good enough combinations for 125 Mhz
-    // FIX! update for other clock frequencies
-
-    // FIX! Just make this always use the calc now
-    // because the calc uses the closest, if it doesn't meet our target
-    if (false) 
-        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
-
-    if (true) {
-        // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666
-        // GOOD: totalSymbolsTime 110.590
-        // PWM_DIV = 250;
-        // PWM_WRAP_CNT = 42666;
-
-        // GOOD: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42328
-        // GOOD: totalSymbolsTime 110.592
-        PWM_DIV = 252;
-        PWM_WRAP_CNT = 42328;
-
-    } else {
-        // D: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42331
-        // GOOD: totalSymbolsTime 110.600
-        PWM_DIV = 252;
-        PWM_WRAP_CNT = 42331;
-    }
-
-    // PWM_WRAP_CNT is full period value.
-    // -1 before it's set as the wrap top value.
-    proceed = false;
-    setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
 
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
     V1_println(F("syncAndSendWSPR() END"));
@@ -1969,12 +1959,12 @@ int initPicoClock(int PLL_SYS_MHZ) {
     uint32_t clk_khz = PLL_SYS_MHZ * 1000UL;
     uint32_t clk_mhz = PLL_SYS_MHZ * 1000000UL;
     if (!set_sys_clock_khz(clk_khz, false)) {
-      V1_printf("ERROR: Can not set rp2040 clock to %d Mhz.", PLL_SYS_MHZ);
+      V1_printf("ERROR: Can not set rp2040 clock to PLL_SYS_MHZ %d", PLL_SYS_MHZ);
       V1_print(F("pico PLL mults cannot be achieved" EOL));
       return -1;
     }
 
-    V1_printf("Attempt to set rp2040 clock to %d Mhz (legal)" EOL, PLL_SYS_MHZ);
+    V1_printf("Attempt to set rp2040 clock to PLL_SYS_MHZ %d (legal)" EOL, PLL_SYS_MHZ);
     // 2nd arg is "required"
     set_sys_clock_khz(clk_khz, true);
     // bool clock_configure ( enum clock_index clk_index, uint32_t src,
@@ -1985,10 +1975,34 @@ int initPicoClock(int PLL_SYS_MHZ) {
     // src_freq: Frequency of the input clock source
     // freq: Requested frequency
 
-    clock_configure(clk_peri, 0,
-        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
-        clk_mhz,
-        clk_mhz);
+    // Hmm. I guess I don't need any clock_configure() ?
+    if (false) {
+        clock_configure(clk_peri, 0,
+            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
+            clk_mhz,
+            clk_mhz);
+    }
+
+    // what about this. clk_peri is derived from clk_sys by default
+    if (false) {
+        clock_configure(clk_sys, 
+            CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX, 
+            CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS, 
+            /* default pll freq: */ 125 * MHZ , 
+            /* new sys freq: */ 42 * MHZ);
+    }
+    
+
+    // changing to 48Mhz possible?
+    // Change clk_sys to be 48MHz. The simplest way is to take this from PLL_USB
+    // which has a source frequency of 48MHz
+    if (false) {
+        clock_configure(clk_sys,
+            CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
+            CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
+            48 * MHZ,
+            48 * MHZ);
+    }
 
     V1_println(F("initPicoClock END"));
     return 0;
@@ -2023,18 +2037,10 @@ void freeMem() {
 // https://github.com/hzeller/rpi-gpio-dma-demo#direct-output-loop-to-gpio
 
 //*****************************************************************
-// https://brainwagon.org/2015/05/14/its-about-time-with-some-wspr-updates/
-// The four tones needed by WSPR are 12000/8192 (or about 1.465 Hz) apart
-// and are 8192 / 12000 seconds in duration.
-// 0.6826666666666666 secs
-
 // wsprry-pi still lives?
 // https://wsprry-pi.readthedocs.io/en/latest/About_Wsprry_Pi/index.html
-
-// 50 chars in 110.6 seconds. starting 1 sec after the minute
 // wsprry pi starts at 2 secs in
 // https://wsprry-pi.readthedocs.io/en/latest/About_WSPR/index.html
-
 // https://www.qrp-labs.com/ultimate3/u3info/dt.html
 
 //*****************************************
