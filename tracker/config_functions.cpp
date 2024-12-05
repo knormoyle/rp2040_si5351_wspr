@@ -472,7 +472,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'D':
-                get_user_input("Enter DEVMODE to enable messaging: (0 or 1)" EOL,
+                get_user_input("Enter DEVMODE (currently affects nothing): (0 or 1)" EOL,
                     _devmode, sizeof(_devmode));
                 write_FLASH();
                 break;

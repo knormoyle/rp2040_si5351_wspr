@@ -12,7 +12,6 @@
 #include "print_functions.h"
 
 //********************************
-// the key output that is used to pwm rf ..162 symbols that are 4-FSK
 extern uint32_t XMIT_FREQUENCY;
 extern bool VERBY[10];
 

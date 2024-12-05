@@ -209,8 +209,7 @@ void vfo_set_power_on(bool turn_on) {
     // always just turn it on!
     s_is_on = turn_on;
      
-    // FIX! kevin 11/18/24
-    // huh? don't change the direction when it's on vs off
+    // don't change the direction when it's on vs off. LightAPRS code did
     // we can just read the level
     // gpio_set_dir(Si5351Pwr, (turn_on ? GPIO_OUT : GPIO_IN));
 
