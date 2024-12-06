@@ -688,15 +688,18 @@ void setup1() {
     // default pins for Wire 0 are SDA=4 SCL=5 (our ISC1 for the BMP)
 
     Watchdog.reset();
-    GpsINIT(); // also turns on and checks for output
+
+    // also turns on and checks for output
+    // does a full gps cold reset now?
+    GpsINIT(); 
+
     GpsOFF(false); // don't keep TinyGPS state
     GpsFixMillis = 0;
     GpsStartMillis = millis();
 
-    // do full cold gps reset
-    // this means we get a full cold result on the aruduino IDE with usb power
-    // otherwise usb power means vbat is always on. so a hot reset!
-    GpsON(true);
+    // usb power means vbat is always on. so a hot reset!
+    // we already did a cold reset in the GpsINIT() ..don't do it again!
+    GpsON(false);
 
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
@@ -1003,8 +1006,6 @@ void loop1() {
     // otherwise usb power means vbat is always on. so a hot reset!
 
     // we do a full cold reset in setup1() now (part of the GpsInit()?)
-    // if (loopCnt == 1) GpsON(true);
-    // else GpsON(false);
     GpsON(false);
 
     //******************
@@ -1735,7 +1736,12 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
     //*******************************
     // this should still work?
-    const uint8_t PROCEEDS_TO_SYNC = 1;
+    // hmm. at PLL_SYS_MHZ=60, we get DT=0.7 if we wait for a PROCEEDS_TO_SYNC=1
+    // skip it at slower clocks?
+
+    uint8_t PROCEEDS_TO_SYNC = 0;
+    if (PLL_SYS_MHZ >= 125) PROCEEDS_TO_SYNC = 1;
+
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time,
         // after a 'proceed' false -> true transition

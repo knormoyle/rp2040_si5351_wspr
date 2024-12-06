@@ -150,8 +150,8 @@ void nmeaBufferAndPrint(const char charToAdd, bool printIfFull) {
 void sleepForMilliSecs(int n, bool enableEarlyOut) {
     // FIX! should we do this here or where?
     Watchdog.reset();
-    if (n < 0 || n > 5000) {
-        V1_printf("ERROR: sleepForMilliSecs() n %d too big (5000 max). Using 1000" EOL, n);
+    if (n < 0 || n > 120000) {
+        V1_printf("ERROR: sleepForMilliSecs() n %d too big (120000 max). Using 1000" EOL, n);
         n = 1000;
     }
     int milliDiv = n / 10;
@@ -163,7 +163,10 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
         }
         // https://docs.arduino.cc/language-reference/en/functions/time/delay/
         // check for update every 10 milliseconds
-        if ((milliDiv % 10) == 0) updateStatusLED();
+        if ((milliDiv % 10) == 0) {
+            updateStatusLED();
+            Watchdog.reset();
+        }
 
         // faster recovery with delay?
         delay(10);
@@ -350,19 +353,19 @@ void setGpsConstellations(int desiredConstellations) {
     char nmeaSentence[62] = { 0 };
 
     switch (usedConstellations) {
-        case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 62); break;
-        case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 62); break;
-        case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 62); break;
-        case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 62); break;
-        case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 62); break;
-        case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 62); break;
-        case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break;
+        // case 0 isn't defined in the CASIC_ProtocolSpecification.pdf?
+        case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 62); break; // GPS
+        case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 62); break; // BDS
+        case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 62); break; // GPS+BDS
+        case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 62); break; // GLONASS
+        case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 62); break; // GPS+GLONASS
+        case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 62); break; // BDS+GLONASS
+        case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break; // GPS+BDS+GLONASS
         default:
             usedConstellations = 3;
             strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62);
     }
 
-    // FIX! was it not passing unless I did this?
     if (false) {
         // alternative experiment
         // what about this rumored PMTK353 sentence?
@@ -520,12 +523,13 @@ void GpsINIT(void) {
     V1_printf("GPS_NRESET_PIN %d" EOL, GPS_NRESET_PIN);
     V1_printf("GPS_ON_PIN %d" EOL, GPS_ON_PIN);
 
+    // FIX! is it okay that RX is powered on while gps chip is powered off?
     Serial2.setRX(GPS_UART1_RX_PIN);
     Serial2.setTX(GPS_UART1_TX_PIN);
 
     //****************
     Serial2.setPollingMode(true);
-    // tried making bigger...seems like 32 is the reality?
+    // tried making bigger...seems like 32 is the reality though?
     Serial2.setFIFOSize(SERIAL2_FIFO_SIZE);
     Serial2.flush();
     Serial2.end();
@@ -555,6 +559,8 @@ void GpsFullColdReset(void) {
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
     V1_println(F("GpsFullColdReset START"));
+    Watchdog.reset();
+
     GpsIsOn_state = false;
     GpsStartTime = 0;
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -569,25 +575,32 @@ void GpsFullColdReset(void) {
 
     bool EXPERIMENTAL_COLD_POWER_ON = true;
 
+
+    // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
+    // just go into light sleep to reduce rp2040 power demand for 1 minute
+    // i.e. guarantee that cold reset, takes 1 minute?
+
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
     if (EXPERIMENTAL_COLD_POWER_ON) {
-        V1_println(F("Doing Gps EXPERIMENTAL_COLD_POWER_ON (GPS_ON_PIN off at first power"));
+        V1_println(F("Doing Gps EXPERIMENTAL_COLD_POWER_ON (GPS_ON_PIN off with first power)"));
         // NOTE: do I have to keep inputs like GPS_ON_PIN low 
         // until after power is on? What about reset?
         // to avoid latchup of LNA? see
         // https://www.eevblog.com/forum/rf-microwave/gps-lna-overheating-on-custom-pcb/
 
-        digitalWrite(GPS_ON_PIN, LOW);
-        digitalWrite(GPS_NRESET_PIN, LOW);
-        digitalWrite(GpsPwr, HIGH);
+        digitalWrite(GPS_ON_PIN, LOW); // deassert
+        digitalWrite(GPS_NRESET_PIN, LOW); // assert
+        digitalWrite(GpsPwr, HIGH); // deassert
     } else {
-        digitalWrite(GPS_ON_PIN, HIGH);
-        digitalWrite(GPS_NRESET_PIN, LOW);
-        digitalWrite(GpsPwr, HIGH);
+        V1_println(F("Doing Gps NORMAL_COLD_POWER_ON (GPS_ON_PIN on with first power)"));
+        digitalWrite(GPS_ON_PIN, HIGH); // assert
+        digitalWrite(GPS_NRESET_PIN, LOW); // assert
+        digitalWrite(GpsPwr, HIGH); // deassert
     }
 
     sleepForMilliSecs(1000, false);
 
+    //******************
     // Cold Start. doesn't clear any system/user configs
     // Serial2.print("$PMTK103*30\r\n");
     // Full Cold Start. any system/user configs (back to factory status)
@@ -597,26 +610,22 @@ void GpsFullColdReset(void) {
     // always do this just in case the GpsIsOn() got wrong?
     // but we're relying on the Serial2.begin/end to be correct?
     // might as well commit to being right!
-    //******************
-    digitalWrite(GpsPwr, LOW);
+    digitalWrite(GpsPwr, LOW); // assert
     sleepForMilliSecs(1000, false);
 
     // deassert NRESET after power on (okay in both normal and experimental case)
     if (EXPERIMENTAL_COLD_POWER_ON) {
-        // deassert
-        digitalWrite(GPS_NRESET_PIN, HIGH);
+        digitalWrite(GPS_NRESET_PIN, HIGH); // deassert
         // wait 5 secs before we assert the GPS_ON_PIN?
         sleepForMilliSecs(5000, false);
-        // we're never asserting the GPS_NRESET_PIN LOW in experimental mode
-        digitalWrite(GPS_ON_PIN, HIGH);
-        // GPS_NRESET_PIN wasn't asserted
+        digitalWrite(GPS_ON_PIN, HIGH); // assert
     } else {
         digitalWrite(GPS_NRESET_PIN, HIGH);
     }
         
     sleepForMilliSecs(1000, false);
 
-    // old experiment..do reset assertion after power is good
+    // old experiment..do reset assertion (again or solely? after power is good
     // belt and suspenders: 
     // wait 2 secs and assert/deassert NRESET
     // still can't seem to get back to 9600 baud after higher baud rate set
@@ -628,6 +637,7 @@ void GpsFullColdReset(void) {
         sleepForMilliSecs(1000, false);
     }
 
+    Watchdog.reset();
     if (false) {
         // TOTAL HACK experiment
         // since vbat seems to preserve the baud rate, even with NRESET assertion
@@ -662,8 +672,18 @@ void GpsFullColdReset(void) {
         sleepForMilliSecs(1000, false);
 
     }
+    // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
+    // just go into light sleep to reduce rp2040 power demand for 1 minute
+    // i.e. guarantee that cold reset, takes 1 minute?
+    V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 1 minute"));
+    // we had to make sure we reset the watchdog, now, in sleepForMilliSecs
+    // we already wakeup periodically to update led, so fine
+    Watchdog.reset();
+    sleepForMilliSecs(60000, false);
+
 
     //******************
+    Watchdog.reset();
     int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
 
     // if it came up already in our target baud rate
@@ -687,8 +707,10 @@ void GpsFullColdReset(void) {
     // FIX! we don't need to toggle power to get the effect?
     setGpsBalloonMode();
 
-    // all constellations
-    setGpsConstellations(7); 
+    // all constellations GPS/BaiDou/Glonass
+    // setGpsConstellations(7); 
+    // FIX! try just gps to see effect on power on current
+    setGpsConstellations(1); 
     // no ZDA/ANT TXT (NMEA sentences) after this:
     setGpsBroadcast(); 
 
@@ -718,13 +740,14 @@ void GpsWarmReset(void) {
     bool EXPERIMENTAL_WARM_POWER_ON = true;
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
     if (EXPERIMENTAL_WARM_POWER_ON) {
-        V1_println(F("Doing Gps EXPERIMENTAL_WARM POWER_ON (GPS_ON_PIN off at first power"));
+        V1_println(F("Doing Gps EXPERIMENTAL_WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
         // NOTE: should we start with NRESET_PIN low also until powered (latchup?)?
         digitalWrite(GPS_NRESET_PIN, HIGH);
         // NOTE: do we need to start low until powered to avoid latchup of LNA?
         digitalWrite(GPS_ON_PIN, LOW);
         digitalWrite(GpsPwr, HIGH);
     } else {
+        V1_println(F("Doing Gps NORMAL_WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
         digitalWrite(GPS_NRESET_PIN, HIGH);
         digitalWrite(GPS_ON_PIN, HIGH);
         digitalWrite(GpsPwr, HIGH);
@@ -770,7 +793,9 @@ void GpsWarmReset(void) {
     // wait 2 seconds for normal power before sending more commands
     setGpsBalloonMode();
     // all constellations
-    setGpsConstellations(7); 
+    // setGpsConstellations(7); 
+    // FIX! try just gps to see effect on power on current
+    setGpsConstellations(1); 
     // no ZDA/TXT
     setGpsBroadcast(); 
 
@@ -1216,8 +1241,18 @@ void gpsDebug() {
 // 2) Enable the ON_OFF pin (HIGH signal from an STM32 - powered by a separate 3.0V LDO Linear Regulator);
 // 3) Turn 3V3 power on.
 // 4) Hot LNA!
-// After that, the only thing that cools down the LNA is turning 3V3 off again. Disabling the ON_OFF pin does nothing.
+// After that, the only thing that cools down the LNA is turning 3V3 off again. 
+// Disabling the ON_OFF pin does nothing.
 
 // Yes, this sounds like a classic example of latch up caused by an input voltage exceeding a power rail.
 // https://en.wikipedia.org/wiki/Latch-up
 
+// https://forum.arduino.cc/t/gps-power-management-reset-loop/529253/5
+// someone using the NDB6020P, which had a good suggestion by @MarkT to simply increase 
+// the value of the gate resistor to slow the switching of the MOSFET. 
+// So, I increased my gate resistor to 47 kOhm, watched as my turn on time increased to 150 μs 
+// and was pleasantly surprised to discover the Arduino didn't reset when the GPS was turned on! 
+// Out of curiousity, I increased the value of my gate resistor again to 100 kOhm, 
+// which further increased the turn on time to 250 μs and also seemed to fix the reset problem. 
+// With these higher value gate resistors, I put my scope leads back on the 3.3 V source, 
+// and measured the voltage dropping to only ~3.0 V when the GPS is turned on (~250 mV).
