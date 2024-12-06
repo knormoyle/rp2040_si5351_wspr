@@ -3,6 +3,8 @@
 // AT6558 BDS/GNSS Full Constellation SOC Chip Data Sheet Version 1.14
 // AT6558-5N-3X is GPS + BDS
 // QFN package 40 pin 5x5x0.8mm
+// English AT6558 BDS/GNSS Full Constellation SOC Chip Data Sheet
+// 42 pages
 // https://www.icofchina.com/d/file/xiazai/2016-12-05/b1be6f481cdf9d773b963ab30a2d11d8.pdf
 
 //******************************************************

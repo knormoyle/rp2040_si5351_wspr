@@ -286,10 +286,16 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
         // res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false, 1000);
         res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false);
 
-        if (res == 127) V1_printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
-        else if (res == 2) ; // V1_printf("GOOD: res %d after i2cWrite" EOL, res);
-        else if (res == PICO_ERROR_GENERIC) V1_printf("ERROR: res %d after i2cWrite" EOL, res);
-        else V1_printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
+        if (res == 127) {
+            V1_printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
+        } else if (res == 2) {
+            ; 
+            // V1_printf("GOOD: res %d after i2cWrite" EOL, res);
+        } else if (res == PICO_ERROR_GENERIC) {
+            V1_printf("ERROR: res %d after i2cWrite" EOL, res);
+        } else {
+            V1_printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
+        }
     }
     // V1_printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
     return res;
@@ -415,13 +421,15 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
     }
 
     // cover all - errors above
-    if (res == 127) ; // my decode for reserved
-    else if (res == PICO_ERROR_GENERIC || res < 0)
+    if (res == 127) {
+        ; // my decode for reserved
+    } else if (res == PICO_ERROR_GENERIC || res < 0) {
         V1_printf("ERROR: i2cWrRead() got bad res %d reg %02x val %02x" EOL, res, reg, *val);
-    else if (res==1)
+    } else if (res==1) {
         V1_printf("GOOD: i2cWrRead() got good res %d reg %02x val %02x" EOL, res, reg, *val);
-    else
+    } else {
         V1_printf("UNEXPECTED: i2cWrRead() got unexpected res %d reg %02x val %02x" EOL, res, reg, *val);
+    }
 
     V1_printf("i2cWrRead END reg %02x val %02x" EOL, reg, *val);
     return res;
@@ -456,10 +464,16 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
         res = i2c_write_blocking(VFO_I2C_INSTANCE,
             SI5351A_I2C_ADDR, i2c_buf, (vcnt + 1), false); // addr + data (byte)
 
-        if (res == 127) V1_printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
-        else if (res == (1 + (int) vcnt)) ; // V1_printf("GOOD: res %d after i2cWriten" EOL, res);
-        else if (res == PICO_ERROR_GENERIC) V1_printf("ERROR: res %d after i2cWriten" EOL, res);
-        else V1_printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
+        if (res == 127) {
+            V1_printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
+        } else if (res == (1 + (int) vcnt)) {
+            ; 
+            // V1_printf("GOOD: res %d after i2cWriten" EOL, res);
+        } else if (res == PICO_ERROR_GENERIC) {
+            V1_printf("ERROR: res %d after i2cWriten" EOL, res);
+        } else {
+            V1_printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
+        }
     }
 
     // V1_printf("i2cWriten START reg %02x vcnt %u" EOL, reg, vcnt);

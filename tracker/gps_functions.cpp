@@ -566,9 +566,19 @@ void GpsFullColdReset(void) {
     Serial.end();
 
     // assert reset during power off
-    digitalWrite(GPS_ON_PIN, HIGH);
-    digitalWrite(GPS_NRESET_PIN, LOW);
-    digitalWrite(GpsPwr, HIGH);
+
+    bool EXPERIMENTAL_POWER_ON = true;
+    // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
+    if (!EXPERIMENTAL_POWER_ON) {
+        digitalWrite(GPS_ON_PIN, HIGH);
+        digitalWrite(GPS_NRESET_PIN, LOW);
+        digitalWrite(GpsPwr, HIGH);
+    } else {
+        digitalWrite(GPS_ON_PIN, LOW);
+        digitalWrite(GPS_NRESET_PIN, HIGH);
+        digitalWrite(GpsPwr, HIGH);
+    }
+
     sleepForMilliSecs(1000, false);
 
     // Cold Start. doesn't clear any system/user configs
@@ -581,12 +591,21 @@ void GpsFullColdReset(void) {
     // but we're relying on the Serial2.begin/end to be correct?
     // might as well commit to being right!
     //******************
-
-    // now power on with reset asserted
     digitalWrite(GpsPwr, LOW);
     sleepForMilliSecs(1000, false);
-    // deassert NRESET after power on
-    digitalWrite(GPS_NRESET_PIN, HIGH);
+
+    // deassert NRESET after power on (okay in both normal and experimental case)
+    if (!EXPERIMENTAL_POWER_ON) {
+        // deassert
+        digitalWrite(GPS_NRESET_PIN, HIGH);
+    
+    } else {
+        // we're never asserting the GPS_NRESET_PIN LOW in experimental mode
+        digitalWrite(GPS_ON_PIN, HIGH);
+        // GPS_NRESET_PIN wasn't asserted
+    }
+        
+    sleepForMilliSecs(1000, false);
 
     // old experiment..do reset assertion after power is good
     // belt and suspenders: 
@@ -735,9 +754,11 @@ void GpsWarmReset(void) {
 //************************************************
 void GpsON(bool GpsColdReset) {
     // no print if no cold reset request. So I can grep on GpsColdReset as a special case only
-    if (!GpsColdReset) V1_printf("GpsON START GpsIsOn_state %u" EOL, GpsIsOn_state);
-    else V1_printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL, 
-        GpsIsOn_state, GpsColdReset);
+    if (!GpsColdReset) {
+        V1_printf("GpsON START GpsIsOn_state %u" EOL, GpsIsOn_state);
+    } else {
+        V1_printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
+    }
 
     // could be off or on already
     // Assume GpsINIT was already done (pins etc)
@@ -748,9 +769,12 @@ void GpsON(bool GpsColdReset) {
     // does nothing if already on
     else if (!GpsIsOn()) GpsWarmReset();
 
-    if (!GpsColdReset) V1_printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
-    else V1_printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, 
-        GpsIsOn_state, GpsColdReset);
+    if (!GpsColdReset) {
+        V1_printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
+    }
+    else {
+        V1_printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
+    }
 
     V1_flush();
 }

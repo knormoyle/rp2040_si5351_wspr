@@ -289,7 +289,7 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
     float PLL_SYS_USECS = 1.0 / (float)PLL_SYS_MHZ;
     float wrap_cnt_float;
     int wrap_cnt;
-    float totalSymbolsTime;
+    float totalSymbolsTime = 0.0;
 
     // we use 250 div now for 125 mhz so check with that first
     // per
@@ -325,7 +325,6 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
             totalSymbolsTime, wrap_cnt, div);
 
         // good enough total range
-        abs_error_so_far;
         float current_abs_error = abs(totalSymbolsTime - DESIRED_SECS);
         if (current_abs_error < abs_error_so_far) {
             V1_printf("BETTER: PLL_SYS_MHZ %lu PWM_DIV %d PWM_WRAP_CNT %d" EOL, PLL_SYS_MHZ, div, wrap_cnt);

@@ -237,7 +237,7 @@ void config_intro(void) {
     // char drainSerialTo_CRorNL (uint32_t millis_max) {
     // clear out any old stuff in serial input
     // V0_println("press any key to continue");
-    char c_char = drainSerialTo_CRorNL(1000);
+    drainSerialTo_CRorNL(1000);
 
     // FIX! assume this is the state it was in before config menu?
     // not always right. but loop will self-correct?

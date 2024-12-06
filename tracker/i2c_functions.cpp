@@ -254,9 +254,12 @@ int scan_i2c(int i2c_number) {
         char char1[2] = { 0 };
         char1[0] = ret < 0 ? '.' : '@';
         // EOL
-        if (addr % 16 == 15) V1_printf("%s" EOL,  char1);
+        if (addr % 16 == 15) {
+            V1_printf("%s" EOL,  char1);
         // <space>
-        else V1_printf("%s ",  char1);
+        } else {
+            V1_printf("%s ",  char1);
+        }
         V0_flush();
     }
 
@@ -306,16 +309,22 @@ void i2c_scan_with_Wire(void) {
         error = Wire.endTransmission();
         if (error == 0) {
             V1_print("I2C device found at address 0x");
-            if (address < 16) V1_print("0");
+            if (address < 16) {
+                V1_print("0");
+            }
             V1_println(address, HEX);
             nDevices++;
         } else if (error == 4) {
             V1_print("Unknown error at address 0x");
-            if (address < 16) V1_print("0");
+            if (address < 16) {
+                V1_print("0");
+            }
             V1_println(address, HEX);
         }
     }
-    if (nDevices == 0) V1_println("No I2C devices found\n");
+    if (nDevices == 0) {
+        V1_println("No I2C devices found" EOL);
+    }
     else V1_println("done\n");
     V1_println(F("i2c_scan END"));
 }
@@ -436,7 +445,6 @@ int I2cWriteTest(uint8_t reg, uint8_t val) {  // write reg via i2c
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
         V1_printf("reserved reg %u", reg);
-
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     }
@@ -450,9 +458,13 @@ int I2cWriteTest(uint8_t reg, uint8_t val) {  // write reg via i2c
     }
 
     if (res == 127) ; // my decode for reserved
-    else if (res==PICO_ERROR_GENERIC)  V1_printf("ERROR: I2cWriteTest() got bad res %d reg %02x val %02x" EOL, res, reg, val);
-    else if (res==2) V1_printf("GOOD: I2cWriteTest() got good res %d reg %02x val %02x" EOL, res, reg, val);
-    else V1_printf("UNEXPECTED: i2cWRite() got unexpected res %d reg %02x val %02x" EOL, res, reg, val);
+    else if (res==PICO_ERROR_GENERIC) {
+        V1_printf("ERROR: I2cWriteTest() got bad res %d reg %02x val %02x" EOL, res, reg, val);
+    } else if (res==2) {
+        V1_printf("GOOD: I2cWriteTest() got good res %d reg %02x val %02x" EOL, res, reg, val);
+    } else {
+        V1_printf("UNEXPECTED: i2cWRite() got unexpected res %d reg %02x val %02x" EOL, res, reg, val);
+    }
     V1_print(EOL);
 
     V1_printf("I2cWriteTest END reg %02x val %02x" EOL, reg, val);
@@ -544,13 +556,15 @@ int i2cWrReadTest(uint8_t reg, uint8_t *val) {
     }
 
     // cover all - errors above
-    if (res == 127) ; // my decode for reserved
-    else if (res == PICO_ERROR_GENERIC || res < 0)
+    if (res == 127) {
+        ; // my decode for reserved
+    } else if (res == PICO_ERROR_GENERIC || res < 0) {
         V1_printf("ERROR: i2cWrReadTest() got bad res %d reg %02x val %02x" EOL, res, reg, *val);
-    else if (res==1)
+    } else if (res==1) {
         V1_printf("GOOD: i2cWrReadTest() got good res %d reg %02x val %02x" EOL, res, reg, *val);
-    else
+    } else {
         V1_printf("UNEXPECTED: i2cWrReadTest() got unexpected res %d reg %02x val %02x" EOL, res, reg, *val);
+    }
     V1_print(EOL);
 
     // FIX! no expected data compare. I just eyeball the sequential write/read in the serial monitor

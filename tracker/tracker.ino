@@ -799,7 +799,7 @@ void setup1() {
 
     // oneliner
     V1_printf("calcPwmDivAndWrap() ");
-    V1_printf("for PLL_SYS_MHZ %d ...calculated best PWM_DIV %lu PWM_WRAP_CNT %lu" EOL,
+    V1_printf("for PLL_SYS_MHZ %lu ...calculated best PWM_DIV %lu PWM_WRAP_CNT %lu" EOL,
         PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT);
 
     // choices
@@ -1599,9 +1599,11 @@ void sleepSeconds(int secs) {
         // and shouldn't keep it off for more than 1 minute.
         if (!GpsIsOn()) GpsON(false); // don't keep TinyGps state
         else {
+            ;
             // all the data should be valid to consider it a good fix.
             // this doesn't need qualification on whether we got a good date/time
             // since we check that first, before we do any looking for a 3d fix
+            /*
             bool fix_valid_all = !GpsInvalidAll &&
                 gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
                 gps.hdop.isValid() &&
@@ -1609,6 +1611,7 @@ void sleepSeconds(int secs) {
                 gps.location.isValid() &&
                 gps.speed.isValid() &&
                 gps.course.isValid();
+            */
 
             // keep it on if we don't have a solid fix
             // otherwise save power for a cycle?
@@ -1695,7 +1698,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     V1_printf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
     if (VERBY[1]) {
         // do a StampPrintf, so we can measure usec duration from here to the first symbol
-        // it's not aligned to the gps time.
+        // remember, it's usec running time, it's not aligned to the gps time.
         StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
     }
     //*******************************
@@ -2054,3 +2057,8 @@ void freeMem() {
 // strtoimax()
 // strtoumax()
 // https://pubs.opengroup.org/onlinepubs/9699919799/functions/strtoumax.html
+
+//*****************************************
+// boost converter?
+// KC3LBR has a MCP1640T boost converter
+// what about the kazu boost converter (at his *gen1 repo as .eprj. Is the bom available? are pads on the pcb?)
