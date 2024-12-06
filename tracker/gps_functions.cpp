@@ -567,13 +567,14 @@ void GpsFullColdReset(void) {
 
     // assert reset during power off
 
-    bool EXPERIMENTAL_POWER_ON = true;
+    bool EXPERIMENTAL_COLD_POWER_ON = true;
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
-    if (!EXPERIMENTAL_POWER_ON) {
+    if (!EXPERIMENTAL_COLD_POWER_ON) {
         digitalWrite(GPS_ON_PIN, HIGH);
         digitalWrite(GPS_NRESET_PIN, LOW);
         digitalWrite(GpsPwr, HIGH);
     } else {
+        V1_println(F("Doing Gps EXPERIMENTAL_COLD_POWER_ON (GPS_ON_PIN off at first power"));
         digitalWrite(GPS_ON_PIN, LOW);
         digitalWrite(GPS_NRESET_PIN, HIGH);
         digitalWrite(GpsPwr, HIGH);
@@ -595,11 +596,13 @@ void GpsFullColdReset(void) {
     sleepForMilliSecs(1000, false);
 
     // deassert NRESET after power on (okay in both normal and experimental case)
-    if (!EXPERIMENTAL_POWER_ON) {
+    if (!EXPERIMENTAL_COLD_POWER_ON) {
         // deassert
         digitalWrite(GPS_NRESET_PIN, HIGH);
     
     } else {
+        // wait 5 secs before we turn it on?
+        sleepForMilliSecs(5000, false);
         // we're never asserting the GPS_NRESET_PIN LOW in experimental mode
         digitalWrite(GPS_ON_PIN, HIGH);
         // GPS_NRESET_PIN wasn't asserted
@@ -705,9 +708,19 @@ void GpsWarmReset(void) {
     Serial.end();
 
     // don't assert reset during power off
-    digitalWrite(GPS_NRESET_PIN, HIGH);
-    digitalWrite(GPS_ON_PIN, HIGH);
-    digitalWrite(GpsPwr, HIGH);
+
+    bool EXPERIMENTAL_WARM_POWER_ON = true;
+    // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
+    if (!EXPERIMENTAL_WARM_POWER_ON) {
+        digitalWrite(GPS_NRESET_PIN, HIGH);
+        digitalWrite(GPS_ON_PIN, HIGH);
+        digitalWrite(GpsPwr, HIGH);
+    } else {
+        V1_println(F("Doing Gps EXPERIMENTAL_WARM POWER_ON (GPS_ON_PIN off at first power"));
+        digitalWrite(GPS_NRESET_PIN, HIGH);
+        digitalWrite(GPS_ON_PIN, LOW);
+        digitalWrite(GpsPwr, HIGH);
+    }
     sleepForMilliSecs(1000, false);
 
     // now power on with reset still off
@@ -715,6 +728,12 @@ void GpsWarmReset(void) {
     // digitalWrite(GPS_ON_PIN, HIGH);
     digitalWrite(GpsPwr, LOW);
     sleepForMilliSecs(2000, false);
+
+    if (EXPERIMENTAL_WARM_POWER_ON) {
+        digitalWrite(GPS_ON_PIN, HIGH);
+        sleepForMilliSecs(2000, false);
+    }
+
 
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
