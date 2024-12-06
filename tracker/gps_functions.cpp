@@ -568,15 +568,21 @@ void GpsFullColdReset(void) {
     // assert reset during power off
 
     bool EXPERIMENTAL_COLD_POWER_ON = true;
+
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
-    if (!EXPERIMENTAL_COLD_POWER_ON) {
-        digitalWrite(GPS_ON_PIN, HIGH);
+    if (EXPERIMENTAL_COLD_POWER_ON) {
+        V1_println(F("Doing Gps EXPERIMENTAL_COLD_POWER_ON (GPS_ON_PIN off at first power"));
+        // NOTE: do I have to keep inputs like GPS_ON_PIN low 
+        // until after power is on? What about reset?
+        // to avoid latchup of LNA? see
+        // https://www.eevblog.com/forum/rf-microwave/gps-lna-overheating-on-custom-pcb/
+
+        digitalWrite(GPS_ON_PIN, LOW);
         digitalWrite(GPS_NRESET_PIN, LOW);
         digitalWrite(GpsPwr, HIGH);
     } else {
-        V1_println(F("Doing Gps EXPERIMENTAL_COLD_POWER_ON (GPS_ON_PIN off at first power"));
-        digitalWrite(GPS_ON_PIN, LOW);
-        digitalWrite(GPS_NRESET_PIN, HIGH);
+        digitalWrite(GPS_ON_PIN, HIGH);
+        digitalWrite(GPS_NRESET_PIN, LOW);
         digitalWrite(GpsPwr, HIGH);
     }
 
@@ -586,7 +592,7 @@ void GpsFullColdReset(void) {
     // Serial2.print("$PMTK103*30\r\n");
     // Full Cold Start. any system/user configs (back to factory status)
     // FIX! should we wait for ack or no?
-    // have to toggle power off/on to get this effect? no?
+    // have to toggle power off/on to get this effect? 
 
     // always do this just in case the GpsIsOn() got wrong?
     // but we're relying on the Serial2.begin/end to be correct?
@@ -596,16 +602,16 @@ void GpsFullColdReset(void) {
     sleepForMilliSecs(1000, false);
 
     // deassert NRESET after power on (okay in both normal and experimental case)
-    if (!EXPERIMENTAL_COLD_POWER_ON) {
+    if (EXPERIMENTAL_COLD_POWER_ON) {
         // deassert
         digitalWrite(GPS_NRESET_PIN, HIGH);
-    
-    } else {
-        // wait 5 secs before we turn it on?
+        // wait 5 secs before we assert the GPS_ON_PIN?
         sleepForMilliSecs(5000, false);
         // we're never asserting the GPS_NRESET_PIN LOW in experimental mode
         digitalWrite(GPS_ON_PIN, HIGH);
         // GPS_NRESET_PIN wasn't asserted
+    } else {
+        digitalWrite(GPS_NRESET_PIN, HIGH);
     }
         
     sleepForMilliSecs(1000, false);
@@ -711,14 +717,16 @@ void GpsWarmReset(void) {
 
     bool EXPERIMENTAL_WARM_POWER_ON = true;
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
-    if (!EXPERIMENTAL_WARM_POWER_ON) {
+    if (EXPERIMENTAL_WARM_POWER_ON) {
+        V1_println(F("Doing Gps EXPERIMENTAL_WARM POWER_ON (GPS_ON_PIN off at first power"));
+        // NOTE: should we start with NRESET_PIN low also until powered (latchup?)?
         digitalWrite(GPS_NRESET_PIN, HIGH);
-        digitalWrite(GPS_ON_PIN, HIGH);
+        // NOTE: do we need to start low until powered to avoid latchup of LNA?
+        digitalWrite(GPS_ON_PIN, LOW);
         digitalWrite(GpsPwr, HIGH);
     } else {
-        V1_println(F("Doing Gps EXPERIMENTAL_WARM POWER_ON (GPS_ON_PIN off at first power"));
         digitalWrite(GPS_NRESET_PIN, HIGH);
-        digitalWrite(GPS_ON_PIN, LOW);
+        digitalWrite(GPS_ON_PIN, HIGH);
         digitalWrite(GpsPwr, HIGH);
     }
     sleepForMilliSecs(1000, false);
@@ -1198,4 +1206,18 @@ void gpsDebug() {
 // leading to errors which are not obvious.
 // Example: if the function argument list contains user defined data types and
 // the automatically created function prototype is placed before the declaration of that data type.
+
+//*****************
+// some notes on bad power on of ATGM336
+// https://www.eevblog.com/forum/rf-microwave/gps-lna-overheating-on-custom-pcb/
+
+// So the magic sequence to turn the LNA into a toaster is:
+// 1) Have the 3V3 power off;
+// 2) Enable the ON_OFF pin (HIGH signal from an STM32 - powered by a separate 3.0V LDO Linear Regulator);
+// 3) Turn 3V3 power on.
+// 4) Hot LNA!
+// After that, the only thing that cools down the LNA is turning 3V3 off again. Disabling the ON_OFF pin does nothing.
+
+// Yes, this sounds like a classic example of latch up caused by an input voltage exceeding a power rail.
+// https://en.wikipedia.org/wiki/Latch-up
 
