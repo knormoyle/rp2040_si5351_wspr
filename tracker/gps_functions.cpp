@@ -601,7 +601,6 @@ void GpsFullColdReset(void) {
         // until after power is on? What about reset?
         // to avoid latchup of LNA? see
         // https://www.eevblog.com/forum/rf-microwave/gps-lna-overheating-on-custom-pcb/
-
         digitalWrite(GPS_ON_PIN, LOW); // deassert
         digitalWrite(GPS_NRESET_PIN, LOW); // assert
         digitalWrite(GpsPwr, HIGH); // deassert
@@ -639,16 +638,6 @@ void GpsFullColdReset(void) {
             // turn this on later in lowest power mode. while rp2040 is reduced power
             digitalWrite(GPS_ON_PIN, HIGH); // assert
 
-        // if we pick 4800 this will slow it down the broadcast during the intial gps first fix
-        // will this save power?
-        /*
-        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
-        setGpsBaud(desiredBaud);
-        sleepForMilliSecs(1000, false);
-        setGpsBalloonMode();
-        setGpsConstellations(1); 
-        setGpsBroadcast(); 
-        */
     } else {
         digitalWrite(GPS_NRESET_PIN, HIGH);
     }
@@ -742,8 +731,9 @@ void GpsFullColdReset(void) {
         // FIX! does the flush above not wait long enough? 
         // Wait another second before shutting down serial
         // sleep may be problematic in this transition?
-        busy_wait_ms(1000);
+        busy_wait_ms(500);
         Serial.end();
+        busy_wait_ms(500);
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
         // There are two PLLs in RP2040. They are:
         // pll_sys - Used to generate up to a 133MHz (actually more) system clock
@@ -752,6 +742,7 @@ void GpsFullColdReset(void) {
         // void pll_deinit (PLL	pll)	
         // Release/uninitialise specified PLL.This will turn off the power to the specified PLL. 
         // Note this function does not check if the PLL is in use before powering it off. (use care)
+        // this seems to crap out
         // pll_deinit(pll_usb);
         set_sys_clock_khz(18000, true);
         // enums for voltage at:
