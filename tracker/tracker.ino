@@ -261,9 +261,11 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // 670 chars with 396 ms duration. going back to 9600
 
 // lets try 4800. is power less at power on?
-extern const int SERIAL2_BAUD_RATE = 4800;
+// hmm something was not working with gps warm reset with 4800. back to 9600
+
+// extern const int SERIAL2_BAUD_RATE = 4800;
 // works down to 50 Mhz fine? what's the lowest SYS_PLL_MHZ that works?
-// extern const int SERIAL2_BAUD_RATE = 9600;
+extern const int SERIAL2_BAUD_RATE = 9600;
 // extern const int SERIAL2_BAUD_RATE = 19200;
 
 // can't seem to recover to 9600 after trying 38400? full cold reset not working?
@@ -1348,7 +1350,7 @@ void loop1() {
     // FIX! StampPrintf doesn't seem to be printing correctly with this format string?
     // oh I had the wrong formats for the variables. V1_printf exposed that. StampPrintf didn't.
     // use V1_printf()
-    V1_printf(
+    V1_printf(EOL
         "t_tx_count_0: %s "
         "t_callsign: %s "
         "t_temp: %s "
@@ -1362,11 +1364,11 @@ void loop1() {
         t_tx_count_0, t_callsign, t_temp, t_voltage, t_altitude, t_grid6, t_power, t_sat_count,
         GpsTimeToLastFix, GpsWatchdogCnt);
 
-    V1_printf(
+    V1_printf(EOL
         "main/20: _Band %s "
         "loop_ms_elapsed: %" PRIu64 " millisecs "
         "loop_us_start: %llu microsecs "
-        "loop_us_end: %llu microsecs",
+        "loop_us_end: %llu microsecs" EOL,
         _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
 
     updateStatusLED();

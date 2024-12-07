@@ -693,12 +693,7 @@ void GpsFullColdReset(void) {
     // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
     // just go into light sleep to reduce rp2040 power demand for 1 minute
     // i.e. guarantee that cold reset, takes 1 minute? 
-    Watchdog.reset();
-    V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 60 secs" EOL));
-    V1_printf("Going to slow PLL_SYS_MHZ from %lu to 18Mhz before long sleep" EOL, PLL_SYS_MHZ);
-    V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
-    V1_print("Also lowering core voltage to 0.95v" EOL);
-    V1_flush();
+    // hmm. we're stalling things now. maybe only sleep for 30 secs
     // FIX! this apparently makes the Serial2 dysfunctional so the gps chip can't send output
     // it backs up on the initial TXT broadcast (revisions) and then hits a power peak
     // right after we fix the clock back to normal (50Mhz min tried)
@@ -711,38 +706,67 @@ void GpsFullColdReset(void) {
     // we already wakeup periodically to update led, so fine
     Watchdog.reset();
 
+
     //******************
-    // DRASTIC measures, do before sleep!
-    // save current sys freq
+    // so we can undo the testing
+    bool DRASTIC_MODE = false;
     uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
-    // FIX! does the flush above not wait long enough?
-    sleep_ms(1000);
-    Serial.end();
-    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
-    // pll_deinit(pll_usb);
+    if (DRASTIC_MODE) {
+        Watchdog.reset();
+        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
+        V1_printf("Going to slow PLL_SYS_MHZ from %lu to 18Mhz before long sleep" EOL, PLL_SYS_MHZ);
+        V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
+        V1_print("Also lowering core voltage to 0.95v" EOL);
+        V1_flush();
+        // DRASTIC measures, do before sleep!
+        // save current sys freq
+        // FIX! does the flush above not wait long enough? Wait another second before shutting down serial
+        sleep_ms(1000);
+        Serial.end();
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
+        // There are two PLLs in RP2040. They are:
+        // pll_sys - Used to generate up to a 133MHz (actually more) system clock
+        // pll_usb - Used to generate a 48MHz USB reference clock
 
-    set_sys_clock_khz(18000, true);
-    // enums for voltage at:
-    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
-    vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
 
-    sleepForMilliSecs(60000, false); // 60 secs
+        // void pll_deinit (PLL	pll)	
+        // Release/uninitialise specified PLL.This will turn off the power to the specified PLL. 
+        // Note this function does not check if the PLL is in use before powering it off. (use care)
+        // pll_deinit(pll_usb);
+        set_sys_clock_khz(18000, true);
+        // enums for voltage at:
+        // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
+        vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
+    } else {
+        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
+    }
+
+    sleepForMilliSecs(30000, false); // 30 secs
 
     //******************
     // DRASTIC measures, undo after sleep!
     Watchdog.reset();
-    vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
-    set_sys_clock_khz(freq_khz, true);
-    pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
-    // High-level Adafruit TinyUSB init code, does many things to get the USB controller back online
-    tusb_init();
-    Serial.begin(115200);
+    if (DRASTIC_MODE) {
+        vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
+        set_sys_clock_khz(freq_khz, true);
 
-    //******************
-    V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
-    V1_print(F("Restored USB pll to 48Mhz" EOL));
-    V1_print(F("Restored core voltage back to 1.1v" EOL));
-    V1_flush();
+        // pll_init() Parameters
+        // pll	pll_sys or pll_usb
+        // ref_div	Input clock divider.
+        // vco_freq	Requested output from the VCO (voltage controlled oscillator)
+        // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
+        // post_div2	Post Divider 2 - range 1-7
+        pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+        // High-level Adafruit TinyUSB init code, does many things to get the USB controller back online
+        tusb_init();
+        Serial.begin(115200);
+
+        //******************
+        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+        V1_print(F("Restored USB pll to 48Mhz" EOL));
+        V1_print(F("Restored core voltage back to 1.1v" EOL));
+        V1_flush();
+    }
 
     //******************
     Watchdog.reset();
@@ -826,34 +850,24 @@ void GpsWarmReset(void) {
         digitalWrite(GPS_ON_PIN, HIGH);
         sleepForMilliSecs(2000, false);
     }
-
-
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
-
-    // don't know what baud rate it was at. gps comes up at 9600
-    // maybe just assume it's the same as whatever setup was agreed on before
-    // Serial2.end();
-    // Serial2.begin(9600);
-
-    // hmm.. just leave it like it was? vbat will keep the old baud rate?
-    // resets to 9600. set to new baud rate
-    // FIFO is big enough to hold output while we send more input here
-    // the old reset if you want to change baud rate  
-    // should be the same from init, so this should work? (unecessary ?)
-    // don't change or ?? should be don't care?
 
     // if it comes back up in out desired BAUD rate already, 
     // everything will be fine and we'll start talking to it
     // as long as the tracker only got one other Baud rate other than 9600 
     // all will be fine
-    if (true) {
+
+    // or will this come out of warm reset at 9600 baud and we can't talk to it?
+    
+    // FIX! this is a don't care then? whatever it was? or ??
+    if (false) {
         int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
         // then up the speed to desired (both gps chip and then Serial2
         setGpsBaud(desiredBaud);
     }
-    // wait 2 seconds for normal power before sending more commands
     setGpsBalloonMode();
+
     // all constellations
     // setGpsConstellations(7); 
     // FIX! try just gps to see effect on power on current
