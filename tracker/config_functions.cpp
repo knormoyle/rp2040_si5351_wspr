@@ -945,7 +945,6 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_printf("XMIT_FREQUENCY:%lu" EOL, XMIT_FREQUENCY);
 
     V0_println(F(EOL "Valid commands:" EOL));
-
     V0_println(F("X: eXit configuration and reboot"));
     V0_println(F("/: reboot to bootloader mode to drag/drop new .uf2"));
     V0_println(F("*: factory reset all config values"));
@@ -960,7 +959,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));
 
-    V0_println(F("show_values() END"));
+    V0_print(F("show_values() END" EOL));
 }
 
 //*****************************************************

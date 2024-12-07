@@ -90,6 +90,8 @@ extern bool VERBY[10];
 
 extern uint32_t GpsInvalidAllCnt;
 extern bool GpsInvalidAll;
+// to avoid servicing keyboard while in aggressive power transition
+extern bool IGNORE_KEYBOARD_CHARS;
 
 // FIX! gonna need an include for this? maybe note
 // # include <TimeLib.h>
@@ -716,12 +718,21 @@ void GpsFullColdReset(void) {
     // so we can undo the testing
     uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
     if (LOWEST_POWER_TURN_ON_MODE) {
+        // the global IGNORE_KEYBOARD_CHARS is used to guarantee no interrupting of core1
+        // while we've messed with clocks during the gps agressive power on control
+        // it should always be re-enabled after 30 secs. 
+        // Worst case to recover: unplug power and plug in again
+
         Watchdog.reset();
+        V1_print(F(RED));
         V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
         V1_printf("Going to slow PLL_SYS_MHZ from %lu to 18Mhz before long sleep" EOL, PLL_SYS_MHZ);
         V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
         V1_print("Also lowering core voltage to 0.95v" EOL);
+        V1_print(F(NORMAL));
         V1_flush();
+
+        IGNORE_KEYBOARD_CHARS = true;
         // DRASTIC measures, do before sleep!
         // save current sys freq
         // FIX! does the flush above not wait long enough? Wait another second before shutting down serial
@@ -764,11 +775,12 @@ void GpsFullColdReset(void) {
         tusb_init();
         Serial.begin(115200);
 
-        //******************
         V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
         V1_print(F("Restored USB pll to 48Mhz" EOL));
         V1_print(F("Restored core voltage back to 1.1v" EOL));
         V1_flush();
+
+        IGNORE_KEYBOARD_CHARS = false;
     }
 
     //******************

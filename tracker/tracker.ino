@@ -263,9 +263,9 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // lets try 4800. is power less at power on?
 // hmm something was not working with gps warm reset with 4800. back to 9600
 
-// extern const int SERIAL2_BAUD_RATE = 4800;
+extern const int SERIAL2_BAUD_RATE = 4800;
 // works down to 50 Mhz fine? what's the lowest SYS_PLL_MHZ that works?
-extern const int SERIAL2_BAUD_RATE = 9600;
+// extern const int SERIAL2_BAUD_RATE = 9600;
 // extern const int SERIAL2_BAUD_RATE = 19200;
 
 // can't seem to recover to 9600 after trying 38400? full cold reset not working?
@@ -406,6 +406,12 @@ uint64_t GpsFixMillis = 0;
 uint64_t GpsStartMillis = 0;
 uint64_t loopCnt = 0;
 
+// the global IGNORE_KEYBOARD_CHARS is used to guarantee no interrupting of core1
+// while we've messed with clocks during the gps agressive power on control
+// it should always be re-enabled after 30 secs. 
+// Worst case to recover: unplug power and plug in again
+bool IGNORE_KEYBOARD_CHARS = false;
+
 //***********************************************************
 // FIX! should this be non-zero?
 // Maybe all a don't care now with the voltage monitor that causes reset.
@@ -491,6 +497,7 @@ void setup() {
         read_FLASH();
         forceHACK();
         Watchdog.reset();
+        // hmm IGNORE_KEYBOARD_CHARS is not factored into this..should always be false at this point?
         found_any = drainSerialTo_CRorNL(1000);
         // how to compare char: ..== 'R' is the same as == 82 (ascii value)
         if (!found_any) {
@@ -585,7 +592,7 @@ void loop() {
         // This core can handle modifying config state, not the other core
         // so the other core just should be timely in stopping normal balloon work.
         int charsAvailable = (int) Serial.available();
-        if (charsAvailable) {
+        if (charsAvailable && !IGNORE_KEYBOARD_CHARS) {
             // FIX! this is a just-in-case we had temporarily slowed the clock to 18Mhz
             // during the first gps cold reset, and keyboard interrupted that?
             // this will make the clock right again
@@ -607,19 +614,15 @@ void loop() {
             // NO! we'd have to wake up more than once a sec. Leave it on the other core
             // which is active anyhow
 
-            // moved here from loop1
-            if (Serial.available()) {
-                if (VERBY[0]) 
-                    Serial.println(F("tracker.ino: (A) Going to user_interface() from loop()"));
-                setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
-                updateStatusLED();
-                // sleep_ms(1000);
-                user_interface();
-                // won't return here, since all exits from user_interface reboot
-            }
+            if (VERBY[0]) 
+                Serial.println(F("tracker.ino: (A) Going to user_interface() from loop()"));
+            setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
+            updateStatusLED();
+            // sleep_ms(1000);
+            user_interface();
+            // won't return here, since all exits from user_interface reboot
             // so will never resume the other core if we idled it?
             // rp2040.resumeOtherCore();
-
         }
     }
 }
