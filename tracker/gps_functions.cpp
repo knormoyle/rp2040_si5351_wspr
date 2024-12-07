@@ -378,10 +378,11 @@ void setGpsConstellations(int desiredConstellations) {
         case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break; // GPS+BDS+GLONASS
         default:
             usedConstellations = 3;
-            strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62);
+            strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62); // GPS+BDS
     }
 
-    if (false) {
+    // FIX! does the above not do anything? is this the only way?
+    if (true) {
         // alternative experiment
         // what about this rumored PMTK353 sentence?
         // $PMTK353,1,1,1,0,1*2B : Search GPS BEIDOU GLONASS and GALILEO satellites
@@ -470,6 +471,7 @@ void setGpsBaud(int desiredBaud) {
     Serial2.flush();
     delay(1000);
     Serial2.print(nmeaBaudSentence);
+    Serial2.flush();
     V1_printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
     // have to wait for the sentence to get out and complete at the GPS
     delay(3000);
@@ -610,7 +612,7 @@ void GpsFullColdReset(void) {
         digitalWrite(GpsPwr, HIGH); // deassert
     }
 
-    sleepForMilliSecs(1000, false);
+    sleepForMilliSecs(500, false);
 
     //******************
     // Cold Start. doesn't clear any system/user configs
@@ -623,28 +625,30 @@ void GpsFullColdReset(void) {
     // but we're relying on the Serial2.begin/end to be correct?
     // might as well commit to being right!
     digitalWrite(GpsPwr, LOW); // assert
-    sleepForMilliSecs(1000, false);
+    sleepForMilliSecs(500, false);
 
     // deassert NRESET after power on (okay in both normal and experimental case)
     if (EXPERIMENTAL_COLD_POWER_ON) {
         digitalWrite(GPS_NRESET_PIN, HIGH); // deassert
-        // wait 3 secs before we assert the GPS_ON_PIN?
-
+        // wait ? secs before we assert the GPS_ON_PIN?
         // gps shold come up at 9600 so look with our uart at 9600?
         Serial2.begin(9600);
-        sleepForMilliSecs(2000, false);
-        digitalWrite(GPS_ON_PIN, HIGH); // assert
-        sleepForMilliSecs(2000, false);
+        sleepForMilliSecs(1000, false);
+
+        if (!LOWEST_POWER_TURN_ON_MODE) 
+            // turn this on later in lowest power mode. while rp2040 is reduced power
+            digitalWrite(GPS_ON_PIN, HIGH); // assert
 
         // if we pick 4800 this will slow it down the broadcast during the intial gps first fix
-        // will this save power
+        // will this save power?
+        /*
         int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
         setGpsBaud(desiredBaud);
         sleepForMilliSecs(1000, false);
-
         setGpsBalloonMode();
         setGpsConstellations(1); 
         setGpsBroadcast(); 
+        */
     } else {
         digitalWrite(GPS_NRESET_PIN, HIGH);
     }
@@ -751,6 +755,10 @@ void GpsFullColdReset(void) {
         // enums for voltage at:
         // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
         vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
+
+        // finally turn on the gps here! (if we didn't already above (experimental mode)
+        digitalWrite(GPS_ON_PIN, HIGH); // assert
+
     } else {
         V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
     }
@@ -762,7 +770,9 @@ void GpsFullColdReset(void) {
     Watchdog.reset();
     if (LOWEST_POWER_TURN_ON_MODE) {
         vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
+        sleep_ms(1000);
         set_sys_clock_khz(freq_khz, true);
+        sleep_ms(1000);
 
         // pll_init() Parameters
         // pll	pll_sys or pll_usb
@@ -771,9 +781,11 @@ void GpsFullColdReset(void) {
         // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
         // post_div2	Post Divider 2 - range 1-7
         pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+        sleep_ms(1000);
         // High-level Adafruit TinyUSB init code, does many things to get the USB controller back online
         tusb_init();
         Serial.begin(115200);
+        sleep_ms(1000);
 
         V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
         V1_print(F("Restored USB pll to 48Mhz" EOL));
@@ -785,41 +797,35 @@ void GpsFullColdReset(void) {
 
     //******************
     Watchdog.reset();
-    if (!EXPERIMENTAL_COLD_POWER_ON) {
-        //******************
-        // we already changed the baud rate earlier if we're doing the experimental power on
-        // if it came up already in our target baud rate
-        // this will be a no-op (seems it happens if vbat stays on)
-        // if so, since we only have one target baud rate hardwired in, 
-        // we should be able to start talking to it 
-        // gps shold come up at 9600 so look with our uart at 9600
-        Serial2.begin(9600);
-        // wait for 1 secs before sending commands
-        sleepForMilliSecs(1000, false);
-        V1_println(F("Should get some output at 9600 after reset?"));
-        // we'll see if it's wrong baud rate or not, at this point
-        checkInitialGpsOutput();
 
-        // But then we'll be good when we transition to the target rate also
-        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
-        setGpsBaud(desiredBaud);
-        // this is all done earlier in the experimental mode
-        // FIX! we don't need to toggle power to get the effect?
-        setGpsBalloonMode();
-        // all constellations GPS/BaiDou/Glonass
-        // setGpsConstellations(7); 
-        // FIX! try just gps to see effect on power on current
-        setGpsConstellations(1); 
-        // no ZDA/ANT TXT (NMEA sentences) after this:
-        setGpsBroadcast(); 
-        //******************
-    }
+    // we should be able to start talking to it 
+    // gps shold come up at 9600 so look with our uart at 9600?
+    Serial2.begin(9600);
+    // wait for 1 secs before sending commands
+    sleepForMilliSecs(1000, false);
+    V1_println(F("Should get some output at 9600 after reset?"));
+    // we'll see if it's wrong baud rate or not, at this point
+    checkInitialGpsOutput();
+
+    // But then we'll be good when we transition to the target rate also
+    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+    setGpsBaud(desiredBaud);
+    // this is all done earlier in the experimental mode
+    // FIX! we don't need to toggle power to get the effect?
+    setGpsBalloonMode();
+    // all constellations GPS/BaiDou/Glonass
+    // setGpsConstellations(7); 
+    // FIX! try just gps to see effect on power on current
+    setGpsConstellations(7); 
+    // no ZDA/ANT TXT (NMEA sentences) after this:
+    setGpsBroadcast(); 
+    //******************
+
     checkInitialGpsOutput();
 
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
 
-    //******************
     V1_println(F("GpsFullColdReset END"));
 }
 

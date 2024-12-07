@@ -263,9 +263,10 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // lets try 4800. is power less at power on?
 // hmm something was not working with gps warm reset with 4800. back to 9600
 
-extern const int SERIAL2_BAUD_RATE = 4800;
+// seem to leave the polling for NMEA data too soon at 4800..miss some chars
+// extern const int SERIAL2_BAUD_RATE = 4800;
 // works down to 50 Mhz fine? what's the lowest SYS_PLL_MHZ that works?
-// extern const int SERIAL2_BAUD_RATE = 9600;
+extern const int SERIAL2_BAUD_RATE = 9600;
 // extern const int SERIAL2_BAUD_RATE = 19200;
 
 // can't seem to recover to 9600 after trying 38400? full cold reset not working?
@@ -707,13 +708,14 @@ void setup1() {
     // does a full gps cold reset now?
     GpsINIT(); 
 
-    GpsOFF(false); // don't keep TinyGPS state
+    // 12/7/24. the GpsINIT covers GpsON() now?
+    // GpsOFF(false); // don't keep TinyGPS state
     GpsFixMillis = 0;
     GpsStartMillis = millis();
 
     // usb power means vbat is always on. so a hot reset!
     // we already did a cold reset in the GpsINIT() ..don't do it again!
-    GpsON(false);
+    // GpsON(false);
 
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
