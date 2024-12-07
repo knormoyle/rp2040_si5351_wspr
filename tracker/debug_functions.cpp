@@ -8,6 +8,13 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+// for measureMyFreqs?
+#include "pico/stdlib.h"
+#include "hardware/pll.h"
+#include "hardware/clocks.h"
+#include "hardware/structs/pll.h"
+#include "hardware/structs/clocks.h"
+
 // stdlib https://www.tutorialspoint.com/c_standard_library/stdlib_h.htm
 // #include <cstdio.h>
 // #include <stdlib.h>
@@ -213,6 +220,7 @@ void StampPrintf(const char* pformat, ...) {
     }
 }
 
+//***********************************
 // Outputs the content of the log buffer to stdio (UART and/or USB)
 // Direct output to UART is very slow so we will do it in CPU idle times
 // and not in time critical functions
@@ -227,3 +235,47 @@ void DoLogPrint() {
     updateStatusLED();
     Watchdog.reset();
 }
+
+//***********************************
+// from: https://sourcevu.sysprogs.com/rp2040/examples/clocks/hello_48MHz/files/hello_48MHz.c#tok293
+// don't namespace collide with measure_freqs() in SPI.h? 
+void measureMyFreqs(void) {
+    V1_print(F("measureMyFreqs() START" EOL));
+    // see for frequency_count_khz()
+    // evidently uses a special frequency counter ??
+    // https://sourcevu.sysprogs.com/rp2040/picosdk/files/src/rp2_common/hardware_clocks/clocks.c#tok966
+    // what about this? interesting for something? what is clock_handle_t?
+    // probably 'clk_sys' looking at people's use of clock_configure()
+    // https://sourcevu.sysprogs.com/rp2040/picosdk/files/src/rp2_common/hardware_clocks/clocks.c#tok909
+    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/clocks.c
+
+    // uint32_t clock_get_hz(clock_handle_t clock) {
+    uint32_t f_clk_sys_get_hz = clock_get_hz(clk_sys);
+
+    uint32_t f_pll_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
+    uint32_t f_pll_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
+    uint32_t f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
+    uint32_t f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
+    uint32_t f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
+    uint32_t f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
+    uint32_t f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
+#ifdef CLOCKS_FC0_SRC_VALUE_CLK_RTC
+    uint32_t f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
+#endif
+
+    V1_printf("clk_sys_get_hz  = %luHz" EOL, f_clk_sys_get_hz);
+    V1_printf("pll_sys  = %lukHz" EOL, f_pll_sys);
+    V1_printf("pll_usb  = %lukHz" EOL, f_pll_usb);
+    V1_printf("rosc     = %lukHz" EOL, f_rosc);
+    V1_printf("clk_sys  = %lukHz" EOL, f_clk_sys);
+    V1_printf("clk_peri = %lukHz" EOL, f_clk_peri);
+    V1_printf("clk_usb  = %lukHz" EOL, f_clk_usb);
+    V1_printf("clk_adc  = %lukHz" EOL, f_clk_adc);
+#ifdef CLOCKS_FC0_SRC_VALUE_CLK_RTC
+    V1_printf("clk_rtc  = %lukHz" EOL, f_clk_rtc);
+#endif
+
+    // Can't measure clk_ref / xosc as it is the ref
+    V1_print(F("measureMyFreqs() END" EOL));
+}
+

@@ -17,5 +17,7 @@ void printInt(uint64_t val, bool valid, int len);
 // buffering that emptys with DoLogPrint()
 void StampPrintf(const char* pformat, ...);
 void DoLogPrint();
+// report all interesting clock freqs
+void measureMyFreqs(void);
 
 #endif

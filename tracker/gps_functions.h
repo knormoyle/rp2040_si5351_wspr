@@ -15,12 +15,23 @@
 bool GpsIsOn(void);
 void GpsINIT(void);
 void GpsFullColdReset(void);
+void GpsWarmReset(void);
 void invalidateTinyGpsState(void);
 void GpsON(bool GpsColdReset);
 void GpsOFF(bool keepTinyGpsState);
 void updateGpsDataAndTime(int ms);
-void sendUBX(uint8_t *MSG, uint8_t len);
-void setGPS_DynamicModel6();
 void gpsDebug(void);
+
+// these probably shouldn't be used outside gps_functions.cpp ?
+void nmeaBufferPrintAndClear(void);
+void nmeaBufferAndPrint(const char charToAdd, bool printIfFull);
+void sleepForMilliSecs(int n, bool enableEarlyOut);
+void drainInitialGpsOutput(void);
+void setGpsBalloonMode(void);
+void setGpsBroadcast(void);
+void disableGpsBroadcast(void);
+void setGpsConstellations(int desiredConstellations);
+void setGpsBaud(int desiredBaud);
+
 
 #endif

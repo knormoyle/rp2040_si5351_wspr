@@ -3,6 +3,8 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
+// REMEMBER: no references to Serial.* in BALLOON_MODE! (no usb)
+
 //*******************************************
 // Reference docs (for SIM28 but should apply)
 // can download all from https://simcom.ee/documents/?sort_by=size&sort_as=desc&dir=SIM28/
@@ -31,17 +33,18 @@
 //*******************************************
 // Printing too much
 // Many programmers run into trouble because they try to print too much debug info. 
-// The Arduino V1_print function will "block" until 
-// those output characters can be stored in a buffer. 
-// While the sketch is blocked at V1_print, 
-// the GPS device is probably still sending data. 
+// Serial.print() will "block" until output characters can be stored in a buffer. 
+// While blocked at V1_print, GPS is probably still sending data. 
 // The input buffer on a rp2040 is only 32 bytes
 // After 32 bytes have been received stored, all other data is dropped! 
 
-// It is crucial to call gps.available( gps_port ) or serial.read() frequently, 
+// It is crucial to call gps.available( gps_port ) or Serial2.read() frequently, 
 // and never to call a blocking function that takes more than 
 // (1/baud) = 104 usecs @ 9600 baud.. but: effective baud rate from gps chip is less than peak 
 // though?  Don't depend on depth 32 to absorb delay?
+
+// I decided to use polling mode, not be interrupt driven on Serial2 data.
+// more deterministic behavior? dunno.
 
 #include <Arduino.h>
 // for isprint()
@@ -98,12 +101,15 @@ extern bool IGNORE_KEYBOARD_CHARS;
 
 // we make RP2040 to 18mhz during the long gps cold reset fix time, then restore to this
 extern uint32_t PLL_SYS_MHZ; // decode of _clock_speed
+extern bool BALLOON_MODE;
 
 // ************************************************
 // false and true work here
 bool EXPERIMENTAL_WARM_POWER_ON = true;
 bool EXPERIMENTAL_COLD_POWER_ON = true;
 bool LOWEST_POWER_TURN_ON_MODE = true;
+bool ALLOW_USB_DISABLE_MODE = true;
+bool ALLOW_UPDATE_GPS_FLASH_MODE = true;
 
 // ************************************************
 static bool GpsIsOn_state = false;
@@ -208,8 +214,8 @@ int checkGpsBaudRate(int desiredBaud) {
 }
 
 //************************************************
-void checkInitialGpsOutput(void) {
-    V1_println(F("checkInitialGpsOutput START"));
+void drainInitialGpsOutput(void) {
+    V1_println(F("drainInitialGpsOutput START"));
 
     // FIX! rely on watchdog reset in case we stay here  forever?
     V1_println(F("drain any Serial2 garbage first"));
@@ -237,7 +243,7 @@ void checkInitialGpsOutput(void) {
     nmeaBufferPrintAndClear();
     updateStatusLED();
     Watchdog.reset();
-    V1_println(F("checkInitialGpsOutput END"));
+    V1_println(F("drainInitialGpsOutput END"));
 }
 
 //************************************************
@@ -255,7 +261,7 @@ void setGpsBalloonMode(void) {
 //************************************************
 // always GGA GLL GSA GSV RMC
 // nver ZDA TXT
-void setGpsBroadcast() {
+void setGpsBroadcast(void) {
     V1_print(F("setGpsBroadcast START" EOL));
     updateStatusLED();
     Watchdog.reset();
@@ -269,8 +275,7 @@ void setGpsBroadcast() {
     // hhmmss.ss = UTC
     // xx = Day, 01 to 31
     // xx = Month, 01 to 12
-    // xxxx = Year
-    // xx = Local zone description, 00 to +/- 13 hours
+    // xxxx = Year // xx = Local zone description, 00 to +/- 13 hours
     // xx = Local zone minutes description (same sign as hours)
 
     //*************************************************
@@ -329,6 +334,21 @@ void setGpsBroadcast() {
     V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
     V1_print(F("setGpsBroadcast END" EOL ));
 
+}
+//************************************************
+void disableGpsBroadcast(void) {
+    V1_print(F("disableGpsBroadcast START" EOL));
+    updateStatusLED();
+    Watchdog.reset();
+    // room for a 60 char sentence with CR and LF also
+    char nmeaSentence[62] = { 0 };
+    // checksum from https://www.meme.au/nmea-checksum.html
+    strncpy(nmeaSentence, "$PCAS03,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*02" CR LF, 62);
+    Serial2.print(nmeaSentence);
+    Serial2.flush();
+    // delay(1000);
+    V1_printf("disableGpsBroadcast sent %s" EOL, nmeaSentence);
+    V1_print(F("disableGpsBroadcast END" EOL ));
 }
 
 //***************************************
@@ -584,9 +604,14 @@ void GpsFullColdReset(void) {
     updateStatusLED();
 
     // turn it off first. may be off or on currently
-    // turn off the serial2
+    V1_println(F("Turn off the serial2..does it float at the gps then? gps doesn't try to do UART stuff at poweron?"));
     V1_flush();
     Serial2.end();
+
+    // experiment idea: can we float the rx/tx pins of Serial2? maybe switch it 
+    // to other pins temporarily?
+    // https://github.com/earlephilhower/arduino-pico/discussions/199
+
 
     // assert reset during power off
 
@@ -623,21 +648,26 @@ void GpsFullColdReset(void) {
     // always do this just in case the GpsIsOn() got wrong?
     // but we're relying on the Serial2.begin/end to be correct?
     // might as well commit to being right!
+
+    // FIX! hmm. does driving the uart rx/tx to gps while gps is powering up
+    // change it's behavior. What if we left them floating until after powerup?
+    // seems like the gps backs up on the serial data?
+
     digitalWrite(GpsPwr, LOW); // assert
     sleepForMilliSecs(500, false);
 
     // deassert NRESET after power on (okay in both normal and experimental case)
+    // new 12/7/24 disable Serial2 while powering on!
+    // should we float the rx/tx also somehow?
+    Serial2.end();
+    sleepForMilliSecs(500, false);
+
     if (EXPERIMENTAL_COLD_POWER_ON) {
         digitalWrite(GPS_NRESET_PIN, HIGH); // deassert
-        // wait ? secs before we assert the GPS_ON_PIN?
-        // gps shold come up at 9600 so look with our uart at 9600?
-        Serial2.begin(9600);
-        sleepForMilliSecs(1000, false);
-
-        if (!LOWEST_POWER_TURN_ON_MODE) 
+        if (!LOWEST_POWER_TURN_ON_MODE) {
             // turn this on later in lowest power mode. while rp2040 is reduced power
             digitalWrite(GPS_ON_PIN, HIGH); // assert
-
+        }
     } else {
         digitalWrite(GPS_NRESET_PIN, HIGH);
     }
@@ -657,6 +687,135 @@ void GpsFullColdReset(void) {
     }
 
     Watchdog.reset();
+    // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
+    // just go into light sleep to reduce rp2040 power demand for 1 minute
+    // i.e. guarantee that cold reset, takes 1 minute? 
+    // hmm. we're stalling things now. maybe only sleep for 30 secs
+    // FIX! this apparently makes the Serial2 dysfunctional so the gps chip can't send output
+    // it backs up on the initial TXT broadcast (revisions) and then hits a power peak
+    // right after we fix the clock back to normal (50Mhz min tried)
+    // so: is that worth it? dunno.
+
+    // other power saving: disable usb pll (and restore)
+    
+    // https://github.com/earlephilhower/arduino-pico/discussions/1544
+    // we had to make sure we reset the watchdog, now, in sleepForMilliSecs
+    // we already wakeup periodically to update led, so fine
+
+    //******************
+    // so we can undo the testing
+    uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
+    if (LOWEST_POWER_TURN_ON_MODE) {
+        // the global IGNORE_KEYBOARD_CHARS is used to guarantee no interrupting of core1
+        // while we've messed with clocks during the gps agressive power on control
+        // it should always be re-enabled after 30 secs. 
+        // Worst case to recover: unplug power and plug in again
+
+        Watchdog.reset();
+        measureMyFreqs();
+        V1_print(F(RED));
+        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
+        V1_printf("Going to slow PLL_SYS_MHZ from %lu to 18Mhz before long sleep" EOL, PLL_SYS_MHZ);
+        V1_print("No keyboard interrupts will work because disabling USB PLL too or minimally: Serial.end()" EOL);
+        V1_print("Also lowering core voltage to 0.95v" EOL);
+        V1_print(F(NORMAL));
+        V1_flush();
+
+        IGNORE_KEYBOARD_CHARS = true;
+        // DRASTIC measures, do before sleep!
+        // save current sys freq
+        // FIX! does the flush above not wait long enough? 
+        // Wait another second before shutting down serial
+        // sleep may be problematic in this transition?
+        // some more thoughts about low power rp2040 and clocks
+        // was wondering what measureMyFreqs() sees differing ring osc and rtc freqs
+        // https://forums.raspberrypi.com/viewtopic.php?t=342156
+
+        busy_wait_ms(500);
+        // remember not to touch Serial if in BALOOON_MODE!!
+        if (!BALLOON_MODE) Serial.end();
+
+        if (ALLOW_USB_DISABLE_MODE) {
+            busy_wait_ms(500);
+            // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
+            // There are two PLLs in RP2040. They are:
+            // pll_sys - Used to generate up to a 133MHz (actually more) system clock
+            // pll_usb - Used to generate a 48MHz USB reference clock
+
+            // void pll_deinit (PLL	pll)	
+            // Release/uninitialise specified PLL.This will turn off the power to the specified PLL. 
+            // Note this function does not check if the PLL is in use before powering it off. (use care)
+            // this seems to crap out
+            // pll_deinit(pll_usb);
+
+            // examples: https://sourcevu.sysprogs.com/rp2040/picosdk/symbols/pll_deinit
+            // sidenote: pi pico sdk has set_sys_clock_48mhz() function
+            // Initialise the system clock to 48MHz Set the system clock to 48MHz, 
+            // and set the peripheral clock to match.
+            // example:
+            // https://sourcevu.sysprogs.com/rp2040/examples/clocks/hello_48MHz/files/hello_48MHz.c#tok293
+
+
+            // HACK: doesn't work?
+            // pll_deinit(pll_usb);
+        }
+        set_sys_clock_khz(18000, true);
+        // enums for voltage at:
+        // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
+        // vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
+
+        // finally turn on the gps here! (if we didn't already above (experimental mode)
+        digitalWrite(GPS_ON_PIN, HIGH); // assert
+
+    } else {
+        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
+    }
+
+    // can't do this while USB is disabled? but if we can't disable deinit USB (see above), we can?
+    measureMyFreqs();
+    // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
+    sleepForMilliSecs(30000, false); // 30 secs
+
+    //******************
+    // DRASTIC measures, undo after sleep!
+    Watchdog.reset();
+    if (LOWEST_POWER_TURN_ON_MODE) {
+        // maybe try not changing core voltage (here and above)
+        // vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
+        busy_wait_ms(1000);
+        set_sys_clock_khz(freq_khz, true);
+
+        // don't bother reinitting if in BALLOON_MODE (no usb)
+        // especially: don't try touching Serial.*
+        if (ALLOW_USB_DISABLE_MODE && !BALLOON_MODE) {
+        busy_wait_ms(1000);
+            // pll_init() Parameters
+            // pll	pll_sys or pll_usb
+            // ref_div	Input clock divider.
+            // vco_freq	Requested output from the VCO (voltage controlled oscillator)
+            // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
+            // post_div2	Post Divider 2 - range 1-7
+            pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+            busy_wait_ms(1000);
+            // High-level Adafruit TinyUSB init code, 
+            // does many things to get USB back online
+            tusb_init();
+            Serial.begin(115200);
+            busy_wait_ms(1000);
+        }
+
+        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+        V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
+        V1_print(F("Restored core voltage back to 1.1v" EOL));
+        V1_flush();
+        measureMyFreqs();
+
+        IGNORE_KEYBOARD_CHARS = false;
+    }
+
+    //******************
+    Watchdog.reset();
+
     if (false) {
         // TOTAL HACK experiment
         // since vbat seems to preserve the baud rate, even with NRESET assertion
@@ -691,105 +850,10 @@ void GpsFullColdReset(void) {
         sleepForMilliSecs(1000, false);
 
     }
-    // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
-    // just go into light sleep to reduce rp2040 power demand for 1 minute
-    // i.e. guarantee that cold reset, takes 1 minute? 
-    // hmm. we're stalling things now. maybe only sleep for 30 secs
-    // FIX! this apparently makes the Serial2 dysfunctional so the gps chip can't send output
-    // it backs up on the initial TXT broadcast (revisions) and then hits a power peak
-    // right after we fix the clock back to normal (50Mhz min tried)
-    // so: is that worth it? dunno.
 
-    // other power saving: disable usb pll (and restore)
-    
-    // https://github.com/earlephilhower/arduino-pico/discussions/1544
-    // we had to make sure we reset the watchdog, now, in sleepForMilliSecs
-    // we already wakeup periodically to update led, so fine
-    Watchdog.reset();
-
-    //******************
-    // so we can undo the testing
-    uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
-    if (LOWEST_POWER_TURN_ON_MODE) {
-        // the global IGNORE_KEYBOARD_CHARS is used to guarantee no interrupting of core1
-        // while we've messed with clocks during the gps agressive power on control
-        // it should always be re-enabled after 30 secs. 
-        // Worst case to recover: unplug power and plug in again
-
-        Watchdog.reset();
-        V1_print(F(RED));
-        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
-        V1_printf("Going to slow PLL_SYS_MHZ from %lu to 18Mhz before long sleep" EOL, PLL_SYS_MHZ);
-        V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
-        V1_print("Also lowering core voltage to 0.95v" EOL);
-        V1_print(F(NORMAL));
-        V1_flush();
-
-        IGNORE_KEYBOARD_CHARS = true;
-        // DRASTIC measures, do before sleep!
-        // save current sys freq
-        // FIX! does the flush above not wait long enough? 
-        // Wait another second before shutting down serial
-        // sleep may be problematic in this transition?
-        busy_wait_ms(500);
-        Serial.end();
-        busy_wait_ms(500);
-        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
-        // There are two PLLs in RP2040. They are:
-        // pll_sys - Used to generate up to a 133MHz (actually more) system clock
-        // pll_usb - Used to generate a 48MHz USB reference clock
-
-        // void pll_deinit (PLL	pll)	
-        // Release/uninitialise specified PLL.This will turn off the power to the specified PLL. 
-        // Note this function does not check if the PLL is in use before powering it off. (use care)
-        // this seems to crap out
-        // pll_deinit(pll_usb);
-        set_sys_clock_khz(18000, true);
-        // enums for voltage at:
-        // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
-        vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
-
-        // finally turn on the gps here! (if we didn't already above (experimental mode)
-        digitalWrite(GPS_ON_PIN, HIGH); // assert
-
-    } else {
-        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
-    }
-
-    sleepForMilliSecs(30000, false); // 30 secs
-
-    //******************
-    // DRASTIC measures, undo after sleep!
-    Watchdog.reset();
-    if (LOWEST_POWER_TURN_ON_MODE) {
-        vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
-        busy_wait_ms(1000);
-        set_sys_clock_khz(freq_khz, true);
-        busy_wait_ms(1000);
-
-        // pll_init() Parameters
-        // pll	pll_sys or pll_usb
-        // ref_div	Input clock divider.
-        // vco_freq	Requested output from the VCO (voltage controlled oscillator)
-        // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
-        // post_div2	Post Divider 2 - range 1-7
-        pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
-        busy_wait_ms(1000);
-        // High-level Adafruit TinyUSB init code, does many things to get the USB controller back online
-        tusb_init();
-        Serial.begin(115200);
-        busy_wait_ms(1000);
-
-        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
-        V1_print(F("Restored USB pll to 48Mhz" EOL));
-        V1_print(F("Restored core voltage back to 1.1v" EOL));
-        V1_flush();
-
-        IGNORE_KEYBOARD_CHARS = false;
-    }
-
-    //******************
-    Watchdog.reset();
+    // hmm. we get a power surge here then? Is it because the Serial2 data was backed up 
+    // in the gps chip and busy waiting? Drain it? (usually it's the TXT stuff (versions)
+    // at power on. Don't care.
 
     // we should be able to start talking to it 
     // gps shold come up at 9600 so look with our uart at 9600?
@@ -798,7 +862,7 @@ void GpsFullColdReset(void) {
     sleepForMilliSecs(1000, false);
     V1_println(F("Should get some output at 9600 after reset?"));
     // we'll see if it's wrong baud rate or not, at this point
-    checkInitialGpsOutput();
+    drainInitialGpsOutput();
 
     // But then we'll be good when we transition to the target rate also
     int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
@@ -812,9 +876,8 @@ void GpsFullColdReset(void) {
     setGpsConstellations(7); 
     // no ZDA/ANT TXT (NMEA sentences) after this:
     setGpsBroadcast(); 
-    //******************
 
-    checkInitialGpsOutput();
+    drainInitialGpsOutput();
 
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
@@ -886,9 +949,35 @@ void GpsWarmReset(void) {
     // FIX! try just gps to see effect on power on current
     setGpsConstellations(1); 
     // no ZDA/TXT
+    // do this after the config write now
+    // setGpsBroadcast(); 
+
+    // from the CASIC_ProtocolSpecification_english.pdf page 24
+    // I suppose this could be dangerous, since it's writing a baud rate to the power off/on reset config state?
+    // could change it from 9600 and we'd lose track of what it is? As long as we stick with 9600 we should be safe
+    // CAS00. Description Save the current configuration information to FLASH. 
+    // Even if the receiver is completely powered off, the information in FLASH will not be lost.
+    // Format $PCAS00*CS<CR><LF>
+    // Example $PCAS00*01<CR><LF>
+
+    // will this help us to boot in a better config so we don't get the power demand peaks we see (on subsequent boots)
+    // maybe we shouldn't do this all the time? just once. Does the FLASH have a max # of writes issue? (100k or ??)
+    // we only do gps cold reset at start of day. Don't do it in BALLOON_MODE. that should fix the issue
+    if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
+        // risk: do we ever power on and not do this full cold reset that sets up broadcast?
+        // the warm gps reset shouldn't get new state from config?
+        disableGpsBroadcast(); 
+        // HMM! should we change it to no broadcast, in the FLASH, so cold reset power on might try to do no broadcast
+        char nmeaBaudSentence[21] = { 0 };
+        strncpy(nmeaBaudSentence, "$PCAS00*01" CR LF, 21);
+        V1_println(F("Write GPS current config state to GPS Flash (for use in next GPS cold reset?)"));
+        V1_printf("%s" EOL, nmeaBaudSentence);
+        Serial2.print(nmeaBaudSentence);
+        Serial2.flush();
+    }
     setGpsBroadcast(); 
 
-    checkInitialGpsOutput();
+    drainInitialGpsOutput();
     V1_println(F("GpsWarmReset END"));
 }
 
