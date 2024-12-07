@@ -98,6 +98,12 @@ extern bool GpsInvalidAll;
 extern uint32_t PLL_SYS_MHZ; // decode of _clock_speed
 
 // ************************************************
+// false and true work here
+bool EXPERIMENTAL_WARM_POWER_ON = true;
+bool EXPERIMENTAL_COLD_POWER_ON = true;
+bool LOWEST_POWER_TURN_ON_MODE = true;
+
+// ************************************************
 static bool GpsIsOn_state = false;
 bool GpsIsOn(void) {
     return GpsIsOn_state;
@@ -574,14 +580,11 @@ void GpsFullColdReset(void) {
     updateStatusLED();
 
     // turn it off first. may be off or on currently
-    // turn off the serial
+    // turn off the serial2
     V1_flush();
-    Serial.end();
+    Serial2.end();
 
     // assert reset during power off
-
-    bool EXPERIMENTAL_COLD_POWER_ON = true;
-
 
     // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
     // just go into light sleep to reduce rp2040 power demand for 1 minute
@@ -629,11 +632,14 @@ void GpsFullColdReset(void) {
         Serial2.begin(9600);
         sleepForMilliSecs(2000, false);
         digitalWrite(GPS_ON_PIN, HIGH); // assert
-        sleepForMilliSecs(1000, false);
+        sleepForMilliSecs(2000, false);
+
         // if we pick 4800 this will slow it down the broadcast during the intial gps first fix
         // will this save power
         int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
         setGpsBaud(desiredBaud);
+        sleepForMilliSecs(1000, false);
+
         setGpsBalloonMode();
         setGpsConstellations(1); 
         setGpsBroadcast(); 
@@ -706,12 +712,10 @@ void GpsFullColdReset(void) {
     // we already wakeup periodically to update led, so fine
     Watchdog.reset();
 
-
     //******************
     // so we can undo the testing
-    bool DRASTIC_MODE = false;
     uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
-    if (DRASTIC_MODE) {
+    if (LOWEST_POWER_TURN_ON_MODE) {
         Watchdog.reset();
         V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
         V1_printf("Going to slow PLL_SYS_MHZ from %lu to 18Mhz before long sleep" EOL, PLL_SYS_MHZ);
@@ -727,7 +731,6 @@ void GpsFullColdReset(void) {
         // There are two PLLs in RP2040. They are:
         // pll_sys - Used to generate up to a 133MHz (actually more) system clock
         // pll_usb - Used to generate a 48MHz USB reference clock
-
 
         // void pll_deinit (PLL	pll)	
         // Release/uninitialise specified PLL.This will turn off the power to the specified PLL. 
@@ -746,7 +749,7 @@ void GpsFullColdReset(void) {
     //******************
     // DRASTIC measures, undo after sleep!
     Watchdog.reset();
-    if (DRASTIC_MODE) {
+    if (LOWEST_POWER_TURN_ON_MODE) {
         vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
         set_sys_clock_khz(freq_khz, true);
 
@@ -771,8 +774,8 @@ void GpsFullColdReset(void) {
     //******************
     Watchdog.reset();
     if (!EXPERIMENTAL_COLD_POWER_ON) {
+        //******************
         // we already changed the baud rate earlier if we're doing the experimental power on
-        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
         // if it came up already in our target baud rate
         // this will be a no-op (seems it happens if vbat stays on)
         // if so, since we only have one target baud rate hardwired in, 
@@ -784,10 +787,10 @@ void GpsFullColdReset(void) {
         V1_println(F("Should get some output at 9600 after reset?"));
         // we'll see if it's wrong baud rate or not, at this point
         checkInitialGpsOutput();
-        // But then we'll be good when we transition to the target rate also
-        setGpsBaud(desiredBaud);
 
-        //******************
+        // But then we'll be good when we transition to the target rate also
+        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+        setGpsBaud(desiredBaud);
         // this is all done earlier in the experimental mode
         // FIX! we don't need to toggle power to get the effect?
         setGpsBalloonMode();
@@ -797,6 +800,7 @@ void GpsFullColdReset(void) {
         setGpsConstellations(1); 
         // no ZDA/ANT TXT (NMEA sentences) after this:
         setGpsBroadcast(); 
+        //******************
     }
     checkInitialGpsOutput();
 
@@ -819,11 +823,10 @@ void GpsWarmReset(void) {
     // turn it off first. may be off or on currently
     // turn off the serial
     V1_flush();
-    Serial.end();
+    Serial2.end();
 
     // don't assert reset during power off
 
-    bool EXPERIMENTAL_WARM_POWER_ON = true;
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
     if (EXPERIMENTAL_WARM_POWER_ON) {
         V1_println(F("Doing Gps EXPERIMENTAL_WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
@@ -861,11 +864,10 @@ void GpsWarmReset(void) {
     // or will this come out of warm reset at 9600 baud and we can't talk to it?
     
     // FIX! this is a don't care then? whatever it was? or ??
-    if (false) {
-        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
-        // then up the speed to desired (both gps chip and then Serial2
-        setGpsBaud(desiredBaud);
-    }
+    // but since we serial2.end() above, we have to restart it on the rp2040
+    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+    // then up the speed to desired (both gps chip and then Serial2
+    setGpsBaud(desiredBaud);
     setGpsBalloonMode();
 
     // all constellations
@@ -968,12 +970,12 @@ void GpsOFF(bool keepTinyGpsState) {
     digitalWrite(GpsPwr, HIGH);
     // Serial2.end() Disables serial communication,
     // To re-enable serial communication, call Serial2.begin().
-    // FIX! do we really need or want to turn off Serial2? Remember to Serial2.begin() when we turn it back on
-    // (only if it was off)
+    // FIX! do we really need or want to turn off Serial2? 
+    // Remember to Serial2.begin() when we turn it back on
     Serial2.end();
+
     // unlike i2c to vfo, we don't tear down the Serial2 definition...just .end() 
     // so we can just .begin() again later
-
     if (!keepTinyGpsState)
         invalidateTinyGpsState();
 
