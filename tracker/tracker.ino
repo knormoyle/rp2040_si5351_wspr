@@ -1434,7 +1434,6 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     // when we do writes?
     vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
     startSymbolFreq(hf_freq, 0);
-
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
     // GPS will stay off for all

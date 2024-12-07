@@ -774,25 +774,12 @@ void vfo_turn_on(uint8_t clk_num) {
     // 2 secs enough?
     sleep_ms(2000);
 
-    // did full init above instead..since we toggled vfo power?
-    if (false) {
-        // undo what vfo_turn_off() did! Everything else was left as is per vfo_init()?
-        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
-    }
-    // sleep_ms(1000);
-
-    // do these use a specific timer?
-    // busy_wait_us_32(100000);
-    // busy_wait_ms_32(1000);
-
     // what timer to use?
     // timer_busy_wait_ms
     // void timer_busy_wait_ms (timer_hw_t *timer, uint32_t delay_ms)
     // Busy wait wasting cycles for the given number of milliseconds using the given timer instance.
     // Parameters timer	the timer instance
 
-    // output 7MHz on CLK0
     uint8_t reg;
     // Disable all CLK output drivers
     V1_println(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
