@@ -50,6 +50,14 @@
 #include "debug_functions.h"
 #include "print_functions.h"
 #include "defines.h"
+// enums for voltage at:
+// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
+#include "hardware/vreg.h"
+// for disabling pll 
+// https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
+#include "hardware/pll.h"
+// ugh, do we need to include this for tusb_init()
+#include "tusb.h"
 
 // in libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 // for setTime()
@@ -85,6 +93,9 @@ extern bool GpsInvalidAll;
 
 // FIX! gonna need an include for this? maybe note
 // # include <TimeLib.h>
+
+// we make RP2040 to 18mhz during the long gps cold reset fix time, then restore to this
+extern uint32_t PLL_SYS_MHZ; // decode of _clock_speed
 
 // ************************************************
 static bool GpsIsOn_state = false;
@@ -305,11 +316,7 @@ void setGpsBroadcast() {
 
     Serial2.print(nmeaSentence);
     Serial2.flush();
-    delay(1000);
-
-    Serial2.print(nmeaSentence);
-    Serial2.flush();
-    delay(1000);
+    // delay(1000);
 
     V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
     V1_print(F("setGpsBroadcast END" EOL ));
@@ -616,9 +623,20 @@ void GpsFullColdReset(void) {
     // deassert NRESET after power on (okay in both normal and experimental case)
     if (EXPERIMENTAL_COLD_POWER_ON) {
         digitalWrite(GPS_NRESET_PIN, HIGH); // deassert
-        // wait 5 secs before we assert the GPS_ON_PIN?
-        sleepForMilliSecs(5000, false);
+        // wait 3 secs before we assert the GPS_ON_PIN?
+
+        // gps shold come up at 9600 so look with our uart at 9600?
+        Serial2.begin(9600);
+        sleepForMilliSecs(2000, false);
         digitalWrite(GPS_ON_PIN, HIGH); // assert
+        sleepForMilliSecs(1000, false);
+        // if we pick 4800 this will slow it down the broadcast during the intial gps first fix
+        // will this save power
+        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+        setGpsBaud(desiredBaud);
+        setGpsBalloonMode();
+        setGpsConstellations(1); 
+        setGpsBroadcast(); 
     } else {
         digitalWrite(GPS_NRESET_PIN, HIGH);
     }
@@ -674,45 +692,89 @@ void GpsFullColdReset(void) {
     }
     // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
     // just go into light sleep to reduce rp2040 power demand for 1 minute
-    // i.e. guarantee that cold reset, takes 1 minute?
-    V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 1 minute"));
+    // i.e. guarantee that cold reset, takes 1 minute? 
+    Watchdog.reset();
+    V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 60 secs" EOL));
+    V1_printf("Going to slow PLL_SYS_MHZ from %lu to 18Mhz before long sleep" EOL, PLL_SYS_MHZ);
+    V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
+    V1_print("Also lowering core voltage to 0.95v" EOL);
+    V1_flush();
+    // FIX! this apparently makes the Serial2 dysfunctional so the gps chip can't send output
+    // it backs up on the initial TXT broadcast (revisions) and then hits a power peak
+    // right after we fix the clock back to normal (50Mhz min tried)
+    // so: is that worth it? dunno.
+
+    // other power saving: disable usb pll (and restore)
+    
+    // https://github.com/earlephilhower/arduino-pico/discussions/1544
     // we had to make sure we reset the watchdog, now, in sleepForMilliSecs
     // we already wakeup periodically to update led, so fine
     Watchdog.reset();
-    sleepForMilliSecs(60000, false);
 
+    //******************
+    // DRASTIC measures, do before sleep!
+    // save current sys freq
+    uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
+    // FIX! does the flush above not wait long enough?
+    sleep_ms(1000);
+    Serial.end();
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
+    // pll_deinit(pll_usb);
+
+    set_sys_clock_khz(18000, true);
+    // enums for voltage at:
+    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
+    vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
+
+    sleepForMilliSecs(60000, false); // 60 secs
+
+    //******************
+    // DRASTIC measures, undo after sleep!
+    Watchdog.reset();
+    vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
+    set_sys_clock_khz(freq_khz, true);
+    pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+    // High-level Adafruit TinyUSB init code, does many things to get the USB controller back online
+    tusb_init();
+    Serial.begin(115200);
+
+    //******************
+    V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+    V1_print(F("Restored USB pll to 48Mhz" EOL));
+    V1_print(F("Restored core voltage back to 1.1v" EOL));
+    V1_flush();
 
     //******************
     Watchdog.reset();
-    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+    if (!EXPERIMENTAL_COLD_POWER_ON) {
+        // we already changed the baud rate earlier if we're doing the experimental power on
+        int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+        // if it came up already in our target baud rate
+        // this will be a no-op (seems it happens if vbat stays on)
+        // if so, since we only have one target baud rate hardwired in, 
+        // we should be able to start talking to it 
+        // gps shold come up at 9600 so look with our uart at 9600
+        Serial2.begin(9600);
+        // wait for 1 secs before sending commands
+        sleepForMilliSecs(1000, false);
+        V1_println(F("Should get some output at 9600 after reset?"));
+        // we'll see if it's wrong baud rate or not, at this point
+        checkInitialGpsOutput();
+        // But then we'll be good when we transition to the target rate also
+        setGpsBaud(desiredBaud);
 
-    // if it came up already in our target baud rate
-    // this will be a no-op (seems it happens if vbat stays on)
-    // if so, since we only have one target baud rate hardwired in, 
-    // we should be able to start talking to it 
-
-    // gps shold come up at 9600 so look with our uart at 9600
-    Serial2.begin(9600);
-    // wait for 1 secs before sending commands
-    sleepForMilliSecs(1000, false);
-    V1_println(F("Should get some output at 9600 after reset?"));
-    // we'll see if it's wrong baud rate or not, at this point
+        //******************
+        // this is all done earlier in the experimental mode
+        // FIX! we don't need to toggle power to get the effect?
+        setGpsBalloonMode();
+        // all constellations GPS/BaiDou/Glonass
+        // setGpsConstellations(7); 
+        // FIX! try just gps to see effect on power on current
+        setGpsConstellations(1); 
+        // no ZDA/ANT TXT (NMEA sentences) after this:
+        setGpsBroadcast(); 
+    }
     checkInitialGpsOutput();
-    
-    // But then we'll be good when we transition to the target rate also
-    setGpsBaud(desiredBaud);
-    checkInitialGpsOutput();
-
-    //******************
-    // FIX! we don't need to toggle power to get the effect?
-    setGpsBalloonMode();
-
-    // all constellations GPS/BaiDou/Glonass
-    // setGpsConstellations(7); 
-    // FIX! try just gps to see effect on power on current
-    setGpsConstellations(1); 
-    // no ZDA/ANT TXT (NMEA sentences) after this:
-    setGpsBroadcast(); 
 
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs

@@ -259,7 +259,11 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // works going from 9600 to 19200
 // reduced broadcast works now, with 3 constellations
 // 670 chars with 396 ms duration. going back to 9600
-extern const int SERIAL2_BAUD_RATE = 9600;
+
+// lets try 4800. is power less at power on?
+extern const int SERIAL2_BAUD_RATE = 4800;
+// works down to 50 Mhz fine? what's the lowest SYS_PLL_MHZ that works?
+// extern const int SERIAL2_BAUD_RATE = 9600;
 // extern const int SERIAL2_BAUD_RATE = 19200;
 
 // can't seem to recover to 9600 after trying 38400? full cold reset not working?
@@ -471,7 +475,8 @@ void setup() {
         updateStatusLED();
         // No race here with anyone looking at it
         // millis since running this program
-        if (millis() > 10000) break;
+        // wait for 15 seconds before deciding to switch to balloon mode..no serial
+        if (millis() > 15000) break;
         sleep_ms(1000);
     }
     Watchdog.reset();
@@ -577,9 +582,13 @@ void loop() {
 
         // This core can handle modifying config state, not the other core
         // so the other core just should be timely in stopping normal balloon work.
-
         int charsAvailable = (int) Serial.available();
         if (charsAvailable) {
+            // FIX! this is a just-in-case we had temporarily slowed the clock to 18Mhz
+            // during the first gps cold reset, and keyboard interrupted that?
+            // this will make the clock right again
+            initPicoClock(PLL_SYS_MHZ);
+
             rp2040.idleOtherCore();
             core1_idled = true;
             V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
@@ -762,8 +771,7 @@ void setup1() {
         }
     }
 
-    // FIX! change clock for now..
-    if (false) initPicoClock(PLL_SYS_MHZ);
+    initPicoClock(PLL_SYS_MHZ);
 
     Watchdog.reset();
     bmp_init();
@@ -1738,9 +1746,11 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // this should still work?
     // hmm. at PLL_SYS_MHZ=60, we get DT=0.7 if we wait for a PROCEEDS_TO_SYNC=1
     // skip it at slower clocks?
+    // yes that was good
 
     uint8_t PROCEEDS_TO_SYNC = 0;
-    if (PLL_SYS_MHZ >= 125) PROCEEDS_TO_SYNC = 1;
+    // no, still getting DT=0.7 at 133Mhz. try keeping it with no extra proceed beforehand
+    // if (PLL_SYS_MHZ >= 125) PROCEEDS_TO_SYNC = 1;
 
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time,
