@@ -109,7 +109,7 @@ bool EXPERIMENTAL_WARM_POWER_ON = true;
 bool EXPERIMENTAL_COLD_POWER_ON = true;
 bool LOWEST_POWER_TURN_ON_MODE = true;
 bool ALLOW_USB_DISABLE_MODE = true;
-bool ALLOW_UPDATE_GPS_FLASH_MODE = true;
+bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 
 // ************************************************
 static bool GpsIsOn_state = false;
