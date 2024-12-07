@@ -509,19 +509,19 @@ void GpsINIT(void) {
     gpio_init(GpsPwr);
     pinMode(GpsPwr, OUTPUT);
     gpio_pull_up(GpsPwr);
-    gpio_put(GpsPwr, HIGH);
+    // gpio_put(GpsPwr, HIGH); // deassert
 
     gpio_init(GPS_NRESET_PIN);
     pinMode(GPS_NRESET_PIN, OUTPUT);
     gpio_pull_up(GPS_NRESET_PIN);
-    gpio_put(GPS_NRESET_PIN, HIGH);
+    // gpio_put(GPS_NRESET_PIN, HIGH); // deassert
 
     // FIX! should toggle this for low power operation?
     // instead of powering GpsPwr on/off (even if VBAT gives hot fix)
     gpio_init(GPS_ON_PIN);
     pinMode(GPS_ON_PIN, OUTPUT);
-    gpio_pull_up(GPS_ON_PIN);
-    gpio_put(GPS_ON_PIN, HIGH);
+    gpio_pull_down(GPS_ON_PIN);
+    // gpio_put(GPS_ON_PIN, LOW); // deassert
     //****************
 
     // Updated: Do a full reset since vbat may have kept old settings
@@ -530,8 +530,8 @@ void GpsINIT(void) {
     V1_printf("set GpsPwr %d HIGH (power off)" EOL, GpsPwr);
     digitalWrite(GPS_NRESET_PIN, HIGH);
     V1_printf("set GPS_NRESET_PIN %d HIGH" EOL, GPS_NRESET_PIN);
-    digitalWrite(GPS_ON_PIN, HIGH);
-    V1_printf("set GPS_ON_PIN %d HIGH" EOL, GPS_ON_PIN);
+    digitalWrite(GPS_ON_PIN, LOW);
+    V1_printf("set GPS_ON_PIN %d LOW" EOL, GPS_ON_PIN);
     //****************
 
     V1_printf("GPS_UART1_RX_PIN %d" EOL, GPS_UART1_RX_PIN);
@@ -739,8 +739,10 @@ void GpsFullColdReset(void) {
         IGNORE_KEYBOARD_CHARS = true;
         // DRASTIC measures, do before sleep!
         // save current sys freq
-        // FIX! does the flush above not wait long enough? Wait another second before shutting down serial
-        sleep_ms(1000);
+        // FIX! does the flush above not wait long enough? 
+        // Wait another second before shutting down serial
+        // sleep may be problematic in this transition?
+        busy_wait_ms(1000);
         Serial.end();
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
         // There are two PLLs in RP2040. They are:
@@ -770,9 +772,9 @@ void GpsFullColdReset(void) {
     Watchdog.reset();
     if (LOWEST_POWER_TURN_ON_MODE) {
         vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
-        sleep_ms(1000);
+        busy_wait_ms(1000);
         set_sys_clock_khz(freq_khz, true);
-        sleep_ms(1000);
+        busy_wait_ms(1000);
 
         // pll_init() Parameters
         // pll	pll_sys or pll_usb
@@ -781,11 +783,11 @@ void GpsFullColdReset(void) {
         // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
         // post_div2	Post Divider 2 - range 1-7
         pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
-        sleep_ms(1000);
+        busy_wait_ms(1000);
         // High-level Adafruit TinyUSB init code, does many things to get the USB controller back online
         tusb_init();
         Serial.begin(115200);
-        sleep_ms(1000);
+        busy_wait_ms(1000);
 
         V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
         V1_print(F("Restored USB pll to 48Mhz" EOL));
