@@ -181,8 +181,8 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
     if (n < 0 || n > 120000) {
         // V1_printf("ERROR: sleepForMilliSecs() n %d too big (120000 max). Using 1000" EOL, n);
         // n = 1000;
-        // UPDATE: this is used while USB is disabled, but BALLOON_MODE/VERBY don't protect us
-        // just don't print here
+        // UPDATE: this is used while USB is disabled, 
+        // but BALLOON_MODE/VERBY don't protect us ..just don't print here
         ;
     }
     int milliDiv = n / 10;
@@ -753,7 +753,7 @@ void GpsFullColdReset(void) {
 
         if (ALLOW_KAZU_SLOW_CLOCKS_MODE)  {
             busy_wait_ms(500);
-            // NOTE: doesn't include the usb pll?
+            // includes deinit of the usb pll now?
             kazuClocksSlow();
 
         } else if (ALLOW_USB_DISABLE_MODE) {
@@ -1512,6 +1512,7 @@ void kazuClocksSlow() {
 
     // Turn off pll sys and pll usb to save power
     pll_deinit(pll_sys);
+    // this will stop the ability to print
     pll_deinit(pll_usb);
 
     // CLK peri is clocked from clk_sys so need to change clk_peri's freq

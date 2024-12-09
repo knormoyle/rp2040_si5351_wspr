@@ -184,6 +184,9 @@ JTEncode jtencode;
 //*********************************
 // all extern consts can be externed by a function
 extern const int STATUS_LED_PIN = 25;
+// these are the short blinks
+// we should create long blinks for the 8 and 9 error cases
+
 extern const int LED_STATUS_NO_GPS = 1;
 extern const int LED_STATUS_GPS_TIME = 2;
 extern const int LED_STATUS_GPS_FIX = 3;
@@ -191,8 +194,8 @@ extern const int LED_STATUS_TX_WSPR = 4;
 extern const int LED_STATUS_TX_TELEMETRY = 5;
 extern const int LED_STATUS_TX_TELEN1 = 6;
 extern const int LED_STATUS_TX_TELEN2 = 7;
-extern const int LED_STATUS_REBOOT_NO_SERIAL = 8;
-extern const int LED_STATUS_USER_CONFIG = 9;
+extern const int LED_STATUS_REBOOT_NO_SERIAL = 8; // this does 3 long blinks?
+extern const int LED_STATUS_USER_CONFIG = 9; // this does 4 long blinks?
 
 #include "led_functions.h"
 #include "keyboard_functions.h"
@@ -438,9 +441,6 @@ void setup() {
     // and then reboot and unplug usb. Or unplug usb and leave running
     // will it reboot when watch dog timer detects hang on Serial?
     // no it will reboot because of power going away and coming back?
-    Watchdog.enable(30000);
-    initStatusLED();
-    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     // what things are thread safe?
     // https://forums.raspberrypi.com/viewtopic.php?t=370841
     // sleep_us (Depends on Children, Unsolved due to "sleep_until")
@@ -465,6 +465,10 @@ void setup() {
 
     BALLOON_MODE = true;
     decodeVERBY(); // BALLOON_MODE forces all false
+
+    Watchdog.enable(30000);
+    initStatusLED();
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     while (!Serial) {
         // hmmm.. is Watchdog threadsafe? maybe watch out for that!
         Watchdog.reset();
@@ -478,22 +482,28 @@ void setup() {
     Watchdog.reset();
     updateStatusLED();
     bool found_any = false;
+    // FIX! do we detect Serial if we never open putty, and data + power is connected on USB?
+    // eventually we'll time out in config menu and reboot
+    // detecting usb is connected
+    // read the nvram and decode VERBY and DEVMODE. This will control printing
+    read_FLASH();
+
     if (Serial) {
         // HACK stay in balloon mode for debug
-        if (!FORCE_BALLOON_MODE) {
+        if (FORCE_BALLOON_MODE) {
+            BALLOON_MODE = true;
+            decodeVERBY(); 
+        } else {
             V0_print(F(EOL "SETUP() ..Found Serial. BALLOON_MODE false" EOL));
             BALLOON_MODE = false;
             decodeVERBY(); 
         }
-        // read the nvram and decode VERBY and DEVMODE. This will control printing
-        read_FLASH();
-        // forceHACK();
         Watchdog.reset();
-
         // hmm IGNORE_KEYBOARD_CHARS is not factored into this..should always be false at this point?
         found_any = drainSerialTo_CRorNL(1000);
         // how to compare char: ..== 'R' is the same as == 82 (ascii value)
         if (!found_any) {
+            // core1 takes over Watchdog.reset() at this point
             CORE1_PROCEED = true;
         } else {
             // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
@@ -506,7 +516,10 @@ void setup() {
         }
     }
     else {
-        V0_print(F(EOL "SETUP() ..did not find Serial. BALLOON_MODE true" EOL));
+        BALLOON_MODE = true;
+        decodeVERBY(); // BALLOON_MODE forces all false
+        // no point in printing here?
+        // V0_print(F(EOL "SETUP() ..did not find Serial. BALLOON_MODE true" EOL));
         Watchdog.reset();
         // Serial on core1 is only used for printing (no keyboard input)
         // so okay to manage that with VERB
@@ -590,7 +603,6 @@ void loop() {
             // during the first gps cold reset, and keyboard interrupted that?
             // this will make the clock right again
             initPicoClock(PLL_SYS_MHZ);
-
             rp2040.idleOtherCore();
             core1_idled = true;
             V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
@@ -624,11 +636,28 @@ void setup1() {
     sleep_ms(1000);
     while (!CORE1_PROCEED) { 
         // no printing inside this..potentially BALLOON_MODE/VERBY not setup yet?
-        updateStatusLED();
+        // updateStatusLED();
+        // debug: just keep it turning it on until we get a CORE1_PROCEED?
+        // hmm. FIX! the setup() will be messing with LED blinking at same time?
+        // do we care? (thread-safety?)
+        turnOnLED(true); 
         sleep_ms(10);
     }
-
+    // take over watchdog and LED from core0
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+    Watchdog.enable(30000);
+    Watchdog.reset();
     V1_println(F("setup1() START"));
+
+    // show we're here.. unless it goes to user config? 2 sec long
+    turnOnLED(true); 
+    sleep_ms(2000);
+    turnOnLED(false); 
+    sleep_ms(2000);
+    // back to blinking
+    initStatusLED();
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+
     Watchdog.enable(30000);
     Watchdog.reset();
 
@@ -641,16 +670,9 @@ void setup1() {
     // FIX! should we use this?
     // int sleepMS = Watchdog.sleep();
 
-    //**********************
-    initStatusLED();
-    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-    Watchdog.reset();
-
-    //**********************
-    // Apparently I don't need to init the usb serial port? (the pi pico core does that)
-
     Watchdog.reset();
     adc_INIT();
+
 
     Watchdog.reset();
     vfo_init();
@@ -687,30 +709,43 @@ void setup1() {
     Watchdog.reset();
     // also turns on and checks for output
     // does a full gps cold reset now?
-    GpsINIT(); 
 
     // 12/7/24. the GpsINIT covers GpsON() now?
-    // GpsOFF(false); // don't keep TinyGPS state
+    GpsINIT(); 
     GpsFixMillis = 0;
     GpsStartMillis = millis();
-
     // usb power means vbat is always on. so a hot reset!
     // we already did a cold reset in the GpsINIT() ..don't do it again!
-    // GpsON(false);
 
-    if (!BALLOON_MODE && !Serial) {
-        // V1_println("Why can't we see Serial from setup1()..rebooting");
-        setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
-        // we're going to have to reboot..even balloon needs Serial created?
-        // If serial data output buf is full, we just overflow it (on balloon)
-        Watchdog.enable(10000);  // milliseconds
-        for (;;) {
-            // FIX! put a bad status in the leds
-            // maybe just force it on?
-            digitalWrite(LED_BUILTIN, LOW); // Show we're asleep?
-            // updateStatusLED();
+    if (!BALLOON_MODE) {
+        if (!Serial) {
+            // V1_println("Why can't we see Serial from setup1()..rebooting");
+            setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
+            // we're going to have to reboot..even balloon needs Serial created?
+            // If serial data output buf is full, we just overflow it (on balloon)
+            Watchdog.enable(10000);  // milliseconds
+            for (;;) {
+                // maybe just force it off?
+                // (after always on above)?
+                // show we're gonna reboot with long 1 sec on, 1 sec off
+                turnOnLED(true); 
+                sleep_ms(1000);
+                turnOnLED(false); 
+                sleep_ms(1000);
+                // updateStatusLED();
+            }
         }
     }
+
+    // show we're here.. unless it goes to user config? 4 sec long
+    turnOnLED(true); 
+    sleep_ms(4000);
+    turnOnLED(false); 
+    sleep_ms(4000);
+    // back to blinking
+    initStatusLED();
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+
     V1_println("setup1() ..Serial() is true");
 
     //**********************
@@ -798,6 +833,19 @@ void setup1() {
         PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT);
 
     V1_println(F("setup1() END"));
+    // show we're done with setup1() with long 2 sec on, 2 sec off
+    // the other core won't be messing with led's at this time
+    // unless it goes to user config?
+    Watchdog.reset();
+
+    // so we can tell we're here?
+    turnOnLED(true); 
+    sleep_ms(2000);
+    turnOnLED(false); 
+    sleep_ms(2000);
+    // back to blinking
+    initStatusLED();
+    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 }
 
 //*************************************************************************

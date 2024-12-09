@@ -47,6 +47,8 @@
 
 // NOTE: we could expand this to have timestamps in front of each print,
 // if desirable
+
+// FIX! add if VERBY[0] to these?
 void yPrintf(const char* pformat, ...) {
 #if FLY_WITH_NO_USBSERIAL == 1
     va_list argptr;

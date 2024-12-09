@@ -9,6 +9,11 @@ const int LED_BLINK_ON_PERIOD_USEC = 50000;
 const int LED_BLINK_OFF_PERIOD_USEC = 300000;
 const int LED_BLINK_PAUSE_PERIOD_USEC = 1000000;
 
+const int LONG_LED_BLINK_ON_PERIOD_USEC = LED_BLINK_ON_PERIOD_USEC * 3;
+const int LONG_LED_BLINK_OFF_PERIOD_USEC = LED_BLINK_OFF_PERIOD_USEC * 3;
+const int LONG_LED_BLINK_PAUSE_PERIOD_USEC = LONG_LED_BLINK_PAUSE_PERIOD_USEC * 3;
+
+// note this is global ..so static
 int statusLEDBlinkCnt = 0;
 
 //********************
@@ -21,7 +26,6 @@ void initStatusLED(void) {
 void setStatusLEDBlinkCount(int cnt) {
     statusLEDBlinkCnt = cnt;
 }
-
 //********************
 void updateStatusLED(void) {
     // no prints allowed here. can be used while USB printing doesn't work
@@ -30,26 +34,43 @@ void updateStatusLED(void) {
     static int targetBlinkCnt = 0;
     static int currBlinkCnt = 0;
 
+    bool longBlinks = false;
+    int blinkCntInit;
+
+    if (statusLEDBlinkCnt >= 8) {
+        // threshold for indicating 3, 4, ... long blinks
+        blinkCntInit = statusLEDBlinkCnt - 5;
+        longBlinks = true;
+    } else {
+        // short blinks
+        blinkCntInit = statusLEDBlinkCnt;
+        longBlinks = false;
+    }
+
     uint32_t usec = time_us_32();
     if ((int32_t) (nextFlipUsec - usec) <= 0) {
         if (isLEDOn() == false) {
             // OFF to ON
             if (targetBlinkCnt == 0) {
-                targetBlinkCnt = statusLEDBlinkCnt;
+                targetBlinkCnt = blinkCntInit;
                 currBlinkCnt = 0;
             }
             if (++currBlinkCnt <= targetBlinkCnt) {
                 turnOnLED(true);
             }
-            nextFlipUsec = usec + LED_BLINK_ON_PERIOD_USEC;
+            if (longBlinks) nextFlipUsec = usec + LONG_LED_BLINK_ON_PERIOD_USEC;
+            else nextFlipUsec = usec + LED_BLINK_ON_PERIOD_USEC;
+
         } else {
             // ON to OFF
             turnOnLED(false);
             if (currBlinkCnt >= targetBlinkCnt) {
-                nextFlipUsec = usec + LED_BLINK_PAUSE_PERIOD_USEC;
                 targetBlinkCnt = 0;
+                if (longBlinks) nextFlipUsec = usec + LONG_LED_BLINK_PAUSE_PERIOD_USEC;
+                else nextFlipUsec = usec + LED_BLINK_PAUSE_PERIOD_USEC;
             } else {
-                nextFlipUsec = usec + LED_BLINK_OFF_PERIOD_USEC;
+                if (longBlinks) nextFlipUsec = usec + LONG_LED_BLINK_OFF_PERIOD_USEC;
+                else nextFlipUsec = usec + LED_BLINK_OFF_PERIOD_USEC;
             }
         }
     }
