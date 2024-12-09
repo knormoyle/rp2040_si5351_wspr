@@ -1516,26 +1516,30 @@ void kazuClocksSlow() {
     // this will stop the ability to print
     pll_deinit(pll_usb);
 
-    // CLK peri is clocked from clk_sys so need to change clk_peri's freq
-    clock_configure(clk_peri,
-        0,
-        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
-        12 * MHZ,
-        12 * MHZ);
+    // don't do this. because we actually restore to a pll sys value
+    // so we should not change these..assume go back just the same as it was
+    if (false) {
+        // CLK peri is clocked from clk_sys so need to change clk_peri's freq
+        clock_configure(clk_peri,
+            0,
+            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+            12 * MHZ,
+            12 * MHZ);
 
-    // CLK RTC = XOSC 12MHz / 256 = 46875Hz
-    clock_configure(clk_rtc,
-        0, // No GLMUX
-        CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        46875);
+        // CLK RTC = XOSC 12MHz / 256 = 46875Hz
+        clock_configure(clk_rtc,
+            0, // No GLMUX
+            CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+            12 * MHZ,
+            46875);
 
-    // CLK ADC = XO (12MHZ) / 1 = 12MHz
-    clock_configure(clk_adc,
-        0, // No GLMUX
-        CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        12 * MHZ);
+        // CLK ADC = XO (12MHZ) / 1 = 12MHz
+        clock_configure(clk_adc,
+            0, // No GLMUX
+            CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+            12 * MHZ,
+            12 * MHZ);
+    }
 
     // can't print without USB now
     // V0_println(F("kazuClocksSlow END" EOL));
@@ -1583,26 +1587,31 @@ void kazuClocksRestore() {
 
     // I suppose this stuff is the same as it was due to kazuClocksSlow()
 
-    // CLK peri is clocked from clk_sys so need to change clk_peri's freq
-    clock_configure(clk_peri,
-        0,
-        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
-        12 * MHZ,
-        12 * MHZ);
+    
+    // don't do this. because we actually restore to a pll sys value
+    // so we should not change these..assume go back just the same as it was
+    if (false) {
+        // CLK peri is clocked from clk_sys so need to change clk_peri's freq
+        clock_configure(clk_peri,
+            0,
+            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+            12 * MHZ,
+            12 * MHZ);
 
-    // CLK RTC = XOSC 12MHz / 256 = 46875Hz
-    clock_configure(clk_rtc,
-        0, // No GLMUX
-        CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        46875);
+        // CLK RTC = XOSC 12MHz / 256 = 46875Hz
+        clock_configure(clk_rtc,
+            0, // No GLMUX
+            CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+            12 * MHZ,
+            46875);
 
-    // CLK ADC = XO (12MHZ) / 1 = 12MHz
-    clock_configure(clk_adc,
-        0, // No GLMUX
-        CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        12 * MHZ);
+        // CLK ADC = XO (12MHZ) / 1 = 12MHz
+        clock_configure(clk_adc,
+            0, // No GLMUX
+            CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+            12 * MHZ,
+            12 * MHZ);
+    }
 
     // I guess printing should work now? (if not BALLOON_MODE)
     V0_println(F("kazuClocksRestore END" EOL));

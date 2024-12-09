@@ -608,26 +608,37 @@ void loop() {
 
         // This core can handle modifying config state, not the other core
         // so the other core just should be timely in stopping normal balloon work.
+
+        // detect the transition of 1 -> 0 on IGNORE_KEYBOARD_CHARS (by core1)  (gps cold reset)
+        // and drain all garbage chars in serial
         if (IGNORE_KEYBOARD_CHARS_last & !IGNORE_KEYBOARD_CHARS) {
             // drain it of everything..garbage during gps cold reset
             // should have a limited number of ?? chars
             while (Serial.available()) Serial.read();
         }
                 
+        // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
+        // 0x00010000 [16]    CONNECTED    (0) Device: connected
+        // 0x00000010 [4]     SUSPENDED    (0) Bus in suspended state
+        // 0x0000000c [3:2]   LINE_STATE   (0x0) USB bus line state
+        // 0x00000001 [0]     VBUS_DETECTED (0) Device: VBUS Detected
+        #define sieStatusPtr ((uint32_t*)0x50110050)
+        uint32_t sieValue = *sieStatusPtr;
+        // https://forum.arduino.cc/t/solved-serialusb-checking-if-connection-is-still-present/582448/3
+        bool usbConnected = Serial && ((sieValue && 0x0000001) == 0x1) ;
+
         int charsAvailable = (int) Serial.available();
-        // detect the transition of 1 -> 0 on IGNORE_KEYBOARD_CHARS (by core1)  (gps cold reset)
-        // and drain all garbage chars in serial
-        if (charsAvailable && !IGNORE_KEYBOARD_CHARS) {
+        if (usbConnected && charsAvailable && !IGNORE_KEYBOARD_CHARS) {
             // CR or LF to interrupt? 
             // Are we getting odd chars while plugged into USB power with data, but no serial window?
             char incomingByte = drainSerialTo_CRorNL(1000);
             // could we be getting random CR or LF if using usb plug with data and no serial window?
             // hopefully not!
-            if (incomingByte==10 || incomingByte==13) {
+            if (incomingByte == 10 || incomingByte == 13) {
+                Watchdog.enable(30000);
                 rp2040.idleOtherCore();
                 core1_idled = true;
                 // we own the led's and the watch dog interface no2
-                Watchdog.enable(30000);
                 Watchdog.reset();
 
                 // FIX! this is a just-in-case we had temporarily slowed the clock to 18Mhz
@@ -653,7 +664,6 @@ void loop() {
                 // which is active anyhow
 
                 V0_println(F("tracker.ino: (A) Going to user_interface() from loop()"));
-                // sleep_ms(1000);
                 user_interface();
                 // won't return here, since all exits from user_interface reboot
                 // so will never resume the other core if we idled it?
