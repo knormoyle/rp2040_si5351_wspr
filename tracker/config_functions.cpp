@@ -105,9 +105,9 @@ void forceHACK(void) {
     static bool HACK = false;
 
     if (false) {
-        // apparently 12-17Mhz illegal. 
+        // apparently 12-17Mhz illegal.
         // 18-19Mhz legal
-        // 20-48Mhz legal (and more above that). 
+        // 20-48Mhz legal (and more above that).
         // Has to do with divisors and such for the sys pll
         V1_println(F("Check some legal/illegal low frequencies for possible use with pll_sys later" EOL));
         for (uint32_t i = 12; i <= 48; i++)  {
@@ -627,7 +627,7 @@ void decodeVERBY(void) {
         for (int i = 0; i < 10 ; i++) VERBY[i] = false;
         return;
     }
-    // always set VERBY[0] if not BALLOON_MODE, so we 
+    // always set VERBY[0] if not BALLOON_MODE, so we
     // can see the config output
     VERBY[0] = true;
 
@@ -951,6 +951,13 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_printf("go_when_rdy:%s" EOL, _go_when_rdy);
     V0_printf("factory_reset_done:%s" EOL, _factory_reset_done);
     V0_printf("XMIT_FREQUENCY:%lu" EOL, XMIT_FREQUENCY);
+    V0_print(F(EOL "SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
+
+    // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
+    #define sieStatusPtr ((uint32_t*)0x50110050)
+    uint32_t sieValue = *sieStatusPtr;
+    V0_printf("SIE_STATUS:%lu" EOL, sieValue);
+
 
     V0_println(F(EOL "Valid commands:" EOL));
     V0_println(F("X: eXit configuration and reboot"));

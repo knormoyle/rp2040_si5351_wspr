@@ -488,16 +488,38 @@ void setup() {
     // read the nvram and decode VERBY and DEVMODE. This will control printing
     read_FLASH();
 
-    if (Serial) {
-        // HACK stay in balloon mode for debug
-        if (FORCE_BALLOON_MODE) {
-            BALLOON_MODE = true;
-            decodeVERBY(); 
-        } else {
-            BALLOON_MODE = false;
-            decodeVERBY(); 
-            V0_print(F(EOL "SETUP() ..Found Serial. BALLOON_MODE false" EOL));
-        }
+
+    // Get the SIE_STATUS to see if we're connected or what?
+    // this is what I see when I'm using the putty window
+    // SIE_STATUS:1074069509
+    // why am I not getting bit 16 when connected?
+
+    // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
+    // 0x00010000 [16]    CONNECTED    (0) Device: connected
+    // 0x00000010 [4]     SUSPENDED    (0) Bus in suspended state
+    // 0x0000000c [3:2]   LINE_STATE   (0x0) USB bus line state
+    // 0x00000001 [0]     VBUS_DETECTED (0) Device: VBUS Detected
+    #define sieStatusPtr ((uint32_t*)0x50110050)
+    uint32_t sieValue = *sieStatusPtr;
+    // why is it 0?
+    // bool usbConnected = Serial && ((sieValue && 0x0001000) != 0) ;
+    // https://forum.arduino.cc/t/solved-serialusb-checking-if-connection-is-still-present/582448/3
+    bool usbConnected = Serial && ((sieValue && 0x0000001) == 0x1) ;
+    // bool usbConnected = Serial;
+
+    // HACK stay in balloon mode for debug
+    if (FORCE_BALLOON_MODE | !usbConnected) {
+        BALLOON_MODE = true;
+        decodeVERBY(); 
+        // BALLOON_MODE forces all false, so no point in printing here?
+        Watchdog.reset();
+        // Serial on core1 is only used for printing (no keyboard input)
+        // so okay to manage that with VERBY
+        CORE1_PROCEED = true;
+    } else {
+        BALLOON_MODE = false;
+        decodeVERBY(); 
+        V0_print(F(EOL "SETUP() ..Found usb Serial. BALLOON_MODE false" EOL));
         Watchdog.reset();
         // hmm IGNORE_KEYBOARD_CHARS is not factored into this..should always be false at this point?
         char incomingByte = drainSerialTo_CRorNL(1000);
@@ -506,24 +528,13 @@ void setup() {
             // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
             V1_print(F(EOL "LEAVING SETUP() (1)" EOL EOL));
             V0_print(F(EOL "Hit <enter> if you need to enter config mode. otherwise it's running (1)" EOL EOL));
-            updateStatusLED();
-            // sleep_ms(1000);
             user_interface();
             // won't return here, since all exits from user_interface reboot
         } else {
+            // we drained but it wasn't CR or LF at the end
             // core1 takes over Watchdog.reset() at this point
             CORE1_PROCEED = true;
         }
-    }
-    else {
-        BALLOON_MODE = true;
-        decodeVERBY(); // BALLOON_MODE forces all false
-        // no point in printing here?
-        // V0_print(F(EOL "SETUP() ..did not find Serial. BALLOON_MODE true" EOL));
-        Watchdog.reset();
-        // Serial on core1 is only used for printing (no keyboard input)
-        // so okay to manage that with VERB
-        CORE1_PROCEED = true;
     }
     // FIX! shouldn't do Watchdog.reset() from here on in, unless core1 is stopped?
     // from here on, if this code hangs, we just don't get keyboard input
@@ -2106,3 +2117,51 @@ void freeMem() {
 // boost converter?
 // KC3LBR has a MCP1640T boost converter
 // what about the kazu boost converter (at his *gen1 repo as .eprj. Is the bom available? are pads on the pcb?)
+
+
+//*****************************************
+// 
+// https://stackoverflow.com/questions/74323515/how-can-a-usb-device-tell-if-it-is-connected-to-a-port
+// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2040/hardware_structs/include/hardware/structs/usb.h
+
+
+// In the RP2040 datasheet, the USB device connectivity status is bit 16 of the SIE_STATUS register.
+// Serial Interface engine
+// From section 4.1.4:
+// The USB registers start at a base address of 0x50110000 (defined as USBCTRL_REGS_BASE in SDK).
+// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2040/hardware_regs/include/hardware/regs/addressmap.h
+
+// In the following table, we find that the SIE status register is at offset 0x50.
+// So to find out if the device is connected, read the 32-bit register with (micropython machine.mem32), mask out bit 16 and cast the result to a boolean.
+// https://sourcevu.sysprogs.com/rp2040/picosdk/symbols/usb_hw_t
+// https://lorenz-ruprecht.at/docu/pico-sdk/1.4.0/html/group__hardware__base.html
+// memory mapped hardware register?
+// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_base/include/hardware/address_mapped.h
+
+// #define sieStatus ((uint32_t*)0x50110050)
+// uint32_t value = *sieStatus
+
+
+// include "hardware/usb.h"
+//  io_rw_32 sie_status;
+//    _REG_(USB_SIE_STATUS_OFFSET) // USB_SIE_STATUS
+//     // SIE status register
+//     // 0x80000000 [31]    DATA_SEQ_ERROR (0) Data Sequence Error
+//     // 0x40000000 [30]    ACK_REC      (0) ACK received
+//     // 0x20000000 [29]    STALL_REC    (0) Host: STALL received
+//     // 0x10000000 [28]    NAK_REC      (0) Host: NAK received
+//     // 0x08000000 [27]    RX_TIMEOUT   (0) RX timeout is raised by both the host and device if an...
+//     // 0x04000000 [26]    RX_OVERFLOW  (0) RX overflow is raised by the Serial RX engine if the...
+//     // 0x02000000 [25]    BIT_STUFF_ERROR (0) Bit Stuff Error
+//     // 0x01000000 [24]    CRC_ERROR    (0) CRC Error
+//     // 0x00080000 [19]    BUS_RESET    (0) Device: bus reset received
+//     // 0x00040000 [18]    TRANS_COMPLETE (0) Transaction complete
+//     // 0x00020000 [17]    SETUP_REC    (0) Device: Setup packet received
+//     // 0x00010000 [16]    CONNECTED    (0) Device: connected
+//     // 0x00000800 [11]    RESUME       (0) Host: Device has initiated a remote resume
+//     // 0x00000400 [10]    VBUS_OVER_CURR (0) VBUS over current detected
+//     // 0x00000300 [9:8]   SPEED        (0x0) Host: device speed
+//     // 0x00000010 [4]     SUSPENDED    (0) Bus in suspended state
+//     // 0x0000000c [3:2]   LINE_STATE   (0x0) USB bus line state
+//     // 0x00000001 [0]     VBUS_DETECTED (0) Device: VBUS Detected
+// io_rw_32 sie_status;
