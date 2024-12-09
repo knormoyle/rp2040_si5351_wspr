@@ -409,15 +409,16 @@ void setGpsConstellations(int desiredConstellations) {
     }
 
     // FIX! does the above not do anything? is this the only way?
-    if (true) {
+    if (false) {
         // alternative experiment
         // what about this rumored PMTK353 sentence?
         // $PMTK353,1,1,1,0,1*2B : Search GPS BEIDOU GLONASS and GALILEO satellites
         strncpy(nmeaSentence, "$PMTK353,1,1,1,0,1*2B" CR LF, 62);
-        Serial2.print(nmeaSentence);
-        Serial2.flush();
-        delay(1000);
     }
+
+    Serial2.print(nmeaSentence);
+    Serial2.flush();
+    delay(1000);
 
     V1_printf("setGpsConstellations for usedConstellations %d, sent %s" EOL, desiredConstellations, nmeaSentence);
     V1_printf("setGpsConstellations END %d" EOL, desiredConstellations);
