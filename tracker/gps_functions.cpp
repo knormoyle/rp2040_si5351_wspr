@@ -108,8 +108,9 @@ extern bool BALLOON_MODE;
 bool EXPERIMENTAL_WARM_POWER_ON = true;
 bool EXPERIMENTAL_COLD_POWER_ON = true;
 bool LOWEST_POWER_TURN_ON_MODE = true;
-bool ALLOW_USB_DISABLE_MODE = true;
+bool ALLOW_USB_DISABLE_MODE = false;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
+bool ALLOW_KAZU_SLOW_CLOCKS_MODE = false; 
 
 // ************************************************
 static bool GpsIsOn_state = false;
@@ -690,12 +691,13 @@ void GpsFullColdReset(void) {
     // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
     // just go into light sleep to reduce rp2040 power demand for 1 minute
     // i.e. guarantee that cold reset, takes 1 minute? 
-    // hmm. we're stalling things now. maybe only sleep for 30 secs
+    // hmm. we're stalling things now. maybe only sleep for 15 secs
     // FIX! this apparently makes the Serial2 dysfunctional so the gps chip can't send output
     // it backs up on the initial TXT broadcast (revisions) and then hits a power peak
     // right after we fix the clock back to normal (50Mhz min tried)
     // so: is that worth it? dunno.
 
+    // UPDATE: is the broadcast right after power on the issue
     // other power saving: disable usb pll (and restore)
     
     // https://github.com/earlephilhower/arduino-pico/discussions/1544
@@ -708,16 +710,16 @@ void GpsFullColdReset(void) {
     if (LOWEST_POWER_TURN_ON_MODE) {
         // the global IGNORE_KEYBOARD_CHARS is used to guarantee no interrupting of core1
         // while we've messed with clocks during the gps agressive power on control
-        // it should always be re-enabled after 30 secs. 
+        // it should always be re-enabled after 15 secs. 
         // Worst case to recover: unplug power and plug in again
 
         Watchdog.reset();
         measureMyFreqs();
         V1_print(F(RED));
-        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
-        V1_printf("Going to slow PLL_SYS_MHZ from %lu to 18Mhz before long sleep" EOL, PLL_SYS_MHZ);
+        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 15 secs" EOL));
+        V1_printf("Going to slow PLL_SYS_MHZ from %lu to 12Mhz before long sleep" EOL, PLL_SYS_MHZ);
         V1_print("No keyboard interrupts will work because disabling USB PLL too or minimally: Serial.end()" EOL);
-        V1_print("Also lowering core voltage to 0.95v" EOL);
+        // V1_print("Also lowering core voltage to 0.95v" EOL);
         V1_print(F(NORMAL));
         V1_flush();
 
@@ -735,17 +737,21 @@ void GpsFullColdReset(void) {
         // remember not to touch Serial if in BALOOON_MODE!!
         if (!BALLOON_MODE) Serial.end();
 
-        if (ALLOW_USB_DISABLE_MODE) {
+        if (ALLOW_KAZU_SLOW_CLOCKS_MODE)  {
+            busy_wait_ms(500);
+            kazuSlowClocks();
+
+        } else if (ALLOW_USB_DISABLE_MODE) {
             busy_wait_ms(500);
             // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
             // There are two PLLs in RP2040. They are:
             // pll_sys - Used to generate up to a 133MHz (actually more) system clock
             // pll_usb - Used to generate a 48MHz USB reference clock
 
-            // void pll_deinit (PLL	pll)	
+            
             // Release/uninitialise specified PLL.This will turn off the power to the specified PLL. 
             // Note this function does not check if the PLL is in use before powering it off. (use care)
-            // this seems to crap out
+            // this seems to cause a crap out
             // pll_deinit(pll_usb);
 
             // examples: https://sourcevu.sysprogs.com/rp2040/picosdk/symbols/pll_deinit
@@ -755,11 +761,15 @@ void GpsFullColdReset(void) {
             // example:
             // https://sourcevu.sysprogs.com/rp2040/examples/clocks/hello_48MHz/files/hello_48MHz.c#tok293
 
-
             // HACK: doesn't work?
             // pll_deinit(pll_usb);
+            // set_sys_clock_khz(18000, true);
+            ;
         }
+        // try 12 Mhz
+        // is this a higher level api than clock_configure() pll_init() etc?
         set_sys_clock_khz(18000, true);
+
         // enums for voltage at:
         // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
         // vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
@@ -768,18 +778,27 @@ void GpsFullColdReset(void) {
         digitalWrite(GPS_ON_PIN, HIGH); // assert
 
     } else {
-        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 30 secs" EOL));
+        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 15 secs" EOL));
     }
 
     // can't do this while USB is disabled? but if we can't disable deinit USB (see above), we can?
     measureMyFreqs();
     // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
-    sleepForMilliSecs(30000, false); // 30 secs
+    sleepForMilliSecs(15000, false); // 15 secs
 
     //******************
     // DRASTIC measures, undo after sleep!
     Watchdog.reset();
-    if (LOWEST_POWER_TURN_ON_MODE) {
+    if (ALLOW_KAZU_SLOW_CLOCKS_MODE) {
+        busy_wait_ms(1000);
+        set_sys_clock_khz(freq_khz, true);
+        V1_printf("After long sleep (kazu), Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+        V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
+        // V1_print(F("Restored core voltage back to 1.1v" EOL));
+        V1_flush();
+        measureMyFreqs();
+        IGNORE_KEYBOARD_CHARS = false;
+    } else if (LOWEST_POWER_TURN_ON_MODE) {
         // maybe try not changing core voltage (here and above)
         // vreg_set_voltage(VREG_VOLTAGE_1_10 ); // normal core voltage
         busy_wait_ms(1000);
@@ -788,13 +807,14 @@ void GpsFullColdReset(void) {
         // don't bother reinitting if in BALLOON_MODE (no usb)
         // especially: don't try touching Serial.*
         if (ALLOW_USB_DISABLE_MODE && !BALLOON_MODE) {
-        busy_wait_ms(1000);
+            busy_wait_ms(1000);
             // pll_init() Parameters
             // pll	pll_sys or pll_usb
             // ref_div	Input clock divider.
             // vco_freq	Requested output from the VCO (voltage controlled oscillator)
             // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
             // post_div2	Post Divider 2 - range 1-7
+
             pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
             busy_wait_ms(1000);
             // High-level Adafruit TinyUSB init code, 
@@ -809,7 +829,6 @@ void GpsFullColdReset(void) {
         V1_print(F("Restored core voltage back to 1.1v" EOL));
         V1_flush();
         measureMyFreqs();
-
         IGNORE_KEYBOARD_CHARS = false;
     }
 
@@ -1434,3 +1453,93 @@ void gpsDebug() {
 // which further increased the turn on time to 250 μs and also seemed to fix the reset problem. 
 // With these higher value gate resistors, I put my scope leads back on the 3.3 V source, 
 // and measured the voltage dropping to only ~3.0 V when the GPS is turned on (~250 mV).
+
+
+//************************************************
+void kazuSlowClocks() {
+    V1_println(F("kazuSlowClocks START"));
+    // Change clk_sys and clk_peri to be 12MHz, and disable pll_sys and pll_usb
+    clock_configure(clk_sys,
+        CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
+        CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+        12 * MHZ,
+        12 * MHZ);
+
+    // Turn off PLL sys for good measure
+    pll_deinit(pll_sys);
+    pll_deinit(pll_usb);
+
+    // CLK peri is clocked from clk_sys so need to change clk_peri's freq
+    clock_configure(clk_peri,
+        0,
+        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+        12 * MHZ,
+        12 * MHZ);
+
+    // CLK RTC = XOSC 12MHz / 256 = 46875Hz
+    clock_configure(clk_rtc,
+        0, // No GLMUX
+        CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+        12 * MHZ,
+        46875);
+
+    // CLK ADC = XO (12MHZ) / 1 = 12MHz
+    clock_configure(clk_adc,
+        0, // No GLMUX
+        CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+        12 * MHZ,
+        12 * MHZ);
+
+    V1_println(F("kazuSlowClocks END"));
+}
+
+//************************************************
+void kazuRestoreClocks() {
+    V1_println(F("kazuRestorClocks START"));
+    // Change clk_sys and clk_peri to be 12MHz, and restore usb to 48 mhz ?
+    clock_configure(clk_sys,
+        CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
+        CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+        12 * MHZ,
+        12 * MHZ);
+    busy_wait_ms(500);
+
+    // FIX! we need usb at 48 mhz ?
+    // pll_init(pll_sys);
+    // ../rp2040/4.2.0//pico-sdk/src/rp2_common/hardware_pll/include/hardware/pll.h:62
+
+    // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
+    // pll	pll_sys or pll_usb
+    // ref_div	Input clock divider.
+    // vco_freq	Requested output from the VCO (voltage controlled oscillator)
+    // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
+    // post_div2	Post Divider 2 - range 1-7
+    pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+    busy_wait_ms(500);
+    
+
+    // CLK peri is clocked from clk_sys so need to change clk_peri's freq
+    clock_configure(clk_peri,
+        0,
+        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+        12 * MHZ,
+        12 * MHZ);
+
+    // CLK RTC = XOSC 12MHz / 256 = 46875Hz
+    clock_configure(clk_rtc,
+        0, // No GLMUX
+        CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+        12 * MHZ,
+        46875);
+
+    // CLK ADC = XO (12MHZ) / 1 = 12MHz
+    clock_configure(clk_adc,
+        0, // No GLMUX
+        CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+        12 * MHZ,
+        12 * MHZ);
+
+    V1_println(F("kazuSlowClocks END"));
+}
+ 
+//************************************************

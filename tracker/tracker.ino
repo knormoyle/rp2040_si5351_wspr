@@ -505,7 +505,8 @@ void setup() {
             CORE1_PROCEED = true;
         } else {
             // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
-            V0_print(F(EOL "SETUP() ..LEAVING AFTER NOT SEEING Serial.available()" EOL EOL));
+            V1_print(F(EOL "LEAVING SETUP() (1)" EOL EOL));
+            V0_print(F(EOL "Hit <enter> if you need to enter config mode. otherwise it's running (1)" EOL EOL));
             updateStatusLED();
             // sleep_ms(1000);
             user_interface();
@@ -525,7 +526,8 @@ void setup() {
     // but that's not an issue if BALLOON_MODE
 
     // freeMem();
-    V0_print(F(EOL "SETUP() ..LEAVING SETUP() AFTER NOT SEEING Serial.available()" EOL EOL));
+    V1_print(F(EOL "LEAVING SETUP() (2)" EOL EOL));
+    V0_print(F(EOL "Hit <enter> if you need to enter config mode. otherwise it's running (2)" EOL EOL));
 
 }
 //*********************************************************
@@ -615,8 +617,7 @@ void loop() {
             // NO! we'd have to wake up more than once a sec. Leave it on the other core
             // which is active anyhow
 
-            if (VERBY[0]) 
-                Serial.println(F("tracker.ino: (A) Going to user_interface() from loop()"));
+            V0_println(F("tracker.ino: (A) Going to user_interface() from loop()"));
             setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
             updateStatusLED();
             // sleep_ms(1000);

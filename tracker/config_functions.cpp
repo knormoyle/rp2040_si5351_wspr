@@ -518,7 +518,7 @@ void user_interface(void) {
 #define FLASH_BYTES_USED 29
 int read_FLASH(void) {
     Watchdog.reset();
-    V0_print("read_FLASH START" EOL);
+    V1_print("read_FLASH START" EOL);
     // there is no internal eeprom on rp2040
     // Therefore, do not frequently update the EEPROM or you may prematurely wear out the flash.
     // https://arduino-pico.readthedocs.io/en/latest/eeprom.html
@@ -607,11 +607,13 @@ int read_FLASH(void) {
 
     decodeVERBY();
 
+    V1_print("read_FLASH END" EOL);
     return result;
 }
 
 //**************************************
 void decodeVERBY(void) {
+    V1_print("decodeVERBY START" EOL);
     // can't use Serial at all, if BALLOON_MODE
     // VERBY[0] guarantees that, even for config
     // Currently VERBY[1] covers everything else
@@ -640,21 +642,21 @@ void decodeVERBY(void) {
         else VERBY[i] = false;
     }
 
-    V0_printf("decoded _verbose %s to VERBY[9:0]" EOL, _verbose);
+    V1_printf("decoded _verbose %s to VERBY[9:0]" EOL, _verbose);
     if (false) {
         for (int i = 0; i < 10 ; i++) {
             V0_printf("VERBY[%d] %x" EOL, i, VERBY[i]);
         }
     }
 
-    V0_print("read_FLASH START" EOL);
+    V1_print("decodeVERBY END" EOL);
 }
 
 //***************************************
 // Write the user entered data into FLASH
 void write_FLASH(void) {
     Watchdog.reset();
-    V0_print("write_FLASH START" EOL);
+    V1_print("write_FLASH START" EOL);
     // Flash is initially all zeroes
     char data_chunk[FLASH_BYTES_USED] = { 0 };  // enough to cover what we use here
     uint8_t udata_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
@@ -695,7 +697,7 @@ void write_FLASH(void) {
 
     flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
     restore_interrupts(ints);
-    V0_print("write_FLASH END" EOL);
+    V1_print("write_FLASH END" EOL);
 }
 
 //**************************************
