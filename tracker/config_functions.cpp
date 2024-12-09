@@ -947,6 +947,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_printf("TELEN config:%s" EOL, _TELEN_config);
     V0_printf("clock speed:%sMhz" EOL, _clock_speed);
     V0_printf("band:%s" EOL, _Band);
+    V0_printf("tx_high:%s" EOL, _tx_high);
     V0_printf("DEVMODE:%s" EOL, _devmode);
     V0_printf("correction:%s" EOL, _correction);
     V0_printf("go_when_rdy:%s" EOL, _go_when_rdy);
@@ -957,7 +958,8 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
     #define sieStatusPtr ((uint32_t*)0x50110050)
     uint32_t sieValue = *sieStatusPtr;
-    V0_printf("SIE_STATUS:%lu" EOL, sieValue);
+    // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
+    V0_printf("SIE_STATUS:%" PRIx32 EOL, sieValue);
 
 
     V0_println(F(EOL "Valid commands:" EOL));

@@ -116,8 +116,6 @@ char getOneChar (uint32_t millis_max) {
 uint32_t get_sie_status(void) {
 
     // Get the SIE_STATUS to see if we're connected or what?
-    // this is what I see when I'm using the putty window
-    // SIE_STATUS:1074069509
     // why am I not getting bit 16 when connected?
 
     // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register

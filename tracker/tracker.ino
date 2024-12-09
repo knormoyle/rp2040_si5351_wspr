@@ -477,10 +477,14 @@ void setup() {
         updateStatusLED();
         // No race here with anyone looking at it
         // millis since running this program
-        // wait for 15 seconds before deciding to switch to balloon mode..no serial
+        // wait for 15 seconds before deciding to switch to balloon mode..
+        // no serial
         if (millis() > 15000) break;
         sleep_ms(1000);
     }
+    uint32_t sieValue = get_sie_status();
+    // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
+    V0_printf("SETUP() after finding Serial.* sieValue %" PRIx32 EOL, sieValue);
     Watchdog.reset();
     updateStatusLED();
     // FIX! do we detect Serial if we never open putty, and data + power is connected on USB?
@@ -495,6 +499,7 @@ void setup() {
     // why am I not getting bit 16 when connected?
 
     bool usbConnected = Serial && get_sie_connected();
+    
     // FIX! is 'Serial" sufficient? it's not formed if I don't open a putty window?
     // FORCE_BALLLON_MODE is test mode: guarantees balloon mode for debug when plugged into USB
     if (FORCE_BALLOON_MODE | !usbConnected) {
@@ -1876,7 +1881,6 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // Using this ubiquitously makes it much easier to find tight loops, 
         // #ifdef-ed support for lockup debugging might be added
 
-            
         // Whenever we have spin loops we need to updateStatusLED()
         // Leave it out for now, just in case it affects symbols
         // we know we're done coarse/very-fine split here. so maybe just 15-20 ms spin
