@@ -154,7 +154,7 @@ extern const uint32_t INTERRUPTS_PER_SYMBOL = 8;
 uint8_t hf_tx_buffer[162] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
 
 // FIX! why is this volatile? Because it's set by the ISR for PWM interrupts?
-volatile bool proceed = false;
+volatile bool PROCEED = false;
 
 //*********************************
 // if we need to ignore TinyGps++ state for a while, because
@@ -516,15 +516,13 @@ void setup() {
     else {
         V0_print(F(EOL "SETUP() ..did not find Serial. BALLOON_MODE true" EOL));
         Watchdog.reset();
-        // proceeding with no Serial
-        // Serial on core1 is only used for printing
-        // so okay to manage that with DEVMODE and VERBY[9]
+        // Serial on core1 is only used for printing (no keyboard input)
+        // so okay to manage that with VERB
         CORE1_PROCEED = true;
     }
     // FIX! shouldn't do Watchdog.reset() from here on in, unless core1 is stopped?
     // from here on, if this code hangs, we just don't get keyboard input
     // but that's not an issue if BALLOON_MODE
-
     // freeMem();
     V1_print(F(EOL "LEAVING SETUP() (2)" EOL EOL));
     V0_print(F(EOL "Hit <enter> if you need to enter config mode. otherwise it's running (2)" EOL EOL));
@@ -1284,25 +1282,38 @@ void loop1() {
             // readVoltage can return 0
             float voltageBeforeWSPR = readVoltage();
             if (voltageBeforeWSPR >= WsprBattMin) {
-                if (alignMinute(-1)) {
+                if (!alignMinute(-1)) {
+                    // oneliner
+                    V1_print(F("WARN: wspr no send."));
+                    V1_printf(" because minute() %d second: %d *alignMinute(-1) %u*" EOL,
+                        minute(), second(), alignMinute(-1));
+                    // we fall thru and can get another gps fix or just try again.
+                    // sleep because we don't want to cycle endlessly waiting to align
+                    SMART_WAIT = (60 - second() + 20);
+                    // oneliner
+                    V1_print(F("case 0: will sleepSeconds() 20 secs into the next minute"));
+                    V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
+                    sleepSeconds(SMART_WAIT);
+
+                } else {
                     V1_printf("wspr? good alignMinute(-1) and voltageBeforeWSPR %.f" EOL, voltageBeforeWSPR);
                     if (second() > 30) {
                         // to late..don't try to send
                         // minute() second() come from Time.h as ints
                         // oneliner
-                        V1_print("WARN: wspr no send, past 30 secs in pre-minute:");
-                        V1_printf("minute: %d *second: %d* alignMinute(-1) %u" EOL,
+                        V1_print(F("WARN: wspr no send, past 30 secs in pre-minute:"));
+                        V1_printf(" minute: %d *second: %d* alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
                         SMART_WAIT = (60 - second() + 20);
                         // oneliner
-                        V1_print("(1) will sleepSeconds() 20 secs into the next minute");
-                        V1_printf("with SMART_WAIT %d" EOL, SMART_WAIT);
+                        V1_print(F("case 1: will sleepSeconds() 20 secs into the next minute"));
+                        V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
                         sleepSeconds(SMART_WAIT);
 
                     } else {
                         // oneliner
                         V1_printf("wspr? wait until 30 secs before the aligned starting minute");
-                        V1_printf("now: minute: %d *second: %d*" EOL, minute(), second());
+                        V1_printf(" now: minute: %d *second: %d*" EOL, minute(), second());
                         while (second() < 30) {
                             Watchdog.reset();
                             delay(10); // 10 millis
@@ -1313,7 +1324,7 @@ void loop1() {
                         V1_println("wspr? have 30 secs to go till the aligned starting minute");
                         // oneliner
                         V1_print("wspr? get the vfo going");
-                        V1_printf("now: minute: %d second: %d" EOL, minute(), second());
+                        V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
                         uint32_t hf_freq = 14097100UL;
                         hf_freq = doCorrection(hf_freq);
@@ -1322,19 +1333,11 @@ void loop1() {
                             // FIX! gps should be off at this point and not firing data? or ?
                             SMART_WAIT = (60 - second() + 20);
                             // oneliner
-                            V1_print("(2) will sleepSeconds() 20 secs into the next minute");
-                            V1_printf("with SMART_WAIT %d" EOL, SMART_WAIT);
+                            V1_print(F("case 2: will sleepSeconds() 20 secs into the next minute"));
+                            V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
                             sleepSeconds(SMART_WAIT);
                         }
                     }
-                } else {
-                    // oneliner
-                    V1_print("WARN: wspr no send.");
-                    V1_printf("because minute() %d second: %d *alignMinute(-1) %u*" EOL,
-                        minute(), second(), alignMinute(-1));
-                    // we fall thru and can get another gps fix or just try again.
-                    // sleep because we don't want to cycle endlessly waiting to align
-                    sleepSeconds(BEACON_WAIT);
                 }
             }
             else {
@@ -1400,12 +1403,12 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     // at most wait up to a minute if called the minute before start time)
     if (!alignMinute(-1)) {
         V1_print("FAIL: alignAndDoAllSequentialTX END early out: alignment wrong!");
-        V1_printf("now: minute: %d second: %d" EOL, minute(), second());
+        V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
         return -1;
     }
 
     V1_printf("alignAndDoAllSequentialTX START");
-    V1_printf("now: minute: %d second: %d" EOL, minute(), second());
+    V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
     while (second() < 30)  {
         Watchdog.reset();
         delay(5); // 5 millis
@@ -1414,7 +1417,7 @@ int alignAndDoAllSequentialTx (uint32_t hf_freq) {
     }
 
     V1_print("alignAndDoAllSequentialTX START");
-    V1_printf("now: minute: %d second: %d" EOL, minute(), second());
+    V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
     // don't want gps power and tx power together
     GpsOFF(true); // keep TinyGPS state
 
@@ -1594,7 +1597,10 @@ void sleepSeconds(int secs) {
             // does this have a updateStatusLED() ??
             // long enough to be sure to catch all NMEA during the broadcast interval of 1 sec
             // 1050: was this causing rx buffer overrun (21 to 32)
-            updateGpsDataAndTime(1500);  // milliseconds
+            // 1500 was good for 9600 and up
+            // not long enough for 4800?
+            if (SERIAL2_BAUD_RATE == 4800) updateGpsDataAndTime(2000);  // milliseconds
+            else updateGpsDataAndTime(1500); 
         } else {
             sleep_ms(1500);
         }
@@ -1694,11 +1700,11 @@ bool alignMinute(int offset) {
 // txNum can be 0, 1, 2, 3
 
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhenDone) {
-    // Instead of delaying in for 1 sec: we wait for 'proceed' here.
-    // If we wait for 2 proceeds, it's okay if the first is short
+    // Instead of delaying in for 1 sec: we wait for PROCEED here.
+    // If we wait for 2 PROCEEDs, it's okay if the first is short
     // because of unknown PWM counter initial state?
 
-    // Two proceed delays kind of get us to the 1-1.5secs in
+    // Two PROCEED delays kind of get us to the 1-1.5secs in
     // target..so okay?
     // Then we're going more closely interrupt to interrupt right from symbol[0]
     // each of these should just be symbol time delay
@@ -1706,11 +1712,11 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
     // 0.68266666... per symbol
     // so 2x -> 1.3653333..maybe a little shorter due to code delays
-    // should we do one proceed plus a fixed delay?
+    // should we do one PROCEED plus a fixed delay?
 
     Watchdog.reset();
     //*******************************
-    // Note we print this after the extra 'proceed' delay(s). (or any additional fixed delay)
+    // Note we print this after the extra PROCEED delay(s). (or any additional fixed delay)
     V1_printf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
     if (VERBY[1]) {
         // do a StampPrintf, so we can measure usec duration from here to the first symbol
@@ -1756,15 +1762,15 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // yes that was good
 
     uint8_t PROCEEDS_TO_SYNC = 0;
-    // no, still getting DT=0.7 at 133Mhz. try keeping it with no extra proceed beforehand
+    // no, still getting DT=0.7 at 133Mhz. try keeping it with no extra PROCEED beforehand
     // if (PLL_SYS_MHZ >= 125) PROCEEDS_TO_SYNC = 1;
 
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time,
-        // after a 'proceed' false -> true transition
+        // after a PROCEED false -> true transition
         sleep_ms(660); // as big as we can go safely and not be too big. save power!
-        while (!proceed) { ; }
-        proceed = false; // ? to 1 symbol time
+        while (!PROCEED) { ; }
+        PROCEED = false; // ? to 1 symbol time
     }
     // hmm. not updating led during this
     // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
@@ -1810,17 +1816,17 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         if (false && VERBY[1])
             if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
 
-        proceed = false;
+        PROCEED = false;
         // this won't affect alignment by doing it here
         updateStatusLED();
         // FIX! ideally we sleep during the symbol time. (a little less than symbol time)
         sleep_ms(650);
 
-        // Will watchdog reset if we don't get 'proceed', which means
+        // Will watchdog reset if we don't get PROCEED, which means
         // something went wrong with the interrupt handler
 
         // FIX! we could sleep for a little less than the expected symbol time here
-        // that would work..then check proceed on wakep (spin loop here)
+        // that would work..then check PROCEED on wakeup (spin loop here)
         // i.e. sleep a little less than this.
         // The symbol rate is approximately 1.4648 baud (4FSK symbols per second),
         // or exactly 12,000 Hz / 8192
@@ -1831,7 +1837,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // waking and re-checking time on every processor event (WFE)
         // These functions should not be called from an IRQ handler.
 
-        while (!proceed) {
+        while (!PROCEED) {
             ;
             // Whenever we have spin loops we need to updateStatusLED()
             // Leave it out for now, just in case it affects symbols
@@ -1918,7 +1924,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
 
     // PWM_WRAP_CNT is full period value.
     // -1 before it's set as the wrap top value.
-    proceed = false;
+    PROCEED = false;
     // we constantly reset this for every wspr message, 
     // so we know the first interrupt is a little ways 
     // out from where we are now, then?

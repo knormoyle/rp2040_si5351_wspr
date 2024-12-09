@@ -65,7 +65,7 @@ extern bool VERBY[10];
 extern const uint32_t INTERRUPTS_PER_SYMBOL;
 
 const int WSPR_PWM_SLICE_NUM = 4;
-extern volatile bool proceed;
+extern volatile bool PROCEED;
 
 // https://swharden.com/software/FSKview/wspr/
 // 110.6 sec continuous wave
@@ -147,7 +147,7 @@ void PWM4_Handler() {
         pwm_interrupt_cnt = 0;
         // symbol rate is approximately 1.4648 baud (4fsk per sec), or exactly 12,000 Hz / 8192.
         // 0.6826 secs per symbol?
-        proceed = true;
+        PROCEED = true;
     }
     // FIX! remove this. redundant and slows down gettng to 'proceed' in tracker.ino
     if (false and VERBY[1]) {
@@ -164,7 +164,6 @@ void PWM4_Handler() {
         }
     }
     // V1_print/ln(F("PWM4_Handler() END"));
-
 }
 
 //*******************************************************
@@ -225,7 +224,7 @@ void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     pwm_interrupt_total_cnt = 0;
 
     pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
-    // does this start it counting to interrupt and toggle 'proceed' after completion of first symbol?
+    // does this start it counting to interrupt and toggle PROCEED after completion of first symbol?
     // first symbol could be "short" as a result (the extra delay in getting first frequency setup)
     // setup the base frequency earlier, so we don't see this extra variation on first symbol!
     // due to the "change" optimization in the i2c writes.

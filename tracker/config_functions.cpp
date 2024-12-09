@@ -223,14 +223,13 @@ void config_intro(void) {
     // re-read the NVRAM just to see if we have any errors, and to see the VERBY decode
     V0_print(F(CLEAR_SCREEN CURSOR_HOME BRIGHT));
     for (int i = 0; i < 10; i++) V0_println();
-    V0_print(F(UNDERLINE_ON));
+    // V0_print(F(RED));
     V0_println("tracker: AD6Z firmware, AG6NS 0.04 pcb, JLCPCB with *kbn* or *kbn2* bom/cpl mod");
     V0_println("https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker");
+    V0_println("https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/tree/main/pcb/tracker/v0.4_kbn");
     V0_println("tracker.ino firmware version: " __DATE__ " "  __TIME__);
     V0_println("support: knormoyle@gmail.com or https://groups.io/g/picoballoon");
-    V0_print(F(UNDERLINE_OFF));
-    V0_print(F(RED));
-    V0_print(F(NORMAL));
+    // V0_print(F(NORMAL));
 
     //***************
     // get all the _* config state set and fix any bad values (to defaults)
