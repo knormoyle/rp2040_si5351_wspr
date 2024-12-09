@@ -494,9 +494,9 @@ void setup() {
             BALLOON_MODE = true;
             decodeVERBY(); 
         } else {
-            V0_print(F(EOL "SETUP() ..Found Serial. BALLOON_MODE false" EOL));
             BALLOON_MODE = false;
             decodeVERBY(); 
+            V0_print(F(EOL "SETUP() ..Found Serial. BALLOON_MODE false" EOL));
         }
         Watchdog.reset();
         // hmm IGNORE_KEYBOARD_CHARS is not factored into this..should always be false at this point?
@@ -599,12 +599,20 @@ void loop() {
         // so the other core just should be timely in stopping normal balloon work.
         int charsAvailable = (int) Serial.available();
         if (charsAvailable && !IGNORE_KEYBOARD_CHARS) {
+            rp2040.idleOtherCore();
+            core1_idled = true;
+            // we own the led's and the watch dog interface no2
+            Watchdog.enable(30000);
+            Watchdog.reset();
+
             // FIX! this is a just-in-case we had temporarily slowed the clock to 18Mhz
             // during the first gps cold reset, and keyboard interrupted that?
             // this will make the clock right again
             initPicoClock(PLL_SYS_MHZ);
-            rp2040.idleOtherCore();
-            core1_idled = true;
+            initStatusLED();
+            setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
+            updateStatusLED();
+
             V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
             V0_print(F(EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
 
@@ -620,8 +628,6 @@ void loop() {
             // which is active anyhow
 
             V0_println(F("tracker.ino: (A) Going to user_interface() from loop()"));
-            setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
-            updateStatusLED();
             // sleep_ms(1000);
             user_interface();
             // won't return here, since all exits from user_interface reboot
