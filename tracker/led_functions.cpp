@@ -11,16 +11,21 @@ const int LED_BLINK_PAUSE_PERIOD_USEC = 1000000;
 
 int statusLEDBlinkCnt = 0;
 
+//********************
 void initStatusLED(void) {
     pinMode(STATUS_LED_PIN, OUTPUT);
     turnOnLED(true);
 }
 
+//********************
 void setStatusLEDBlinkCount(int cnt) {
     statusLEDBlinkCnt = cnt;
 }
 
+//********************
 void updateStatusLED(void) {
+    // no prints allowed here. can be used while USB printing doesn't work
+    // but not protected by BALLOON_MODE or VERBY
     static uint32_t nextFlipUsec = 0;
     static int targetBlinkCnt = 0;
     static int currBlinkCnt = 0;
@@ -50,10 +55,12 @@ void updateStatusLED(void) {
     }
 }
 
+//********************
 void turnOnLED(bool turn_on) {
     digitalWrite(STATUS_LED_PIN, (turn_on) ? HIGH : LOW);
 }
 
+//********************
 bool isLEDOn(void) {
     return (digitalRead(STATUS_LED_PIN) ? true : false);
 }

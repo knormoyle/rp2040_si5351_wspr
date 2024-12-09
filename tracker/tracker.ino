@@ -3,7 +3,7 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-//*******************************************
+
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
@@ -13,6 +13,9 @@
 #include <string.h>
 // FIX! is this needed?
 #include <avr/dtostrf.h>
+
+// HACK stay in balloon mode for debug.  Normally should be false.
+bool FORCE_BALLOON_MODE = false;
 
 #include "defines.h"
 #include "print_functions.h"
@@ -102,13 +105,6 @@
 
 // The RP2040 has two hardware-based UARTS with configurable pin selection.
 // Serial1 is UART0, and Serial2 is UART1.
-// The size of the receive FIFO can be adjusted from the default 32 bytes with
-// setFIFOSize call prior to calling begin()
-// but can't change the hw buffer from 32 for the RP2040?
-//     Serial1.setFIFOSize(128);
-//     Serial1.begin(baud);
-//
-// The FIFO is normally handled via an interrupt.
 // For applications where an IRQ driven serial port is not appropriate,
 // use setPollingMode(true) before calling begin()
 //     Serial1.setPollingMode(true);
@@ -387,7 +383,7 @@ char _lane[2] = { 0 };
 extern const uint32_t DEFAULT_PLL_SYS_MHZ = 125;
 uint32_t PLL_SYS_MHZ = 0; // should never try to use it while it's 0
 
-bool BALLOON_MODE = false;
+bool BALLOON_MODE = true;
 bool CORE1_PROCEED = false;
 // decode of _devmode
 bool DEVMODE = false;
@@ -436,12 +432,12 @@ bool core1_separate_stack = true;
 
 // everything is shared/accessible between two cores, but little is thread safe?
 
+
 void setup() {
     // FIX! what if we start with usb connected, boot, do some printing or keyboard
     // and then reboot and unplug usb. Or unplug usb and leave running
     // will it reboot when watch dog timer detects hang on Serial?
     // no it will reboot because of power going away and coming back?
-
     Watchdog.enable(30000);
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -463,21 +459,12 @@ void setup() {
     // time_reached (Depends on Children, Looks SMP Safe/Thread Safe)
     // busy_wait_until (Depends on Children, Looks SMP Safe/Thread Safe)
 
-    // loop on this and leave if once we get Serial.available()
-    // otherwise just stay here! This will give us a test
-    // of Serial.print() thread-safeness. We can remove the prints later to be careful.
-    // wait 1 sec for core1 to create Serial
-
-    // FIX! this forces going to the user interface always on boot. don't want this
-    // for balloon, although it will time out there eventually
-
     // FIX! in case user is frantically trying to get to the config menu to avoid setting clock speed or ??
     // if anything was found by incomingByte above, go to the config menu
     // (potentially a balloon weird case would timeout)
 
     BALLOON_MODE = true;
     decodeVERBY(); // BALLOON_MODE forces all false
-    DEVMODE = false;
     while (!Serial) {
         // hmmm.. is Watchdog threadsafe? maybe watch out for that!
         Watchdog.reset();
@@ -492,12 +479,17 @@ void setup() {
     updateStatusLED();
     bool found_any = false;
     if (Serial) {
-        V0_print(F(EOL "SETUP() ..Found Serial. BALLOON_MODE false" EOL));
-        BALLOON_MODE = false;
+        // HACK stay in balloon mode for debug
+        if (!FORCE_BALLOON_MODE) {
+            V0_print(F(EOL "SETUP() ..Found Serial. BALLOON_MODE false" EOL));
+            BALLOON_MODE = false;
+            decodeVERBY(); 
+        }
         // read the nvram and decode VERBY and DEVMODE. This will control printing
         read_FLASH();
-        forceHACK();
+        // forceHACK();
         Watchdog.reset();
+
         // hmm IGNORE_KEYBOARD_CHARS is not factored into this..should always be false at this point?
         found_any = drainSerialTo_CRorNL(1000);
         // how to compare char: ..== 'R' is the same as == 82 (ascii value)
@@ -568,8 +560,8 @@ void loop() {
     if (BALLOON_MODE) {
         // just sleep 
         sleep_ms(100000);
-        // just return, loop will be called again
-        return;
+        // hmm could just return, loop will be called again
+        // return;
     }
 
     // FIX! musing: should never get any usb/serial input while balloon is flying
@@ -578,7 +570,7 @@ void loop() {
     // Shouldn't be necessary?
     // if garbage serial arrived, and we went to config mode, eventually we'd timeout/reboot
 
-    while (true) {
+    while (!BALLOON_MODE) {
         // don't use watchog reset..not thread safe?
         if (core1_idled) {
             V0_print(F(EOL "loop() LOOPING QUICKLY WITH core1_idled()" EOL EOL));
@@ -631,6 +623,7 @@ void setup1() {
     // CORE1_PROCEED should start false, so no need to wait?
     sleep_ms(1000);
     while (!CORE1_PROCEED) { 
+        // no printing inside this..potentially BALLOON_MODE/VERBY not setup yet?
         updateStatusLED();
         sleep_ms(10);
     }
@@ -638,18 +631,15 @@ void setup1() {
     V1_println(F("setup1() START"));
     Watchdog.enable(30000);
     Watchdog.reset();
+
     // any use for Watchdog.sleep() from SleepyDog library?
     // instead of sleep_ms() ?
-
     // To enter low power sleep mode call Watchdog.sleep() like below
     // and the watchdog will allow low power sleep for as long as possible.
     // The actual amount of time spent in sleep will be returned in // milliseconds).
-    // digitalWrite(LED_BUILTIN, LOW); // Show we're asleep
+
     // FIX! should we use this?
     // int sleepMS = Watchdog.sleep();
-
-    // temp hack to force DEVMODE and verbose 9
-    forceHACK();
 
     //**********************
     initStatusLED();
@@ -664,13 +654,6 @@ void setup1() {
 
     Watchdog.reset();
     vfo_init();
-
-    // FIX! we don't need to turn it on here
-    if (false) {
-        // unnecessary 11/23/24 ..inside vfo_turn_on() now
-        // vfo_set_power_on(true);
-        vfo_turn_on(WSPR_TX_CLK_NUM);
-    }
 
     //**********************
     // Some notes in case we ever use Wire
@@ -702,7 +685,6 @@ void setup1() {
     // default pins for Wire 0 are SDA=4 SCL=5 (our ISC1 for the BMP)
 
     Watchdog.reset();
-
     // also turns on and checks for output
     // does a full gps cold reset now?
     GpsINIT(); 
@@ -716,24 +698,20 @@ void setup1() {
     // we already did a cold reset in the GpsINIT() ..don't do it again!
     // GpsON(false);
 
-    setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
-    updateStatusLED();
-
-    // FIX! assume this is the state it was in before config menu?
-    // not always right. but loop will self-correct?
-
     if (!BALLOON_MODE && !Serial) {
         // V1_println("Why can't we see Serial from setup1()..rebooting");
         setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
         // we're going to have to reboot..even balloon needs Serial created?
         // If serial data output buf is full, we just overflow it (on balloon)
-        Watchdog.enable(1000);  // milliseconds
+        Watchdog.enable(10000);  // milliseconds
         for (;;) {
             // FIX! put a bad status in the leds
-            updateStatusLED();
+            // maybe just force it on?
+            digitalWrite(LED_BUILTIN, LOW); // Show we're asleep?
+            // updateStatusLED();
         }
     }
-    V1_println("Serial() is true");
+    V1_println("setup1() ..Serial() is true");
 
     //**********************
     Watchdog.reset();
@@ -818,40 +796,6 @@ void setup1() {
     V1_printf("calcPwmDivAndWrap() ");
     V1_printf("for PLL_SYS_MHZ %lu ...calculated best PWM_DIV %lu PWM_WRAP_CNT %lu" EOL,
         PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT);
-
-    // choices
-    // GOOD: PLL_SYS_MHZ 60 PWM_DIV 250 PWM_WRAP_CNT 20479 totalSymbolsTime 110.591
-    // GOOD: PLL_SYS_MHZ 100 PWM_DIV 250 PWM_WRAP_CNT 34133 totalSymbolsTime 110.591
-    // GOOD: PLL_SYS_MHZ 133 PWM_DIV 250 PWM_WRAP_CNT 45397 totalSymbolsTime 110.591
-    // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666 totalSymbolsTime 110.590
-
-    //***********************************************
-    // various good enough combinations for 125 Mhz
-    // FIX! update for other clock frequencies
-
-    // just calc once in setup? recalc if we change clock frequency in config
-    if (false) {
-        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
-    }
-    if (false) {
-        // GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666
-        // GOOD: totalSymbolsTime 110.590
-        // PWM_DIV = 250;
-        // PWM_WRAP_CNT = 42666;
-
-        // GOOD: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42328
-        // GOOD: totalSymbolsTime 110.592
-        PWM_DIV = 252;
-        PWM_WRAP_CNT = 42328;
-    }
-    if (false) {
-        // D: PLL_SYS_MHZ 125 PWM_DIV 252 PWM_WRAP_CNT 42331
-        // GOOD: totalSymbolsTime 110.600
-        PWM_DIV = 252;
-        PWM_WRAP_CNT = 42331;
-    }
-
-    //***********************************************
 
     V1_println(F("setup1() END"));
 }
@@ -1681,6 +1625,7 @@ bool alignMinute(int offset) {
             align_minute = 0;
     }
 
+    // WARN: make sure _go_when_rdy is cleared before real balloon flight!
     if (_go_when_rdy[0] == '1') {
         // any odd minute for any odd offset (including -1)
         if ((abs(offset) % 2) == 1) aligned = (minute() % 2) == 1;

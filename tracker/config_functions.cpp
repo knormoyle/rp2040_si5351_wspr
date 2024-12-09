@@ -215,10 +215,8 @@ void printFLASH(const uint8_t *buf, size_t len) {
 //***************************************
 void config_intro(void) {
     V0_println(F("config_intro() START"));
-
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
-    V0_println(F("test Serial.println config_intro() Serial.println()"));
 
     // re-read the NVRAM just to see if we have any errors, and to see the VERBY decode
     V0_print(F(CLEAR_SCREEN CURSOR_HOME BRIGHT));
@@ -247,13 +245,8 @@ void config_intro(void) {
     }
 
     //**************
-    // FIX! what happens when BALLOON_MODE and Serial isn't there .. just reboot eventually?
-    // (timeout)
-    // char drainSerialTo_CRorNL (uint32_t millis_max) {
-    // clear out any old stuff in serial input
-    // V0_println("press any key to continue");
+    // FIX! what happens when BALLOON_MODE and Serial isn't there .. just timeout reboot?
     drainSerialTo_CRorNL(1000);
-
     // FIX! assume this is the state it was in before config menu?
     // not always right. but loop will self-correct?
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -351,7 +344,6 @@ void user_interface(void) {
         V0_print(F(UNDERLINE_OFF NORMAL));
 
         Watchdog.reset();
-        // char drainSerialTo_CRorNL (uint32_t millis_max);
         char c_char = getOneChar(15000);
 
         // V0_printf("%s" EOL, c_char);
@@ -501,6 +493,7 @@ void user_interface(void) {
             case 'G':
                 V0_print(F("test only: 1 means you don't wait for starting minute from _U4B_channel" EOL));
                 V0_print(F("does wait for any 2 minute alignment though" EOL));
+                V0_print(F("MAKE SURE YOU ZERO THIS BEFORE BALLOON FLIGHT!! ignores BALLOON_MODE" EOL));
                 get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1):",
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
@@ -613,13 +606,10 @@ int read_FLASH(void) {
     // -1 if anything got fixed
     int result = check_data_validity_and_set_defaults();
 
-    // hack _devmode _verbose DEVMODE
-    // forces DEVMODE and _verbose == '9'
-    forceHACK();
+    // forceHACK();
 
     if (_devmode[0] == '1') DEVMODE = true;
     else DEVMODE = false;
-
     decodeVERBY();
 
     V1_print("read_FLASH END" EOL);
@@ -628,7 +618,8 @@ int read_FLASH(void) {
 
 //**************************************
 void decodeVERBY(void) {
-    V1_print("decodeVERBY START" EOL);
+    // don't do any printing in here, in case BALLOON_MODE/VERBY not correct yet
+    // V1_print("decodeVERBY START" EOL);
     // can't use Serial at all, if BALLOON_MODE
     // VERBY[0] guarantees that, even for config
     // Currently VERBY[1] covers everything else
@@ -657,14 +648,14 @@ void decodeVERBY(void) {
         else VERBY[i] = false;
     }
 
-    V1_printf("decoded _verbose %s to VERBY[9:0]" EOL, _verbose);
+    // V1_printf("decoded _verbose %s to VERBY[9:0]" EOL, _verbose);
     if (false) {
         for (int i = 0; i < 10 ; i++) {
             V0_printf("VERBY[%d] %x" EOL, i, VERBY[i]);
         }
     }
 
-    V1_print("decodeVERBY END" EOL);
+    // V1_print("decodeVERBY END" EOL);
 }
 
 //***************************************

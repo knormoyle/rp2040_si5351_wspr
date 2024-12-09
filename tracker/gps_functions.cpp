@@ -179,8 +179,11 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
     // FIX! should we do this here or where?
     Watchdog.reset();
     if (n < 0 || n > 120000) {
-        V1_printf("ERROR: sleepForMilliSecs() n %d too big (120000 max). Using 1000" EOL, n);
-        n = 1000;
+        // V1_printf("ERROR: sleepForMilliSecs() n %d too big (120000 max). Using 1000" EOL, n);
+        // n = 1000;
+        // UPDATE: this is used while USB is disabled, but BALLOON_MODE/VERBY don't protect us
+        // just don't print here
+        ;
     }
     int milliDiv = n / 10;
 
@@ -192,6 +195,7 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
         // https://docs.arduino.cc/language-reference/en/functions/time/delay/
         // check for update every 10 milliseconds
         if ((milliDiv % 10) == 0) {
+            // no prints in this
             updateStatusLED();
             Watchdog.reset();
         }
@@ -791,9 +795,12 @@ void GpsFullColdReset(void) {
         V0_print(F("GPS power demand is high until first fix after cold reset..sleep for 15 secs" EOL));
     }
 
-    //Not worth doing if USB is disabled? (no print) but if we can't disable deinit USB (see above), we can?
-    measureMyFreqs();
+    // Not worth doing if USB is disabled? (no print) but if we can't disable deinit USB (see above), we can?
+    if (!ALLOW_KAZU_SLOW_CLOCKS_MODE && !ALLOW_USB_DISABLE_MODE) 
+        measureMyFreqs();
+
     // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
+    // this should have no printing either?
     sleepForMilliSecs(15000, false); // 15 secs
 
     //******************
@@ -1528,15 +1535,22 @@ void kazuClocksSlow() {
         12 * MHZ,
         12 * MHZ);
 
-    V0_println(F("kazuClocksSlow END" EOL));
+    // can't print without USB now
+    // V0_println(F("kazuClocksSlow END" EOL));
 }
 
 //************************************************
 void kazuClocksRestore() {
-    V0_println(F("kazuClocksRestore START" EOL));
-    V0_flush();
+    // if kazuClocksRestore() is only used after kazuClocksSlow() why do we need it? 
+    // it's not changing anything anything except restoring usb if not balloon mode
+
+    // was VERBY cleared while USB was off. no. so don't print here
+    // V0_println(F("kazuClocksRestore START" EOL));
+    // V0_flush();
+
     // Change clk_sys and clk_peri to be 12MHz, and restore usb to 48 mhz ?
     // the external crystal is 12mhz
+    // I suppose this is the same as it was due to kazuClocksSlow()
     clock_configure(clk_sys,
         CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
         CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
@@ -1548,21 +1562,24 @@ void kazuClocksRestore() {
     // pll_init(pll_sys);
     // ../rp2040/4.2.0//pico-sdk/src/rp2_common/hardware_pll/include/hardware/pll.h:62
 
-    // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
-    // pll	pll_sys or pll_usb
-    // ref_div	Input clock divider.
-    // vco_freq	Requested output from the VCO (voltage controlled oscillator)
-    // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
-    // post_div2	Post Divider 2 - range 1-7
-    pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+    if (!BALLOON_MODE) {
+        // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
+        // pll	pll_sys or pll_usb
+        // ref_div	Input clock divider.
+        // vco_freq	Requested output from the VCO (voltage controlled oscillator)
+        // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
+        // post_div2	Post Divider 2 - range 1-7
+        pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+        // FIX! we don't need pll_sys for the Serial2 ? (gps) or do we?
+        busy_wait_ms(1000);
+        // High-level Adafruit TinyUSB init code,
+        // does many things to get USB back online
+        tusb_init();
+        Serial.begin(115200);
+        busy_wait_ms(1000);
+    }
 
-    // FIX! we don't need pll_sys for the Serial2 ? (gps) or do we?
-    busy_wait_ms(1000);
-    // High-level Adafruit TinyUSB init code,
-    // does many things to get USB back online
-    tusb_init();
-    Serial.begin(115200);
-    busy_wait_ms(1000);
+    // I suppose this stuff is the same as it was due to kazuClocksSlow()
 
     // CLK peri is clocked from clk_sys so need to change clk_peri's freq
     clock_configure(clk_peri,
@@ -1570,7 +1587,6 @@ void kazuClocksRestore() {
         CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
         12 * MHZ,
         12 * MHZ);
-
 
     // CLK RTC = XOSC 12MHz / 256 = 46875Hz
     clock_configure(clk_rtc,
@@ -1586,11 +1602,11 @@ void kazuClocksRestore() {
         12 * MHZ,
         12 * MHZ);
 
+    // I guess printing should work now? (if not BALLOON_MODE)
     V0_println(F("kazuClocksRestore END" EOL));
     // The Raspberry Pi Pico's Serial communication uses the same system clock as everything else.
     // The baud rate of the serial communication is derived from this main clock frequency.
     // What does it mean for Serial2 when we're running at 12Mhz?
 }
-
 
 //************************************************
