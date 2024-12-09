@@ -733,6 +733,7 @@ void GpsFullColdReset(void) {
         // V0_print("Also lowering core voltage to 0.95v" EOL);
         V0_flush();
 
+        // hmm core0 has to know to drain garbage chars if we assert this? then deassert?
         IGNORE_KEYBOARD_CHARS = true;
         // DRASTIC measures, do before sleep!
         // save current sys freq

@@ -411,6 +411,7 @@ uint64_t loopCnt = 0;
 // it should always be re-enabled after 30 secs. 
 // Worst case to recover: unplug power and plug in again
 bool IGNORE_KEYBOARD_CHARS = false;
+bool IGNORE_KEYBOARD_CHARS_last = false;
 
 //***********************************************************
 // FIX! should this be non-zero?
@@ -481,7 +482,6 @@ void setup() {
     }
     Watchdog.reset();
     updateStatusLED();
-    bool found_any = false;
     // FIX! do we detect Serial if we never open putty, and data + power is connected on USB?
     // eventually we'll time out in config menu and reboot
     // detecting usb is connected
@@ -500,12 +500,9 @@ void setup() {
         }
         Watchdog.reset();
         // hmm IGNORE_KEYBOARD_CHARS is not factored into this..should always be false at this point?
-        found_any = drainSerialTo_CRorNL(1000);
-        // how to compare char: ..== 'R' is the same as == 82 (ascii value)
-        if (!found_any) {
-            // core1 takes over Watchdog.reset() at this point
-            CORE1_PROCEED = true;
-        } else {
+        char incomingByte = drainSerialTo_CRorNL(1000);
+        // CR or LF to interrupt?
+        if (incomingByte == 10 || incomingByte == 13) {
             // Must do this branching BEFORE setting clock speed in case of bad clock speed setting!
             V1_print(F(EOL "LEAVING SETUP() (1)" EOL EOL));
             V0_print(F(EOL "Hit <enter> if you need to enter config mode. otherwise it's running (1)" EOL EOL));
@@ -513,6 +510,9 @@ void setup() {
             // sleep_ms(1000);
             user_interface();
             // won't return here, since all exits from user_interface reboot
+        } else {
+            // core1 takes over Watchdog.reset() at this point
+            CORE1_PROCEED = true;
         }
     }
     else {
@@ -597,43 +597,59 @@ void loop() {
 
         // This core can handle modifying config state, not the other core
         // so the other core just should be timely in stopping normal balloon work.
-        int charsAvailable = (int) Serial.available();
-        if (charsAvailable && !IGNORE_KEYBOARD_CHARS) {
-            rp2040.idleOtherCore();
-            core1_idled = true;
-            // we own the led's and the watch dog interface no2
-            Watchdog.enable(30000);
-            Watchdog.reset();
-
-            // FIX! this is a just-in-case we had temporarily slowed the clock to 18Mhz
-            // during the first gps cold reset, and keyboard interrupted that?
-            // this will make the clock right again
-            initPicoClock(PLL_SYS_MHZ);
-            initStatusLED();
-            setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
-            updateStatusLED();
-
-            V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
-            V0_print(F(EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
-
-            // FIX! what if did all the updateStatusLED from this core?
-            // the other core could update the count as a writer and we would just be a reader
-            // we could strip all the updateStatusLED() out of the other core
-            // I guess we don't have a watch dog timer just for this core
-            // but that's okay..worst case we lose keyboard response and if we do led here
-            // we could lose led update if we hang here.
-            // so when we loop here, we also do updateStatusLED()
-            // have to remove all of it from the other core.
-            // NO! we'd have to wake up more than once a sec. Leave it on the other core
-            // which is active anyhow
-
-            V0_println(F("tracker.ino: (A) Going to user_interface() from loop()"));
-            // sleep_ms(1000);
-            user_interface();
-            // won't return here, since all exits from user_interface reboot
-            // so will never resume the other core if we idled it?
-            // rp2040.resumeOtherCore();
+        if (IGNORE_KEYBOARD_CHARS_last & !IGNORE_KEYBOARD_CHARS) {
+            // drain it of everything..garbage during gps cold reset
+            // should have a limited number of ?? chars
+            while (Serial.available()) Serial.read();
         }
+                
+        int charsAvailable = (int) Serial.available();
+        // detect the transition of 1 -> 0 on IGNORE_KEYBOARD_CHARS (by core1)  (gps cold reset)
+        // and drain all garbage chars in serial
+        if (charsAvailable && !IGNORE_KEYBOARD_CHARS) {
+            // CR or LF to interrupt? 
+            // Are we getting odd chars while plugged into USB power with data, but no serial window?
+            char incomingByte = drainSerialTo_CRorNL(1000);
+            // could we be getting random CR or LF if using usb plug with data and no serial window?
+            // hopefully not!
+            if (incomingByte==10 || incomingByte==13) {
+                rp2040.idleOtherCore();
+                core1_idled = true;
+                // we own the led's and the watch dog interface no2
+                Watchdog.enable(30000);
+                Watchdog.reset();
+
+                // FIX! this is a just-in-case we had temporarily slowed the clock to 18Mhz
+                // during the first gps cold reset, and keyboard interrupted that?
+                // this will make the clock right again
+                initPicoClock(PLL_SYS_MHZ);
+                initStatusLED();
+                setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
+                updateStatusLED();
+
+                V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
+                V0_print(F(EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
+
+                // FIX! what if did all the updateStatusLED from this core?
+                // the other core could update the count as a writer and we would just be a reader
+                // we could strip all the updateStatusLED() out of the other core
+                // I guess we don't have a watch dog timer just for this core
+                // but that's okay..worst case we lose keyboard response and if we do led here
+                // we could lose led update if we hang here.
+                // so when we loop here, we also do updateStatusLED()
+                // have to remove all of it from the other core.
+                // NO! we'd have to wake up more than once a sec. Leave it on the other core
+                // which is active anyhow
+
+                V0_println(F("tracker.ino: (A) Going to user_interface() from loop()"));
+                // sleep_ms(1000);
+                user_interface();
+                // won't return here, since all exits from user_interface reboot
+                // so will never resume the other core if we idled it?
+                // rp2040.resumeOtherCore();
+            }
+        }
+        IGNORE_KEYBOARD_CHARS_last = IGNORE_KEYBOARD_CHARS;
     }
 }
 //***********************************************************
@@ -678,7 +694,6 @@ void setup1() {
 
     Watchdog.reset();
     adc_INIT();
-
 
     Watchdog.reset();
     vfo_init();
