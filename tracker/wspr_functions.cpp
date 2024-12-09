@@ -10,6 +10,8 @@
 // https://docs.arduino.cc/tutorials/generic/secrets-of-arduino-pwm/
 #include "hardware/pwm.h"
 #include "wspr_functions.h"
+#include "led_functions.h"
+#include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 // alternatives for hw timers
 // April, 2022 article (different now?)
@@ -60,13 +62,55 @@
 //*******************************************************************************
 // So: it appears using the PWM based interrupt mechanism avoids all these issues!
 //*******************************************************************************
-
 extern bool VERBY[10];
 extern const uint32_t INTERRUPTS_PER_SYMBOL;
 
 const int WSPR_PWM_SLICE_NUM = 4;
 extern volatile bool PROCEED;
 
+//************************************************
+void wsprSleepForMillis(int n) {
+    // FIX! we could use a sleep_until() thing? but sleep_ms should be fine?
+    // if we know watchdog interval is > than the max sleep used here?
+    // and ignored led updates
+    Watchdog.reset();
+    if (n < 0 || n > 25000) {
+        // V1_printf("ERROR: wsprSleepForMillis() n %d too big (25000 max). Using 1000" EOL, n);
+        // n = 1000;
+        // UPDATE: if this was used while USB is disabled (don't think it would be)
+        // but BALLOON_MODE/VERBY don't protect us ..just don't print here
+        ;
+    }
+
+    // interesting it says 'attempts'
+    // void sleep_ms (uint32_t	ms)	
+    // Wait for the given number of milliseconds before returning.
+    // This method attempts to perform a lower power sleep (using WFE) as much as possible.
+    // ms	the number of milliseconds to sleep
+    
+    if (false) {
+        // I guess we don't want to use this, because the led isn't update
+        // so that 3 short led, start looking like 3 long (longs are config/error cases)
+        sleep_ms(n);
+    } else {
+        int milliDiv = n / 10;
+        // sleep approx. n millisecs
+        for (int i = 0; i < milliDiv ; i++) {
+            // https://docs.arduino.cc/language-reference/en/functions/time/delay/
+            // check for update every 10 milliseconds
+            if ((milliDiv % 10) == 0) {
+                // no prints in this
+                updateStatusLED();
+                Watchdog.reset();
+            }
+
+            // faster recovery with delay?
+            sleep_ms(10);
+        }
+    }
+}
+
+//************************************************
 // https://swharden.com/software/FSKview/wspr/
 // 110.6 sec continuous wave
 // Frequency shifts among 4 tones every 0.683 sec

@@ -3,7 +3,6 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
@@ -150,6 +149,8 @@ extern const uint32_t INTERRUPTS_PER_SYMBOL = 8;
 uint8_t hf_tx_buffer[162] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
 
 // FIX! why is this volatile? Because it's set by the ISR for PWM interrupts?
+// alternatives discussed here
+// https://forums.raspberrypi.com/viewtopic.php?t=312685
 volatile bool PROCEED = false;
 
 //*********************************
@@ -488,26 +489,14 @@ void setup() {
     // read the nvram and decode VERBY and DEVMODE. This will control printing
     read_FLASH();
 
-
     // Get the SIE_STATUS to see if we're connected or what?
     // this is what I see when I'm using the putty window
     // SIE_STATUS:1074069509
     // why am I not getting bit 16 when connected?
 
-    // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
-    // 0x00010000 [16]    CONNECTED    (0) Device: connected
-    // 0x00000010 [4]     SUSPENDED    (0) Bus in suspended state
-    // 0x0000000c [3:2]   LINE_STATE   (0x0) USB bus line state
-    // 0x00000001 [0]     VBUS_DETECTED (0) Device: VBUS Detected
-    #define sieStatusPtr ((uint32_t*)0x50110050)
-    uint32_t sieValue = *sieStatusPtr;
-    // why is it 0?
-    // bool usbConnected = Serial && ((sieValue && 0x0001000) != 0) ;
-    // https://forum.arduino.cc/t/solved-serialusb-checking-if-connection-is-still-present/582448/3
-    bool usbConnected = Serial && ((sieValue && 0x0000001) == 0x1) ;
-    // bool usbConnected = Serial;
-
-    // HACK stay in balloon mode for debug
+    bool usbConnected = Serial && get_sie_connected();
+    // FIX! is 'Serial" sufficient? it's not formed if I don't open a putty window?
+    // FORCE_BALLLON_MODE is test mode: guarantees balloon mode for debug when plugged into USB
     if (FORCE_BALLOON_MODE | !usbConnected) {
         BALLOON_MODE = true;
         decodeVERBY(); 
@@ -574,12 +563,22 @@ void setup() {
 // in a timely manner (which it can’t do when idled).
 // So we never idle core 0 !!
 
+//**********************************************************
+// FIX! what if did all the updateStatusLED from this core?
+// the other core could update the count as a writer and we would just be a reader
+// we could strip all the updateStatusLED() out of the other core
+// I guess we don't have a watch dog timer just for this core
+// but that's okay..worst case we lose keyboard response and if we do led here
+// we could lose led update if we hang here.
+// so when we loop here, we also do updateStatusLED()
+// have to remove all of it from the other core.
+// NO! we'd have to wake up more than once a sec. Leave it on the other core
+// which is active anyhow
+
 //**************************************
 absolute_time_t loop_us_start = 0;
-
 // FIX! is there a watchdog for this core?
 bool core1_idled = false;
-//**********************************************************
 void loop() {
     if (BALLOON_MODE) {
         // just sleep 
@@ -594,10 +593,20 @@ void loop() {
     // Shouldn't be necessary?
     // if garbage serial arrived, and we went to config mode, eventually we'd timeout/reboot
 
-    while (!BALLOON_MODE) {
+    bool usbConnected = get_sie_connected();
+    while (!BALLOON_MODE && usbConnected && !IGNORE_KEYBOARD_CHARS) {
+        // detect the transition of 1 -> 0 on IGNORE_KEYBOARD_CHARS (by core1)  (gps cold reset)
+        // and drain all garbage chars in serial. Should only happen around gps cold reset 
+        // and it's low power nonsense: turning usb off/on 
+        if (IGNORE_KEYBOARD_CHARS_last & !IGNORE_KEYBOARD_CHARS) {
+            // drain it of everything..garbage during gps cold reset
+            // should have a limited number of ?? chars
+            while (Serial.available()) Serial.read();
+        }
+
         // don't use watchog reset..not thread safe?
         if (core1_idled) {
-            V0_print(F(EOL "loop() LOOPING QUICKLY WITH core1_idled()" EOL EOL));
+            V0_print(F(EOL "loop() LOOPING WITH core1_idled()" EOL EOL));
             sleep_ms(1000);
         } else {
             // Serial.print(F(EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
@@ -607,28 +616,13 @@ void loop() {
         }
 
         // This core can handle modifying config state, not the other core
-        // so the other core just should be timely in stopping normal balloon work.
+        // so the other core can just be timely in stopping normal balloon work 
+        // wen it gets rp2040.idleOtherCore()
 
-        // detect the transition of 1 -> 0 on IGNORE_KEYBOARD_CHARS (by core1)  (gps cold reset)
-        // and drain all garbage chars in serial
-        if (IGNORE_KEYBOARD_CHARS_last & !IGNORE_KEYBOARD_CHARS) {
-            // drain it of everything..garbage during gps cold reset
-            // should have a limited number of ?? chars
-            while (Serial.available()) Serial.read();
-        }
-                
-        // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
-        // 0x00010000 [16]    CONNECTED    (0) Device: connected
-        // 0x00000010 [4]     SUSPENDED    (0) Bus in suspended state
-        // 0x0000000c [3:2]   LINE_STATE   (0x0) USB bus line state
-        // 0x00000001 [0]     VBUS_DETECTED (0) Device: VBUS Detected
-        #define sieStatusPtr ((uint32_t*)0x50110050)
-        uint32_t sieValue = *sieStatusPtr;
-        // https://forum.arduino.cc/t/solved-serialusb-checking-if-connection-is-still-present/582448/3
-        bool usbConnected = Serial && ((sieValue && 0x0000001) == 0x1) ;
-
+        bool usbConnected = get_sie_connected();
+        // FIX! is 'charsAvailable" sufficient? 
         int charsAvailable = (int) Serial.available();
-        if (usbConnected && charsAvailable && !IGNORE_KEYBOARD_CHARS) {
+        if (usbConnected && !IGNORE_KEYBOARD_CHARS && charsAvailable) {
             // CR or LF to interrupt? 
             // Are we getting odd chars while plugged into USB power with data, but no serial window?
             char incomingByte = drainSerialTo_CRorNL(1000);
@@ -638,7 +632,7 @@ void loop() {
                 Watchdog.enable(30000);
                 rp2040.idleOtherCore();
                 core1_idled = true;
-                // we own the led's and the watch dog interface no2
+                // we own the led's and the watch dog interface now
                 Watchdog.reset();
 
                 // FIX! this is a just-in-case we had temporarily slowed the clock to 18Mhz
@@ -648,20 +642,9 @@ void loop() {
                 initStatusLED();
                 setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
                 updateStatusLED();
-
                 V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
                 V0_print(F(EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
 
-                // FIX! what if did all the updateStatusLED from this core?
-                // the other core could update the count as a writer and we would just be a reader
-                // we could strip all the updateStatusLED() out of the other core
-                // I guess we don't have a watch dog timer just for this core
-                // but that's okay..worst case we lose keyboard response and if we do led here
-                // we could lose led update if we hang here.
-                // so when we loop here, we also do updateStatusLED()
-                // have to remove all of it from the other core.
-                // NO! we'd have to wake up more than once a sec. Leave it on the other core
-                // which is active anyhow
 
                 V0_println(F("tracker.ino: (A) Going to user_interface() from loop()"));
                 user_interface();
@@ -766,7 +749,7 @@ void setup1() {
             // we're going to have to reboot..even balloon needs Serial created?
             // If serial data output buf is full, we just overflow it (on balloon)
             Watchdog.enable(10000);  // milliseconds
-            for (;;) {
+            while (true) {
                 // maybe just force it off?
                 // (after always on above)?
                 // show we're gonna reboot with long 1 sec on, 1 sec off
@@ -1803,8 +1786,18 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time,
         // after a PROCEED false -> true transition
-        sleep_ms(660); // as big as we can go safely and not be too big. save power!
-        while (!PROCEED) { ; }
+        
+        // intersymbol sleep: go as big as we can go safely and not be too big. save power!
+
+        // we need to wake up at intervals though to do the led
+        // otherwise we get wrong timing and 3-4 short look like 3-4 long!
+        // the 3-4 long are for config/error cases!
+        // 660 ms had worked here. but seems like 645 is better 
+        // to match the real symbol PROCEED 'coarse, then very-fine' alignment and rationale 
+        // function wakes to update led appropriately
+        // resets watchdog too?
+        wsprSleepForMillis(645);
+        while (!PROCEED) tight_loop_contents(); 
         PROCEED = false; // ? to 1 symbol time
     }
     // hmm. not updating led during this
@@ -1827,8 +1820,10 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
                 symbol = 0;
         }
 
-        // Does this affect drift at sdr?
-        if (false && VERBY[1])
+        // FIX! Does this affect drift at sdr? We can get more timing info (usec accuracy, but not aligned to gps-correct rtc)
+        // kazu has his special library to get usec level detail (within 75usec alignment to rtc?)
+        // these are amount the few VERBY[2] controlled prints
+        if (VERBY[2])
             if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
 
         //****************************************************
@@ -1847,17 +1842,22 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
         // With this reduced rate printing, everything is good enough for the tx.
         // only log every 10 symbols and the last three (160 161)
-        // Does this affect drift at sdr?
-        if (false && VERBY[1])
+
+        // FIX! Does this affect drift at sdr?
+        // these are amount the few VERBY[2] controlled prints
+        if (VERBY[2])
             if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
 
         PROCEED = false;
-        // this won't affect alignment by doing it here
-        updateStatusLED();
         // FIX! ideally we sleep during the symbol time. (a little less than symbol time)
-        sleep_ms(650);
+        // hardwired 650 based on tweaking and seeing what SDR DT is reported by WSJT-X
+        // we only use 10ms granularity in this routine, so need that slop subtracted 
+        // here..plus a little more?
+        // basically this is a 'coarse', then 'very fine' alignment strategy.
+        // resets watchdog too?
+        wsprSleepForMillis(645);
 
-        // Will watchdog reset if we don't get PROCEED, which means
+        // Will watchdog reset if we don't get PROCEED, which would mean
         // something went wrong with the interrupt handler
 
         // FIX! we could sleep for a little less than the expected symbol time here
@@ -1868,22 +1868,29 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // 8192 / 12000 = 0.6826666.. secs. So could sleep for 660 millisecs ?
 
         // on sleeping: https://ghubcoder.github.io/posts/awaking-the-pico/
-        // This is a lower powered sleep;
-        // waking and re-checking time on every processor event (WFE)
+        // low cost sleep: waking and re-checking time on every processor event (WFE)
         // These functions should not be called from an IRQ handler.
 
-        while (!PROCEED) {
-            ;
-            // Whenever we have spin loops we need to updateStatusLED()
-            // Leave it out for now, just in case it affects symbols
-            // leds won't blink right during tx?
-            // updateStatusLED();
-        }
+        // static __always_inline void tight_loop_contents ( void )
+        // No-op function intended to be called by any tight hardware polling loop. 
+        // Using this ubiquitously makes it much easier to find tight loops, 
+        // #ifdef-ed support for lockup debugging might be added
+
+            
+        // Whenever we have spin loops we need to updateStatusLED()
+        // Leave it out for now, just in case it affects symbols
+        // we know we're done coarse/very-fine split here. so maybe just 15-20 ms spin
+        // leds won't blink right during tx?
+        // updateStatusLED();
+        while (!PROCEED) tight_loop_contents();
+
         // hmm. not updating led during this
         // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
         // note we have this same delay before the first symbol, above before the loop!
         delay(EXTRA_DELAY_AFTER_PROCEED);
-        // if ((i % 10)==1) V1_print("."); // one per symbol
+
+        // another VERBY[2] (or above) print
+        if ((i % 10)==1) V2_print("."); // one per symbol
         Watchdog.reset();
     }
 
@@ -1900,7 +1907,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         V1_printf("ERROR: wsprDuration %" PRIu64 " usecs" EOL EOL, wsprDuration);
     }
 
-    DoLogPrint();
+    // if we gathered stuff to log above at VERBY[2] level
+    if (VERBY[2]) DoLogPrint();
     disablePwmInterrupts();
 
     // FIX! leave on if we're going to do more telemetry?
@@ -1914,11 +1922,12 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
 //**********************************
 void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
-    // setup with the base frequency if symbol == 0, so the i2c writes have seeded the si5351
+    // do setup with the base frequency and symbol == 0, so the i2c writes have seeded the si5351
     // so the first symbol won't have different delay than the subsequent symbols
-    // this s copied from sendWspr() below). Keep it up to date or make routine
-    // txNum is between 0 and 3..means 0,2,4,6 offsets, given the u4b channel configured
-    // we turned the vfo on in the minute before 0, separately
+    // hmm wonder what the typical "first symbol" is for a real wspr message?
+
+    // this was originally copied from sendWspr() below. but it now uses it. so no 
+    // issues with keeping up to date in multiple places
 
     // otherwise, normal use is for to start a symbol frequency
     uint32_t freq_x16 = (
@@ -2129,49 +2138,3 @@ void freeMem() {
 // what about the kazu boost converter (at his *gen1 repo as .eprj. Is the bom available? are pads on the pcb?)
 
 
-//*****************************************
-// 
-// https://stackoverflow.com/questions/74323515/how-can-a-usb-device-tell-if-it-is-connected-to-a-port
-// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2040/hardware_structs/include/hardware/structs/usb.h
-
-
-// In the RP2040 datasheet, the USB device connectivity status is bit 16 of the SIE_STATUS register.
-// Serial Interface engine
-// From section 4.1.4:
-// The USB registers start at a base address of 0x50110000 (defined as USBCTRL_REGS_BASE in SDK).
-// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2040/hardware_regs/include/hardware/regs/addressmap.h
-
-// In the following table, we find that the SIE status register is at offset 0x50.
-// So to find out if the device is connected, read the 32-bit register with (micropython machine.mem32), mask out bit 16 and cast the result to a boolean.
-// https://sourcevu.sysprogs.com/rp2040/picosdk/symbols/usb_hw_t
-// https://lorenz-ruprecht.at/docu/pico-sdk/1.4.0/html/group__hardware__base.html
-// memory mapped hardware register?
-// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_base/include/hardware/address_mapped.h
-
-// #define sieStatus ((uint32_t*)0x50110050)
-// uint32_t value = *sieStatus
-
-
-// include "hardware/usb.h"
-//  io_rw_32 sie_status;
-//    _REG_(USB_SIE_STATUS_OFFSET) // USB_SIE_STATUS
-//     // SIE status register
-//     // 0x80000000 [31]    DATA_SEQ_ERROR (0) Data Sequence Error
-//     // 0x40000000 [30]    ACK_REC      (0) ACK received
-//     // 0x20000000 [29]    STALL_REC    (0) Host: STALL received
-//     // 0x10000000 [28]    NAK_REC      (0) Host: NAK received
-//     // 0x08000000 [27]    RX_TIMEOUT   (0) RX timeout is raised by both the host and device if an...
-//     // 0x04000000 [26]    RX_OVERFLOW  (0) RX overflow is raised by the Serial RX engine if the...
-//     // 0x02000000 [25]    BIT_STUFF_ERROR (0) Bit Stuff Error
-//     // 0x01000000 [24]    CRC_ERROR    (0) CRC Error
-//     // 0x00080000 [19]    BUS_RESET    (0) Device: bus reset received
-//     // 0x00040000 [18]    TRANS_COMPLETE (0) Transaction complete
-//     // 0x00020000 [17]    SETUP_REC    (0) Device: Setup packet received
-//     // 0x00010000 [16]    CONNECTED    (0) Device: connected
-//     // 0x00000800 [11]    RESUME       (0) Host: Device has initiated a remote resume
-//     // 0x00000400 [10]    VBUS_OVER_CURR (0) VBUS over current detected
-//     // 0x00000300 [9:8]   SPEED        (0x0) Host: device speed
-//     // 0x00000010 [4]     SUSPENDED    (0) Bus in suspended state
-//     // 0x0000000c [3:2]   LINE_STATE   (0x0) USB bus line state
-//     // 0x00000001 [0]     VBUS_DETECTED (0) Device: VBUS Detected
-// io_rw_32 sie_status;

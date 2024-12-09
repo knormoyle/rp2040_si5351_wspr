@@ -9,5 +9,7 @@
 
 char drainSerialTo_CRorNL (uint32_t millis_max);
 char getOneChar (uint32_t millis_max);
+uint32_t get_sie_status(void);
+uint32_t get_sie_connected(void);
 
 #endif

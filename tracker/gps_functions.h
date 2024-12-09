@@ -25,7 +25,7 @@ void gpsDebug(void);
 // these probably shouldn't be used outside gps_functions.cpp ?
 void nmeaBufferPrintAndClear(void);
 void nmeaBufferAndPrint(const char charToAdd, bool printIfFull);
-void sleepForMilliSecs(int n, bool enableEarlyOut);
+void gpsSleepForMillis(int n, bool enableEarlyOut);
 void drainInitialGpsOutput(void);
 void setGpsBalloonMode(void);
 void setGpsBroadcast(void);

@@ -175,11 +175,11 @@ void nmeaBufferAndPrint(const char charToAdd, bool printIfFull) {
 }
 
 // ************************************************
-void sleepForMilliSecs(int n, bool enableEarlyOut) {
+void gpsSleepForMillis(int n, bool enableEarlyOut) {
     // FIX! should we do this here or where?
     Watchdog.reset();
     if (n < 0 || n > 120000) {
-        // V1_printf("ERROR: sleepForMilliSecs() n %d too big (120000 max). Using 1000" EOL, n);
+        // V1_printf("ERROR: gpsSleepForMillis() n %d too big (120000 max). Using 1000" EOL, n);
         // n = 1000;
         // UPDATE: this is used while USB is disabled, 
         // but BALLOON_MODE/VERBY don't protect us ..just don't print here
@@ -187,7 +187,7 @@ void sleepForMilliSecs(int n, bool enableEarlyOut) {
     }
     int milliDiv = n / 10;
 
-    // sleep approx. n secs
+    // sleep approx. n millisecs
     for (int i = 0; i < milliDiv ; i++) {
         if (enableEarlyOut) {
             if (Serial2.available()) break;
@@ -245,7 +245,7 @@ void drainInitialGpsOutput(void) {
                 nmeaBufferAndPrint(incomingChar, true); // print if full
             }
         }
-        sleepForMilliSecs(1000, true); // return early if Serial2.available()
+        gpsSleepForMillis(1000, true); // return early if Serial2.available()
     }
     nmeaBufferPrintAndClear();
     updateStatusLED();
@@ -261,7 +261,7 @@ void setGpsBalloonMode(void) {
     // normal mode
     // Serial2.print("$PSIMNAV,W,0*39\r\n");
     // have to wait for the sentence to get out, and also complete
-    // sleepForMilliSecs(1000, false);
+    // gpsSleepForMillis(1000, false);
     V1_println(F("setGpsBalloonMode END"));
 }
 
@@ -517,7 +517,7 @@ void setGpsBaud(int desiredBaud) {
     Serial2.begin(usedBaud);
     V1_printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
     // then have to change Serial2.begin() to agree
-    sleepForMilliSecs(1000, false);
+    gpsSleepForMillis(1000, false);
     V1_printf("setGpsBaud END %d" EOL, usedBaud);
 }
 
@@ -581,7 +581,7 @@ void GpsINIT(void) {
 
     // first talk at 9600..but GpsFullColdReset() will do..so a bit redundant
     Serial2.begin(9600);
-    sleepForMilliSecs(500, false);
+    gpsSleepForMillis(500, false);
     //****************
 
     // full cold reset, plus set baud to target baud rate, and setGpsBalloonMode done
@@ -592,7 +592,7 @@ void GpsINIT(void) {
     // drain the rx buffer. GPS is off, but shouldn't keep
     while (Serial2.available()) Serial2.read();
     // sleep 3 secs
-    sleepForMilliSecs(3000, false);
+    gpsSleepForMillis(3000, false);
     V1_println(F("GpsINIT END"));
 }
 
@@ -644,7 +644,7 @@ void GpsFullColdReset(void) {
         digitalWrite(GpsPwr, HIGH); // deassert
     }
 
-    sleepForMilliSecs(500, false);
+    gpsSleepForMillis(500, false);
 
     //******************
     // Cold Start. doesn't clear any system/user configs
@@ -662,13 +662,13 @@ void GpsFullColdReset(void) {
     // seems like the gps backs up on the serial data?
 
     digitalWrite(GpsPwr, LOW); // assert
-    sleepForMilliSecs(500, false);
+    gpsSleepForMillis(500, false);
 
     // deassert NRESET after power on (okay in both normal and experimental case)
     // new 12/7/24 disable Serial2 while powering on!
     // should we float the rx/tx also somehow?
     Serial2.end();
-    sleepForMilliSecs(500, false);
+    gpsSleepForMillis(500, false);
 
     if (EXPERIMENTAL_COLD_POWER_ON) {
         digitalWrite(GPS_NRESET_PIN, HIGH); // deassert
@@ -680,18 +680,18 @@ void GpsFullColdReset(void) {
         digitalWrite(GPS_NRESET_PIN, HIGH);
     }
 
-    sleepForMilliSecs(1000, false);
+    gpsSleepForMillis(1000, false);
 
     // old experiment..do reset assertion (again or solely? after power is good
     // belt and suspenders:
     // wait 2 secs and assert/deassert NRESET
     // still can't seem to get back to 9600 baud after higher baud rate set
     if (false) {
-        sleepForMilliSecs(2000, false);
+        gpsSleepForMillis(2000, false);
         digitalWrite(GPS_NRESET_PIN, LOW);
-        sleepForMilliSecs(1000, false);
+        gpsSleepForMillis(1000, false);
         digitalWrite(GPS_NRESET_PIN, HIGH);
-        sleepForMilliSecs(1000, false);
+        gpsSleepForMillis(1000, false);
     }
 
     Watchdog.reset();
@@ -708,7 +708,7 @@ void GpsFullColdReset(void) {
     // other power saving: disable usb pll (and restore)
 
     // https://github.com/earlephilhower/arduino-pico/discussions/1544
-    // we had to make sure we reset the watchdog, now, in sleepForMilliSecs
+    // we had to make sure we reset the watchdog, now, in gpsSleepForMillis
     // we already wakeup periodically to update led, so fine
 
     //******************
@@ -803,7 +803,7 @@ void GpsFullColdReset(void) {
 
     // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
     // this should have no printing either?
-    sleepForMilliSecs(15000, false); // 15 secs
+    gpsSleepForMillis(15000, false); // 15 secs
 
     //******************
     // DRASTIC measures, undo after sleep!
@@ -885,19 +885,19 @@ void GpsFullColdReset(void) {
         Serial2.begin(9600);
         Serial2.print("$PMTK104*37" CR LF);
         Serial2.flush();
-        sleepForMilliSecs(1000, false);
+        gpsSleepForMillis(1000, false);
 
         V1_println(F("In case reset isn't everything, try full cold reset NMEA cmd at 19200 baud"));
         Serial2.begin(19200);
         Serial2.print("$PMTK104*37" CR LF);
         Serial2.flush();
-        sleepForMilliSecs(1000, false);
+        gpsSleepForMillis(1000, false);
 
         V1_println(F("In case reset isn't everything, try full cold reset NMEA cmd at 38400 baud"));
         Serial2.begin(38400);
         Serial2.print("$PMTK104*37" CR LF);
         Serial2.flush();
-        sleepForMilliSecs(1000, false);
+        gpsSleepForMillis(1000, false);
 
         // We know we would have never told GPS a higher baud rate because we get data rx overruns
 
@@ -905,9 +905,9 @@ void GpsFullColdReset(void) {
         // nmea request just says what happens on the next power off/on?
         // vbat is kept on when we toggle vcc
         digitalWrite(GpsPwr, HIGH);
-        sleepForMilliSecs(1000, false);
+        gpsSleepForMillis(1000, false);
         digitalWrite(GpsPwr, LOW);
-        sleepForMilliSecs(1000, false);
+        gpsSleepForMillis(1000, false);
 
     }
 
@@ -921,7 +921,7 @@ void GpsFullColdReset(void) {
     // FIX! if we're stuck at 4800, okay..this won't matter
     Serial2.begin(9600);
     // wait for 1 secs before sending commands
-    sleepForMilliSecs(1000, false);
+    gpsSleepForMillis(1000, false);
     V1_println(F("Should get some output at 9600 after reset?"));
     // we'll see if it's wrong baud rate or not, at this point
     drainInitialGpsOutput();
@@ -977,17 +977,17 @@ void GpsWarmReset(void) {
         digitalWrite(GPS_ON_PIN, HIGH);
         digitalWrite(GpsPwr, HIGH);
     }
-    sleepForMilliSecs(1000, false);
+    gpsSleepForMillis(1000, false);
 
     // now power on with reset still off
     // digitalWrite(GPS_NRESET_PIN, HIGH);
     // digitalWrite(GPS_ON_PIN, HIGH);
     digitalWrite(GpsPwr, LOW);
-    sleepForMilliSecs(2000, false);
+    gpsSleepForMillis(2000, false);
 
     if (EXPERIMENTAL_WARM_POWER_ON) {
         digitalWrite(GPS_ON_PIN, HIGH);
-        sleepForMilliSecs(2000, false);
+        gpsSleepForMillis(2000, false);
     }
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
@@ -1315,7 +1315,7 @@ void updateGpsDataAndTime(int ms) {
         // I guess here we're trying to sync with a burst? but how long to wait?
         // if we just completed a burst, we should wait for 1 sec - total burst delay?
         // was 25 trying 50 10 for 4800 baud
-        sleepForMilliSecs(12, true); // stop the wait early if symbols arrive
+        gpsSleepForMillis(12, true); // stop the wait early if symbols arrive
 
     } while ( (current_millis - entry_millis) < (uint64_t) ms); // works if ms is 0
 

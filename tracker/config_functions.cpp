@@ -162,7 +162,7 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
             if (timeout_ms > 60 * 1000) { // 60 secs
                 V0_println(F("ERROR: exceeded 60 secs timeout waiting for input, rebooting" EOL));
                 Watchdog.enable(50);  // milliseconds
-                while (true) { ; }
+                while (true) tight_loop_contents();
             }
          }
 
@@ -352,7 +352,8 @@ void user_interface(void) {
             V0_print(F("(3) Timeout waiting for input, ..rebooting" EOL));
             sleep_ms(100);
             // milliseconds
-            Watchdog.enable(500);  for (;;) { ; }
+            Watchdog.enable(500);  
+            while (true) tight_loop_contents();
         }
 
         // make char capital either way
@@ -369,7 +370,7 @@ void user_interface(void) {
                 V0_print(F("Goodbye ..rebooting after '/' command" EOL));
                 V0_print(F(CLEAR_SCREEN EOL));
                 Watchdog.enable(2000);  // milliseconds
-                for (;;) { ; }
+                while (true) tight_loop_contents();
             case '*':
                 V0_print(F("Do factory reset of config state to default values (and reboot)" EOL));
                 doFactoryReset(); // doesn't return, reboots
@@ -378,7 +379,7 @@ void user_interface(void) {
                 V0_print(F("Goodbye ..rebooting after 'X' command" EOL));
                 V0_print(F(CLEAR_SCREEN EOL));
                 Watchdog.enable(500);  // milliseconds
-                for (;;) { ; }
+                while (true) tight_loop_contents();
             case 'C':
                 // FIX! will 1 char send wspr?
                 get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]" EOL,
@@ -1001,6 +1002,6 @@ void doFactoryReset() {
     // reboot
     V0_print(F("Goodbye ..rebooting after doFactorReset()" EOL));
     Watchdog.enable(500);  // milliseconds
-    for (;;) { ; }
+    while (true) tight_loop_contents();
 }
 //*****************************************************
