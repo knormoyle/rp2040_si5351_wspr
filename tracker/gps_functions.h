@@ -32,6 +32,7 @@ void setGpsBroadcast(void);
 void disableGpsBroadcast(void);
 void setGpsConstellations(int desiredConstellations);
 void setGpsBaud(int desiredBaud);
-void kazuSlowClocks(void);
+void kazuClocksSlow(void);
+void kazuClocksRestore(void);
 
 #endif

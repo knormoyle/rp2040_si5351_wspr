@@ -104,6 +104,22 @@ void convertToUpperCase(char *str) {
 void forceHACK(void) {
     static bool HACK = false;
 
+    if (false) {
+        // apparently 12-17Mhz illegal. 
+        // 18-19Mhz legal
+        // 20-48Mhz legal (and more above that). 
+        // Has to do with divisors and such for the sys pll
+        V1_println(F("Check some legal/illegal low frequencies for possible use with pll_sys later" EOL));
+        for (uint32_t i = 12; i <= 48; i++)  {
+            uint32_t freq_khz = i * 1000UL;
+            if (set_sys_clock_khz(freq_khz, false)) {
+                V1_printf("GOOD: set_sys_clock_khz() can change clock to %lu Mhz. legal" EOL, i);
+            } else {
+                V1_printf("ERROR: set_sys_clock_khz() can not change clock to %lu Mhz. illegal" EOL, i);
+            }
+        }
+    }
+
     if (HACK and not BALLOON_MODE) {
         // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
         // recommends to always snprintf(buffer, sizeof(buffer), "%s", string);
@@ -396,7 +412,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'K':
-                get_user_input("Enter clock speed (45-250): " EOL, _clock_speed, sizeof(_clock_speed));
+                get_user_input("Enter clock speed (18, 20-48, 49-250 (not all)): " EOL, _clock_speed, sizeof(_clock_speed));
                 write_FLASH();
                 PLL_SYS_MHZ = atoi(_clock_speed);
                 // frequencies like 205 mhz will PANIC,
@@ -404,7 +420,7 @@ void user_interface(void) {
                 // should detect the failure and change the nvram, otherwise we're stuck even on reboot
                 // this is the only config where we don't let something bad get into flash
                 // don't change the pll, just check. change it on reboot
-                if (PLL_SYS_MHZ < 45 || PLL_SYS_MHZ > 250) {
+                if (PLL_SYS_MHZ < 18 || PLL_SYS_MHZ > 250) {
                     V0_printf("user_interface: _clock_speed %lu illegal. Using %lu instead" EOL,
                         PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
 
@@ -825,7 +841,7 @@ int check_data_validity_and_set_defaults(void) {
     }
     if (!clock_speedBad) {
         PLL_SYS_MHZ = atoi(_clock_speed);
-        if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 45 || PLL_SYS_MHZ > 250) {
+        if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 18 || PLL_SYS_MHZ > 250) {
             V0_printf(EOL "check_data_validity...(): (2) illegal _clock_speed: %s" EOL,_clock_speed);
             clock_speedBad = true;
         }

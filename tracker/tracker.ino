@@ -1905,6 +1905,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // this should be fine even if we wait a long time
     int i = 2 * txNum;  // 0, 2, 4, 6
     // FIX! in debug, why aren't we aligning to any even minute?
+    V1_printf("waiting for alignMinute(%d) && second()==0)" EOL, i);
     while (! (alignMinute(i) && (second() == 0)) ) {
         Watchdog.reset();
         // FIX! delay 1 sec? change to pico busy_wait_us()?

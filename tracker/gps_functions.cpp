@@ -110,7 +110,7 @@ bool EXPERIMENTAL_COLD_POWER_ON = true;
 bool LOWEST_POWER_TURN_ON_MODE = true;
 bool ALLOW_USB_DISABLE_MODE = false;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
-bool ALLOW_KAZU_SLOW_CLOCKS_MODE = false; 
+bool ALLOW_KAZU_SLOW_CLOCKS_MODE = false;
 
 // ************************************************
 static bool GpsIsOn_state = false;
@@ -715,13 +715,17 @@ void GpsFullColdReset(void) {
 
         Watchdog.reset();
         measureMyFreqs();
-        V1_print(F(RED));
-        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 15 secs" EOL));
-        V1_printf("Going to slow PLL_SYS_MHZ from %lu to 12Mhz before long sleep" EOL, PLL_SYS_MHZ);
-        V1_print("No keyboard interrupts will work because disabling USB PLL too or minimally: Serial.end()" EOL);
-        // V1_print("Also lowering core voltage to 0.95v" EOL);
-        V1_print(F(NORMAL));
-        V1_flush();
+        if (ALLOW_KAZU_SLOW_CLOCKS_MODE)  {
+            V0_print(F("GPS power demand is high during cold reset (uart? gps work?)..sleep for 15 secs" EOL));
+            V0_printf("Going to switch from pll_sys with PLL_SYS_MHZ %lu to xosc 12Mhz before long sleep" EOL, PLL_SYS_MHZ);
+            V0_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
+        } else {
+            V0_print(F("GPS power demand is high during cold reset (uart? gps work?)..sleep for 15 secs" EOL));
+            V0_printf("Going to slow PLL_SYS_MHZ from %lu to 12Mhz before long sleep" EOL, PLL_SYS_MHZ);
+            V0_print("No keyboard interrupts will work because <disabling USB PLL?> or minimally: Serial.end()" EOL);
+        }
+        // V0_print("Also lowering core voltage to 0.95v" EOL);
+        V0_flush();
 
         IGNORE_KEYBOARD_CHARS = true;
         // DRASTIC measures, do before sleep!
@@ -735,14 +739,16 @@ void GpsFullColdReset(void) {
 
         busy_wait_ms(500);
         // remember not to touch Serial if in BALOOON_MODE!!
-        if (!BALLOON_MODE) Serial.end();
+        if (!BALLOON_MODE) {
+            Serial.end();
+            busy_wait_ms(500);
+        }
 
         if (ALLOW_KAZU_SLOW_CLOCKS_MODE)  {
             busy_wait_ms(500);
-            kazuSlowClocks();
+            kazuClocksSlow();
 
         } else if (ALLOW_USB_DISABLE_MODE) {
-            busy_wait_ms(500);
             // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
             // There are two PLLs in RP2040. They are:
             // pll_sys - Used to generate up to a 133MHz (actually more) system clock
@@ -761,15 +767,15 @@ void GpsFullColdReset(void) {
             // example:
             // https://sourcevu.sysprogs.com/rp2040/examples/clocks/hello_48MHz/files/hello_48MHz.c#tok293
 
+            busy_wait_ms(500);
             // HACK: doesn't work?
             // pll_deinit(pll_usb);
-            // set_sys_clock_khz(18000, true);
-            ;
+            // FIX! how slow can I got with sys pll?
+            // Should create a table of working 12 to 18 Mhz freqs by using false
+            set_sys_clock_khz(18000, true);
+        } else {
+            set_sys_clock_khz(18000, true);
         }
-        // try 12 Mhz
-        // is this a higher level api than clock_configure() pll_init() etc?
-        set_sys_clock_khz(18000, true);
-
         // enums for voltage at:
         // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
         // vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
@@ -778,10 +784,10 @@ void GpsFullColdReset(void) {
         digitalWrite(GPS_ON_PIN, HIGH); // assert
 
     } else {
-        V1_print(F("GPS power demand is high until first fix after cold reset..sleep for 15 secs" EOL));
+        V0_print(F("GPS power demand is high until first fix after cold reset..sleep for 15 secs" EOL));
     }
 
-    // can't do this while USB is disabled? but if we can't disable deinit USB (see above), we can?
+    //Not worth doing if USB is disabled? (no print) but if we can't disable deinit USB (see above), we can?
     measureMyFreqs();
     // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
     sleepForMilliSecs(15000, false); // 15 secs
@@ -791,11 +797,17 @@ void GpsFullColdReset(void) {
     Watchdog.reset();
     if (ALLOW_KAZU_SLOW_CLOCKS_MODE) {
         busy_wait_ms(1000);
-        set_sys_clock_khz(freq_khz, true);
-        V1_printf("After long sleep (kazu), Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
-        V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
+        // FIX! this restores/keeps sys clk to 12mhz and sys pll off
+        // the problem is _clock_speed doesn't have 12Mhz?
+        // and we need PLL_SYS_MHZ correct for PWM div/wrap calcs
+        // can we just change PLL_SYS_MHZ here?
+        kazuClocksRestore();
+        PLL_SYS_MHZ = 12;
+        // FIX! is Serial2 okay now or broken?
+        V0_printf("After long sleep (kazu), Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+        V0_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
         // V1_print(F("Restored core voltage back to 1.1v" EOL));
-        V1_flush();
+        V0_flush();
         measureMyFreqs();
         IGNORE_KEYBOARD_CHARS = false;
     } else if (LOWEST_POWER_TURN_ON_MODE) {
@@ -824,10 +836,10 @@ void GpsFullColdReset(void) {
             busy_wait_ms(1000);
         }
 
-        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
-        V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
-        V1_print(F("Restored core voltage back to 1.1v" EOL));
-        V1_flush();
+        V0_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+        V0_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
+        V0_print(F("Restored core voltage back to 1.1v" EOL));
+        V0_flush();
         measureMyFreqs();
         IGNORE_KEYBOARD_CHARS = false;
     }
@@ -1456,9 +1468,10 @@ void gpsDebug() {
 
 
 //************************************************
-void kazuSlowClocks() {
-    V1_println(F("kazuSlowClocks START"));
+void kazuClocksSlow() {
+    V0_println(F("kazuClocksSlow START"));
     // Change clk_sys and clk_peri to be 12MHz, and disable pll_sys and pll_usb
+    // the external crystal is 12mhz 
     clock_configure(clk_sys,
         CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
         CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
@@ -1490,13 +1503,14 @@ void kazuSlowClocks() {
         12 * MHZ,
         12 * MHZ);
 
-    V1_println(F("kazuSlowClocks END"));
+    V0_println(F("kazuClocksSlow END"));
 }
 
 //************************************************
-void kazuRestoreClocks() {
-    V1_println(F("kazuRestorClocks START"));
+void kazuClocksRestore() {
+    V0_println(F("kazuClocksRestore START"));
     // Change clk_sys and clk_peri to be 12MHz, and restore usb to 48 mhz ?
+    // the external crystal is 12mhz 
     clock_configure(clk_sys,
         CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
         CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
@@ -1515,8 +1529,12 @@ void kazuRestoreClocks() {
     // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
     // post_div2	Post Divider 2 - range 1-7
     pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
-    busy_wait_ms(500);
-    
+    busy_wait_ms(1000);
+    // High-level Adafruit TinyUSB init code, 
+    // does many things to get USB back online
+    tusb_init();
+    Serial.begin(115200);
+    busy_wait_ms(1000);
 
     // CLK peri is clocked from clk_sys so need to change clk_peri's freq
     clock_configure(clk_peri,
@@ -1539,7 +1557,7 @@ void kazuRestoreClocks() {
         12 * MHZ,
         12 * MHZ);
 
-    V1_println(F("kazuSlowClocks END"));
+    V0_println(F("kazuClocksRestore END"));
 }
  
 //************************************************
