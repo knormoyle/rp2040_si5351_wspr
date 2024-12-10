@@ -1949,14 +1949,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
 //**********************************
 void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
-    // dump the symbol frequency in the log buffer, eventually it will get printed 
-    // when we're not sending wspr, by something above
-    if (VERBY[1])
-        StampPrintf("startSymbolFreq START hf_freq %lu symbol %u" EOL, hf_freq, symbol); 
-    
-    // This is how we figure out the frequency for a symbol
-    // note all the shifting so integer arithmetic is used everywhere, 
-    // and precision is not lost.
+    // Calculate the frequency for a symbol
+    // Note all the shifting so integer arithmetic is used everywhere, and precision is not lost.
     uint32_t freq_x16_with_symbol = (
         hf_freq << PLL_CALCULATION_PRECISION) +
         ((symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096L) / 8192L);
@@ -1964,7 +1958,8 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     // FIX! does this change the state of the clock output enable?
     vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16_with_symbol);
 
-    // Note: Remember to do setup with the base frequency and symbol == 0, so the i2c writes have seeded the si5351
+    // Note: Remember to do setup with the base frequency and symbol == 0, 
+    // so the i2c writes have seeded the si5351
     // so the first symbol won't have different delay than the subsequent symbols
     // hmm wonder what the typical "first symbol" is for a real wspr message?
 
@@ -1974,6 +1969,16 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
 void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
     V1_printf("syncAndSendWSPR() START now: minute: %d second: %d" EOL, minute(), second());
+
+    // actual freq for symbol 0 in the log buffer, eventually it will get printed 
+    // when we're not sending wspr, by something above
+    uint8_t symbol = 0; // can only be 0, 1, 2 or 3
+    uint32_t symbol_freq_shifted = 
+        (hf_freq << PLL_CALCULATION_PRECISION) +
+        ((symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096L) / 8192L);
+    uint32_t symbol_freq = symbol_freq_shifted >> PLL_CALCULATION_PRECISION;
+    V1_printf("For hf_freq %lu symbol 0: symbol_freq is %lu" EOL, hf_freq, symbol_freq); 
+    
 
     if (txNum < 0 || txNum > 3) {
         V1_printf("syncAndSendWSPR() bad txNum %d, using 0" EOL, txNum);
