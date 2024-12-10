@@ -603,24 +603,82 @@ void si5351a_reset_PLLB(void) {
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
+    // use freq tool?
+    // 15M
+    //  _Band 15 BASE_FREQ_USED 21094600 XMIT_FREQUENCY 21096020 
+    // For XMIT FREQ tool says VCO 632 886 000 307 Hz. 0 ppb deviation
+    // FOr 14 095 600. VCO 620 206 400 311 Hz
+    // For 28 124 600. VCO 620 206 400 659
+    // are there constraints on div etc?
+
+    // https://rfzero.net/documentation/tools/si5351a-frequency-tool/ 
+    // hans code is at (2015)
+    // https://qrp-labs.com/images/synth/demo6/si5351a.c
+
+    // FIX! is this only working for 20M? not 15M or 10M?
     // V1_printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
     // looks like this doesn't change the state of the output enables
     // just the freq
+
+    // hans uses the max frequency?
     const int PLL_MAX_FREQ  = 900000000;
     const int PLL_MIN_FREQ  = 600000000;
 
-    // divide by 2 result must be integer
-    const int PLL_MID_FREQ  = ((PLL_MAX_FREQ + PLL_MIN_FREQ) / 2);
-    const int PLL_DENOM_MAX = 0x000fffff;
+    // TRY: what about PLL_DENOM_MAX = 1000000
+    // and PLL freq 800000000 ? (integer ratios?
 
+    // divide by 2 result must be integer
+    uint32_t PLL_MID_FREQ;
+    if (false) 
+        PLL_MID_FREQ  = ((PLL_MAX_FREQ + PLL_MIN_FREQ) / 2);
+    else
+        // HACK 12/10/24. force a higher pll freq? does this affect power?
+        PLL_MID_FREQ  = 800000000;
+
+    // hans uses 1048575 as max (which is 0xfffff)
+    // const int PLL_DENOM_MAX = 0x000fffff;
+    // HACK 12/10/24. does it matter if pll/this is integer result?
+    // I guess no matter what, we will have fractional stuff with the 6 hz symbol adjustments
+    // be interesting to see how close to desired freq, we get on the sdr?
+    const int PLL_DENOM_MAX = 1000000;
+
+    // FIX! should this vary for 15M and 10M
     uint32_t ms_div = PLL_MID_FREQ / (freq >> PLL_CALCULATION_PRECISION) + 1;
     ms_div &= 0xfffffffe;   // make it even number
 
     uint32_t pll_freq = ((uint64_t)freq * ms_div) >> PLL_CALCULATION_PRECISION;
-    uint32_t tcxo_freq = SI5351_TCXO_FREQ;
+    uint32_t tcxo_freq = SI5351_TCXO_FREQ; // 26 mhz?
     uint32_t pll_mult   = pll_freq / tcxo_freq;
+    // mult has to be in the range 15 to 90
+    if (pll_mult < 15 || pll_mult > 90)
+        V0_printf("ERROR: pll_mult %lu is out of range 15 to 90" EOL, pll_mult);
+
+    // pll_num max 20 bits (0 to 1048575)?
+    // In the Si5351A, the "PLL num" refers to a 20-bit register value 
+    // used to set the numerator of the fractional PLL multiplier, 
+    // allowing for fine-tuning of the internal PLL frequency within a specified range; 
+    // essentially, it provides the fractional part of the multiplication factor with 20 bits of precision.
+
+    // also look at https://github.com/etherkit/Si5351Arduino
+
+    // new method. he says PLL_DENOM_MAX might be 1048757?
+    // https://github.com/etherkit/Si5351Arduino/issues/79
+
+    // he says to choice INTEGER_FACTOR1 to be 10e* 
+    // y1 = Fout/INTEGER_FACTOR1
+    // x1 = 900e6*/INTEGER_FACTOR1  <-- needs to be an integer. 
+    // If you choose INTEGER_FACTOR1 to be 10^something, this will be an integer too!
+    // Multisynth output equation:
+    // A+B/C
+    // A = floor(x1, y1)
+    // B = x1 % y1
+    // C = y1
+
+
     uint32_t pll_remain = pll_freq - (pll_mult * tcxo_freq);
     uint32_t pll_num    = (uint64_t)pll_remain * PLL_DENOM_MAX / tcxo_freq;
+    if (pll_num > 1048575)
+        V0_printf("ERROR: pll_num %lu is out of range 0 to 1048575" EOL, pll_num);
 
     // this has sticky s_regs_prev state that it uses if called multiple times?
     si5351a_setup_PLLB(pll_mult, pll_num, PLL_DENOM_MAX);
@@ -884,12 +942,9 @@ void vfo_turn_on(uint8_t clk_num) {
     memset(s_vfo_drive_strength, 0, 3);
 
     //***********************
-    // FIX! HACK it to 20M
-    // this is what it was?
-    // freq = 14097000UL
-    uint32_t freq = 14097100UL;
-    // FIX! change to XMIT_FREQUENCY..is it set at this point?
-    // freq = XMIT_FREQUENCY ; // is this freq centered in the u4b channel?
+    // debug only, on 20M
+    // uint32_t freq = 14097100UL;
+    uint32_t freq = XMIT_FREQUENCY; 
     // do any (default 0) parts per billion correction?
     freq = doCorrection(freq);
     V1_printf("initial freq for vfo_set_freq_x16(), after correction, is %lu" EOL, freq);

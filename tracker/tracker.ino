@@ -1343,12 +1343,12 @@ void loop1() {
                             updateStatusLED();
                         }
                         // will call this with less than or equal to 30 secs to go
-                        V1_println("wspr? have 30 secs to go till the aligned starting minute");
+                        V1_println("wspr? have 30 secs to go until the aligned starting minute");
                         // oneliner
                         V1_print("wspr? get the vfo going");
                         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
-                        uint32_t hf_freq = 14097100UL;
+                        uint32_t hf_freq = XMIT_FREQUENCY;
                         hf_freq = doCorrection(hf_freq);
                         int res = alignAndDoAllSequentialTx(hf_freq);
                         if (res==-1) {
@@ -1949,20 +1949,25 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
 //**********************************
 void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
-    // do setup with the base frequency and symbol == 0, so the i2c writes have seeded the si5351
+    // dump the symbol frequency in the log buffer, eventually it will get printed 
+    // when we're not sending wspr, by something above
+    if (VERBY[1])
+        StampPrintf("startSymbolFreq START hf_freq %lu symbol %u" EOL, hf_freq, symbol); 
+    
+    // This is how we figure out the frequency for a symbol
+    // note all the shifting so integer arithmetic is used everywhere, 
+    // and precision is not lost.
+    uint32_t freq_x16_with_symbol = (
+        hf_freq << PLL_CALCULATION_PRECISION) +
+        ((symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096L) / 8192L);
+
+    // FIX! does this change the state of the clock output enable?
+    vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16_with_symbol);
+
+    // Note: Remember to do setup with the base frequency and symbol == 0, so the i2c writes have seeded the si5351
     // so the first symbol won't have different delay than the subsequent symbols
     // hmm wonder what the typical "first symbol" is for a real wspr message?
 
-    // this was originally copied from sendWspr() below. but it now uses it. so no 
-    // issues with keeping up to date in multiple places
-
-    // otherwise, normal use is for to start a symbol frequency
-    uint32_t freq_x16 = (
-        hf_freq << PLL_CALCULATION_PRECISION) +
-        ((symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096) / 8192L);
-
-    // FIX! does this change the state of the clock output enable?
-    vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16);
 }
 
 //**********************************

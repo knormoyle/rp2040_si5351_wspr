@@ -70,6 +70,9 @@
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
+// gps+bds+glonass
+#define DEFAULT_CONSTELLATIONS_CHOICE 7
+
 // object for TinyGPSPlus state
 extern TinyGPSPlus gps;
 
@@ -320,7 +323,7 @@ void setGpsBroadcast(void) {
     // strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0*02" CR LF, 21);
 
     // spec has more/new detail. see below
-    // FIX! still getting GNZDA and GPTXT ANTENNAOPEN with this
+    // FIX! was I still getting GNZDA and GPTXT ANTENNAOPEN with this?
     strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
 
     // example in pdf
@@ -935,7 +938,7 @@ void GpsFullColdReset(void) {
     // all constellations GPS/BaiDou/Glonass
     // setGpsConstellations(7);
     // FIX! try just gps to see effect on power on current
-    setGpsConstellations(7);
+    setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
     // no ZDA/ANT TXT (NMEA sentences) after this:
     setGpsBroadcast();
 
@@ -1009,11 +1012,7 @@ void GpsWarmReset(void) {
     // all constellations
     // setGpsConstellations(7);
     // FIX! try just gps to see effect on power on current
-    setGpsConstellations(1);
-    // no ZDA/TXT
-    // do this after the config write now
-    // setGpsBroadcast();
-
+    
     // from the CASIC_ProtocolSpecification_english.pdf page 24
     // I suppose this could be dangerous, since it's writing a baud rate to the power off/on reset config state?
     // could change it from 9600 and we'd lose track of what it is? As long as we stick with 9600 we should be safe
@@ -1026,23 +1025,45 @@ void GpsWarmReset(void) {
     // maybe we shouldn't do this all the time? just once. Does the FLASH have a max # of writes issue? (100k or ??)
     // we only do gps cold reset at start of day. Don't do it in BALLOON_MODE. that should fix the issue
     if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
-        // risk: do we ever power on and not do this full cold reset that sets up broadcast?
-        // the warm gps reset shouldn't get new state from config?
-        disableGpsBroadcast();
-        // HMM! should we change it to no broadcast, in the FLASH, so cold reset power on might try to do no broadcast
-        char nmeaBaudSentence[21] = { 0 };
-        strncpy(nmeaBaudSentence, "$PCAS00*01" CR LF, 21);
-        V1_println(F("Write GPS current config state to GPS Flash (for use in next GPS cold reset?)"));
-        V1_printf("%s" EOL, nmeaBaudSentence);
-        Serial2.print(nmeaBaudSentence);
-        Serial2.flush();
+        // this will init to just GPS for the right then restore as below 
+        writeGpsConfigNoBroadcastToFlash();
+        // restors to desired constellations and broadcast
     }
+    
+    // redundant sometimes
+    setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
+    // set desired broadcast
+    // we don't need no ZDA/TXT
     setGpsBroadcast();
 
     drainInitialGpsOutput();
     V1_println(F("GpsWarmReset END"));
 }
 
+//************************************************
+void writeGpsConfigNoBroadcastToFlash() {
+    // risk: do we ever power on and not do this full cold reset 
+    // that sets up broadcast?
+    // the warm gps reset shouldn't get new state from config?
+    disableGpsBroadcast();
+    // FIX! just gps. what about 0. would that save power at gps power on?
+    setGpsConstellations(1); 
+
+    // HMM! should we change it to no broadcast, in the FLASH, so cold reset power on might try to do no broadcast
+    char nmeaBaudSentence[21] = { 0 };
+    V1_print(F("Write GPS current config state (with no broadcast and just GPS constellations"));
+    V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
+
+    strncpy(nmeaBaudSentence, "$PCAS00*01" CR LF, 21);
+    V1_printf("%s" EOL, nmeaBaudSentence);
+    Serial2.print(nmeaBaudSentence);
+    Serial2.flush();
+
+    // set desired constellations
+    setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
+    // set desired broadcast. 
+    setGpsBroadcast();
+}
 //************************************************
 void GpsON(bool GpsColdReset) {
     // no print if no cold reset request. So I can grep on GpsColdReset as a special case only

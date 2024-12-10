@@ -16,6 +16,7 @@
 // my stuff
 #include "defines.h"
 #include "print_functions.h"
+#include "gps_functions.h"
 #include "led_functions.h"
 #include "u4b_functions.h"
 #include "keyboard_functions.h"
@@ -148,6 +149,7 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
     int index = 0;
     int ch;
     // Display the prompt to the user
+    V0_print(F("<enter> to end input"));
     V0_printf("%s", prompt);
     V0_flush();
     while (!BALLOON_MODE) {
@@ -161,7 +163,8 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
             updateStatusLED();
             if (timeout_ms > 60 * 1000) { // 60 secs
                 V0_println(F("ERROR: exceeded 60 secs timeout waiting for input, rebooting" EOL));
-                Watchdog.enable(50);  // milliseconds
+                V0_flush();
+                Watchdog.enable(5000);  // milliseconds
                 while (true) tight_loop_contents();
             }
          }
@@ -290,7 +293,7 @@ void show_TELEN_msg() {
 }
 
 //********************************************
-// '@' command causes this to execute
+// 'Z' command causes this to execute
 void do_i2c_tests(void) {
     // quick and dirty way to execute some different tests
     if (true) {
@@ -340,7 +343,7 @@ void user_interface(void) {
         V0_print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
         // no comma to concat strings
         // F() to keep string in flash, not ram
-        V0_println(F("Enter single char command: /, X, C, U, V, T, K, A, P, D, R, G"));
+        V0_println(F("Enter single char command: Z, *, @, /, X, C, U, V, T, K, A, P, D, R, G"));
         V0_print(F(UNDERLINE_OFF NORMAL));
 
         Watchdog.reset();
@@ -362,7 +365,36 @@ void user_interface(void) {
         // FIX! can we case the int32_t to char. we might lost data with the cast
         uint32_t freq_khz;
         bool good;
+        char confirm[2] = { 0 };
         switch ( c_char ) {
+            case 'Z':
+                V0_print(F("Will run i2c tests" EOL));
+                do_i2c_tests();
+                break;
+
+            case '@':
+                V0_print(F(EOL));
+                V0_print(F("<DANGER> Only do this if you have seen you're in a good GPS state <DANGER!>" EOL));
+                V0_print(F("<DANGER> Write current GPS config, no broadcast, 1 constellation to GPS FLASH? <DANGER!>" EOL));
+                V0_print(F(EOL));
+                get_user_input("Y to confirm, Anything else like <newline> to abort" EOL, confirm, sizeof(confirm));
+                convertToUpperCase(confirm);
+                if (false) {
+                // Y is 89
+                // if (confirm[0] == 'Y') {
+                    V0_print(F("Copying config to GPS flash, no broadcast enabled (config for gps cold reset?)" EOL));
+                    V0_flush();
+                    // this changes constellations to just GPS
+                    // and no broadcasts
+                    writeGpsConfigNoBroadcastToFlash();
+                    // after: it restores desired broadcast, restores constellations to desired
+                }
+                else {
+                    V0_print(F("No GPS config write done." EOL));
+                }
+
+                break;
+
             case '/':
                 V0_print(F("Rebooting to bootloader mode..drag/drop a uf2 per normal" EOL));
                 V0_print(F("after reboot: drag/drop a uf2 the normal way to the drive that shows" EOL));
@@ -371,6 +403,7 @@ void user_interface(void) {
                 V0_print(F(CLEAR_SCREEN EOL));
                 Watchdog.enable(2000);  // milliseconds
                 while (true) tight_loop_contents();
+
             case '*':
                 V0_print(F("Do factory reset of config state to default values (and reboot)" EOL));
                 doFactoryReset(); // doesn't return, reboots
@@ -499,10 +532,6 @@ void user_interface(void) {
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
                 break;
-            case '@':
-                do_i2c_tests();
-                break;
-
             case 13:  break;
             case 10:  break;
             default:
@@ -965,11 +994,13 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_println(F(EOL "Valid commands:" EOL));
     V0_println(F("X: eXit configuration and reboot"));
     V0_println(F("/: reboot to bootloader mode to drag/drop new .uf2"));
+    V0_println(F("@: write current gps config, no broadcast, 1 constellation to GPS Flash (for boot)"));
     V0_println(F("*: factory reset all config values"));
-    V0_println(F("@: run i2c test or scan: which, currently?"));
+    V0_println(F("Z: run i2c test or scan: which, currently?"));
     V0_println(F("C: change Callsign (6 char max)"));
     V0_println(F("U: change U4b channel # (0-599)"));
     V0_println(F("A: change band (10,12,15,17,20 default 20)"));
+    V0_println(F("P: change tx power: 1 high: 0 lower default )"));
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
     V0_printf(   "K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);

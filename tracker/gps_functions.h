@@ -21,6 +21,7 @@ void GpsON(bool GpsColdReset);
 void GpsOFF(bool keepTinyGpsState);
 void updateGpsDataAndTime(int ms);
 void gpsDebug(void);
+void writeGpsConfigNoBroadcastToFlash(void);
 
 // these probably shouldn't be used outside gps_functions.cpp ?
 void nmeaBufferPrintAndClear(void);
