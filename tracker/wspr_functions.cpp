@@ -137,8 +137,7 @@ void wsprSleepForMillis(int n) {
 // takes around 110.6 seconds to send and occupies a bandwidth of approximately 6Hz.
 
 // WSPR protocol specification states:
-// Each tone should last for 8192/12000 = 0.682666667 seconds, and transitions between
-// tones should be done in a phase-continuous manner.
+// Each tone should last for 8192/12000 = 0.682666667 seconds, and transitions between tones should be done in a phase-continuous manner.
 
 //*******************************************************
 // The RP2040 PWM block has 8 identical slices.

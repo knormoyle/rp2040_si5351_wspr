@@ -78,5 +78,15 @@ void yPrintln(const char* pformat, ...);
 #define V2_print if (VERBY[2]) Serial.print
 #define V2_flush if (VERBY[2]) Serial.flush
 
+#define V3_println if (VERBY[3]) Serial.println
+#define V3_printf if (VERBY[3]) Serial.printf
+#define V3_print if (VERBY[3]) Serial.print
+#define V3_flush if (VERBY[3]) Serial.flush
+
+#define V4_println if (VERBY[4]) Serial.println
+#define V4_printf if (VERBY[4]) Serial.printf
+#define V4_print if (VERBY[4]) Serial.print
+#define V4_flush if (VERBY[4]) Serial.flush
+
 #endif
 

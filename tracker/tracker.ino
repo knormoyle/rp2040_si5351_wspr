@@ -1741,7 +1741,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     //*******************************
     // Note we print this after the extra PROCEED delay(s). (or any additional fixed delay)
     V1_printf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
-    if (VERBY[1]) {
+    if (VERBY[2]) {
         // do a StampPrintf, so we can measure usec duration from here to the first symbol
         // remember, it's usec running time, it's not aligned to the gps time.
         StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
@@ -1893,10 +1893,33 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // note we have this same delay before the first symbol, above before the loop!
         delay(EXTRA_DELAY_AFTER_PROCEED);
 
-        // another VERBY[2] (or above) print
-        if ((i % 10)==1) V2_print("."); // one per symbol
+        // another VERBY[3] (or above) print (only VERBY[3] so far)
+        if ((i % 10)==1) V3_print("."); // one per symbol
         Watchdog.reset();
-    }
+    } 
+    // results from deltatime.sh scrapping putty.log
+    // looks like symbol to symbol variance (this usecs diff every 10 symbols)
+    // is 1 to 2 milliseconds...6.826
+    // usecs diff 6824166 sym 10
+    // usecs diff 6826675 sym 20
+    // usecs diff 6826640 sym 30
+    // usecs diff 6826727 sym 40
+    // usecs diff 6826614 sym 50
+    // usecs diff 6826286 sym 60
+    // usecs diff 6827026 sym 70
+    // usecs diff 6826820 sym 80
+    // usecs diff 6826525 sym 90
+    // usecs diff 6826765 sym 100
+    // usecs diff 6826643 sym 110
+    // usecs diff 6826686 sym 120
+    // usecs diff 6826713 sym 130
+    // usecs diff 6826521 sym 140
+    // usecs diff 6826799 sym 150
+    // usecs diff 6826675 sym 160
+    // usecs diff 6825210 sym 161
+
+    // EOL the dots
+    V2_print(F(EOL));
 
     absolute_time_t wsprEndTime = get_absolute_time(); // usecs
     int64_t wsprDuration = absolute_time_diff_us(wsprStartTime, wsprEndTime);
