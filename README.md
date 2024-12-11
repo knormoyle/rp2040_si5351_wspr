@@ -81,10 +81,12 @@ Download and install [Arduino IDE](https://www.arduino.cc/en/Main/Software). If 
   - After your PC recognized the board, release the shorting
 
 ## Questions?
-I will try to answer all questions or email
+I (Kevin Normoyle) will try to answer all questions or email.
  
 
 ## Project Background and History (Kazu AG6NS prehistory to this fork)
+**Nov 2024** - This fork initiated by Kevin Normoyle AD6Z
+
 **Oct 2021** - attend to [SF-HAB (San Francisco Bay Area High Altitude Balloon) group](https://sf-hab.org/)'s Amateur Radio Pico Balloon presentation at Pacificon 2021, then joined the group
 
 **Dec 2021** - start writing firmware for existing W6MRR V6.6 Pico Balloon Tracker boards
@@ -124,5 +126,3 @@ I will try to answer all questions or email
 #
 
 Kazuhisa "Kazu." Terasaki, AG6NS
-
-if you are insterested in, [here](https://www.instagram.com/kazuterasaki/) is my latest updates
