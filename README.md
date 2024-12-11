@@ -2,7 +2,7 @@
 This is a fork by AD6Z of the Kazu AG6NS fork of LightAPRS-2.0 for Kazu's [sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1).
 The shorthand name for this pcb is AG6NS 0.4 pcb. The bom and cpl files (BOM* and PickAndPlace* xlsx) were modified to remove the low pass filters and vhf output, and have full differential tx for the WSPR RF. There are multiple choices due to experiments. Contact me to clarify which to use.
 
-[sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1) is an open-hardware project.
+[sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1) is an open-hardware project. Kazu AG6NS released the pcb schematics/gerber etc and his port of LightAPRS firmware as open source. Thank you Kazu. Note there were 4 revisions of his work. I forked 0.4 of his pcb work.
 
 The pcb used for this firmware is currently at [AD6Z tracker](https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/tree/main/pcb/tracker/v0.4_kbn)
 (v0.4_kbn dir). There are multiple BOM and CPL files for jlcpcb.com there. Contact me by email to find out which you should use if interested in building some at jlcpcb.com.
@@ -11,9 +11,9 @@ Schematic and board png from jlcpcb are there also. The schematic has a buck/boo
 ## PCB highlights
 
 **sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1 with mods**:
-Note LPF has been removed. Capacitive coupling for full differential (antiphase) dipole HF antenna (for max power out of Si5351a-compatible ms5351m)
-Hans G0UPL did a review of m5351m. I mention that only because that part is in the current BOM, but a si5351a could just be swapped in, if desired.
-https://qrp-labs.com/synth/ms5351m.html
+Note LPF has been removed. Capacitive coupling for full differential (antiphase) dipole HF antenna (for max power out of Si5351a-compatible ms5351m).
+Hans G0UPL did a review of m5351m in 2021. Other reviews exist (Google). I mention that only because that part is in the current BOM, but a si5351a could just be swapped in, if desired. The part seems good, potentially less phase noise?
+[ms5351m review](https://qrp-labs.com/synth/ms5351m.html)
 
 <img src="https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png" height="500"/>
 
