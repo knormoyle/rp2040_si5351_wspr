@@ -2164,20 +2164,24 @@ void checkPLLCalcs_200Hz() {
     uint32_t freq;
 
     enum XMIT_FREQS {
-        BXF_10M = 28124600UL + 1400UL + 20,
-        BXF_12M = 24924600UL + 1400UL + 20,
-        BXF_15M = 21094600UL + 1400UL + 20,
-        BXF_17M = 18104600UL + 1400UL + 20,
-        BXF_20M = 14095600UL + 1400UL + 20,
+        BXF10M = 28124600UL + 1400UL + 20,
+        BXF12M = 24924600UL + 1400UL + 20,
+        BXF15M = 21094600UL + 1400UL + 20,
+        BXF17M = 18104600UL + 1400UL + 20,
+        BXF20M = 14095600UL + 1400UL + 20,
     };
 
     uint32_t BAND_XMIT_FREQ;
-    // FIX! check all bands?
-    BAND_XMIT_FREQ = BXF_10M; 
-    // BAND_XMIT_FREQ = BXF_12M; 
-    // BAND_XMIT_FREQ = BXF_15M; 
-    // BAND_XMIT_FREQ = BXF_17M; 
-    // BAND_XMIT_FREQ = BXF_20M; 
+    switch (atoi(_Band)) {
+        case 20: BAND_XMIT_FREQ = BXF20M; break;
+        case 17: BAND_XMIT_FREQ = BXF17M; break;
+        case 15: BAND_XMIT_FREQ = BXF15M; break;
+        case 12: BAND_XMIT_FREQ = BXF12M; break;
+        case 10: BAND_XMIT_FREQ = BXF10M; break;
+        // default to 20M in case of error cases
+        default: BAND_XMIT_FREQ = BXF20M;
+    }
+
     uint32_t symbol_freq = calcSymbolFreq(BAND_XMIT_FREQ, 0);
 
     // this will give the freq you should see on wsjt-tx if hf_freq is the XMIT_FREQ for a channel

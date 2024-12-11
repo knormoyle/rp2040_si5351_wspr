@@ -149,7 +149,7 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
     int index = 0;
     int ch;
     // Display the prompt to the user
-    V0_print(F("<enter> to end input"));
+    V0_print(F("<enter> to end input" EOL));
     V0_printf("%s", prompt);
     V0_flush();
     while (!BALLOON_MODE) {

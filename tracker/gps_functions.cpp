@@ -651,7 +651,17 @@ void GpsFullColdReset(void) {
 
     //******************
     // Cold Start. doesn't clear any system/user configs
+    // does this PMTK command work or not work
     // Serial2.print("$PMTK103*30\r\n");
+    // or according to CASIC_ProtocolSpecification_english.pdf
+
+    // does this force the reset right away? no power transition?
+    // some say it's just a boot mode configuration? (i.e. send before power cycle?)
+    // Serial2.print("$PCAS10,3*1F\r\n"); // factory start. clear all data, reset rcvr.
+    // Serial2.print("$PCAS10,2*1E\r\n"); // cold start. no init info, clear all data except config
+    // Serial2.print("$PCAS10,1*1D\r\n"); // warm start. no init info, all data valid. clear ephemris
+    // Serial2.print("$PCAS10,0*1C\r\n"); // hot start. no init info, all data valid. 
+
     // Full Cold Start. any system/user configs (back to factory status)
     // FIX! should we wait for ack or no?
     // have to toggle power off/on to get this effect?

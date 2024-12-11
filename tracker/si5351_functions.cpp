@@ -1032,7 +1032,7 @@ void vfo_turn_on(uint8_t clk_num) {
     // debug only, on 20M
     // uint32_t freq = 14097100UL;
     uint32_t freq = XMIT_FREQUENCY; 
-    V1_printf("initial freq for vfo_set_freq_x16(), after correction, is %lu" EOL, freq);
+    V1_printf("initial freq for vfo_set_freq_x16() is %lu" EOL, freq);
     freq = freq << PLL_CALCULATION_PRECISION;
     vfo_set_freq_x16(clk_num, freq);
 
@@ -1057,7 +1057,7 @@ void vfo_turn_on(uint8_t clk_num) {
 // do this on the tcxo 26Mhz, everything else shouldn't need correction
 uint32_t doCorrection(uint32_t freq) {
     uint32_t freq_corrected = freq;
-    if (false and atoi(_correction) != 0) {
+    if (atoi(_correction) != 0) {
         // this will be a floor divide
         // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
         freq_corrected = freq + (atoi(_correction) * freq / 1000000000UL);
