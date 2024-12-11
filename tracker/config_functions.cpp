@@ -988,7 +988,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     #define sieStatusPtr ((uint32_t*)0x50110050)
     uint32_t sieValue = *sieStatusPtr;
     // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
-    V0_printf("SIE_STATUS:%" PRIx32 EOL, sieValue);
+    V0_printf("SIE_STATUS: 0x%" PRIx32 EOL, sieValue);
 
 
     V0_println(F(EOL "Valid commands:" EOL));

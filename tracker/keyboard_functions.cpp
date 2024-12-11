@@ -114,7 +114,6 @@ char getOneChar (uint32_t millis_max) {
 
 //***********************************************************
 uint32_t get_sie_status(void) {
-
     // Get the SIE_STATUS to see if we're connected or what?
     // why am I not getting bit 16 when connected?
 
@@ -135,11 +134,8 @@ uint32_t get_sie_status(void) {
 
 //***********************************************************
 bool get_sie_connected(void ) {
-
     uint32_t sieValue = get_sie_status();
     bool usbConnected = Serial && ((sieValue && 0x0000001) == 0x1) ;
-    // bool usbConnected = Serial;
-
     return usbConnected;
 }
 

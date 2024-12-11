@@ -32,7 +32,7 @@
 // https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png
 // TinyGPSPlus library: //https://github.com/mikalhart/TinyGPSPlus
 // Time library: //https://github.com/PaulStoffregen/Time
-// Si5351 programming: based on work by: Kazuhisa “Kazu” Terasaki AG6NS
+// Si5351 programming: based on work by: Kazuhisa "Kazu" Terasaki AG6NS
 // U4B telemetry protocol defined by Hans Summers G0UPL
 // WSPR protocol defined by Joe Taylor K1JT
 

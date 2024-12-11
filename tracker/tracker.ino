@@ -497,7 +497,8 @@ void setup() {
 
     // Get the SIE_STATUS to see if we're connected or what?
     // this is what I see when I'm using the putty window
-    // SIE_STATUS:1074069509
+    // SIE_STATUS:0x40050009
+
     // why am I not getting bit 16 when connected?
 
     bool usbConnected = Serial && get_sie_connected();

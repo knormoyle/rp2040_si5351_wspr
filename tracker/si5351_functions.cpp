@@ -280,7 +280,7 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
     int res;
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
-        // V1_printf("i2cWrRead reserved reg %u", reg);
+        V1_printf("ERROR: i2cWrite reserved reg %u" EOL, reg);
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     }
@@ -398,7 +398,7 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
 
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
-        V1_printf("i2cWrRead reserved reg %u", reg);
+        V1_printf("ERROR: i2cWrRead reserved reg %u" EOL, reg);
         // make this a unique error to recognize my reserved reg detection
         res = 127;
     }
@@ -411,8 +411,6 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
         // copy the data we got to val location to return it.
         *val = i2c_buf[0];
 
-        // see enums for other errors (all negative) at
-        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/error_8h_source.html
         // see enums for other errors (all negative) at
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/error_8h_source.html
         if (res1 == PICO_ERROR_GENERIC || res1 != 1)
@@ -1062,6 +1060,7 @@ uint32_t doCorrection(uint32_t freq) {
         // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
         freq_corrected = freq + (atoi(_correction) * freq / 1000000000UL);
     }
+    V0_printf("doCorrection (should be tcxo freq?) freq %lu freq_corrected %lu" EOL, freq, freq_corrected);
     return freq_corrected;
 }
 //****************************************************
