@@ -1004,7 +1004,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
     V0_printf(   "K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
-    V0_println(F("D: DEVMODE to enable messaging (default: 0)"));
+    V0_println(F("D: DEVMODE (currently does nothing) (default: 0)"));
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));
 
