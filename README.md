@@ -77,9 +77,12 @@ Download and install [Arduino IDE](https://www.arduino.cc/en/Main/Software). If 
 
 ### 4. Upload
 
-- First attach a GPS and a HF antenna (at least 50cm monopole wire) to your tracker. Radio module may be damaged when not attaching an antenna, since power has nowhere to go. 
-- Connect sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1 (AG6NS 0.4 with new kbn BOM/CPL files) board to your computer with a micro USB cable, then you should see a COM port under **Tools->Port** menu item. Select that port. (e.g. "/dev/cu.usbmodem141101")
+- First attach a GPS antenna and a short HF antenna (6" dipole wires?) to the AG6NS 0.4 pcb with new kbn BOM/CPL files, assembled by jlcpcb.com
+- Connec board to your computer with a micro USB cable, then you should see a COM port under **Tools->Port** menu item. Select that port. (e.g. "/dev/cu.usbmodem141101")
 - Click **Upload**
+- 
+- The firmware turns USB pll off at times. If you can't upload, unplug the usb (better yet get a usb cable with switch to avoid plug/unplug cycles). Then plug it back in. The green led should be on steady. immediately do the compile upload. After that you have 15 secs to open a putty window (setup a fast way to start putty with a session defined. save output (logging) to a putty.log for later analysis/debug. You will interact with the putty window for keyboard entry (if necessary). Hit enter to interrupt to get to config screen and keyboard entry. X to leave config mode and reboot. You will have to repeat opening putty at this point because of the reboot. If there is no usb, but just power, the tracker will enter balloon mode. Also, all usb input/output will be disabled if you don't open the putty session within 15 secs of boot. There is much debug output. it can be disabled with the V command in the config (VERBY). 0 is least output. 1 is more. 2 is more than that. 3 is most so far. The printing does not interfere with wspr operations. You can set K (clock) to 18 Mhz. There is a factory reset in the config selection. It will default any bad/illegal entries in the config.
+- 
 - If you see an error, you may need to put the tracker board into "Bootloader" mode before uploading:
   - Disconnect the USB cable
   - While shorting the H5 (two thru-hole next to the USB connector, maybe with pins or tweezers), connect the USB cable
