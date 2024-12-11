@@ -131,6 +131,4 @@ I (Kevin Normoyle) will try to answer all questions or email.
 
 **Nov 2023** - release an **Ocean Buoy** with the v0.3 tracker [KQ6RS-12](https://aprs.fi/#!call=a%2FKQ6RS-12&timerange=604800&tail=604800) at 420 miles WSW of San Diego California (from a boat), as of Mar 30 2024 **still floating on Pacific Ocean for 144 days**
 
-#
-
-Kazuhisa "Kazu." Terasaki, AG6NS
+prehistory by Kazuhisa "Kazu." Terasaki, AG6NS
