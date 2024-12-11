@@ -384,7 +384,11 @@ char _start_minute[2] = { 0 };
 char _lane[2] = { 0 };
 
 // decode of _clock_speed
-extern const uint32_t DEFAULT_PLL_SYS_MHZ = 125;
+// extern const uint32_t DEFAULT_PLL_SYS_MHZ = 125;
+// this seems to work fine even with VERBY[3] doing a little more output during wspr
+// be nice if I could get Serial2 working with pll_sys off, 
+// so I could do 12Mhz with crystal osc.
+extern const uint32_t DEFAULT_PLL_SYS_MHZ = 18;
 uint32_t PLL_SYS_MHZ = 0; // should never try to use it while it's 0
 // this gets correction if any in setup()
 uint32_t SI5351_TCXO_FREQ = 26000000;

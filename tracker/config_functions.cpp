@@ -457,7 +457,6 @@ void user_interface(void) {
                     write_FLASH();
                 }
 
-
                 // https://www.raspberrypi.com/documentation/pico-sdk/high_level.html#gab3a273e837ba1947bb5fd8fc97cf47e5
                 // says "Note that not all clock frequencies are possible;
                 // it is preferred that you use src/rp2_common/hardware_clocks/scripts/vcocalc.py
@@ -466,12 +465,12 @@ void user_interface(void) {
                 // https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
                 // for more information about the PLLs and clock dividers.
 
-                // do only full Mhz work?
+                // do only full Mhz work? maybe can do more but we only need integer Mhz here.
+                // This guy say: absolutely can do non Mhz frequencies (just not those between 125 and 126?)
                 // https://github.com/raspberrypi/pico-sdk/issues/1450
                 // None of the frequencies can be exactly matched exactly by the PLL so set_sys_clock_khz fails -
                 // as per the docs, you can use vco_calc.py to find out settings
                 // for set_sys_clock_pll for settings that are close.
-                // absolutely can do non Mhz frequencies (just not those between 125 and 126)
                 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/scripts/vcocalc.py
 
                 // bool check_sys_clock_khz (
