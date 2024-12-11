@@ -1,5 +1,4 @@
-// Project: https://github.com/knormoyle/rp2040_si5351_wspr
-// Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
+// Project: https://github.com/knormoyle/rp2040_si5351_wspr // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
@@ -29,6 +28,9 @@
 
 // an alternative flowchart for programming si5351
 // https://nt7s.com/2018/02/si5351-programming-flowchart/
+
+// overview and programming
+// http://www.wa5bdu.com/programming-the-si5351a-synthesizer/
 
 
 // FIX! we're using default 10pf load capacitance?
@@ -81,6 +83,7 @@
 #include <Wire.h>
 
 // from tracker.ino 
+extern uint32_t SI5351_TCXO_FREQ; // 26 mhz with correction already done
 extern const int SI5351A_I2C_ADDR;
 extern const int VFO_I2C0_SCL_HZ;
 
@@ -601,9 +604,10 @@ void si5351a_reset_PLLB(void) {
 }
 
 //****************************************************
-// freq is in 28.4 fixed point number, 0.0625Hz resolution
-void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
-    // use freq tool?
+// good for doing calc only, so see what changes with freq changes
+void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, 
+    uint32_t *pll_denom, uint32_t freq) {
+    // for comparison from tool
     // 15M
     //  _Band 15 BASE_FREQ_USED 21094600 XMIT_FREQUENCY 21096020 
     // For XMIT FREQ tool says VCO 632 886 000 307 Hz. 0 ppb deviation
@@ -628,30 +632,73 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
     // and PLL freq 800000000 ? (integer ratios?
 
     // divide by 2 result must be integer
-    uint32_t PLL_MID_FREQ;
+    uint32_t PLL_FREQ_TARGET;
     if (false) 
-        PLL_MID_FREQ  = ((PLL_MAX_FREQ + PLL_MIN_FREQ) / 2);
+        PLL_FREQ_TARGET  = ((PLL_MAX_FREQ + PLL_MIN_FREQ) / 2);
     else
         // HACK 12/10/24. force a higher pll freq? does this affect power?
-        PLL_MID_FREQ  = 800000000;
+        // okay 10M
+        // PLL_FREQ_TARGET  = 800000000;
+        // okay 10M
+        // PLL_FREQ_TARGET  = 700000000;
+        // for 10M resulted in pll_freq like 699638105 and pll_num 909157
+        // for 700000000:
+        // pll_freq 699634747 ms_div 398 pll_mult 26 pll_num 909028 pll_denom 1000000 freq 28126020
+        PLL_FREQ_TARGET  = 650000000;
 
-    // hans uses 1048575 as max (which is 0xfffff)
+        // so probably don't want PLL_FREQ_TARGET < 700e6?
+
+    // http://www.wa5bdu.com/programming-the-si5351a-synthesizer/
+    // http://www.wa5bdu.com/si5351a-quadrature-vfo/
+    // Following the VCO is another divider stage that divides the VCO frequency by a value of ‘d + e/f’ 
+    // and can be used to take the frequency down into the low MHz range. 
+    // However the chip will provide an output with lower jitter if this value is an integer and 
+    // better still if it is an even integer. So we let e/f be zero and select a value for d 
+    // that’s an even number. 
+
+    // hans uses 1048575 as max (which is 0xfffff) (2^20 - 1)
     // const int PLL_DENOM_MAX = 0x000fffff;
+
     // HACK 12/10/24. does it matter if pll/this is integer result?
     // I guess no matter what, we will have fractional stuff with the 6 hz symbol adjustments
     // be interesting to see how close to desired freq, we get on the sdr?
-    const int PLL_DENOM_MAX = 1000000;
 
-    // FIX! should this vary for 15M and 10M
-    uint32_t ms_div = PLL_MID_FREQ / (freq >> PLL_CALCULATION_PRECISION) + 1;
-    ms_div &= 0xfffffffe;   // make it even number
+    // int PLL_DENOM = PLL_DENOM_MAX;
+    int PLL_DENOM = 1000000;
 
-    uint32_t pll_freq = ((uint64_t)freq * ms_div) >> PLL_CALCULATION_PRECISION;
+    // the divider is 'a + b/c' or "Feedback Multisynth Divider"
+    // c is PLL_DENOM
+
+    // Following the VCO is another divider stage that divides the VCO frequency by a value of ‘d + e/f’ and 
+    // can be used to take the frequency down into the low MHz range. 
+    // However the chip will provide an output with lower jitter if this value is an integer and 
+    // better still if it is an even integer. 
+    // So we let e/f be zero and select a value for d that’s an even number. 
+    // Remember that there is enough resolution in the PLL/VCO stage to provide fine tuning. 
+    // The data sheet calls the ‘d + e/f’ divider the Output Multisynth Divider, 
+    // because it acts on the output of the PLL/VCO.
+    // we don't have to worry about the divider R. we use 1 for that
+
+    // So we’re down to six values to calculate which are the ‘a, b, c, d, e and f’ of 
+    // the dividers ‘a + b/c’ and ‘d + e/f’. 
+    // But it will actually be a lot simpler. 
+    // We said that the second divider d + e/f will be an even integer, so e and f are not needed. 
+    // Then in the first divider a + b/c, we will make c a constant 
+    // so we are now down to three required values: a, b and d.
+
+    uint32_t ms_div_here = PLL_FREQ_TARGET / (freq >> PLL_CALCULATION_PRECISION) + 1;
+    ms_div_here &= 0xfffffffe;   // make it even number
+
+    uint32_t pll_freq_here = ((uint64_t)freq * ms_div_here) >> PLL_CALCULATION_PRECISION;
+    // FIX! should we just apply correction to the crystal frequency? yes.
+    // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
+    // is just one once
+    
     uint32_t tcxo_freq = SI5351_TCXO_FREQ; // 26 mhz?
-    uint32_t pll_mult   = pll_freq / tcxo_freq;
+    uint32_t pll_mult_here   = pll_freq_here / tcxo_freq;
     // mult has to be in the range 15 to 90
-    if (pll_mult < 15 || pll_mult > 90)
-        V0_printf("ERROR: pll_mult %lu is out of range 15 to 90" EOL, pll_mult);
+    if (pll_mult_here < 15 || pll_mult_here > 90)
+        V0_printf("ERROR: pll_mult %lu is out of range 15 to 90" EOL, pll_mult_here);
 
     // pll_num max 20 bits (0 to 1048575)?
     // In the Si5351A, the "PLL num" refers to a 20-bit register value 
@@ -674,23 +721,44 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
     // B = x1 % y1
     // C = y1
 
+    uint32_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
 
-    uint32_t pll_remain = pll_freq - (pll_mult * tcxo_freq);
-    uint32_t pll_num    = (uint64_t)pll_remain * PLL_DENOM_MAX / tcxo_freq;
-    if (pll_num > 1048575)
-        V0_printf("ERROR: pll_num %lu is out of range 0 to 1048575" EOL, pll_num);
+    // can see the benefit of PLL_DENOM / tcxo_freq being integer here?
+    uint32_t pll_num_here    = (uint64_t)pll_remain * PLL_DENOM / tcxo_freq;
+    if (pll_num_here > 1048575)
+        V0_printf("ERROR: pll_num %lu is out of range 0 to 1048575" EOL, pll_num_here);
+
+    // output so we can print or use
+    *ms_div = ms_div_here;
+    *pll_mult = pll_mult_here;
+    *pll_num = pll_num_here;
+    *pll_freq = pll_freq_here;
+    *pll_denom = PLL_DENOM;
+}
+
+//****************************************************
+// freq is in 28.4 fixed point number, 0.0625Hz resolution
+void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
+    uint32_t pll_freq;
+    uint32_t ms_div;
+    uint32_t pll_mult;
+    uint32_t pll_num;
+    uint32_t pll_denom;
+    if (clk_num != 0) {
+        V1_println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
+        // I guess force clk_num, although code is bokren somewhere
+        clk_num = 0;
+        // note we only have one s_ms_div_prev copy state also
+    }
+    // we get pll_denom to know what was used in the calc
+    vfo_calc_div_mult_num(&pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
 
     // this has sticky s_regs_prev state that it uses if called multiple times?
-    si5351a_setup_PLLB(pll_mult, pll_num, PLL_DENOM_MAX);
-
+    si5351a_setup_PLLB(pll_mult, pll_num, pll_denom);
     // only reset pll if ms_div changes?
     if (ms_div != s_ms_div_prev) {
         // static global?
         s_ms_div_prev = ms_div;
-
-        if (clk_num != 0) {
-            V1_println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
-        }
         // setting up multisynth0 and multisynth1 
         si5351a_setup_multisynth01(ms_div);
         si5351a_reset_PLLB();
@@ -945,8 +1013,6 @@ void vfo_turn_on(uint8_t clk_num) {
     // debug only, on 20M
     // uint32_t freq = 14097100UL;
     uint32_t freq = XMIT_FREQUENCY; 
-    // do any (default 0) parts per billion correction?
-    freq = doCorrection(freq);
     V1_printf("initial freq for vfo_set_freq_x16(), after correction, is %lu" EOL, freq);
     freq = freq << PLL_CALCULATION_PRECISION;
     vfo_set_freq_x16(clk_num, freq);
@@ -969,16 +1035,15 @@ void vfo_turn_on(uint8_t clk_num) {
 }
 
 //****************************************************
-uint32_t doCorrection(uint32_t hf_freq) {
-    uint32_t hf_freq_corrected = hf_freq;
+// do this on the tcxo 26Mhz, everything else shouldn't need correction
+uint32_t doCorrection(uint32_t freq) {
+    uint32_t freq_corrected = freq;
     if (false and atoi(_correction) != 0) {
         // this will be a floor divide
         // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
-        hf_freq_corrected = hf_freq + (atoi(_correction) * hf_freq / 1000000000UL);
-        // if (VERBY[0]) Serial.printf("WSPR desired freq: %lu used hf_freq %u with correction %s" EOL,
-        //    XMIT_FREQUENCY, hf_freq, _correction);
+        freq_corrected = freq + (atoi(_correction) * freq / 1000000000UL);
     }
-    return hf_freq_corrected;
+    return freq_corrected;
 }
 //****************************************************
 void vfo_turn_off(void) {

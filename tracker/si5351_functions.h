@@ -6,9 +6,6 @@
 #define SI5351_FUNCTIONS_H
 #include <stdint.h>
 
-// so config_functions.cpp can get them and do a test
-const int SI5351_TCXO_FREQ =                26000000;
-
 const int SI5351A_OUTPUT_ENABLE_CONTROL =   3;
 const int SI5351A_CLK0_CONTROL =            16;
 const int SI5351A_CLK1_CONTROL =            17;
@@ -61,11 +58,14 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom);
 void si5351a_setup_multisynth1(uint32_t div);  // removed static
 void si5351a_setup_multisynth0(uint32_t div);
 
+// used to print (not change) for walking a range in setup, just to see what changes
+void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, 
+    uint32_t *pll_denom, uint32_t freq);
+
 void vfo_set_freq_x16(uint8_t clk_number, uint32_t freq);
 void vfo_turn_on_clk_out(uint8_t clk_number);
 void vfo_turn_off_clk_out(uint8_t clk_number);
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength);
-
 uint32_t doCorrection(uint32_t hf_freq);
 
 

@@ -386,6 +386,8 @@ char _lane[2] = { 0 };
 // decode of _clock_speed
 extern const uint32_t DEFAULT_PLL_SYS_MHZ = 125;
 uint32_t PLL_SYS_MHZ = 0; // should never try to use it while it's 0
+// this gets correction if any in setup()
+uint32_t SI5351_TCXO_FREQ = 26000000;
 
 bool BALLOON_MODE = true;
 bool CORE1_PROCEED = false;
@@ -820,8 +822,13 @@ void setup1() {
         }
     }
 
-    initPicoClock(PLL_SYS_MHZ);
 
+    //***************
+    initPicoClock(PLL_SYS_MHZ);
+    // figure out tcxo correction once. (remember we reboot after any config change ..i.e. correction)
+    SI5351_TCXO_FREQ = doCorrection(SI5351_TCXO_FREQ);
+
+    //***************
     Watchdog.reset();
     bmp_init();
 
@@ -841,6 +848,7 @@ void setup1() {
             Adafruit_BMP280::STANDBY_MS_500);
     }
 
+    //***************
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
     Watchdog.reset();
@@ -852,6 +860,32 @@ void setup1() {
         calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 125);
         calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
     }
+
+    //***************
+    if (true) {
+        // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
+        // for possible tx in a band
+        uint32_t pll_freq;
+        uint32_t ms_div;
+        uint32_t pll_mult;
+        uint32_t pll_num;
+        uint32_t pll_denom;
+        uint32_t freq;
+
+        // 10M
+        uint32_t BAND_XMIT_FREQ = 28126020; // start with lowest on 10M
+        V0_print(F(EOL));
+        V0_print(F("test calc'ing 5351a programming" EOL));
+        for (uint32_t i = 0; i < 200; i++) {
+            freq = BAND_XMIT_FREQ + i;
+            // note this will include any correction to SI5351_TCXO_FREQ (already done)
+            vfo_calc_div_mult_num(&pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
+            V0_printf("pll_freq %lu ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu freq %lu" EOL,
+                pll_freq, ms_div, pll_mult, pll_num, pll_denom, freq);
+        }
+        V0_print(F(EOL));
+    }
+    //***************
 
     // have the last one be the current PLL_SYS_MHZ,
     // so we could just use PMW_DIV, PWM_WRAP_CNT to set below
@@ -1349,7 +1383,6 @@ void loop1() {
                         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
                         uint32_t hf_freq = XMIT_FREQUENCY;
-                        hf_freq = doCorrection(hf_freq);
                         int res = alignAndDoAllSequentialTx(hf_freq);
                         if (res==-1) {
                             // FIX! gps should be off at this point and not firing data? or ?
@@ -1412,12 +1445,6 @@ void loop1() {
 
 //*******************************************************
 int alignAndDoAllSequentialTx (uint32_t hf_freq) {
-    // FIX! disabled for now
-    // only do the correction once, for subsequent use of hf_freq.
-    // is this the right place?
-
-    // assume done before this
-    // hf_freq = doCorrection(hf_freq);
 
     // if we called this too early, just return so we don't wait 10 minutes here
     // it should loop around in loop1() ..after how much of a wait? smartWait?
