@@ -10,7 +10,10 @@ Schematic and board png from jlcpcb are there also. The schematic has a buck/boo
 
 ## PCB highlights
 
-**sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1**:
+**sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1 with mods**:
+Note LPF has been removed. Capacitive coupling for full differential (antiphase) dipole HF antenna (for max power out of Si5351a-compatible ms5351m)
+Hans G0UPL did a review of m5351m. I mention that only because that part is in the current BOM, but a si5351a could just be swapped in, if desired.
+https://qrp-labs.com/synth/ms5351m.html
 
 <img src="https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png" height="500"/>
 
