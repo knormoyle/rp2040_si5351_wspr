@@ -26,6 +26,7 @@ Schematic and board png from jlcpcb are there also. The schematic has a buck/boo
 |**HF Radio Module**|Si5351A-B-GT or MS5351 (Max 10 mWatt)|
 |**Sensor**|optional BMP280 (pressure and temperature)|
 
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/config_screenshot.png"/>
 
 The source code started with AG6NS port of the LightAPRS firmware to his HF + APRS SF-HAB pcb v0.4
 
