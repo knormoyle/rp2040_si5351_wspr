@@ -644,9 +644,27 @@ void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_m
         // for 10M resulted in pll_freq like 699638105 and pll_num 909157
         // for 700000000:
         // pll_freq 699634747 ms_div 398 pll_mult 26 pll_num 909028 pll_denom 1000000 freq 28126020
-        PLL_FREQ_TARGET  = 650000000;
+        // got a matching pll_num for 1Hz change. not good on 10M
+        // PLL_FREQ_TARGET  = 650000000;
+        // hmm. this didn't work. got mult problems?
+        // PLL_FREQ_TARGET  = 67000000;
 
-        // so probably don't want PLL_FREQ_TARGET < 700e6?
+        // this had a pll_num match issue
+        // PLL_FREQ_TARGET  = 700000000;
+        // pll_freq 699634598 ms_div 398 pll_mult 26 pll_num 909023 pll_denom 1000000 freq 28126014
+        // pll_freq 699634623 ms_div 398 pll_mult 26 pll_num 909023 pll_denom 1000000 freq 28126015
+
+        // changing PLL_DENOM to max with this again
+        // PLL_FREQ_TARGET  = 700000000;
+        // one match with PLL_DENOM_MAX
+        // pll_freq 699636240 ms_div 398 pll_mult 26 pll_num 953245 pll_denom 1048575 freq 28126080
+        // pll_freq 699636264 ms_div 398 pll_mult 26 pll_num 953245 pll_denom 1048575 freq 28126081
+        // still got matches with PLL_DENOM = 1000000;
+        // PLL_FREQ_TARGET  = 700000000;
+
+        // this works with PLL_DENOM = 1000000 ..no matches on pll_Num
+        PLL_FREQ_TARGET  = 800000000;
+
 
     // http://www.wa5bdu.com/programming-the-si5351a-synthesizer/
     // http://www.wa5bdu.com/si5351a-quadrature-vfo/
@@ -656,15 +674,16 @@ void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_m
     // better still if it is an even integer. So we let e/f be zero and select a value for d 
     // that’s an even number. 
 
-    // hans uses 1048575 as max (which is 0xfffff) (2^20 - 1)
-    // const int PLL_DENOM_MAX = 0x000fffff;
-
-    // HACK 12/10/24. does it matter if pll/this is integer result?
-    // I guess no matter what, we will have fractional stuff with the 6 hz symbol adjustments
-    // be interesting to see how close to desired freq, we get on the sdr?
-
-    // int PLL_DENOM = PLL_DENOM_MAX;
-    int PLL_DENOM = 1000000;
+    int PLL_DENOM;
+    if (false) {
+        // hans uses 1048575 as max (which is 0xfffff) (2^20 - 1)
+        // I guess no matter what, we will have fractional stuff with the 6 hz symbol adjustments
+        // be interesting to see how close to desired freq, we get on the sdr?
+        const int PLL_DENOM_MAX = 0x000fffff;
+        PLL_DENOM = PLL_DENOM_MAX;
+    } else {
+        PLL_DENOM = 1000000;
+    }
 
     // the divider is 'a + b/c' or "Feedback Multisynth Divider"
     // c is PLL_DENOM
@@ -724,7 +743,7 @@ void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_m
     uint32_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
 
     // can see the benefit of PLL_DENOM / tcxo_freq being integer here?
-    uint32_t pll_num_here    = (uint64_t)pll_remain * PLL_DENOM / tcxo_freq;
+    uint32_t pll_num_here = (uint64_t)pll_remain * PLL_DENOM / tcxo_freq;
     if (pll_num_here > 1048575)
         V0_printf("ERROR: pll_num %lu is out of range 0 to 1048575" EOL, pll_num_here);
 

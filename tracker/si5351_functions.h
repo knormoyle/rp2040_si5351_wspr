@@ -58,6 +58,10 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom);
 void si5351a_setup_multisynth1(uint32_t div);  // removed static
 void si5351a_setup_multisynth0(uint32_t div);
 
+// this will give the freq you should see on wsjt-tx if hf_freq is the XMIT_FREQ for a channel
+// symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin 
+// (assume freq calibration errors of that much, then symbol the 200hz passband?
+uint32_t calcSymbolFreq(uint32_t hf_freq, uint8_t symbol);
 // used to print (not change) for walking a range in setup, just to see what changes
 void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, 
     uint32_t *pll_denom, uint32_t freq);

@@ -853,6 +853,7 @@ void setup1() {
     updateStatusLED();
     Watchdog.reset();
 
+    //***************
     // calculate for different PLL_SYS_MHZ..just to see if we get a good PWM div/wrap cnt for different freqs.
     if (false) {
         calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 60);
@@ -861,41 +862,16 @@ void setup1() {
         calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
     }
 
-    //***************
-    if (true) {
-        // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
-        // for possible tx in a band
-        uint32_t pll_freq;
-        uint32_t ms_div;
-        uint32_t pll_mult;
-        uint32_t pll_num;
-        uint32_t pll_denom;
-        uint32_t freq;
-
-        // 10M
-        uint32_t BAND_XMIT_FREQ = 28126020; // start with lowest on 10M
-        V0_print(F(EOL));
-        V0_print(F("test calc'ing 5351a programming" EOL));
-        for (uint32_t i = 0; i < 200; i++) {
-            freq = BAND_XMIT_FREQ + i;
-            // note this will include any correction to SI5351_TCXO_FREQ (already done)
-            vfo_calc_div_mult_num(&pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
-            V0_printf("pll_freq %lu ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu freq %lu" EOL,
-                pll_freq, ms_div, pll_mult, pll_num, pll_denom, freq);
-        }
-        V0_print(F(EOL));
-    }
-    //***************
-
     // have the last one be the current PLL_SYS_MHZ,
     // so we could just use PMW_DIV, PWM_WRAP_CNT to set below
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
-
-    // oneliner
     V1_printf("calcPwmDivAndWrap() ");
     V1_printf("for PLL_SYS_MHZ %lu ...calculated best PWM_DIV %lu PWM_WRAP_CNT %lu" EOL,
         PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT);
 
+    //***************
+    if (true) checkPLLCalcs_200Hz();
+    //***************
     V1_println(F("setup1() END"));
     // show we're done with setup1() with long 2 sec on, 2 sec off
     // the other core won't be messing with led's at this time
@@ -1993,24 +1969,38 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
 }
 
 //**********************************
-void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
-    char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
-    V1_printf("syncAndSendWSPR() START now: minute: %d second: %d" EOL, minute(), second());
+// calculate the actual tx frequency for a symbol, given the base XMIT_FREQ for the u4b channel config'ed
+uint32_t calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
+    if (symbol > 3) {
+        V1_printf("ERROR: calcSymbolFreq symbol %u is not 0 to 3 ..using 0" EOL, symbol);
+        symbol = 0;
+    }
 
-    // actual freq for symbol 0 in the log buffer, eventually it will get printed 
-    // when we're not sending wspr, by something above
-    uint8_t symbol = 0; // can only be 0, 1, 2 or 3
     uint32_t symbol_freq_shifted = 
         (hf_freq << PLL_CALCULATION_PRECISION) +
         ((symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096L) / 8192L);
     uint32_t symbol_freq = symbol_freq_shifted >> PLL_CALCULATION_PRECISION;
-    V1_printf("For hf_freq %lu symbol 0: symbol_freq is %lu" EOL, hf_freq, symbol_freq); 
-    
 
+    V1_printf("For hf_freq %lu symbol 0: symbol_freq is %lu" EOL, hf_freq, symbol_freq); 
+    return symbol_freq;
+}
+
+//**********************************
+void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
+    char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
+    V1_printf("syncAndSendWSPR() START now: minute: %d second: %d" EOL, minute(), second());
     if (txNum < 0 || txNum > 3) {
         V1_printf("syncAndSendWSPR() bad txNum %d, using 0" EOL, txNum);
         txNum = 0;
     }
+
+    // actual freq for symbol 0 in the log buffer, eventually it will get printed 
+    // when we're not sending wspr, by something above
+    uint8_t symbol = 0; // can only be 0, 1, 2 or 3
+    // don't need the symbol_freq for anything..just want a print here
+    calcSymbolFreq(hf_freq, symbol);
+    // get the vfo going!
+    startSymbolFreq(hf_freq, symbol);
 
     // encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
     // https://stackoverflow.com/questions/27260304/equivalent-of-atoi-for-unsigned-integers
@@ -2161,6 +2151,61 @@ void freeMem() {
     V1_print(freeMemory(), DEC);
     V1_println(F(" byte"));
     V1_println(F("freeMem() END"));
+}
+//**********************
+void checkPLLCalcs_200Hz() {
+    // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
+    // for possible tx in a band
+    uint32_t pll_freq;
+    uint32_t ms_div;
+    uint32_t pll_mult;
+    uint32_t pll_num;
+    uint32_t pll_denom;
+    uint32_t freq;
+
+    enum XMIT_FREQS {
+        BXF_10M = 28124600UL + 1400UL + 20,
+        BXF_12M = 24924600UL + 1400UL + 20,
+        BXF_15M = 21094600UL + 1400UL + 20,
+        BXF_17M = 18104600UL + 1400UL + 20,
+        BXF_20M = 14095600UL + 1400UL + 20,
+    };
+
+    uint32_t BAND_XMIT_FREQ;
+    // FIX! check all bands?
+    BAND_XMIT_FREQ = BXF_10M; 
+    // BAND_XMIT_FREQ = BXF_12M; 
+    // BAND_XMIT_FREQ = BXF_15M; 
+    // BAND_XMIT_FREQ = BXF_17M; 
+    // BAND_XMIT_FREQ = BXF_20M; 
+    uint32_t symbol_freq = calcSymbolFreq(BAND_XMIT_FREQ, 0);
+
+    // this will give the freq you should see on wsjt-tx if hf_freq is the XMIT_FREQ for a channel
+    // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin 
+    // (assume freq calibration errors of that much, then symbol the 200hz passband?
+
+    V0_print(F(EOL));
+    V0_printf("test calc'ing 5351a programming starting at %lu" EOL, symbol_freq - 20);
+    uint32_t pll_num_last = 0;
+    for (uint32_t i = 0; i < 200; i++) {
+        freq = (symbol_freq - 20) + i;
+        // note this will include any correction to SI5351_TCXO_FREQ (already done)
+        vfo_calc_div_mult_num(&pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
+
+        // not ideal if two pll_nums are the same (sequentially) ..the pll_freq isn't correct then?
+        // pll_freq 650415761 ms_div 370 pll_mult 25 pll_num 15990 pll_denom 1000000 freq 28126087
+        // pll_freq 650415785 ms_div 370 pll_mult 25 pll_num 15991 pll_denom 1000000 freq 28126088
+
+        V0_printf("pll_freq %lu ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu freq %lu" EOL,
+            pll_freq, ms_div, pll_mult, pll_num, pll_denom, freq);
+        // really would like unique pll_num changings (+ each 1 Hz ?)
+        if (pll_num == pll_num_last) {
+            V0_print(F("ERROR: pll_num and pll_num_last same"));
+            V0_print(F(" vfo_calc_div_mult_num() needs higher target pll_freq" EOL));
+        }
+        pll_num_last = pll_num;
+    }
+    V0_print(F(EOL));
 }
 
 //**********************
