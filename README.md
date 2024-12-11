@@ -1,34 +1,34 @@
-# LightAPRS-W-2.0 ported to sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1
+# Origins
+This is a fork by AD6Z of the Kazu AG6NS fork of LightAPRS-2.0 for Kazu's [sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1).
+The shorthand name for this pcb is AG6NS 0.4 pcb. The bom and cpl files (BOM* and PickAndPlace* xlsx) were modified to remove the low pass filters and vhf output, and have full differential tx for the WSPR RF. There are multiple choices due to experiments. Contact me to clarify which to use.
 
-[This branch](https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker) is a ported version of [LightAPRS-W-2.0](https://github.com/lightaprs/LightAPRS-W-2.0) for [sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1).
+[sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1) is an open-hardware project.
 
-[sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1) is an open-hardware project intended for STEM (Science, Technology, Engineering and Mathematics) educational purposes.
+The pcb used for this firmware is currently at [AD6Z tracker](https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/tree/main/pcb/tracker/v0.4_kbn)
+(v0.4_kbn dir). There are multiple BOM and CPL files for jlcpcb.com there. Contact me by email to find out which you should use if interested in building some at jlcpcb.com.
+Schematic and board png from jlcpcb are there also. The schematic has a buck/boost converter that's not used, some supercaps that are not used, an the LPFs on the si5351a clk0/clk1 have been changed in the bom/cpl files. But the schematic is pretty usable for understanding what's going on.. There are some datasheets for parts there also. Alternatives and other things being investigated.
 
-## Differences
+## PCB highlights
 
-There are several differences between **LightAPRS-W 2.0 Tracker** and **sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1**:
+**sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1**:
 
-|   |LightAPRS-W 2.0 Tracker|sf-hab.org RP2040 based Tracker gen1|
-|---|---|---|
-|**Weight**|4.61 g|3.94 g (3.57 g after cut-out USB connector portion, with GPS antenna wires)|
-|**Size**|32 mm x 55 mm|29 mm x 55 mm (48 mm after cut-out USB connector portion)|
-|**MCU**|Microchip ATSAMD21G18 (ARM Cortex-M0)|Raspberry Pi RP2040 (ARM Cortex-M0+ dual core)|
-|**Flash**|256 KB (internal)|2 MB (external)|
-|**RAM**|32 KB|264 KB|
-|**MCU Clock Freq.**|48 MHz|125 MHz|
-|**VHF Radio Module**|Si4463 (Max 100 mWatt)|Si5351A-B-GT / MS5351M (Max 10 mWatt)|
-|**VHF LPF**|Available (7 elements)|5 elements (separate from HF LPF)|
-|**HF Radio Module**|Si5351A-B-GT (Max 10mWatt)|Si5351A-B-GT / MS5351 (Max 10 mWatt)|
-|**HF LPF**|No|5 elements (separate from VHF LPF)|
-|**Sensor**|BMP180 (pressure and temperature)|BMP280 (pressure and temperature)|
+|   |sf-hab.org RP2040 based Tracker gen1|
+|---|---|
+|**Weight**|3.94 g (3.57 g after cut-out USB connector portion, with GPS antenna wires)|
+|**Size**|29 mm x 55 mm (48 mm after cut-out USB connector portion)|
+|**MCU**|Raspberry Pi RP2040 (ARM Cortex-M0+ dual core)|
+|**Flash**|2 MB (external)|
+|**RAM**|264 KB|
+|**MCU Clock Freq.**|18-250 MHz|
+|**HF Radio Module**|Si5351A-B-GT or MS5351 (Max 10 mWatt)|
+|**Sensor**|optional BMP280 (pressure and temperature)|
 
-The original LightAPRS-W 2.0 Tracker uses two different chips (Si5351A and Si4463) for supporting both HF and VHF bands, but my ported version only uses the Si5351A-B-GT/MS5351M to generate both HF (WSPR in 20m band) and VHF (APRS in 2m band).
 
-The source code for controlling the Si5351A/MS5351M chip is ported from my [AFSK_to_FSK_VFO](https://github.com/kaduhi/AFSK_to_FSK_VFO) repository, it was developed originally for [**QRPGuys AFP-FSK Digital Transceiver III kit**](https://qrpguys.com/qrpguys-digital-fsk-transceiver-iii) ( [source code](https://qrpguys.com/wp-content/uploads/2022/09/ft8_v1.4_092522-1.zip) ).
+The source code started from AG6NS [AFSK_to_FSK_VFO](https://github.com/kaduhi/AFSK_to_FSK_VFO) repository, it was developed originally for [**QRPGuys AFP-FSK Digital Transceiver III kit**](https://qrpguys.com/qrpguys-digital-fsk-transceiver-iii) ( [source code](https://qrpguys.com/wp-content/uploads/2022/09/ft8_v1.4_092522-1.zip) ).
+U4B extensions were added, configuration etc, etc.
 
 ## How to compile & build the source code
-
-Same as the LightAPRS-W-2.0, you need to use [Arduino IDE](https://www.arduino.cc/en/Main/Software) to compile & build this project.
+You need to use [Arduino IDE](https://www.arduino.cc/en/Main/Software) to compile & build this project.
 
 ### 1. Install Arduino IDE
 
@@ -58,8 +58,8 @@ Download and install [Arduino IDE](https://www.arduino.cc/en/Main/Software). If 
 
 ### 3. Copy Libraries & Compile Source Code 
 
-- First download the repository to your computer using the green "[clone or download](https://github.com/kaduhi/LightAPRS-W-2.0/archive/refs/heads/port_to_ag6ns_rp2040_picoballoon_tracker.zip)" button.
-- There are only one Arduino projects "[LightAPRS-W-2-pico-balloon](LightAPRS-W-2-pico-balloon)" folder.
+- First download the repository to your computer using the green "[clone or download]" button.
+- There are only one Arduino projects rp2040_si5351_wspr/tracker folder.
 - You will notice some folders in the "libraries" folder. You have to copy these folders (libraries) into your Arduino libraries folder on your computer. Path to your Arduino libraries:
 - **Windows** : This PC\Documents\Arduino\libraries\
 - **Mac** : /Users/\<username\>/Documents/Arduino/libraries/
@@ -67,13 +67,13 @@ Download and install [Arduino IDE](https://www.arduino.cc/en/Main/Software). If 
 
 **IMPORTANT :** If you already have folders that have same name, you still need to overwrite them. Otherwise you get a compile error.
 
-- Then open the LightAPRS-W-2-pico-balloon.ino file with Arduino IDE and change your settings (Callsign, SSID, comment, etc.)
+- Then open the tracker.ino file with Arduino IDE
 - Click **Verify** (If you get compile errors, check the steps above)
 
 ### 4. Upload
 
-- First attach an VHF antenna (at least 50cm monopole wire) to your tracker. Radio module may be damaged when not attaching an antenna, since power has nowhere to go. 
-- Connect sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1 board to your computer with a micro USB cable, then you should see a COM port under **Tools->Port** menu item. Select that port. (e.g. "/dev/cu.usbmodem141101")
+- First attach a GPS and a HF antenna (at least 50cm monopole wire) to your tracker. Radio module may be damaged when not attaching an antenna, since power has nowhere to go. 
+- Connect sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1 (AG6NS 0.4 with new kbn BOM/CPL files) board to your computer with a micro USB cable, then you should see a COM port under **Tools->Port** menu item. Select that port. (e.g. "/dev/cu.usbmodem141101")
 - Click **Upload**
 - If you see an error, you may need to put the tracker board into "Bootloader" mode before uploading:
   - Disconnect the USB cable
@@ -81,13 +81,10 @@ Download and install [Arduino IDE](https://www.arduino.cc/en/Main/Software). If 
   - After your PC recognized the board, release the shorting
 
 ## Questions?
+I will try to answer all questions or email
+ 
 
-I will only answer questions from people who are a part of a STEM education program (student, teacher, mentor, advisor, ...), please send them via email (*my call sign* @ arrl.net).
-The answers to these questions will also be added to the [Wiki](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/wiki) for the benefit of all other STEM education groups.
-
-**Note:** ***I will most likely ignore all emails from people who are not part of a STEM education program. If you are not a part of a STEM education program, please do not waste your time sending any questions.***
-
-## Project Background and History
+## Project Background and History (Kazu AG6NS prehistory to this fork)
 **Oct 2021** - attend to [SF-HAB (San Francisco Bay Area High Altitude Balloon) group](https://sf-hab.org/)'s Amateur Radio Pico Balloon presentation at Pacificon 2021, then joined the group
 
 **Dec 2021** - start writing firmware for existing W6MRR V6.6 Pico Balloon Tracker boards
