@@ -54,7 +54,7 @@ extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _devmode[2]; // unused for now
 
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
-extern char _correction[7];  // parts per billion -3000 to 3000. default 0
+extern char _correction[7];  // parts per billion -30000 to 30000. default 0
 // traquito: 500 correction does  ~7 hz lower on 20M (14095.600 base freq)
 // traquito: 500 correction does ~14 hz lower on 10M (28124.600 base freq)
 
@@ -520,7 +520,7 @@ void user_interface(void) {
             case 'R':
                 V0_print(F("Don't cause more than approx. 43 hz 'correction' on a band." EOL));
                 V0_print(F("effect varies per band?" EOL));
-                get_user_input("Enter ppb Correction to si5351: (-3000 to 3000)" EOL,
+                get_user_input("Enter ppb Correction to si5351: (-30000 to 30000)" EOL,
                     _correction, sizeof(_correction));
                 write_FLASH();
                 break;
@@ -934,7 +934,7 @@ int check_data_validity_and_set_defaults(void) {
     //*****************
     // what does atoi() when null is first char? returns 0
     // detect that case to get ascii 0 in there
-    if (_correction[0]==0 || atoi(_correction) < -3000 || atoi(_correction) > 3000) {
+    if (_correction[0]==0 || atoi(_correction) < -30000 || atoi(_correction) > 30000) {
         // left room for 6 bytes
         V0_printf(EOL "_correction %s is not supported/legal, initting to 0" EOL, _correction);
         snprintf(_correction, sizeof(_correction), "0");
