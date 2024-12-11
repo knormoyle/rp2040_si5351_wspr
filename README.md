@@ -12,6 +12,9 @@ Schematic and board png from jlcpcb are there also. The schematic has a buck/boo
 
 **sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1**:
 
+<img src="https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png" height="500"/>
+
+
 |   |sf-hab.org RP2040 based Tracker gen1|
 |---|---|
 |**Weight**|3.94 g (3.57 g after cut-out USB connector portion, with GPS antenna wires)|
@@ -24,8 +27,9 @@ Schematic and board png from jlcpcb are there also. The schematic has a buck/boo
 |**Sensor**|optional BMP280 (pressure and temperature)|
 
 
-The source code started from AG6NS [AFSK_to_FSK_VFO](https://github.com/kaduhi/AFSK_to_FSK_VFO) repository, it was developed originally for [**QRPGuys AFP-FSK Digital Transceiver III kit**](https://qrpguys.com/qrpguys-digital-fsk-transceiver-iii) ( [source code](https://qrpguys.com/wp-content/uploads/2022/09/ft8_v1.4_092522-1.zip) ).
-U4B extensions were added, configuration etc, etc.
+The source code started with AG6NS port of the LightAPRS firmware to his HF + APRS SF-HAB pcb v0.4
+
+U4B extensions were added, multiband configuration etc, etc. by AD6Z in 11/2024
 
 ## How to compile & build the source code
 You need to use [Arduino IDE](https://www.arduino.cc/en/Main/Software) to compile & build this project.
