@@ -50,6 +50,13 @@ the base layer Raspberry Pi Pico SDK (PICO-SDK) docs are
 
 Earle Philhower did the arduino-pico layer on top of that
 [arduino-pico](https://github.com/earlephilhower/arduino-pico)
+
+this is the arduino-pico core docs for the install
+[arduino-pico install](https://arduino-pico.readthedocs.io/en/latest/install.html)
+
+top level is here. you can peruse that to see ALL the stuff this layer gives you
+[arduino-pico](https://arduino-pico.readthedocs.io/en/latest/)
+
 ### 2. Configure Board
 
 
@@ -250,6 +257,17 @@ that's at 5v but I think it's the same at 3.6v
 the thing seems to run at 3.3v, there's a voltage reset monitor that keeps things off if the voltage is too low.
 
 but I think the target with the ldo is around 3.6v voltage for normal balloon operation.
+
+I went hog wild playing with clock speeds and turning usb pll off and sys pll off.
+I settled on running at 18 mhz (you can change the freq in the config up to 250mhz..default is 18mhz now)
+
+I did have it running at 12mhz on the crystal oscillator like kazu suggested but couldn't get Serial2 working to the gps with that. so I just went to the pll being on for sys and 18 mhz (the lowest legal
+
+I do some funky stuff on the first gps cold reset to try to get min power.
+
+since it messes with usb pll, there's some timing to get firmware compiled and uploaded
+I found once I started with the code messing with usb, i had to unplug/replug in the usb to get the sequence right
+I ordered a usb plug that has a on/off switch that I'm going to use so I don't wear out my usb on my pc
 
 ## Questions?
 I (Kevin Normoyle) will try to answer all questions or email.
