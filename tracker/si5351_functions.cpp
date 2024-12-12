@@ -1017,7 +1017,16 @@ void vfo_turn_on(uint8_t clk_num) {
 
     i2cWrite(149, 0x00);  // Disable Spread Spectrum
     i2cWrite(177, 0xA0);  // Reset PLLA and PLLB
-    i2cWrite(187, 0x00);  // Disable all fanout
+    // FIX! is this a reserved address?
+    
+    // in AN1234 register map, this is shown as CLKIN_FANOUT_EN and XO_FANOUT_EN
+    // also MS_FANOUT_EN ? Rev  0.6 of spec (newer is 0.95?)
+    // https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/application-notes/AN619.pdf
+    // also in AN619 "Manually Generating an Si5351 Register map" covers Si5351A/B/C
+    // for Si5351 16QFN device only?
+    // but what enables it?
+    // I think it just doesn't exist in the 0.95 datasheet. let's leave it out!
+    // i2cWrite(187, 0x00);  // Disable all fanout
 
     //***********************
     s_ms_div_prev = 0;
