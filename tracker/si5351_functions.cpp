@@ -295,9 +295,9 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
             ; 
             // V1_printf("GOOD: res %d after i2cWrite" EOL, res);
         } else if (res == PICO_ERROR_GENERIC) {
-            V1_printf("ERROR: res %d after i2cWrite" EOL, res);
+            V1_printf("ERROR: res %d after i2cWrite %d" EOL, res);
         } else {
-            V1_printf("UNEXPECTED: res %d after i2cWrite" EOL, res);
+            V1_printf("UNEXPECTED: res %d after i2cWrite %d" EOL, res, reg);
         }
     }
     // V1_printf("i2cWrite END reg %02x val %02x" EOL, reg, val);
@@ -473,7 +473,7 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
         } else if (res == PICO_ERROR_GENERIC) {
             V1_printf("ERROR: res %d after i2cWriten" EOL, res);
         } else {
-            V1_printf("UNEXPECTED: res %d after i2cWriten" EOL, res);
+            V1_printf("UNEXPECTED: res %d after i2cWriten %d" EOL, res, reg);
         }
     }
 
