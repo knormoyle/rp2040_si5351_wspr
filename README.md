@@ -240,6 +240,17 @@ I could change this to 30 secs until you get the hang of it, if you're continual
 I couldn't think of a good way for deciding when to ignore the usb serial fully in balloon mode..this timeout method is what I came up 
 
 
+## Interesting current info
+I think I'm seeing 45ma on usb power when sending RF now. GPS cold reset current still is the peak current though, I think.
+
+The 45ma, I think that's 8ma si5351a output drive. Been testing on all bands: 20/17/15/12/10m.
+
+that's at 5v but I think it's the same at 3.6v
+
+the thing seems to run at 3.3v, there's a voltage reset monitor that keeps things off if the voltage is too low.
+
+but I think the target with the ldo is around 3.6v voltage for normal balloon operation.
+
 ## Questions?
 I (Kevin Normoyle) will try to answer all questions or email.
  
