@@ -1242,12 +1242,11 @@ void updateGpsDataAndTime(int ms) {
             // can't have the logBuffer fill up, because the unload is delayed
             int charsAvailable = (int) Serial2.available();
             if (VERBY[1]) {
-                if (charsAvailable > 28)
+                if (charsAvailable > 30)
                     // this the case where we started this function with something in the buffer
                     // we unload each in less than 1ms..so we catch up
                     // compare to 28 so we only get 4 (32 -28) ERROR messages as we catch up
-                    StampPrintf("WARN: NMEA incoming chars backing up? 32 deep uart rx buffer has %d)" EOL,
-                        (int) charsAvailable);
+                    StampPrintf("WARN: NMEA backup. uart rx buff at %d)" EOL, (int) charsAvailable);
             }
 
             incomingChar = Serial2.read();
