@@ -135,7 +135,6 @@ lrwxrwxrwx 1 kevin kevin 56 Dec 12 01:08 Adafruit_Sensor -> /home/kevin/rp2040_s
 lrwxrwxrwx 1 kevin kevin 59 Dec 12 01:08 Adafruit_SleepyDog -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_SleepyDog
 lrwxrwxrwx 1 kevin kevin 59 Dec 12 01:08 Arduino-MemoryFree -> /home/kevin/rp2040_si5351_wspr/libraries/Arduino-MemoryFree
 lrwxrwxrwx 1 kevin kevin 49 Dec 12 01:08 JTEncode -> /home/kevin/rp2040_si5351_wspr/libraries/JTEncode
-lrwxrwxrwx 1 kevin kevin 49 Dec 12 01:08 not_used -> /home/kevin/rp2040_si5351_wspr/libraries/not_used
 lrwxrwxrwx 1 kevin kevin 45 Dec 12 01:08 Time -> /home/kevin/rp2040_si5351_wspr/libraries/Time
 lrwxrwxrwx 1 kevin kevin 52 Dec 12 01:08 TinyGPSPlus -> /home/kevin/rp2040_si5351_wspr/libraries/TinyGPSPlus
 kevin@pc8c:~/Arduino/libraries$
