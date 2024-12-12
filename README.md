@@ -8,6 +8,11 @@ The pcb used for this firmware is currently at [AD6Z tracker](https://github.com
 (v0.4_kbn dir). There are multiple BOM and CPL files for jlcpcb.com there. Contact me by email to find out which you should use if interested in building some at jlcpcb.com.
 Schematic and board png from jlcpcb are there also. The schematic has a buck/boost converter that's not used, some supercaps that are not used, an the LPFs on the si5351a clk0/clk1 have been changed in the bom/cpl files. But the schematic is pretty usable for understanding what's going on.. There are some datasheets for parts there also. Alternatives and other things being investigated.
 
+## Costs
+I could post invoices from some recent orders from jlcpcb.com. Cheaper with jlcpcb.com discounts and larger quantities. But even quantity 5 (the minimum) is cheap. Shouldn't be more than $10-$12 a board. (no bmp280, atgm336n gps). Shipping costs are $20 if you want fast shipping, but only $1.52 !! if you are willing to wait a bit for Global Standard Direct Line shipping.
+No extra pico board needed. RP2040 is integrated. You only have solder gps antenna and hf antenna and power connections. Debug done with usb cable for power/data, and gps antenna and short HF antenna stubs.
+
+
 ## PCB highlights
 
 **sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1 with mods**:
@@ -211,6 +216,10 @@ you should be able to see "Raspberry Pi Pico" in the top left white box when you
 - 
 - The firmware turns USB pll off at times. If you can't upload, unplug the usb (better yet get a usb cable with switch to avoid plug/unplug cycles). Then plug it back in. The green led should be on steady. immediately do the compile upload. After that you have 15 secs to open a putty window (setup a fast way to start putty with a session defined. save output (logging) to a putty.log for later analysis/debug. You will interact with the putty window for keyboard entry (if necessary). Hit enter to interrupt to get to config screen and keyboard entry. X to leave config mode and reboot. You will have to repeat opening putty at this point because of the reboot. If there is no usb, but just power, the tracker will enter balloon mode. Also, all usb input/output will be disabled if you don't open the putty session within 15 secs of boot. There is much debug output. it can be disabled with the V command in the config (VERBY). 0 is least output. 1 is more. 2 is more than that. 3 is most so far. The printing does not interfere with wspr operations. You can set K (clock) to 18 Mhz. There is a factory reset in the config selection. It will default any bad/illegal entries in the config.
 - 
+Here's the usb cable with on/off switch I ordered. I think it will be very useful!
+[USB cable](https://www.amazon.com/dp/B0CVZQ66C6) Note your existing USB/A micro-usb cable will plug into the female jack. Pick an appopriate length for comfort!
+
+- 
 - If you see an error, you may need to put the tracker board into "Bootloader" mode before uploading:
   - Disconnect the USB cable
   - While shorting the H5 (two thru-hole next to the USB connector, maybe with pins or tweezers), connect the USB cable
@@ -228,8 +237,7 @@ I do some funky stuff on the first gps cold reset to try to get min power.
 
 since it messes with usb pll, there's some timing to get firmware compiled and uploaded
 I found once I started with the code messing with usb, i had to unplug/replug in the usb to get the sequence right
-I ordered a usb plug that has a on/off switch that I'm going to use so I don't wear out my usb on my pc
-
+I ordered a usb cable from amazon that has a on/off switch that I'm going to use so I don't wear out my usb on my pc
 
 in any case...this is the way to do it
 do the compile-only. you will compile a lot the first time.
