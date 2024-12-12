@@ -61,7 +61,7 @@ Earle says above at the arduino-pico github how to get the arduino-pico stuff in
 Hit OK to close the dialog.
 Go to Tools->Boards->Board Manager in the IDE
 Type "pico" in the search box and select "Add":
-https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/boardmanager.png
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/boardmanager.png"/>
 
 I muddled thru the instructions on installing the arduino-pico core as above.....(look at the readme on his github)
 <img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/board_screenshot1.png"/>
