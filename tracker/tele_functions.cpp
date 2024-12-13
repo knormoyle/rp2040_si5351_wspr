@@ -75,6 +75,12 @@ int legalPowerSize = 19;
 
 void snapForTelemetry(void) {
     V1_println(F("snapForTelemetry START"));
+    if (TESTMODE) {
+        V1_println(F("TESTMODE detected"));
+        telemetrySweepAllForTest();
+        // continue sweep inc'ing the static data (and wrapping)
+        return;
+    }
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
     if (!gps.location.isValid()) return;
@@ -305,12 +311,6 @@ static float onewire_values[10] = { 0 };
 
 void process_TELEN_data(void) {
     V1_println(F("process_TELEN_data START"));
-    if (TESTMODE) {
-        V1_println(F("TESTMODE detected"));
-        telemetrySweepAllForTest();
-        // continue sweep inc'ing the static data (and wrapping)
-        return;
-    }
     // minutes_since_GPS_acquistion (should this be last time to fix);
     // we don't send stuff out if we don't get gps acquistion.
     // so minutes since fix doesn't really matter?
@@ -375,9 +375,9 @@ void process_TELEN_data(void) {
 //****************************************************
 // isFloat tells you the string is float not string
 // all strings are null terminated
-void doTelemetrySweepInteger(char *t_string, uint8_t t_sizeof, uint32_t t_min, uint32_t t_max, uint32_t t_inc) {
+void doTelemetrySweepInteger(char *t_string, uint8_t t_length, int t_min, int t_max, int t_inc) {
     if (t_string[0] == 0) { // empty 
-        snprintf(t_string, t_sizeof, "%d", t_min);
+        snprintf(t_string, t_length, "%d", t_min);
     }
     int value = atoi(t_string);
     value = value + t_inc;
@@ -388,29 +388,33 @@ void doTelemetrySweepInteger(char *t_string, uint8_t t_sizeof, uint32_t t_min, u
     // the remaining characters are discarded and not stored, 
     // but counted for the value returned by the function.
     // A terminating null character is automatically appended after the content written.
-    snprintf(t_string, t_sizeof, "%d", value);
+    snprintf(t_string, t_length, "%d", value);
 }
 
 //****************************************************
-void doTelemetrySweepFloat (char *t_string, uint8_t t_sizeof, float t_min, float t_max, float t_inc) {
+void doTelemetrySweepFloat (char *t_string, uint8_t t_length, float t_min, float t_max, float t_inc) {
+
+    float value;
     if (t_string[0] == 0) { // empty 
-        snprintf(t_string, t_sizeof, "%.f", t_min);
+        value = t_min;
     }
-    float value = atof(t_string);
-    value = value + t_inc;
-    // wrap
-    if (value > t_max) value = t_min;
+    else {
+        value = atof(t_string);
+        value = value + t_inc;
+        // wrap
+        if (value > t_max) value = t_min;
+    }
 
     // snprintf: If the resulting string would be longer than n-1 characters, 
     // the remaining characters are discarded and not stored, 
     // but counted for the value returned by the function.
     // A terminating null character is automatically appended after the content written.
-    if (t_sizeof == 7) 
-        snprintf(t_string, t_sizeof, "%7.2f", value);
-    else if (t_sizeof == 6) 
-        snprintf(t_string, t_sizeof, "%6.2f", value);
+    if (t_length == 7) 
+        snprintf(t_string, t_length, "%.2f", value);
+    else if (t_length == 6) 
+        snprintf(t_string, t_length, "%.1f", value);
     else
-        snprintf(t_string, t_sizeof, "%5.2f", value);
+        snprintf(t_string, t_length, "%.2f", value);
 }
     
 //****************************************************
