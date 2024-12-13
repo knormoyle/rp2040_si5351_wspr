@@ -51,7 +51,7 @@ extern char _clock_speed[4];
 extern char _U4B_chan[4];
 extern char _Band[3];     // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
-extern char _devmode[2]; // unused for now
+extern char _testmode[2]; // currently: sweep telemetry
 
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
 extern char _correction[7];  // parts per billion -30000 to 30000. default 0
@@ -79,7 +79,7 @@ extern uint32_t PWM_WRAP_CNT;
 // this is fixed
 extern const uint32_t INTERRUPTS_PER_SYMBOL;
 
-extern bool DEVMODE; // decode of _devmode
+extern bool TESTMODE; // decode of _testmode
 extern bool VERBY[10]; // decode of verbose 0-9. disabled if BALLOON_MODE
 extern bool BALLOON_MODE; // this is set by setup() when it detects no USB/Serial
 
@@ -512,8 +512,8 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'D':
-                get_user_input("Enter DEVMODE (currently affects nothing): (0 or 1)" EOL,
-                    _devmode, sizeof(_devmode));
+                get_user_input("Enter TESTMODE (currently affects nothing): (0 or 1)" EOL,
+                    _testmode, sizeof(_testmode));
                 write_FLASH();
                 break;
             case 'R':
@@ -615,7 +615,7 @@ int read_FLASH(void) {
     // FIX! change to _band everywhere?
     strncpy(_Band,         flash_target_contents + 17, 2); _Band[2] = 0;
     strncpy(_tx_high,      flash_target_contents + 19, 1); _tx_high[1] = 0;
-    strncpy(_devmode,      flash_target_contents + 20, 1); _devmode[1] = 0;
+    strncpy(_testmode,      flash_target_contents + 20, 1); _testmode[1] = 0;
     strncpy(_correction,   flash_target_contents + 21, 6); _correction[6] = 0;
     strncpy(_go_when_rdy,  flash_target_contents + 27, 1); _go_when_rdy[1] = 0;
     strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
@@ -637,8 +637,8 @@ int read_FLASH(void) {
 
     // forceHACK();
 
-    if (_devmode[0] == '1') DEVMODE = true;
-    else DEVMODE = false;
+    if (_testmode[0] == '1') TESTMODE = true;
+    else TESTMODE = false;
     decodeVERBY();
 
     V1_print("read_FLASH END" EOL);
@@ -704,7 +704,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 14, _U4B_chan, 3);
     strncpy(data_chunk + 17, _Band, 2);
     strncpy(data_chunk + 19, _tx_high, 1);
-    strncpy(data_chunk + 20, _devmode, 1);
+    strncpy(data_chunk + 20, _testmode, 1);
     strncpy(data_chunk + 21, _correction, 6);
     strncpy(data_chunk + 27, _go_when_rdy, 1);
     strncpy(data_chunk + 28, _factory_reset_done, 1);
@@ -924,9 +924,9 @@ int check_data_validity_and_set_defaults(void) {
         result = -1;
     }
     //*****************
-    if (_devmode[0] != '0' && _devmode[0] != '1') {
-        V0_printf(EOL "_devmode %s is not supported/legal, initting to 0" EOL, _devmode);
-        snprintf(_devmode, sizeof(_devmode), "0");
+    if (_testmode[0] != '0' && _testmode[0] != '1') {
+        V0_printf(EOL "_testmode %s is not supported/legal, initting to 0" EOL, _testmode);
+        snprintf(_testmode, sizeof(_testmode), "0");
         write_FLASH();
         result = -1;
     }
@@ -976,7 +976,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_printf("clock speed:%sMhz" EOL, _clock_speed);
     V0_printf("band:%s" EOL, _Band);
     V0_printf("tx_high:%s" EOL, _tx_high);
-    V0_printf("DEVMODE:%s" EOL, _devmode);
+    V0_printf("TESTMODE:%s" EOL, _testmode);
     V0_printf("correction:%s" EOL, _correction);
     V0_printf("go_when_rdy:%s" EOL, _go_when_rdy);
     V0_printf("factory_reset_done:%s" EOL, _factory_reset_done);
@@ -1003,7 +1003,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
     V0_printf(   "K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
-    V0_println(F("D: DEVMODE (currently does nothing) (default: 0)"));
+    V0_println(F("D: TESTMODE (currently: sweep telemetry values) (default: 0)"));
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));
 
@@ -1020,7 +1020,7 @@ void doFactoryReset() {
     snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
     snprintf(_Band, sizeof(_Band), "20");
     snprintf(_tx_high, sizeof(_tx_high), "1");
-    snprintf(_devmode, sizeof(_devmode), "0");
+    snprintf(_testmode, sizeof(_testmode), "0");
     snprintf(_correction, sizeof(_correction), "0");
     snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
     // when we read_FLASH, if this is 0, we set everything to default

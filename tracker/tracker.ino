@@ -369,7 +369,7 @@ char _clock_speed[4] = { 0 };
 char _U4B_chan[4] = { 0 };
 char _Band[3] = { 0 };     // string with 10, 12, 15, 17, 20 legal. null at end
 char _tx_high[2] = { 0 };  // 0 is 2mA si5351. 1 is 8mA si5351
-char _devmode[2] = { 0 };
+char _testmode[2] = { 0 };
 char _correction[7] = { 0 };
 char _go_when_rdy[2] = { 0 };
 char _factory_reset_done[2] = { 0 };
@@ -395,8 +395,8 @@ uint32_t SI5351_TCXO_FREQ = 26000000;
 
 bool BALLOON_MODE = true;
 bool CORE1_PROCEED = false;
-// decode of _devmode
-bool DEVMODE = false;
+// decode of _testmode
+bool TESTMODE = false;
 // decode of _verbose 0-9
 bool VERBY[10] = { false };
 
@@ -496,7 +496,7 @@ void setup() {
     // FIX! do we detect Serial if we never open putty, and data + power is connected on USB?
     // eventually we'll time out in config menu and reboot
     // detecting usb is connected
-    // read the nvram and decode VERBY and DEVMODE. This will control printing
+    // read the nvram and decode VERBY and TESTMODE. This will control printing
     read_FLASH();
 
     // Get the SIE_STATUS to see if we're connected or what?

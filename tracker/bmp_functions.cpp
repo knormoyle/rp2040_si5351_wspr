@@ -156,7 +156,6 @@ extern const int BMP280_I2C1_SCL_PIN;
 // extern Adafruit_BMP085 bmp;
 extern Adafruit_BMP280 bmp;
 
-extern bool DEVMODE;
 // decode of _verbose 0-9
 extern bool VERBY[10];
 

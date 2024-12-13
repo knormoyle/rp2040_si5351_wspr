@@ -30,7 +30,6 @@
 #include <TinyGPS++.h>
 #include <Wire.h>
 
-extern bool DEVMODE;
 // decode of _verbose 0-9
 extern bool VERBY[10];
 

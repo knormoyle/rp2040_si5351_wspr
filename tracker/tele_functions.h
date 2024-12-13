@@ -10,5 +10,8 @@
 void snapForTelemetry(void);
 float readVoltage(void);
 void process_TELEN_data(void);
+void doTelemetrySweepInteger(char *t_string, uint8_t t_length, uint32_t t_min, uint32_t t_max, uint32_t t_inc);
+void doTelemetrySweepFloat (char *t_string, uint8_t t_sizeof, float t_min, float t_max, float t_inc);
+void telemetrySweepAllForTest(void);
 
 #endif

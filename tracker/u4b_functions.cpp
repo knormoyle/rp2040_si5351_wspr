@@ -374,9 +374,9 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
 
     // ah, can't use sizeof. size is lost
     // everything should fill the print here..no spaces
-    snprintf(hf_callsign, 7, "%6s", callsign);
-    snprintf(hf_grid4, 5, "%4s", grid4);
-    snprintf(hf_power, 3, "%2s", power);
+    snprintf(hf_callsign, 7, "%s", callsign);
+    snprintf(hf_grid4, 5, "%s", grid4);
+    snprintf(hf_power, 3, "%s", power);
 
     V1_printf("u4b_encode_std created: hf_callsign %s hf_grid %s hf_power %s)" EOL,
         hf_callsign, hf_grid4, hf_power);
@@ -459,9 +459,10 @@ void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power,
     grid4[4] = 0;  // null term
 
     // can't use sizeof() .. size is lost
-    snprintf(hf_callsign, 7, "%6s", callsign);
-    snprintf(hf_grid4, 5, "%4s", grid4);
-    snprintf(hf_power, 3, "%2s", power);
+    // we shouldn't have to specify 6, 4, 2 for the %s ?
+    snprintf(hf_callsign, 7, "%s", callsign);
+    snprintf(hf_grid4, 5, "%s", grid4);
+    snprintf(hf_power, 3, "%s", power);
 
     V1_printf("u4b_encode_telen() END hf_callsign %s hf_grid4 %s hf_power %s" EOL,
         hf_callsign, hf_grid4, hf_power);

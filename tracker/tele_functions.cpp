@@ -12,6 +12,7 @@
 #include "bmp_functions.h"
 #include "mh_functions.h"
 #include "adc_functions.h"
+#include "tele_functions.h"
 
 #include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
 
@@ -33,6 +34,8 @@ extern int t_TELEN1_val1;
 extern int t_TELEN1_val2;
 extern int t_TELEN2_val1;
 extern int t_TELEN2_val2;
+
+extern bool TESTMODE;
 
 // lat/lon precision: How much to store
 // https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
@@ -60,7 +63,6 @@ extern char _tx_high[2];      // 1 byte
 extern char _callsign[7];     // 6 bytes
 
 extern TinyGPSPlus gps;
-extern bool DEVMODE;
 extern int tx_cnt_0;
 // decode of _verbose 0-9
 extern bool VERBY[10];
@@ -70,7 +72,7 @@ extern bool VERBY[10];
 int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
 
-//****************************************************
+
 void snapForTelemetry(void) {
     V1_println(F("snapForTelemetry START"));
     // FIX! didn't we already check this?
@@ -303,6 +305,12 @@ static float onewire_values[10] = { 0 };
 
 void process_TELEN_data(void) {
     V1_println(F("process_TELEN_data START"));
+    if (TESTMODE) {
+        V1_println(F("TESTMODE detected"));
+        telemetrySweepAllForTest();
+        // continue sweep inc'ing the static data (and wrapping)
+        return;
+    }
     // minutes_since_GPS_acquistion (should this be last time to fix);
     // we don't send stuff out if we don't get gps acquistion.
     // so minutes since fix doesn't really matter?
@@ -364,3 +372,80 @@ void process_TELEN_data(void) {
     TELEN2_val2 = telen_values[3];
     V1_println(F("process_TELEN_data END"));
 }
+//****************************************************
+// isFloat tells you the string is float not string
+// all strings are null terminated
+void doTelemetrySweepInteger(char *t_string, uint8_t t_sizeof, uint32_t t_min, uint32_t t_max, uint32_t t_inc) {
+    if (t_string[0] == 0) { // empty 
+        snprintf(t_string, t_sizeof, "%d", t_min);
+    }
+    int value = atoi(t_string);
+    value = value + t_inc;
+    // wrap
+    if (value > t_max) value = t_min;
+
+    // snprintf: If the resulting string would be longer than n-1 characters, 
+    // the remaining characters are discarded and not stored, 
+    // but counted for the value returned by the function.
+    // A terminating null character is automatically appended after the content written.
+    snprintf(t_string, t_sizeof, "%d", value);
+}
+
+//****************************************************
+void doTelemetrySweepFloat (char *t_string, uint8_t t_sizeof, float t_min, float t_max, float t_inc) {
+    if (t_string[0] == 0) { // empty 
+        snprintf(t_string, t_sizeof, "%.f", t_min);
+    }
+    float value = atof(t_string);
+    value = value + t_inc;
+    // wrap
+    if (value > t_max) value = t_min;
+
+    // snprintf: If the resulting string would be longer than n-1 characters, 
+    // the remaining characters are discarded and not stored, 
+    // but counted for the value returned by the function.
+    // A terminating null character is automatically appended after the content written.
+    if (t_sizeof == 7) 
+        snprintf(t_string, t_sizeof, "%7.2f", value);
+    else if (t_sizeof == 6) 
+        snprintf(t_string, t_sizeof, "%6.2f", value);
+    else
+        snprintf(t_string, t_sizeof, "%5.2f", value);
+}
+    
+//****************************************************
+void telemetrySweepAllForTest(void) {
+    V1_println(F("telemetrySweepAllForTest START"));
+    // the t_* stuff are ascii chars
+    // walk them thru their range. wrap at boundary
+    doTelemetrySweepInteger(t_course, 3, 0, 361, 1);            // 3 bytes (not counting null term)
+    doTelemetrySweepInteger(t_speed, 3, 0, 300, 1);             // 3 bytes
+    doTelemetrySweepInteger(t_altitude, 6, 0, 99999, 1);        // 6 bytes 
+    doTelemetrySweepInteger(t_tx_count_0, 3, 0, 999, 1);        // 3 bytes
+    doTelemetrySweepFloat(t_temp, 6, -100.1, 200.4, 1.0);       // 6 bytes (float)
+    doTelemetrySweepFloat(t_pressure, 7, -20.10, 100.10, 1.0);  // 7 bytes (float)
+    doTelemetrySweepFloat(t_temp_ext, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
+    doTelemetrySweepFloat(t_humidity, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
+    doTelemetrySweepFloat(t_voltage, 5, 0,  6.00, 6.0);        // 5 bytes (float)
+    doTelemetrySweepInteger(t_sat_count, 2, 0, 99, 1);          // 2 bytes
+    doTelemetrySweepInteger(t_hdop, 3, 0, 999, 1);              // 3 bytes
+
+    // not sure of what the range is (max for the integer allowed?)
+    static char telen1_str1[25] = { 0 };
+    static char telen1_str2[25] = { 0 };
+    static char telen2_str1[25] = { 0 };
+    static char telen2_str2[25] = { 0 };
+
+    doTelemetrySweepInteger(telen1_str1, 24, 0, 999, 1);        // 3 bytes
+    doTelemetrySweepInteger(telen1_str2, 24, 0, 999, 1);        // 3 bytes
+    doTelemetrySweepInteger(telen2_str1, 24, 0, 999, 1);        // 3 bytes
+    doTelemetrySweepInteger(telen2_str2, 24, 0, 999, 1);        // 3 bytes
+
+    t_TELEN1_val1 = atoi( telen1_str1); // int
+    t_TELEN1_val2 = atoi( telen1_str2); // int
+    t_TELEN2_val1 = atoi( telen2_str1); // int
+    t_TELEN2_val2 = atoi( telen2_str2); // int
+
+    V1_println(F("telemetrySweepAllForTest END"));
+}
+//****************************************************
