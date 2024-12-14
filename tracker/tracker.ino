@@ -2062,23 +2062,59 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     // symbols - Array of channel symbols to transmit returned by the method.
     // Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT to the method.
 
+    //******************
+    bool fatalErrorReboot = false;
     // hf_power needs to be passed as uint8_t
     // were any spaces on the left due to snprintf to hf_callsign? (starting at hf_callsign[0])
-    int l = strlen(hf_callsign);
+    int l;
+    l = strlen(hf_callsign);
     V1_printf("length check: hf_callsign %s before jtencode was strlen %d" EOL,
         hf_callsign, l);
 
-    if (l < 3 || l > 6)
+    if (l < 3 || l > 6) {
         V1_printf("ERROR: bad length: hf_callsign %s before jtencode was strlen %d" EOL,
             hf_callsign, l);
+        fatalErrorReboot = true;
+    }
 
     // shouldn't be any spaces in hf_callsign. possible due to wrong use of snprintf()
     // already checked for any other badness
     for (uint32_t i = 0; i <= sizeof(hf_callsign); i++) {
-        if (hf_callsign[i] == ' ')
+        if (hf_callsign[i] == ' ') {
             V1_printf("ERROR: hf_callsign '%s' has <space> at %lu" EOL, hf_callsign, i);
+            fatalErrorReboot = true;
+        }
     }
 
+    //******************
+    // no checks on power uint8_t
+
+    //******************
+    l = strlen(hf_grid4);
+    V1_printf("length check: hf_grid4 %s before jtencode was strlen %d" EOL,
+        hf_grid4, l);
+
+    if (l != 4) {
+        V1_printf("ERROR: bad length: hf_grid4 %s before jtencode was strlen %d" EOL,
+            hf_grid4, l);
+        fatalErrorReboot = true;
+    }
+
+    for (uint32_t i = 0; i <= sizeof(hf_grid4); i++) {
+        if (hf_grid4[i] == ' ') {
+            V1_printf("ERROR: hf_grid4 '%s' has <space> at %lu" EOL, hf_grid4, i);
+            fatalErrorReboot = true;
+        }
+    }
+
+    if (fatalErrorReboot) {
+        V0_println(F("ERROR: set_hf_tx_buffer() rebooting because of prior fatal error" EOL));
+        V0_flush();
+        Watchdog.enable(5000);  // milliseconds
+        while (true) tight_loop_contents();
+    }
+
+    //******************
     jtencode.wspr_encode(hf_callsign, hf_grid4, power, hf_tx_buffer);
 
     // maybe useful python for testing wspr encoding
@@ -2167,6 +2203,7 @@ void checkPLLCalcs_200Hz() {
     uint32_t pll_num;
     uint32_t pll_denom;
     uint32_t freq;
+    uint32_t actual;
 
     enum XMIT_FREQS {
         BXF10M = 28124600UL + 1400UL + 20,
@@ -2199,14 +2236,15 @@ void checkPLLCalcs_200Hz() {
     for (uint32_t i = 0; i < 200; i++) {
         freq = (symbol_freq - 20) + i;
         // note this will include any correction to SI5351_TCXO_FREQ (already done)
-        vfo_calc_div_mult_num(&pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
+        vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
 
         // not ideal if two pll_nums are the same (sequentially) ..the pll_freq isn't correct then?
         // pll_freq 650415761 ms_div 370 pll_mult 25 pll_num 15990 pll_denom 1000000 freq 28126087
         // pll_freq 650415785 ms_div 370 pll_mult 25 pll_num 15991 pll_denom 1000000 freq 28126088
 
-        V0_printf("pll_freq %lu ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu freq %lu" EOL,
-            pll_freq, ms_div, pll_mult, pll_num, pll_denom, freq);
+        V0_printf("pll_freq %lu ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu freq %lu actual %lu" EOL,
+            pll_freq, ms_div, pll_mult, pll_num, pll_denom, freq, actual);
+        // FIX! should we compare freq and actual?
         // really would like unique pll_num changings (+ each 1 Hz ?)
         if (pll_num == pll_num_last) {
             V0_print(F("ERROR: pll_num and pll_num_last same"));

@@ -63,8 +63,7 @@ void si5351a_setup_multisynth0(uint32_t div);
 // (assume freq calibration errors of that much, then symbol the 200hz passband?
 uint32_t calcSymbolFreq(uint32_t hf_freq, uint8_t symbol);
 // used to print (not change) for walking a range in setup, just to see what changes
-void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, 
-    uint32_t *pll_denom, uint32_t freq);
+void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t freq);
 
 void vfo_set_freq_x16(uint8_t clk_number, uint32_t freq);
 void vfo_turn_on_clk_out(uint8_t clk_number);

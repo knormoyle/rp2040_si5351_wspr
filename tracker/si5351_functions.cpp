@@ -8,16 +8,15 @@
 // the Arduino si5351 library is also useful
 // https://github.com/etherkit/Si5351Arduino
 
-// another source for programming comparison
+// https://rfzero.net/tutorials/si5351a/
 // https://dk7ih.de/a-simple-software-to-control-the-si5351a-generator-chip/
 // also, examples from hans
 // https://qrp-labs.com/synth/si5351ademo.html
 
 // https://cdn-shop.adafruit.com/datasheets/Si5351.pdf
 
-// FIX! do we set crystal load capacitance anywhere? default 10pf is good (the tcxo is spec'ed for 10pf?)
-// like this in pu2clr library:
-// si5351wire_write(SI5351wire_CRYSTAL_LOAD, (xtal_load_c & SI5351wire_CRYSTAL_LOAD_MASK) | 0b00010010);
+// do we set crystal load capacitance anywhere? Nope. default 10pf is good 
+// (the tcxo is spec'ed for 10pf? Default is 10pf in the chip, so don't need to program it.
 
 // Manually Generating an Si5351 Register Map for 10-MSOP and 20-QFN Devices
 // https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/application-notes/AN619.pdf
@@ -295,7 +294,7 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
             ; 
             // V1_printf("GOOD: res %d after i2cWrite" EOL, res);
         } else if (res == PICO_ERROR_GENERIC) {
-            V1_printf("ERROR: res %d after i2cWrite %d" EOL, res);
+            V1_printf("ERROR: res %d after i2cWrite %d" EOL, res, reg);
         } else {
             V1_printf("UNEXPECTED: res %d after i2cWrite %d" EOL, res, reg);
         }
@@ -603,24 +602,16 @@ void si5351a_reset_PLLB(void) {
 
 //****************************************************
 // good for doing calc only, so see what changes with freq changes
-void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, 
+void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, 
     uint32_t *pll_denom, uint32_t freq) {
-    // for comparison from tool
-    // 15M
-    //  _Band 15 BASE_FREQ_USED 21094600 XMIT_FREQUENCY 21096020 
-    // For XMIT FREQ tool says VCO 632 886 000 307 Hz. 0 ppb deviation
-    // FOr 14 095 600. VCO 620 206 400 311 Hz
-    // For 28 124 600. VCO 620 206 400 659
-    // are there constraints on div etc?
 
+    // interesting they had relatively low pll freq (620Mhz) for 15M case
     // https://rfzero.net/documentation/tools/si5351a-frequency-tool/ 
-    // hans code is at (2015)
+    // this is hans code from 2015:
     // https://qrp-labs.com/images/synth/demo6/si5351a.c
 
-    // FIX! is this only working for 20M? not 15M or 10M?
     // V1_printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
-    // looks like this doesn't change the state of the output enables
-    // just the freq
+    // this doesn't change the state of the output enables, just the freq
 
     // hans uses the max frequency?
     const int PLL_MAX_FREQ  = 900000000;
@@ -688,7 +679,7 @@ void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_m
 
     // Following the VCO is another divider stage that divides the VCO frequency by a value of ‘d + e/f’ and 
     // can be used to take the frequency down into the low MHz range. 
-    // However the chip will provide an output with lower jitter if this value is an integer and 
+    // The chip will provide an output with lower jitter if this value is an integer. 
     // better still if it is an even integer. 
     // So we let e/f be zero and select a value for d that’s an even number. 
     // Remember that there is enough resolution in the PLL/VCO stage to provide fine tuning. 
@@ -703,14 +694,17 @@ void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_m
     // Then in the first divider a + b/c, we will make c a constant 
     // so we are now down to three required values: a, b and d.
 
+
     uint32_t ms_div_here = PLL_FREQ_TARGET / (freq >> PLL_CALCULATION_PRECISION) + 1;
     ms_div_here &= 0xfffffffe;   // make it even number
 
+    // FIX! we should recalc this to deduce the final real pll_freq?
     uint32_t pll_freq_here = ((uint64_t)freq * ms_div_here) >> PLL_CALCULATION_PRECISION;
     // FIX! should we just apply correction to the crystal frequency? yes.
     // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
     // is just one once
     
+    // I suppose there are integer roundoff issues in these operations?
     uint32_t tcxo_freq = SI5351_TCXO_FREQ; // 26 mhz?
     uint32_t pll_mult_here   = pll_freq_here / tcxo_freq;
     // mult has to be in the range 15 to 90
@@ -725,10 +719,10 @@ void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_m
 
     // also look at https://github.com/etherkit/Si5351Arduino
 
-    // new method. he says PLL_DENOM_MAX might be 1048757?
+    // new method.
     // https://github.com/etherkit/Si5351Arduino/issues/79
 
-    // he says to choice INTEGER_FACTOR1 to be 10e* 
+    // he says to choose INTEGER_FACTOR1 to be 10e* 
     // y1 = Fout/INTEGER_FACTOR1
     // x1 = 900e6*/INTEGER_FACTOR1  <-- needs to be an integer. 
     // If you choose INTEGER_FACTOR1 to be 10^something, this will be an integer too!
@@ -741,9 +735,21 @@ void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_m
     uint32_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
 
     // can see the benefit of PLL_DENOM / tcxo_freq being integer here?
+    
+    // the operation is done with 64 bits? i guess it matters given the size of the numbers
     uint32_t pll_num_here = (uint64_t)pll_remain * PLL_DENOM / tcxo_freq;
     if (pll_num_here > 1048575)
         V0_printf("ERROR: pll_num %lu is out of range 0 to 1048575" EOL, pll_num_here);
+
+    // from https://rfzero.net/tutorials/si5351a/
+    // When we're done, we can calc what the fout should be ?
+    uint32_t actual_here;
+    if (true) {
+        uint32_t t = ((ms_div_here << 20) + ((pll_num_here << 20 ) / (PLL_DENOM << 20))) >> 20;
+        actual_here = pll_freq_here  / t;
+    } else {
+        actual_here = 0;
+    }
 
     // output so we can print or use
     *ms_div = ms_div_here;
@@ -751,6 +757,7 @@ void vfo_calc_div_mult_num(uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_m
     *pll_num = pll_num_here;
     *pll_freq = pll_freq_here;
     *pll_denom = PLL_DENOM;
+    *actual = actual_here;
 }
 
 //****************************************************
@@ -761,6 +768,8 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
     uint32_t pll_mult;
     uint32_t pll_num;
     uint32_t pll_denom;
+    uint32_t actual;
+
     if (clk_num != 0) {
         V1_println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
         // I guess force clk_num, although code is bokren somewhere
@@ -768,7 +777,7 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
         // note we only have one s_ms_div_prev copy state also
     }
     // we get pll_denom to know what was used in the calc
-    vfo_calc_div_mult_num(&pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
+    vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
 
     // this has sticky s_regs_prev state that it uses if called multiple times?
     si5351a_setup_PLLB(pll_mult, pll_num, pll_denom);
@@ -816,6 +825,7 @@ void vfo_turn_off_clk_out(uint8_t clk_num) {
         enable_bit |= 1 << 1;
     }
     si5351bx_clken |= enable_bit;
+    // if si5351a power is off we'll get ERROR: res -1 after i2cWrite 3
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
     V1_printf("vfo_turn_off_clk_out END clk_num %u" EOL, clk_num);
 }
@@ -887,6 +897,9 @@ bool vfo_is_on(void) {
 bool vfo_is_off(void) {
     // power on and completed successfully
     // return (gpio_is_dir_out(Si5351Pwr) && vfo_turn_off_completed);
+
+    // FIX! should we get rid of vfo_turn_off_completed?
+    // assumes pin is configured correctly so we can read value?
     return (gpio_get(Si5351Pwr) && vfo_turn_off_completed);
 }
 
@@ -1086,7 +1099,12 @@ void vfo_turn_off(void) {
     // FIX! this will fail if i2c is not working. hang if vfo is powered off?
     // we ride thru it with a -2 return?
     si5351bx_clken = 0xff;
-    i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+
+    // FIX! if si5351a power is actually off 
+    // we'll get ERROR: res -1 after i2cWrite 3
+    // do we care about cleanly stopping clocks before power off? 
+    // 12/14/24 don't do, for now
+    // i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
 
     // sleep_ms(10);
     // void busy_wait_us_32 (uint32_t delay_us)
