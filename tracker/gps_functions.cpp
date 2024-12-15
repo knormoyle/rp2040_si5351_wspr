@@ -77,7 +77,7 @@
 extern TinyGPSPlus gps;
 
 extern const int GpsPwr;
-extern const int GPS_NRESET_PIN; // connected!
+extern const int GPS_NRESET_PIN;  // connected!
 extern const int GPS_ON_PIN;
 
 // input..not used..calibration?
@@ -105,17 +105,15 @@ extern bool IGNORE_KEYBOARD_CHARS;
 // # include <TimeLib.h>
 
 // we make RP2040 to 18mhz during the long gps cold reset fix time, then restore to this
-extern uint32_t PLL_SYS_MHZ; // decode of _clock_speed
+extern uint32_t PLL_SYS_MHZ;  // decode of _clock_speed
 extern bool BALLOON_MODE;
 
 // ************************************************
 // false and true work here
-bool EXPERIMENTAL_WARM_POWER_ON = true;
-bool EXPERIMENTAL_COLD_POWER_ON = true;
 bool LOWEST_POWER_TURN_ON_MODE = true;
 bool ALLOW_USB_DISABLE_MODE = false;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
-bool ALLOW_KAZU_SLOW_CLOCKS_MODE = false; // true not working with Serial2?
+bool ALLOW_KAZU_SLOW_CLOCKS_MODE = false;  // true not working with Serial2?
 
 // ************************************************
 static bool GpsIsOn_state = false;
@@ -150,7 +148,7 @@ void nmeaBufferAndPrint(const char charToAdd, bool printIfFull) {
     // we might add a EOL before a '$' that begins a sentence. so check for +2
     // EOL might be /r /n or /r/n (two chars). so check for 3.
     // possible 2 in front. 0 null term at end
-    if ( (strlen(nmeaBuffer) + 3) >= NMEA_BUFFER_SIZE) {
+    if ((strlen(nmeaBuffer) + 3) >= NMEA_BUFFER_SIZE) {
         // make NMEA_BUFFER_SIZE bigger or
         // can just do more nmeaBufferPrint() if we run into a problem realtime
         // we shouldn't have to add EOL to the sentences. they come with CR LF ?
@@ -184,9 +182,8 @@ void gpsSleepForMillis(int n, bool enableEarlyOut) {
     if (n < 0 || n > 120000) {
         // V1_printf("ERROR: gpsSleepForMillis() n %d too big (120000 max). Using 1000" EOL, n);
         // n = 1000;
-        // UPDATE: this is used while USB is disabled, 
+        // UPDATE: this is used while USB is disabled,
         // but BALLOON_MODE/VERBY don't protect us ..just don't print here
-        ;
     }
     int milliDiv = n / 10;
 
@@ -230,7 +227,9 @@ void drainInitialGpsOutput(void) {
     // FIX! rely on watchdog reset in case we stay here  forever?
     V1_println(F("drain any Serial2 garbage first"));
     // drain any initial garbage
-    while (Serial2.available()) {Serial2.read();}
+    while (Serial2.available()) {
+        Serial2.read();
+    }
     V1_println(F("now look for some Serial2 bytes"));
 
     int i;
@@ -240,15 +239,14 @@ void drainInitialGpsOutput(void) {
         Watchdog.reset();
         if (!Serial2.available()) {
             V1_println(F("no Serial2.available() ..sleep and reverify"));
-        }
-        else {
+        } else {
             while (Serial2.available()) {
                 incomingChar = Serial2.read();
                 // buffer it up like we do normally below, so we can see sentences
-                nmeaBufferAndPrint(incomingChar, true); // print if full
+                nmeaBufferAndPrint(incomingChar, true);  // print if full
             }
         }
-        gpsSleepForMillis(1000, true); // return early if Serial2.available()
+        gpsSleepForMillis(1000, true);  // return early if Serial2.available()
     }
     nmeaBufferPrintAndClear();
     updateStatusLED();
@@ -316,7 +314,8 @@ void setGpsBroadcast(void) {
     // 18 res5 reserve
     // 19 nTIM TIM (PCAS60) output frequency, same as nGGA
 
-    // 20 CSvalue Hexadecimal value checksum, XOR result of all characters between $ and * (excluding $ and *)
+    // 20 CSvalue Hexadecimal value checksum,
+    //    XOR result of all characters between $ and * (excluding $ and *)
     // 21 <CR><LF> charactersCarriage return and line feed
 
     // hmm this didn't work? still got zda and ANT txt. this was a forum posting. wrong apparently
@@ -342,8 +341,7 @@ void setGpsBroadcast(void) {
     // delay(1000);
 
     V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
-    V1_print(F("setGpsBroadcast END" EOL ));
-
+    V1_print(F("setGpsBroadcast END" EOL));
 }
 //************************************************
 void disableGpsBroadcast(void) {
@@ -358,7 +356,7 @@ void disableGpsBroadcast(void) {
     Serial2.flush();
     // delay(1000);
     V1_printf("disableGpsBroadcast sent %s" EOL, nmeaSentence);
-    V1_print(F("disableGpsBroadcast END" EOL ));
+    V1_print(F("disableGpsBroadcast END" EOL));
 }
 
 //***************************************
@@ -384,7 +382,8 @@ void disableGpsBroadcast(void) {
 // $GPTXT,01,01,02,TB=2013-06-20,13:02:49*43
 // Indicates the code compilation time (June 20, 2013, 13:02:49)
 // $GPTXT,01,01,02,MO=GB*77
-// Indicates the working mode of the receiver at this startup (GB indicates the dual-mode mode of GPS+BDS)
+// Indicates the working mode of the receiver at this startup
+// (GB indicates the dual-mode mode of GPS+BDS)
 // $GPTXT,01,01,02,CI=00000000*7A
 // Indicates the customer number (the customer number is 00000000)
 
@@ -399,16 +398,16 @@ void setGpsConstellations(int desiredConstellations) {
 
     switch (usedConstellations) {
         // case 0 isn't defined in the CASIC_ProtocolSpecification.pdf?
-        case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 62); break; // GPS
-        case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 62); break; // BDS
-        case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 62); break; // GPS+BDS
-        case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 62); break; // GLONASS
-        case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 62); break; // GPS+GLONASS
-        case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 62); break; // BDS+GLONASS
-        case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break; // GPS+BDS+GLONASS
+        case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 62); break;  // GPS
+        case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 62); break;  // BDS
+        case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 62); break;  // GPS+BDS
+        case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 62); break;  // GLONASS
+        case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 62); break;  // GPS+GLONASS
+        case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 62); break;  // BDS+GLONASS
+        case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break;  // GPS+BDS+GLONASS
         default:
             usedConstellations = 3;
-            strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62); // GPS+BDS
+            strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62);  // GPS+BDS
     }
 
     // FIX! does the above not do anything? is this the only way?
@@ -423,7 +422,8 @@ void setGpsConstellations(int desiredConstellations) {
     Serial2.flush();
     delay(1000);
 
-    V1_printf("setGpsConstellations for usedConstellations %d, sent %s" EOL, desiredConstellations, nmeaSentence);
+    V1_printf("setGpsConstellations for usedConstellations %d, sent %s" EOL,
+        desiredConstellations, nmeaSentence);
     V1_printf("setGpsConstellations END %d" EOL, desiredConstellations);
 }
 
@@ -514,8 +514,8 @@ void setGpsBaud(int desiredBaud) {
 
     // FIX! we could try RP2040 using different bauds and see what baud rate it's at, then send
     // the command to change baud rate. But really, how come we can't cold reset it to 9600?
-    // when it's in a not-9600 state? it's like vbat keeps the old baud rate on reset and/or power cycle??
-    // makes it dangerous to use anything other than 9600 baud.
+    // when it's in a not-9600 state? it's like vbat keeps the old baud rate on reset and/or
+    // power cycle?? makes it dangerous to use anything other than 9600 baud.
     Serial2.end();
     Serial2.begin(usedBaud);
     V1_printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
@@ -615,7 +615,7 @@ void GpsFullColdReset(void) {
     updateStatusLED();
 
     // turn it off first. may be off or on currently
-    V1_println(F("Turn off the serial2..does it float at the gps then? gps doesn't try to do UART stuff at poweron?"));
+    V1_println(F("Turn off the serial2..float at the gps then? no UART stuff at poweron?"));
     V1_flush();
     Serial2.end();
 
@@ -631,22 +631,15 @@ void GpsFullColdReset(void) {
     // i.e. guarantee that cold reset, takes 1 minute?
 
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
-    if (EXPERIMENTAL_COLD_POWER_ON) {
-        V1_println(F("Doing Gps EXPERIMENTAL_COLD_POWER_ON (GPS_ON_PIN off with first power)"));
-        // NOTE: do I have to keep inputs like GPS_ON_PIN low
-        // until after power is on? What about reset?
-        // to avoid latchup of LNA? see
-        // https://www.eevblog.com/forum/rf-microwave/gps-lna-overheating-on-custom-pcb/
-        digitalWrite(GPS_ON_PIN, LOW); // deassert
-        digitalWrite(GPS_NRESET_PIN, LOW); // assert
-        digitalWrite(GpsPwr, HIGH); // deassert
-    } else {
-        V1_println(F("Doing Gps NORMAL_COLD_POWER_ON (GPS_ON_PIN on with first power)"));
-        digitalWrite(GPS_ON_PIN, HIGH); // assert
-        digitalWrite(GPS_NRESET_PIN, LOW); // assert
-        digitalWrite(GpsPwr, HIGH); // deassert
-    }
+    V1_println(F("Doing Gps EXPERIMENTAL_COLD_POWER_ON (GPS_ON_PIN off with first power)"));
 
+    // NOTE: do I have to keep inputs like GPS_ON_PIN low
+    // until after power is on? What about reset?
+    // to avoid latchup of LNA? see
+    // https://www.eevblog.com/forum/rf-microwave/gps-lna-overheating-on-custom-pcb/
+    digitalWrite(GPS_ON_PIN, LOW);  // deassert
+    digitalWrite(GPS_NRESET_PIN, LOW);  // assert
+    digitalWrite(GpsPwr, HIGH);  // deassert
     gpsSleepForMillis(500, false);
 
     //******************
@@ -657,10 +650,15 @@ void GpsFullColdReset(void) {
 
     // does this force the reset right away? no power transition?
     // some say it's just a boot mode configuration? (i.e. send before power cycle?)
-    // Serial2.print("$PCAS10,3*1F\r\n"); // factory start. clear all data, reset rcvr.
-    // Serial2.print("$PCAS10,2*1E\r\n"); // cold start. no init info, clear all data except config
-    // Serial2.print("$PCAS10,1*1D\r\n"); // warm start. no init info, all data valid. clear ephemris
-    // Serial2.print("$PCAS10,0*1C\r\n"); // hot start. no init info, all data valid. 
+
+    // factory start. clear all data, reset rcvr.
+    // Serial2.print("$PCAS10,3*1F\r\n");
+    // cold start. no init info, clear all data except config
+    // Serial2.print("$PCAS10,2*1E\r\n");
+    // warm start. no init info, all data valid. clear ephemris
+    // Serial2.print("$PCAS10,1*1D\r\n");
+    // hot start. no init info, all data valid.
+    // Serial2.print("$PCAS10,0*1C\r\n");
 
     // Full Cold Start. any system/user configs (back to factory status)
     // FIX! should we wait for ack or no?
@@ -674,7 +672,7 @@ void GpsFullColdReset(void) {
     // change it's behavior. What if we left them floating until after powerup?
     // seems like the gps backs up on the serial data?
 
-    digitalWrite(GpsPwr, LOW); // assert
+    digitalWrite(GpsPwr, LOW);  // assert
     gpsSleepForMillis(500, false);
 
     // deassert NRESET after power on (okay in both normal and experimental case)
@@ -682,30 +680,12 @@ void GpsFullColdReset(void) {
     // should we float the rx/tx also somehow?
     Serial2.end();
     gpsSleepForMillis(500, false);
-
-    if (EXPERIMENTAL_COLD_POWER_ON) {
-        digitalWrite(GPS_NRESET_PIN, HIGH); // deassert
-        if (!LOWEST_POWER_TURN_ON_MODE) {
-            // turn this on later in lowest power mode. while rp2040 is reduced power
-            digitalWrite(GPS_ON_PIN, HIGH); // assert
-        }
-    } else {
-        digitalWrite(GPS_NRESET_PIN, HIGH);
+    digitalWrite(GPS_NRESET_PIN, HIGH);  // deassert
+    if (!LOWEST_POWER_TURN_ON_MODE) {
+        // turn this on later in lowest power mode. while rp2040 is reduced power
+        digitalWrite(GPS_ON_PIN, HIGH);  // assert
     }
-
     gpsSleepForMillis(1000, false);
-
-    // old experiment..do reset assertion (again or solely? after power is good
-    // belt and suspenders:
-    // wait 2 secs and assert/deassert NRESET
-    // still can't seem to get back to 9600 baud after higher baud rate set
-    if (false) {
-        gpsSleepForMillis(2000, false);
-        digitalWrite(GPS_NRESET_PIN, LOW);
-        gpsSleepForMillis(1000, false);
-        digitalWrite(GPS_NRESET_PIN, HIGH);
-        gpsSleepForMillis(1000, false);
-    }
 
     Watchdog.reset();
     // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
@@ -736,13 +716,15 @@ void GpsFullColdReset(void) {
         Watchdog.reset();
         measureMyFreqs();
         if (ALLOW_KAZU_SLOW_CLOCKS_MODE)  {
-            V0_print(F("GPS power demand is high during cold reset (uart? gps work?)..sleep for 15 secs" EOL));
-            V0_printf("Going to switch from pll_sys with PLL_SYS_MHZ %lu to xosc 12Mhz before long sleep" EOL, PLL_SYS_MHZ);
+            V0_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
+            V0_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz then long sleep" EOL,
+                PLL_SYS_MHZ);
             V0_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
         } else {
-            V0_print(F("GPS power demand is high during cold reset (uart? gps work?)..sleep for 15 secs" EOL));
-            V0_printf("Going to slow PLL_SYS_MHZ from %lu to 12Mhz before long sleep" EOL, PLL_SYS_MHZ);
-            V0_print("No keyboard interrupts will work because <disabling USB PLL?> or minimally: Serial.end()" EOL);
+            V0_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
+            V0_printf("Going to slow PLL_SYS_MHZ from %lu to 12Mhz before long sleep" EOL,
+                PLL_SYS_MHZ);
+            V0_print("No keyboard interrupts ...disabling USB PLL? or just Serial.end()" EOL);
         }
         // V0_print("Also lowering core voltage to 0.95v" EOL);
         V0_flush();
@@ -779,7 +761,7 @@ void GpsFullColdReset(void) {
 
 
             // Release/uninitialise specified PLL.This will turn off the power to the specified PLL.
-            // Note this function does not check if the PLL is in use before powering it off. (use care)
+            // This function does not check if the PLL is in use before powering it off. (use care)
             // this seems to cause a crap out
             // pll_deinit(pll_usb);
 
@@ -804,19 +786,20 @@ void GpsFullColdReset(void) {
         // vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
 
         // finally turn on the gps here! (if we didn't already above (experimental mode)
-        digitalWrite(GPS_ON_PIN, HIGH); // assert
+        digitalWrite(GPS_ON_PIN, HIGH);  // assert
 
     } else {
-        V0_print(F("GPS power demand is high until first fix after cold reset..sleep for 15 secs" EOL));
+        V0_print(F("GPS power demand high until after cold reset..sleep for 15 secs" EOL));
     }
 
-    // Not worth doing if USB is disabled? (no print) but if we can't disable deinit USB (see above), we can?
-    if (!ALLOW_KAZU_SLOW_CLOCKS_MODE && !ALLOW_USB_DISABLE_MODE) 
+    // Not worth doing if USB is disabled? (no print)
+    // but if we can't disable deinit USB (see above), we can?
+    if (!ALLOW_KAZU_SLOW_CLOCKS_MODE && !ALLOW_USB_DISABLE_MODE)
         measureMyFreqs();
 
     // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
     // this should have no printing either?
-    gpsSleepForMillis(15000, false); // 15 secs
+    gpsSleepForMillis(15000, false);  // 15 secs
 
     //******************
     // DRASTIC measures, undo after sleep!
@@ -829,7 +812,7 @@ void GpsFullColdReset(void) {
         // can we just change PLL_SYS_MHZ here?
         // NOTE: doesn't include the usb pll?
         kazuClocksRestore();
-    
+
         // hmm we're not getting Serial2 when we use the Kazu 12 Mhz past here
         // just reinit the sys pll to PLL_SYS_MHZ?
         // PLL_SYS_MHZ = 12;
@@ -839,14 +822,15 @@ void GpsFullColdReset(void) {
 
         busy_wait_ms(500);
         if (!BALLOON_MODE) {
-            pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+            pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
             busy_wait_ms(500);
             tusb_init();
             Serial.begin(115200);
             busy_wait_ms(500);
         }
 
-        V0_printf("After long sleep (kazu), Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+        V0_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
+            PLL_SYS_MHZ);
         V0_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
         // V1_print(F("Restored core voltage back to 1.1v" EOL));
         V0_flush();
@@ -863,12 +847,12 @@ void GpsFullColdReset(void) {
         if (ALLOW_USB_DISABLE_MODE && !BALLOON_MODE) {
             busy_wait_ms(500);
             // pll_init() Parameters
-            // pll	pll_sys or pll_usb
-            // ref_div	Input clock divider.
-            // vco_freq	Requested output from the VCO (voltage controlled oscillator)
-            // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
-            // post_div2	Post Divider 2 - range 1-7
-            pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+            // pll pll_sys or pll_usb
+            // ref_div Input clock divider.
+            // vco_freq Requested output from the VCO (voltage controlled oscillator)
+            // post_div1 Post Divider 1 - range 1-7. Must be >= post_div2
+            // post_div2 Post Divider 2 - range 1-7
+            pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
             busy_wait_ms(1000);
             // High-level Adafruit TinyUSB init code,
             // does many things to get USB back online
@@ -877,7 +861,8 @@ void GpsFullColdReset(void) {
             busy_wait_ms(1000);
         }
 
-        V0_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+        V0_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
+            PLL_SYS_MHZ);
         V0_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
         V0_print(F("Hit <enter> if you need to enter config mode. otherwise it's running (3)" EOL));
         // V0_print(F("Restored core voltage back to 1.1v" EOL));
@@ -921,7 +906,6 @@ void GpsFullColdReset(void) {
         gpsSleepForMillis(1000, false);
         digitalWrite(GpsPwr, LOW);
         gpsSleepForMillis(1000, false);
-
     }
 
     // hmm. we get a power surge here then? Is it because the Serial2 data was backed up
@@ -977,19 +961,12 @@ void GpsWarmReset(void) {
     // don't assert reset during power off
 
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
-    if (EXPERIMENTAL_WARM_POWER_ON) {
-        V1_println(F("Doing Gps EXPERIMENTAL_WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
-        // NOTE: should we start with NRESET_PIN low also until powered (latchup?)?
-        digitalWrite(GPS_NRESET_PIN, HIGH);
-        // NOTE: do we need to start low until powered to avoid latchup of LNA?
-        digitalWrite(GPS_ON_PIN, LOW);
-        digitalWrite(GpsPwr, HIGH);
-    } else {
-        V1_println(F("Doing Gps NORMAL_WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
-        digitalWrite(GPS_NRESET_PIN, HIGH);
-        digitalWrite(GPS_ON_PIN, HIGH);
-        digitalWrite(GpsPwr, HIGH);
-    }
+    V1_println(F("Doing Gps EXPERIMENTAL_WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
+    // NOTE: should we start with NRESET_PIN low also until powered (latchup?)?
+    digitalWrite(GPS_NRESET_PIN, HIGH);
+    // NOTE: do we need to start low until powered to avoid latchup of LNA?
+    digitalWrite(GPS_ON_PIN, LOW);
+    digitalWrite(GpsPwr, HIGH);
     gpsSleepForMillis(1000, false);
 
     // now power on with reset still off
@@ -998,10 +975,9 @@ void GpsWarmReset(void) {
     digitalWrite(GpsPwr, LOW);
     gpsSleepForMillis(2000, false);
 
-    if (EXPERIMENTAL_WARM_POWER_ON) {
-        digitalWrite(GPS_ON_PIN, HIGH);
-        gpsSleepForMillis(2000, false);
-    }
+    // now assert the on/off pin
+    digitalWrite(GPS_ON_PIN, HIGH);
+    gpsSleepForMillis(2000, false);
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
 
@@ -1022,24 +998,28 @@ void GpsWarmReset(void) {
     // all constellations
     // setGpsConstellations(7);
     // FIX! try just gps to see effect on power on current
-    
+
     // from the CASIC_ProtocolSpecification_english.pdf page 24
-    // I suppose this could be dangerous, since it's writing a baud rate to the power off/on reset config state?
-    // could change it from 9600 and we'd lose track of what it is? As long as we stick with 9600 we should be safe
+    // Could be dangerous, since it's writing a baud rate to the power off/on reset config state?
+    // could change it from 9600 and we'd lose track of what it is?
+    // As long as we stick with 9600 we should be safe
     // CAS00. Description Save the current configuration information to FLASH.
     // Even if the receiver is completely powered off, the information in FLASH will not be lost.
     // Format $PCAS00*CS<CR><LF>
     // Example $PCAS00*01<CR><LF>
 
-    // will this help us to boot in a better config so we don't get the power demand peaks we see (on subsequent boots)
-    // maybe we shouldn't do this all the time? just once. Does the FLASH have a max # of writes issue? (100k or ??)
-    // we only do gps cold reset at start of day. Don't do it in BALLOON_MODE. that should fix the issue
+    // will this help us to boot in a better config so
+    // we don't get the power demand peaks we see (on subsequent boots)
+    // maybe we shouldn't do this all the time? just once.
+    // Does the FLASH have a max # of writes issue? (100k or ??)
+    // we only do gps cold reset at start of day.
+    // Don't do it in BALLOON_MODE. that should fix the issue
     if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
-        // this will init to just GPS for the right then restore as below 
+        // this will init to just GPS for the right then restore as below
         writeGpsConfigNoBroadcastToFlash();
         // restors to desired constellations and broadcast
     }
-    
+
     // redundant sometimes
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
     // set desired broadcast
@@ -1052,14 +1032,15 @@ void GpsWarmReset(void) {
 
 //************************************************
 void writeGpsConfigNoBroadcastToFlash() {
-    // risk: do we ever power on and not do this full cold reset 
+    // risk: do we ever power on and not do this full cold reset
     // that sets up broadcast?
     // the warm gps reset shouldn't get new state from config?
     disableGpsBroadcast();
     // FIX! just gps. what about 0. would that save power at gps power on?
-    setGpsConstellations(1); 
+    setGpsConstellations(1);
 
-    // HMM! should we change it to no broadcast, in the FLASH, so cold reset power on might try to do no broadcast
+    // HMM! should we change it to no broadcast, in the FLASH,
+    // so cold reset power on might try to do no broadcast
     char nmeaBaudSentence[21] = { 0 };
     V1_print(F("Write GPS current config state (with no broadcast and just GPS constellations"));
     V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
@@ -1071,7 +1052,7 @@ void writeGpsConfigNoBroadcastToFlash() {
 
     // set desired constellations
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
-    // set desired broadcast. 
+    // set desired broadcast.
     setGpsBroadcast();
 }
 //************************************************
@@ -1094,8 +1075,7 @@ void GpsON(bool GpsColdReset) {
 
     if (!GpsColdReset) {
         V1_printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
-    }
-    else {
+    } else {
         V1_printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
     }
 
@@ -1157,16 +1137,13 @@ void invalidateTinyGpsState(void) {
 
 //************************************************
 void GpsOFF(bool keepTinyGpsState) {
-
     V1_printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
-
     digitalWrite(GpsPwr, HIGH);
     // Serial2.end() Disables serial communication,
     // To re-enable serial communication, call Serial2.begin().
     // FIX! do we really need or want to turn off Serial2?
     // Remember to Serial2.begin() when we turn it back on
     Serial2.end();
-
     // unlike i2c to vfo, we don't tear down the Serial2 definition...just .end()
     // so we can just .begin() again later
     if (!keepTinyGpsState)
@@ -1190,7 +1167,8 @@ void updateGpsDataAndTime(int ms) {
     // ms has to be positive?
     // grab data for no more than ms milliseconds
     // stop if no data for 50 milliseconds
-    // all the durations below won't start counting until we get the first char (sets start_millis())
+    // all the durations below won't start counting until we get the first char
+    // (sets start_millis())
     uint64_t start_millis = 0;
     uint64_t last_serial2_millis = 0;
     uint64_t timeSinceLastChar_millis = 0;
@@ -1227,8 +1205,8 @@ void updateGpsDataAndTime(int ms) {
     // but I think better not to average..just track this particular call.
     int incomingCharCnt = 0;
 
-    bool stopPrinting = false;
-    bool last_stopPrinting = false;
+    bool stopPrint = false;
+    bool last_stopPrint = false;
     bool nullChar = false;
     bool spaceChar = false;
     bool notprintable = false;
@@ -1237,7 +1215,7 @@ void updateGpsDataAndTime(int ms) {
         char incomingChar;
         while (Serial2.available() > 0) {
             // start the duration timing when we get the first char
-            if (start_millis==0) start_millis = current_millis;
+            if (start_millis == 0) start_millis = current_millis;
 
             // can't have the logBuffer fill up, because the unload is delayed
             int charsAvailable = (int) Serial2.available();
@@ -1246,7 +1224,7 @@ void updateGpsDataAndTime(int ms) {
                     // this the case where we started this function with something in the buffer
                     // we unload each in less than 1ms..so we catch up
                     // compare to 28 so we only get 4 (32 -28) ERROR messages as we catch up
-                    StampPrintf("WARN: NMEA backup. uart rx buff at %d)" EOL, (int) charsAvailable);
+                    StampPrintf("WARN: NMEA backup. uart rx at %d)" EOL, (int) charsAvailable);
             }
 
             incomingChar = Serial2.read();
@@ -1257,25 +1235,25 @@ void updateGpsDataAndTime(int ms) {
             incomingCharCnt++;
             // do we get any null chars?
             // are CR LF unprintable?
-            stopPrinting = last_stopPrinting;
+            stopPrint = last_stopPrint;
             spaceChar = false;
             nullChar = false;
             notprintable = !isprint(incomingChar);
             switch (incomingChar) {
-                case '$':  sentenceStartCnt++; stopPrinting = false; break;
-                case '*':  sentenceEndCnt++; stopPrinting = false; break;
-                case '\n': stopPrinting = true; break;
-                case '\r': stopPrinting = true; break;
-                // don't change the stopPrinting flow if get a unprintable or these
+                case '$':  sentenceStartCnt++; stopPrint = false; break;
+                case '*':  sentenceEndCnt++; stopPrint = false; break;
+                case '\n': stopPrint = true; break;
+                case '\r': stopPrint = true; break;
+                // don't change the stopPrint flow if get a unprintable or these
                 case '\0': nullChar = true; break;
                 case ' ':  spaceChar = true; break;
                 default: { ; }
             }
             // always strip these here
-            bool enableStripping = true;
-            if (enableStripping && (spaceChar || nullChar || notprintable)) continue;
+            bool enableStrip = true;
+            if (enableStrip && (spaceChar || nullChar || notprintable)) continue;
 
-            // stopPrinting: don't put CR LF in the nmeaBuffer. will add one on the transition
+            // stopPrint: don't put CR LF in the nmeaBuffer. will add one on the transition
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
             // either a number (0123456789),
             // an uppercase letter ABCDEFGHIJKLMNOPQRSTUVWXYZ
@@ -1296,8 +1274,8 @@ void updateGpsDataAndTime(int ms) {
             // FIX! might be odd if a stop is spread over two different calls here?
             // always start printing again on inital call to this function (see inital state)
             if (VERBY[1]) {
-                if (enableStripping &&
-                        (last_stopPrinting && !stopPrinting && !notprintable && !nullChar && !spaceChar)) {
+                if (enableStrip &&
+                    (last_stopPrint && !stopPrint && !notprintable && !nullChar && !spaceChar)) {
                     // false: don't print if full, just empty
                     nmeaBufferAndPrint('\r', false);
                     nmeaBufferAndPrint('\n', false);
@@ -1305,8 +1283,8 @@ void updateGpsDataAndTime(int ms) {
             }
 
             // FIX! do we get any unprintable? ignore unprintable chars.
-            if (!enableStripping ||
-                (!stopPrinting && !notprintable && !nullChar && !spaceChar)) {
+            if (!enableStrip ||
+                (!stopPrint && !notprintable && !nullChar && !spaceChar)) {
                 // FIX! can we not send CR LF? don't care. Performance-wise, might be good?
                 // moved above to send everything to TinyGPS++
                 // gps.encode(incomingChar);
@@ -1315,7 +1293,7 @@ void updateGpsDataAndTime(int ms) {
 
             current_millis = millis();
             last_serial2_millis = current_millis;
-            last_stopPrinting = stopPrinting;
+            last_stopPrint = stopPrint;
         }
 
         // did we wait more than 50 millis() since good data read?
@@ -1329,10 +1307,11 @@ void updateGpsDataAndTime(int ms) {
         // FIX! should the two delays used be dependent on baud rate?
         // was 25 trying 50 10 for 4800 baud
         if (timeSinceLastChar_millis >= 12) {
-            // FIX! could the LED blinking have gotten delayed? ..we don't check in the available loop above.
+            // FIX! could the LED blinking have gotten delayed?
+            // we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
             duration_millis = current_millis - start_millis;
-            if (true && VERBY[1]) StampPrintf(
+            if (false && VERBY[1]) StampPrintf(
                 "updateGpsDataAndTime early out: ms %d "
                 "loop break at %" PRIu64 " millis,  duration %" PRIu64  EOL,
                  ms, current_millis, duration_millis);
@@ -1345,15 +1324,13 @@ void updateGpsDataAndTime(int ms) {
         // I guess here we're trying to sync with a burst? but how long to wait?
         // if we just completed a burst, we should wait for 1 sec - total burst delay?
         // was 25 trying 50 10 for 4800 baud
-        gpsSleepForMillis(12, true); // stop the wait early if symbols arrive
-
-    } while ( (current_millis - entry_millis) < (uint64_t) ms); // works if ms is 0
-
+        gpsSleepForMillis(12, true);  // stop the wait early if symbols arrive
+    } while ( (current_millis - entry_millis) < (uint64_t) ms);  // works if ms is 0
 
     // print/clear any accumulated NMEA sentence stuff
     if (VERBY[1]) {
         // print should only get dumped here?
-        nmeaBufferPrintAndClear(); // print and clear
+        nmeaBufferPrintAndClear();  // print and clear
         V1_print(F(EOL));
         // dump/flush the StampPrintf log_buffer
         DoLogPrint();
@@ -1364,10 +1341,10 @@ void updateGpsDataAndTime(int ms) {
         int diff = sentenceStartCnt - sentenceEndCnt;
         // these 3 form a oneliner
         V1_print("updateGpsDataAndTime:");
-        V1_printf(
-            " start_millis %" PRIu64 " current_millis %" PRIu64, start_millis, current_millis);
-        V1_printf(
-            " sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL, sentenceStartCnt, sentenceEndCnt, diff);
+        V1_printf(" start_millis %" PRIu64 " current_millis %" PRIu64,
+            start_millis, current_millis);
+        V1_printf(" sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
+            sentenceStartCnt, sentenceEndCnt, diff);
         V1_flush();
 
         // we can round up or down by adding 500 before the floor divide
@@ -1386,12 +1363,10 @@ void updateGpsDataAndTime(int ms) {
         else AvgCharRateSec = 1000.0 * ((float)incomingCharCnt / (float)duration_millis);
         // can it get too big?
         if (AvgCharRateSec > 999999.9) AvgCharRateSec = 999999.9;
-        if (true) { // FIX! why is this crashing?
-            V1_printf(
-            "updateGpsDataAndTime: NMEA AvgCharRateSec %.f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,
+        V1_printf(
+            "NMEA sentences: AvgCharRateSec %.f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,
             AvgCharRateSec, duration_millis, incomingCharCnt);
-            V1_flush();
-        }
+        V1_flush();
     }
 
     V1_printf("updateGpsDataAndTime: GpsInvalidAll:%u gps.time.isValid():%u" EOL,
@@ -1408,7 +1383,9 @@ void updateGpsDataAndTime(int ms) {
         // we actually don't care about hour..but good to be aligned with that
         // uint8_t for gps data
         // the Time things are int
-        if (hour() != gps.time.hour() || minute() != gps.time.minute() || second() != gps.time.second()) {
+        if (hour() != gps.time.hour() ||
+            minute() != gps.time.minute() ||
+            second() != gps.time.second()) {
             setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
             V1_printf("setTime(%02u:%02u:%02u)" EOL,
                 gps.time.hour(), gps.time.minute(), gps.time.second());
@@ -1417,10 +1394,8 @@ void updateGpsDataAndTime(int ms) {
 
     updateStatusLED();
     uint64_t total_millis = millis() - entry_millis;
-
     // will be interesting to compare total_millis to duration_millis
-    V1_printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL,
-        total_millis);
+    V1_printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL, total_millis);
 }
 
 //******************************************************
@@ -1463,9 +1438,12 @@ void gpsDebug() {
         printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);
-        printStr((gps.course.isValid() && !GpsInvalidAll)? TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
-        printInt(gps.charsProcessed(), true, 6); // FIX! does this just wrap wround if it's more than 6 digits?
-        printInt(gps.sentencesWithFix(), true, 10); // FIX! does this just wrap wround if it's more than 10 digits?
+        printStr((gps.course.isValid() && !GpsInvalidAll) ?
+            TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
+        // FIX! does this just wrap wround if it's more than 6 digits?
+        printInt(gps.charsProcessed(), true, 6);
+        // FIX! does this just wrap wround if it's more than 10 digits?
+        printInt(gps.sentencesWithFix(), true, 10);
         printInt(gps.failedChecksum(), true, 9);
     }
 
@@ -1488,7 +1466,7 @@ void gpsDebug() {
 // > 20 Poor At this level, measurements should be discarded.
 
 // https://github.com/mikalhart/TinyGPSPlus/issues/8
-// It was a design decision—possibly flawed—to deliver the HDOP exactly as reported by the NMEA string.
+// It was a design decision to deliver the HDOP exactly as reported by the NMEA string.
 // NMEA reports HDOP in hundredths.
 // We could have made this return a floating-point with the correct value,
 // but at the time it seemed better to not introduce floating-point values.
@@ -1502,7 +1480,8 @@ void gpsDebug() {
 // The Arduino build creates these prototypes but not always correctly,
 // leading to errors which are not obvious.
 // Example: if the function argument list contains user defined data types and
-// the automatically created function prototype is placed before the declaration of that data type.
+// the automatically created function prototype is placed before the declaration of that
+// data type.
 
 //*****************
 // some notes on bad power on of ATGM336
@@ -1510,13 +1489,14 @@ void gpsDebug() {
 
 // So the magic sequence to turn the LNA into a toaster is:
 // 1) Have the 3V3 power off;
-// 2) Enable the ON_OFF pin (HIGH signal from an STM32 - powered by a separate 3.0V LDO Linear Regulator);
+// 2) Enable the ON_OFF pin
+//   (HIGH signal from an STM32 - powered by a separate 3.0V LDO Linear Regulator);
 // 3) Turn 3V3 power on.
 // 4) Hot LNA!
 // After that, the only thing that cools down the LNA is turning 3V3 off again.
 // Disabling the ON_OFF pin does nothing.
 
-// Yes, this sounds like a classic example of latch up caused by an input voltage exceeding a power rail.
+// sounds like a classic example of latch up caused by an input voltage exceeding a power rail.
 // https://en.wikipedia.org/wiki/Latch-up
 
 // https://forum.arduino.cc/t/gps-power-management-reset-loop/529253/5
@@ -1559,14 +1539,14 @@ void kazuClocksSlow() {
 
         // CLK RTC = XOSC 12MHz / 256 = 46875Hz
         clock_configure(clk_rtc,
-            0, // No GLMUX
+            0,  // No GLMUX
             CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
             12 * MHZ,
             46875);
 
         // CLK ADC = XO (12MHZ) / 1 = 12MHz
         clock_configure(clk_adc,
-            0, // No GLMUX
+            0,  // No GLMUX
             CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
             12 * MHZ,
             12 * MHZ);
@@ -1578,7 +1558,7 @@ void kazuClocksSlow() {
 
 //************************************************
 void kazuClocksRestore() {
-    // if kazuClocksRestore() is only used after kazuClocksSlow() why do we need it? 
+    // if kazuClocksRestore() is only used after kazuClocksSlow() why do we need it?
     // it's not changing anything anything except restoring usb if not balloon mode
 
     // was VERBY cleared while USB was off. no. so don't print here
@@ -1601,12 +1581,12 @@ void kazuClocksRestore() {
 
     if (!BALLOON_MODE) {
         // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
-        // pll	pll_sys or pll_usb
-        // ref_div	Input clock divider.
-        // vco_freq	Requested output from the VCO (voltage controlled oscillator)
-        // post_div1	Post Divider 1 - range 1-7. Must be >= post_div2
-        // post_div2	Post Divider 2 - range 1-7
-        pll_init(pll_usb, 1, 1440000000, 6, 5); // return USB pll to 48mhz
+        // pll pll_sys or pll_usb
+        // ref_div Input clock divider.
+        // vco_freq Requested output from the VCO (voltage controlled oscillator)
+        // post_div1 Post Divider 1 - range 1-7. Must be >= post_div2
+        // post_div2 Post Divider 2 - range 1-7
+        pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
         // FIX! we don't need pll_sys for the Serial2 ? (gps) or do we?
         busy_wait_ms(1000);
         // High-level Adafruit TinyUSB init code,
@@ -1617,8 +1597,6 @@ void kazuClocksRestore() {
     }
 
     // I suppose this stuff is the same as it was due to kazuClocksSlow()
-
-    
     // don't do this. because we actually restore to a pll sys value
     // so we should not change these..assume go back just the same as it was
     if (false) {
@@ -1631,14 +1609,14 @@ void kazuClocksRestore() {
 
         // CLK RTC = XOSC 12MHz / 256 = 46875Hz
         clock_configure(clk_rtc,
-            0, // No GLMUX
+            0,  // No GLMUX
             CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
             12 * MHZ,
             46875);
 
         // CLK ADC = XO (12MHZ) / 1 = 12MHz
         clock_configure(clk_adc,
-            0, // No GLMUX
+            0,  // No GLMUX
             CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
             12 * MHZ,
             12 * MHZ);
