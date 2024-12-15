@@ -258,9 +258,15 @@ void drainInitialGpsOutput(void) {
 void setGpsBalloonMode(void) {
     V1_println(F("setGpsBalloonMode START"));
     // FIX! should we not worry about setting balloon mode (3) for ATGM336?
+    // doesn't seem like ATGM336 has a balloon mode. no PCAS10 cmd in 
+    // the CASIC specifiction pdf
+
     // Serial2.print("$PSIMNAV,W,3*3A\r\n");
     // normal mode
     // Serial2.print("$PSIMNAV,W,0*39\r\n");
+
+    // wb8elk said:
+    // $PCAS11,5*18 is the Airborne command but not sure if the 336H accepts
     // have to wait for the sentence to get out, and also complete
     // gpsSleepForMillis(1000, false);
     V1_println(F("setGpsBalloonMode END"));
@@ -1159,6 +1165,18 @@ void GpsOFF(bool keepTinyGpsState) {
 }
 
 //************************************************
+// subfunction just to have consistent incomingChar/charsAvailable management 
+// in updateGpsDataAndTime()
+char incomingChar;
+int charsAvailable;
+void getChar() {
+    // setup for next loop iteration
+    charsAvailable = Serial2.available();
+    if (charsAvailable) incomingChar = Serial2.read();
+    else incomingChar = '0';
+}
+ 
+//********
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
     V1_println(F("updateGpsDataAndTime START"));
@@ -1204,30 +1222,53 @@ void updateGpsDataAndTime(int ms) {
     // Could keep the sum for all time, and track total busy time..
     // but I think better not to average..just track this particular call.
     int incomingCharCnt = 0;
-
     bool stopPrint = false;
     bool last_stopPrint = false;
     bool nullChar = false;
     bool spaceChar = false;
-    bool notprintable = false;
-    do {
-        current_millis = millis();
-        char incomingChar;
-        while (Serial2.available() > 0) {
+    bool printable = true;
+
+    // always setup for next loop iteration
+    // V0_println(F("debug1"));
+    getChar();
+    // V0_println(F("debug2"));
+    // fast drain if necessary ..throw away any uart buffered broken sentence at start 
+    // (since we're unaligned initially)
+    // hmm shouldn't get '0' but I guess it would drain that too
+    if (VERBY[1] && charsAvailable && incomingChar != '$')
+        StampPrintf("WARN: Fast draining NMEA backup to '$'. uart rx at %d)" EOL, (int) charsAvailable);
+    // if there's backup, means we jumped into the middle of a broadcast burst
+    // probably best to throw away all chars until we hit a '$' that is start of 
+    // a sentence..like this situation:
+    // ,,38,05,,,38,20,71,192,,27,06,12
+    // $BDGSV,2,2,06,29,65,316,,30,54,126,*65
+    // I suppose only worry about this special 'fast draining' when we first get here
+    // we might totally drain without finding a '$' 
+    // V0_println(F("debug3"));
+    while (charsAvailable && incomingChar != '$') {
+        getChar();
+    }
+    // V0_println(F("debug4"));
+
+    // incomingChar will be '0' if charsAvailable is 0 at this point
+    // incomingChar could have a valid char if charsAvailable was nonzero.
+    // don't drop it. (the '$' start of sentence draining case above)
+    current_millis = millis();
+    // works if ms is 0
+    while ( (current_millis - entry_millis) < (uint64_t) ms) {
+        while (charsAvailable > 0) {
             // start the duration timing when we get the first char
             if (start_millis == 0) start_millis = current_millis;
-
-            // can't have the logBuffer fill up, because the unload is delayed
-            int charsAvailable = (int) Serial2.available();
-            if (VERBY[1]) {
-                if (charsAvailable > 30)
-                    // this the case where we started this function with something in the buffer
-                    // we unload each in less than 1ms..so we catch up
-                    // compare to 28 so we only get 4 (32 -28) ERROR messages as we catch up
+            if (charsAvailable > 30) {
+                // this is the case where we started this function with something in the buffer
+                // we unload each in less than 1ms..so we catch up
+                // compare to 30 so we only get 2? (32 - 30) ERROR messages as we catch up
+                // I would think this case shouldn't happen in this loop now that we silently drain 
+                // above to sentence start?
+                if (VERBY[1])
                     StampPrintf("WARN: NMEA backup. uart rx at %d)" EOL, (int) charsAvailable);
             }
-
-            incomingChar = Serial2.read();
+            // V0_println(F("debug5a"));
             // always send everything to TinyGPS++ ??
             // does it expect the CR LF ?
             gps.encode(incomingChar);
@@ -1238,7 +1279,7 @@ void updateGpsDataAndTime(int ms) {
             stopPrint = last_stopPrint;
             spaceChar = false;
             nullChar = false;
-            notprintable = !isprint(incomingChar);
+            printable = isprint(incomingChar);
             switch (incomingChar) {
                 case '$':  sentenceStartCnt++; stopPrint = false; break;
                 case '*':  sentenceEndCnt++; stopPrint = false; break;
@@ -1251,7 +1292,13 @@ void updateGpsDataAndTime(int ms) {
             }
             // always strip these here
             bool enableStrip = true;
-            if (enableStrip && (spaceChar || nullChar || notprintable)) continue;
+            // V0_println(F("debug5b"));
+            if (enableStrip && (spaceChar || nullChar || !printable)) {
+                getChar();
+                current_millis = millis();
+                continue;
+            }
+            // V0_println(F("debug5c"));
 
             // stopPrint: don't put CR LF in the nmeaBuffer. will add one on the transition
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
@@ -1266,35 +1313,45 @@ void updateGpsDataAndTime(int ms) {
             // FIX! we even send the CR and LF to the TinyGPS++ ??
             // is it necessary?
 
-            // FIX! could disable the GPTXT broadcase to reduce data broadcast
+            // Note we disabled the GPTXT broadcast to reduce the NMEA load (for here)
 
             // make the nmeaBuffer big enough so that we never print while getting data?
             // and we never throw it away (lose data) ?? (for debug only though)
             // this should eliminate duplicate CR LF sequences and just put one in the stream
+
             // FIX! might be odd if a stop is spread over two different calls here?
             // always start printing again on inital call to this function (see inital state)
+
+            // note we're detecting the 1->0 transition on stopPrint here, to add \r\n for eol
+            // before we print the current char
+
+            // Do we get any unprintable? ignore unprintable chars, just in case.
             if (VERBY[1]) {
                 if (enableStrip &&
-                    (last_stopPrint && !stopPrint && !notprintable && !nullChar && !spaceChar)) {
+                    (last_stopPrint && !stopPrint && printable && !nullChar && !spaceChar)) {
                     // false: don't print if full, just empty
                     nmeaBufferAndPrint('\r', false);
                     nmeaBufferAndPrint('\n', false);
                 }
+                if (!enableStrip ||
+                    (!stopPrint && printable && !nullChar && !spaceChar)) {
+                    // FIX! can we not send CR LF? don't care. Performance-wise, might be good?
+                    // moved above to send everything to TinyGPS++
+                    // gps.encode(incomingChar);
+                    nmeaBufferAndPrint(incomingChar, false);
+                }
             }
-
-            // FIX! do we get any unprintable? ignore unprintable chars.
-            if (!enableStrip ||
-                (!stopPrint && !notprintable && !nullChar && !spaceChar)) {
-                // FIX! can we not send CR LF? don't care. Performance-wise, might be good?
-                // moved above to send everything to TinyGPS++
-                // gps.encode(incomingChar);
-                if (VERBY[1]) nmeaBufferAndPrint(incomingChar, false);
-            }
-
+            // V0_println(F("debug5d"));
             current_millis = millis();
             last_serial2_millis = current_millis;
             last_stopPrint = stopPrint;
+            // setup for loop iteration
+            getChar();
+            // V0_println(F("debug5e"));
         }
+
+        //*******************
+        // V0_println(F("debug5f"));
 
         // did we wait more than 50 millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
@@ -1311,12 +1368,15 @@ void updateGpsDataAndTime(int ms) {
             // we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
             duration_millis = current_millis - start_millis;
-            if (false && VERBY[1]) StampPrintf(
-                "updateGpsDataAndTime early out: ms %d "
-                "loop break at %" PRIu64 " millis,  duration %" PRIu64  EOL,
-                 ms, current_millis, duration_millis);
+            if (false && VERBY[1]) {
+                StampPrintf(
+                    "updateGpsDataAndTime early out: ms %d "
+                    "loop break at %" PRIu64 " millis,  duration %" PRIu64  EOL,
+                     ms, current_millis, duration_millis);
+            }
             break;
         }
+        // V0_println(F("debug6"));
 
         // sleep for 50 milliseconds? will we get buffer overflow?
         // 32 symbols at 9600 baud = 33 milliseconds?
@@ -1325,7 +1385,13 @@ void updateGpsDataAndTime(int ms) {
         // if we just completed a burst, we should wait for 1 sec - total burst delay?
         // was 25 trying 50 10 for 4800 baud
         gpsSleepForMillis(12, true);  // stop the wait early if symbols arrive
-    } while ( (current_millis - entry_millis) < (uint64_t) ms);  // works if ms is 0
+        // setup for loop iteration
+        getChar();
+        current_millis = millis();
+        // V0_println(F("debug7"));
+    } 
+
+    // V0_println(F("debug8"));
 
     // print/clear any accumulated NMEA sentence stuff
     if (VERBY[1]) {

@@ -424,11 +424,14 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
     if (res == 127) {
         ; // my decode for reserved
     } else if (res == PICO_ERROR_GENERIC || res < 0) {
-        V1_printf("ERROR: i2cWrRead() got bad res %d reg %02x val %02x" EOL, res, reg, *val);
+        V1_printf("ERROR: i2cWrRead() got bad res %d reg %02x val %02x" EOL, 
+            res, reg, *val);
     } else if (res==1) {
-        V1_printf("GOOD: i2cWrRead() got good res %d reg %02x val %02x" EOL, res, reg, *val);
+        V1_printf("GOOD: i2cWrRead() got good res %d reg %02x val %02x" EOL, 
+            res, reg, *val);
     } else {
-        V1_printf("UNEXPECTED: i2cWrRead() got unexpected res %d reg %02x val %02x" EOL, res, reg, *val);
+        V1_printf("UNEXPECTED: i2cWrRead() got unexpected res %d reg %02x val %02x" EOL, 
+            res, reg, *val);
     }
 
     V1_printf("i2cWrRead END reg %02x val %02x" EOL, reg, *val);
@@ -523,7 +526,8 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     uint8_t reg = SI5351A_PLLB_BASE + start;
     uint8_t len = end - start + 1;
 
-    // FIX! does this really need to be &PLLB_regs[start] to get the pointer, not the value? I guess?
+    // FIX! does this really need to be &PLLB_regs[start] 
+    // to get the pointer, not the value? I guess?
     i2cWriten(reg, &PLLB_regs[start], len);
 
     // this can't be swap..so how could it have worked?
@@ -602,7 +606,8 @@ void si5351a_reset_PLLB(void) {
 
 //****************************************************
 // good for doing calc only, so see what changes with freq changes
-void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, 
+void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq, 
+    uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, 
     uint32_t *pll_denom, uint32_t freq) {
 
     // interesting they had relatively low pll freq (620Mhz) for 15M case
@@ -657,7 +662,9 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq, uint32_t *ms_di
 
     // http://www.wa5bdu.com/programming-the-si5351a-synthesizer/
     // http://www.wa5bdu.com/si5351a-quadrature-vfo/
-    // Following the VCO is another divider stage that divides the VCO frequency by a value of ‘d + e/f’ 
+
+    // Following the VCO is another divider stage that divides the VCO frequency 
+    // by a value of ‘d + e/f’ 
     // and can be used to take the frequency down into the low MHz range. 
     // However the chip will provide an output with lower jitter if this value is an integer and 
     // better still if it is an even integer. So we let e/f be zero and select a value for d 
@@ -690,7 +697,8 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq, uint32_t *ms_di
     // So we’re down to six values to calculate which are the ‘a, b, c, d, e and f’ of 
     // the dividers ‘a + b/c’ and ‘d + e/f’. 
     // But it will actually be a lot simpler. 
-    // We said that the second divider d + e/f will be an even integer, so e and f are not needed. 
+    // We said that the second divider d + e/f will be an even integer, 
+    // so e and f are not needed. 
     // Then in the first divider a + b/c, we will make c a constant 
     // so we are now down to three required values: a, b and d.
 
@@ -715,7 +723,8 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq, uint32_t *ms_di
     // In the Si5351A, the "PLL num" refers to a 20-bit register value 
     // used to set the numerator of the fractional PLL multiplier, 
     // allowing for fine-tuning of the internal PLL frequency within a specified range; 
-    // essentially, it provides the fractional part of the multiplication factor with 20 bits of precision.
+    // essentially, it provides the fractional part of the multiplication factor 
+    // with 20 bits of precision.
 
     // also look at https://github.com/etherkit/Si5351Arduino
 
@@ -879,7 +888,8 @@ bool vfo_is_on(void) {
     // This is the value that is presented outward to the IO muxing, 
     // not the input level back from the pad (which can be read using gpio_get()).
     // 
-    // To avoid races, this function must not be used for read-modify-write sequences when driving GPIOs – 
+    // To avoid races, this function must not be used for read-modify-write sequences 
+    // when driving GPIOs – 
     // instead functions like gpio_put() should be used to atomically update GPIOs. 
     // This accessor is intended for debug use only.
 
@@ -933,7 +943,8 @@ void vfo_turn_on(uint8_t clk_num) {
     // what timer to use?
     // timer_busy_wait_ms
     // void timer_busy_wait_ms (timer_hw_t *timer, uint32_t delay_ms)
-    // Busy wait wasting cycles for the given number of milliseconds using the given timer instance.
+    // Busy wait wasting cycles for the given number of milliseconds 
+    // using the given timer instance.
     // Parameters timer	the timer instance
 
     uint8_t reg;
@@ -1082,7 +1093,8 @@ uint32_t doCorrection(uint32_t freq) {
         // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
         freq_corrected = freq + (atoi(_correction) * freq / 1000000000UL);
     }
-    V0_printf("doCorrection (should be tcxo freq?) freq %lu freq_corrected %lu" EOL, freq, freq_corrected);
+    V0_printf("doCorrection (should be tcxo freq?) freq %lu freq_corrected %lu" EOL, 
+        freq, freq_corrected);
     return freq_corrected;
 }
 //****************************************************
@@ -1165,24 +1177,30 @@ void vfo_turn_off(void) {
 
 
 
-/*
-re: 25 or 26 or 27mhz into si5351a
+// re: 25 or 26 or 27mhz into si5351a
+// Re: Si5351A Freq Synth- 25MHz or 27MHz Reference Oscillator and Why?
+// here's a quick overview:
+// The '5351 has a PLL with a range from 600 to 900 MHz, and two dividers.  
+// These are "fractional dividers", where the divisor is in the form of A + (B / C), 
+// and in most cases can provide a high degree of resolution.  
+// One divider is in the PLL feedback loop, 
+// and the other divides the PLL output to provide the desired clock output.  
+// This output fractional divider has a minimum value of 8, 
+// which limits the output frequency to 900/8 or 112.5 MHz. 
+// 
+// But there are also integer output divisors available: 4, and 6.  
+// Setting the output divider to 4 gives you a max output freq of 225 MHz.  
+// You are now limited to using the PLL feedback divider for frequency adjustment, 
+// and while there are tricks you can play with the divider fractions, 
+// some reference frequencies make this easier than others.
+// 
+// So 27 MHz is a good frequency, but unless you care about exact WSPR tone step frequencies 
+// 25 MHz is probably just as good.  
+// 
+// BTW, there are two identical PLL/divider sections in this chip
+// and additional dividers used to drop the output frequency 
+// beyond what the fractional divider can do by itself.  
+// And The PLL range typically goes beyond the guaranteed range, by quite a bit.  
+// It also has settable output delay (useful for phase control), 
+// settable output drive strength, and some very effective jitter attenuators.  
 
-The reference oscillator may be 25 or 27MHz. I have not found much information on which to use and why. I am sure that it has to do with the multiple frequencies that may be derived.
-
-QRP Labs states: "In [our] module, a 27MHz crystal is used. This frequency is chosen because it is possible to configure the chip to produce the exact 1.46Hz tone spacing for WSPR, on any amateur radio band from 2200m (136kHz) to 2m (145MHz). A 25MHz crystal cannot provide WSPR tone spacing on the 2m band.
-
-I am sure that there are many more considerations that are outside of my knowledge base. My use is to supplement the frequency range of my Rigol DG822 Function Generator = 25MHz for general hobbyist use.
-
-
-Re: Si5351A Freq Synth- 25MHz or 27MHz Reference Oscillator and Why? Arduino Project
-« Reply #1 on: March 02, 2023, 07:42:24 pm »
-You need to look at the Si5351 divider structure to understand this, but here's a quick overview:
-The '5351 has a PLL with a range from 600 to 900 MHz, and two dividers.  These are "fractional dividers", where the divisor is in the form of A + (B / C), and in most cases can provide a high degree of resolution.  One divider is in the PLL feedback loop, and the other divides the PLL output to provide the desired clock output.  This output fractional divider has a minimum value of 8, which limits the output frequency to 900/8 or 112.5 MHz. 
-
-But there are also integer output divisors available: 4, and 6.  Setting the output divider to 4 gives you a max output freq of 225 MHz.  You are now limited to using the PLL feedback divider for frequency adjustment, and while there are tricks you can play with the divider fractions, some reference frequencies make this easier than others.
-
-So 27 MHz is a good frequency, but unless you care about exact WSPR tone step frequencies 25 MHz is probably just as good.  I know the Si5351 spec doesn't say I can do it, but I usually use a 10 MHz external oscillator to drive the chip and that also works great.  You need to understand the dividers when you choose a frequency.
-
-BTW, there are two identical PLL/divider sections in this chip (I only described one of them), and additional dividers used to drop the output frequency beyond what the fractional divider can do by itself.  And The PLL range typically goes beyond the guaranteed range, by quite a bit.  It also has settable output delay (useful for phase control), settable output drive strength, and some very effective jitter attenuators.  
-*/
