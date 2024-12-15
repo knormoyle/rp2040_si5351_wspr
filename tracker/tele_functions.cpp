@@ -420,6 +420,12 @@ void doTelemetrySweepFloat (char *t_string, uint8_t t_length, float t_min, float
 //****************************************************
 void telemetrySweepAllForTest(void) {
     V1_println(F("telemetrySweepAllForTest START"));
+
+    // Force these to static values. used during normal callsign tx
+    snprintf(t_grid6, sizeof(t_grid6), "%s", "AA00AA");
+    snprintf(t_callsign, sizeof(t_callsign), "%s", "TES999");
+    snprintf(t_power, sizeof(t_power), "%d", 0);
+
     // the t_* stuff are ascii chars
     // walk them thru their range. wrap at boundary
     doTelemetrySweepInteger(t_course, 3, 0, 361, 1);            // 3 bytes (not counting null term)
