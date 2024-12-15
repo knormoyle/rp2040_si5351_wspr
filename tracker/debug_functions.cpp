@@ -249,11 +249,25 @@ void measureMyFreqs(void) {
     // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/clocks.c
 
     // uint32_t clock_get_hz(clock_handle_t clock) {
-    uint32_t f_clk_sys_get_hz = clock_get_hz(clk_sys);
 
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__clocks.html#gae78816cc6112538a12adcc604be4b344
+    // clk_ref  Watchdog and timers reference clock.
+    // clk_sys  Processors, bus fabric, memory, memory mapped registers.
+    // clk_peri  Peripheral clock for UART and SPI.
+    // clk_usb  USB clock.
+    // clk_adc  ADC clock.
+    // clk_rtc  Real time clock.
+    uint32_t f_clk_sys_get_hz = clock_get_hz(clk_sys);
+    uint32_t f_clk_peri_get_hz = clock_get_hz(clk_peri);
+    uint32_t f_clk_usb_get_hz = clock_get_hz(clk_usb);
+    uint32_t f_clk_ref_get_hz = clock_get_hz(clk_ref);
+
+    
+    // frequency_count_khz() is accurate to +-1Khz
     uint32_t f_pll_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
     uint32_t f_pll_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
     uint32_t f_rosc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_ROSC_CLKSRC);
+
     uint32_t f_clk_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_SYS);
     uint32_t f_clk_peri = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_PERI);
     uint32_t f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
@@ -263,6 +277,10 @@ void measureMyFreqs(void) {
 #endif
 
     V1_printf("clk_sys_get_hz  = %luHz" EOL, f_clk_sys_get_hz);
+    V1_printf("clk_peri_get_hz = %luHz" EOL, f_clk_peri_get_hz);
+    V1_printf("clk_usb_get_hz  = %luHz" EOL, f_clk_usb_get_hz);
+    V1_printf("clk_ref_get_hz  = %luHz" EOL, f_clk_ref_get_hz);
+
     V1_printf("pll_sys  = %lukHz" EOL, f_pll_sys);
     V1_printf("pll_usb  = %lukHz" EOL, f_pll_usb);
     V1_printf("rosc     = %lukHz" EOL, f_rosc);

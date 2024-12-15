@@ -111,9 +111,14 @@ extern bool BALLOON_MODE;
 // ************************************************
 // false and true work here
 bool LOWEST_POWER_TURN_ON_MODE = true;
-bool ALLOW_USB_DISABLE_MODE = false;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
-bool ALLOW_KAZU_SLOW_CLOCKS_MODE = false;  // true not working with Serial2?
+
+// why isn't this true 12/15/24..true now. works (18Mhz)
+bool ALLOW_USB_DISABLE_MODE = true;
+// true + not 12Mhz works 12/15/24
+bool ALLOW_KAZU_SLOW_CLOCKS_MODE = false;
+// try true 12/15/24
+bool ALLOW_KAZU_12MHZ_MODE = true;  // true not working with Serial2?
 
 // ************************************************
 static bool GpsIsOn_state = false;
@@ -755,10 +760,8 @@ void GpsFullColdReset(void) {
         }
 
         if (ALLOW_KAZU_SLOW_CLOCKS_MODE)  {
-            busy_wait_ms(500);
             // includes deinit of the usb pll now?
             kazuClocksSlow();
-
         } else if (ALLOW_USB_DISABLE_MODE) {
             // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
             // There are two PLLs in RP2040. They are:
@@ -777,12 +780,7 @@ void GpsFullColdReset(void) {
             // and set the peripheral clock to match.
             // example:
             // https://sourcevu.sysprogs.com/rp2040/examples/clocks/hello_48MHz/files/hello_48MHz.c#tok293
-
-            busy_wait_ms(500);
-            // HACK: doesn't work?
-            // pll_deinit(pll_usb);
-            // FIX! how slow can I got with sys pll?
-            // Should create a table of working 12 to 18 Mhz freqs by using false
+            // 18 is the slowest legal I can go for the sys pll
             set_sys_clock_khz(18000, true);
         } else {
             set_sys_clock_khz(18000, true);
@@ -810,8 +808,7 @@ void GpsFullColdReset(void) {
     //******************
     // DRASTIC measures, undo after sleep!
     Watchdog.reset();
-    if (ALLOW_KAZU_SLOW_CLOCKS_MODE) {
-        busy_wait_ms(500);
+    if (ALLOW_KAZU_SLOW_CLOCKS_MODE) { busy_wait_ms(500);
         // FIX! this restores/keeps sys clk to 12mhz and sys pll off
         // the problem is _clock_speed doesn't have 12Mhz?
         // and we need PLL_SYS_MHZ correct for PWM div/wrap calcs
@@ -822,9 +819,15 @@ void GpsFullColdReset(void) {
         // hmm we're not getting Serial2 when we use the Kazu 12 Mhz past here
         // just reinit the sys pll to PLL_SYS_MHZ?
         // PLL_SYS_MHZ = 12;
-        busy_wait_ms(500);
-        set_sys_clock_khz(freq_khz, true);
+        // could reference for sdk api stuff for clocks
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__clocks.html#gae78816cc6112538a12adcc604be4b344
+        if (!ALLOW_KAZU_12MHZ_MODE) {
+            busy_wait_ms(500);
+            set_sys_clock_khz(freq_khz, true);
+            PLL_SYS_MHZ = freq_khz / 1000UL;
+        }
         // FIX! is Serial2 okay now or broken?
+        // it gets restarted below
 
         busy_wait_ms(500);
         if (!BALLOON_MODE) {
@@ -835,8 +838,14 @@ void GpsFullColdReset(void) {
             busy_wait_ms(500);
         }
 
-        V0_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
-            PLL_SYS_MHZ);
+        if (ALLOW_KAZU_12MHZ_MODE) {
+            V0_printf("After long sleep, left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL,
+                PLL_SYS_MHZ);
+        } else {
+            V0_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
+                PLL_SYS_MHZ);
+        }
+
         V0_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
         // V1_print(F("Restored core voltage back to 1.1v" EOL));
         V0_flush();
@@ -1236,7 +1245,7 @@ void updateGpsDataAndTime(int ms) {
     // (since we're unaligned initially)
     // hmm shouldn't get '0' but I guess it would drain that too
     if (VERBY[1] && charsAvailable && incomingChar != '$')
-        StampPrintf("WARN: Fast draining NMEA backup to '$'. uart rx at %d)" EOL, (int) charsAvailable);
+        StampPrintf("OKAY: did fast draining NMEA backup to '$'. uart rx was %d)" EOL, (int) charsAvailable);
     // if there's backup, means we jumped into the middle of a broadcast burst
     // probably best to throw away all chars until we hit a '$' that is start of 
     // a sentence..like this situation:
@@ -1245,7 +1254,10 @@ void updateGpsDataAndTime(int ms) {
     // I suppose only worry about this special 'fast draining' when we first get here
     // we might totally drain without finding a '$' 
     // V0_println(F("debug3"));
-    while (charsAvailable && incomingChar != '$') {
+    // note this could empty with a sentence in the 32 deep fifo, just fitting
+    // UPDATE: maybe keep draining until we know we have enough room so not almost full!
+    // too much messaging if we're dancing around the buffer close to full, below
+    while (charsAvailable > 8 || (charsAvailable && incomingChar != '$')) {
         getChar();
     }
     // V0_println(F("debug4"));
@@ -1259,14 +1271,13 @@ void updateGpsDataAndTime(int ms) {
         while (charsAvailable > 0) {
             // start the duration timing when we get the first char
             if (start_millis == 0) start_millis = current_millis;
-            if (charsAvailable > 30) {
-                // this is the case where we started this function with something in the buffer
-                // we unload each in less than 1ms..so we catch up
-                // compare to 30 so we only get 2? (32 - 30) ERROR messages as we catch up
-                // I would think this case shouldn't happen in this loop now that we silently drain 
+            if (charsAvailable > 25) { // 25/32 now, because with initial drain, shouldn't hit?
+                // This is the case where we started this function with something in the buffer
+                // Unload each in less than 1ms..so we catch up pretty quick if necessary.
+                // Would think this case shouldn't happen in this loop now that we silently drain 
                 // above to sentence start?
                 if (VERBY[1])
-                    StampPrintf("WARN: NMEA backup. uart rx at %d)" EOL, (int) charsAvailable);
+                    StampPrintf("WARN: was NMEA almost full. uart rx was %d)" EOL, (int) charsAvailable);
             }
             // V0_println(F("debug5a"));
             // always send everything to TinyGPS++ ??
@@ -1595,13 +1606,35 @@ void kazuClocksSlow() {
 
     // don't do this. because we actually restore to a pll sys value
     // so we should not change these..assume go back just the same as it was
-    if (false) {
+    if (ALLOW_KAZU_12MHZ_MODE) {
         // CLK peri is clocked from clk_sys so need to change clk_peri's freq
+        // 12/15/24 hmm maybe clk_peri needs to be 48 Mhz ?
+        // nope 48 doesn't help Serial2
+        // maybe it needs the ..AUXSRC_VALUE_XOSC_CLKSRC ? seems legal here
+        // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/include/hardware/clocks.h
+
+        // this guy had similar issues?
+        // https://github.com/raspberrypi/pico-sdk/issues/1037
+
         clock_configure(clk_peri,
-            0,
-            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+            0, // No GLMUX
+            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
             12 * MHZ,
             12 * MHZ);
+            // 48 * MHZ,
+            // 8 * MHZ); // should this be 8 per the link above?
+
+        // was:
+        // CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+
+        // he reinits uart this way
+        // Re init uart now that clk_peri has changed
+        // stdio_init_all();
+        // Fixes baudrate form unchanged clock. 48MHz / 8MHz = 6
+        // uart_set_baudrate(uart0, 115200/6);
+
+        // tried
+        // CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
 
         // CLK RTC = XOSC 12MHz / 256 = 46875Hz
         clock_configure(clk_rtc,
@@ -1634,12 +1667,16 @@ void kazuClocksRestore() {
     // Change clk_sys and clk_peri to be 12MHz, and restore usb to 48 mhz ?
     // the external crystal is 12mhz
     // I suppose this is the same as it was due to kazuClocksSlow()
-    clock_configure(clk_sys,
-        CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
-        CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        12 * MHZ);
-    busy_wait_ms(500);
+    if (false) {
+        clock_configure(clk_sys,
+            CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
+            CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+            12 * MHZ,
+            12 * MHZ);
+        PLL_SYS_MHZ = 12;
+        busy_wait_ms(500);
+    }
+    
 
     // FIX! we need usb at 48 mhz ?
     // pll_init(pll_sys);
@@ -1665,8 +1702,9 @@ void kazuClocksRestore() {
     // I suppose this stuff is the same as it was due to kazuClocksSlow()
     // don't do this. because we actually restore to a pll sys value
     // so we should not change these..assume go back just the same as it was
-    if (false) {
+    if (false && ALLOW_KAZU_12MHZ_MODE) {
         // CLK peri is clocked from clk_sys so need to change clk_peri's freq
+        // 12/15/24 hmm maybe clk_peri needs to be 48 Mhz ?
         clock_configure(clk_peri,
             0,
             CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
@@ -1696,3 +1734,32 @@ void kazuClocksRestore() {
 }
 
 //************************************************
+// blurb on pll_usb -> clk_peri uart 48 Mhz (clk_peri) and i2c can be different
+// https://github.com/raspberrypi/pico-sdk/issues/841
+// rosc @ 1-12 MHz
+// 
+// xosc @ 12 MHz
+//     |
+//     \-- clk_ref @ 12 MHz
+//             |
+//             \-- watchdog tick 1:12, @ 1 Mhz
+//             |       |
+//             |       \-- timer/alarm: get_absolute_time() in micro seconds
+//             |
+//             \-- pll_sys @ 125 MHz
+//             |       |
+//             |       \-- clk_sys @ 125 MHz           
+//             |
+//             \-- pll_usb @ 48 MHz
+//                   |               
+//                   \-- clk_peri @ 48 MHz, for UART but not I2C
+//                   |       |
+//                   |       \-- DMA pacing timers
+//                   |
+//                   \-- clk_usb
+//                   |
+//                   \-- clk_adc
+//                   |
+//                   \-- clk_rtc 1:1024 @ 46,875 Hz
+//                             |
+//                             \-- RTC 1:46875 @ 1Hz
