@@ -967,7 +967,6 @@ int tx_cnt_3;
 // or if the $GPGGA sentence reports fix type “0” (no fix) then those sentences are discarded.
 
 // TinyGPS::GPS_INVALID_AGE is the value when you never got a valid fix.
-// if (fix_age == TinyGPS::GPS_INVALID_AGE)
 
 
 // FIX! should this be exactly a minute, so all the other things
@@ -995,12 +994,13 @@ uint16_t  BATT_WAIT = 1;  // secs
 
 // FIX! if we have a good fix, and good age, should we turn gps off
 // and only turn it on again when the age is bad?
-const uint32_t GPS_LOCATION_AGE_MAX = 70000;
-
-// smallest seen
-// fix_age 1211
-// biggest seen
-// fix_age 60322
+// was getting fix_age violations around 299824 millisecs max with 700000 here
+// 5 minutes? could be due to the go_when_rdy testing...back to back, no room for gps
+// const uint32_t GPS_LOCATION_AGE_MAX = 70000;
+// lets go 5 minutes! can travel 10 miles in that time though? 2 subsquares?
+// we'll be getting long back to back when we do "Extended Telemetry".
+// so maybe big max age is needed?
+const uint32_t GPS_LOCATION_AGE_MAX = 30000;
 
 // FIX! since we break out of the sleepSeconds when gps data starts (Serial2.available()) ..
 // we could make this bigger? needs to be at least 1 sec (a little more) since it
@@ -1211,37 +1211,28 @@ void loop1() {
         //*********************
         // some detail on TinyGPS. precision?
         // https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps
-
-        // FIX! why use isUpdated()  Allows ignoring gps.location.age() compare
-        // we read location in many places, so I don't think the isUpdated() info is useful?
-        // removing it from the age compare
-        //    (fix_age < GPS_LOCATION_AGE_MAX || fix_updated) ||
         // fix_age will be 4294967295 if not valid
         V1_printf("fix_valid_all %u" EOL, fix_valid_all);
         V1_printf("fix_valid %u" EOL, fix_valid);
-        V1_printf("fix_age %lu" EOL, fix_age);
+        V1_printf("fix_age %lu millisecs" EOL, fix_age);
         V1_printf("fix_sat_cnt %lu" EOL, fix_sat_cnt);
         V1_printf("fix_updated %u" EOL, fix_updated);
 
-        // if (!fix_valid || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
         if (!fix_valid_all || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
-            V1_printf("loop1() WARN: GPS fix issue ..stale or not valid ..fix_age %lu" EOL, fix_age);
+            if (!fix_valid_all) {
+                V1_printf("loop1() WARN: GPS fix issue: not valid. fix_age %lu millisecs" EOL, fix_age);
+            } else {
+                V1_printf("loop1() WARN: GPS fix issue: valid but fix_age %lu millisecs" EOL, fix_age);
+            }
             // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
             vfo_turn_off();
             invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
-
-            // these are the waits that give us the long loop times
-            // Looping with sleep
-            // Serial2.Activity() is the thing that gets it to wake up early
-            // no change of LED here. done above in time set/reboot check
             sleepSeconds(BEACON_WAIT);
 
         } else if (fix_sat_cnt <= 3) { // implied also 'not the first if clause' .. i.e good fix
             // FIX! should we have separate led count for 2d fix and 3d fix?
             V1_println(F("loop1() WARN: GPS fix issues ..not enough sats ..2d only"));
-
-            // these are the waits that give us 25-30 sec loop times?
             // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
             vfo_turn_off();
             invalidateTinyGpsState();

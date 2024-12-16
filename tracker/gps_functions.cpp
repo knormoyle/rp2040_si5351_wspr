@@ -884,6 +884,7 @@ void GpsFullColdReset(void) {
         V0_flush();
         measureMyFreqs();
         IGNORE_KEYBOARD_CHARS = false;
+
     }
 
     //******************
@@ -954,8 +955,10 @@ void GpsFullColdReset(void) {
     drainInitialGpsOutput();
 
     GpsIsOn_state = true;
+    // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
+    // a big fix_age
+    invalidateTinyGpsState();
     GpsStartTime = get_absolute_time();  // usecs
-
     V1_println(F("GpsFullColdReset END"));
 }
 
@@ -1042,6 +1045,9 @@ void GpsWarmReset(void) {
     setGpsBroadcast();
 
     drainInitialGpsOutput();
+    // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
+    // a big fix_age
+    invalidateTinyGpsState();
     V1_println(F("GpsWarmReset END"));
 }
 
@@ -1113,6 +1119,7 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 //************************************************
 
 void invalidateTinyGpsState(void) {
+    V1_println(F("invalidateTinyGpsState() START"));
     // gps.date.clear(); // kazu had done this method
     // are these declared private?
     // FIX! how can we clear these? Do we change the library to make them public?
@@ -1140,14 +1147,30 @@ void invalidateTinyGpsState(void) {
         // should get us ignoring least 2 GPS broadcasts? Two cycles through loop1() ?
         GpsInvalidAllCnt = 2;
         GpsInvalidAll = true;
-    } else {
-        // how do we clear him?
-        // do we wait until we turn GpsON() on, beforre clearing GPSInvalidAll
-        // we can decrement the count only if gps is on? (in setup1())
+    }
+
+    //***********************************
+    // how do we clear a fix from TinyGPS++ ?
+    // do we wait until we turn GpsON() on, beforre clearing GPSInvalidAll
+    // we can decrement the count only if gps is on? (in setup1())
+
+    if (false) {
+        // this worked
         gps.date.valid = false;
         gps.date.updated = false;
         gps.date.date = 0;
+        gps.location.valid = false;
+        gps.location.updated = false;
+    } else {
+        // new public methods created in TinyGPS++.h
+        gps.location.flush();
+        gps.location.fixQualityFlush();
+        gps.location.fixModeFlush();
+        gps.date.flush();
     }
+    //***********************************
+
+    V1_println(F("invalidateTinyGpsState() START"));
 }
 
 //************************************************
@@ -1499,9 +1522,9 @@ void gpsDebug() {
     V1_println(F("GpsDebug START"));
 
     V1_print(F(EOL EOL));
-    V1_println(F("Sats HDOP Latitude      Longitude   Fix  Date       Time     Date Alt      Course  Speed Card Chars FixSents  Checksum"));
-    V1_println(F("          (deg)         (deg)       Age                      Age  (m)      --- from GPS ----   RX    RX        Fail"));
-    V1_println(F("---------------------------------------------------------------------------------------------------------------------"));
+    V1_println(F("Sats HDOP Latitude      Longitude   Fix    Date       Time     Date Alt     Course Speed Card    Chars FixSents  Checksum"));
+    V1_println(F("          (deg)         (deg)       Age                        Age  (m)     --- from GPS ----    RX    RX        Fail"));
+    V1_println(F("------------------------------------------------------------------------------------------------------------------------"));
 
     // https://github.com/StuartsProjects/GPSTutorial
     if (VERBY[1]) {
@@ -1510,7 +1533,7 @@ void gpsDebug() {
         printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
         printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
 
-        printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 5);
+        printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
         printDateTime(gps.date, gps.time);
         printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);

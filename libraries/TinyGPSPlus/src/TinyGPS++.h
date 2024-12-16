@@ -54,6 +54,11 @@ struct TinyGPSLocation
 {
    friend class TinyGPSPlus;
 public:
+   //***************
+   // HACK: kevin moved from private 12_15_24 so the .ino can clear them in invalidateTinyGpsState()
+   bool valid, updated;
+   //***************
+    
    enum Quality { Invalid = '0', GPS = '1', DGPS = '2', PPS = '3', RTK = '4', FloatRTK = '5', Estimated = '6', Manual = '7', Simulated = '8' };
    enum Mode { N = 'N', A = 'A', D = 'D', E = 'E'};
 
@@ -64,14 +69,22 @@ public:
    const RawDegrees &rawLng()     { updated = false; return rawLngData; }
    double lat();
    double lng();
-   Quality FixQuality()           { updated = false; return fixQuality; }
-   Mode FixMode()                 { updated = false; return fixMode; }
 
+   //***************
+   // HACK: kevin better: make public method and cover fixQuality and fixMode also
+   void flush()           { updated = false; valid = false; }
+   void fixQualityFlush() { updated = false; fixQuality = Invalid; }
+   void fixModeFlush()    { updated = false; fixMode = N; }
+   //***************
+
+   Quality FixQuality() { updated = false; return fixQuality; }
+   Mode FixMode()       { updated = false; return fixMode; }
+    
    TinyGPSLocation() : valid(false), updated(false), fixQuality(Invalid), fixMode(N)
    {}
 
+
 private:
-   bool valid, updated;
    RawDegrees rawLatData, rawLngData, rawNewLatData, rawNewLngData;
    Quality fixQuality, newFixQuality;
    Mode fixMode, newFixMode;
@@ -94,9 +107,12 @@ public:
    uint8_t month();
    uint8_t day();
    //*************
-   // HACK: kevin moved from private 11_7_24 so the .ino can clear them in GpsOFF
+   // HACK: kevin moved from private 12_15_24 so the .ino can clear them in invalidateTinyGpsState()
    bool valid, updated;
    uint32_t date;
+   //*************
+   // HACK: kevin better: make public method and cover fixQuality and fixMode also
+   void flush() { updated = false; valid = false; date = 0; }
    //*************
 
    TinyGPSDate() : valid(false), updated(false), date(0)
