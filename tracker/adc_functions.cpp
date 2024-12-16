@@ -6,7 +6,6 @@
 #include <Arduino.h>
 #include <stdlib.h>
 
-#include "defines.h"
 #include "print_functions.h"
 #include "adc_functions.h"
 

@@ -6,7 +6,6 @@
 #include <Arduino.h>
 #include <stdlib.h>
 
-#include "defines.h"
 #include "config_functions.h"
 #include "print_functions.h"
 #include "bmp_functions.h"

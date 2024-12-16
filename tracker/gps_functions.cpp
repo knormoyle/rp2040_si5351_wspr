@@ -53,7 +53,6 @@
 #include "debug_functions.h"
 #include "led_functions.h"
 #include "print_functions.h"
-#include "defines.h"
 // enums for voltage at:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
 #include "hardware/vreg.h"
@@ -448,7 +447,7 @@ void setGpsBaud(int desiredBaud) {
     // after power on, start off talking at 9600 baud. when we change it
 
     // have to send CR and LF and correct checksum
-    // CR and LF are in defines.h. they are not part of the checksum, nor is the $
+    // CR and LF are in print_functions.h. they are not part of the checksum, nor is the $
     // Example: $PMTK251,38400*27<CR><LF>
     // just pre-calculate the checksums here and hardwire them in the static sentences used.
     // https://www.meme.au/nmea-checksum.html

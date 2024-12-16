@@ -4,7 +4,6 @@
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
 #include <Arduino.h>
-#include "defines.h"
 #include "debug_functions.h"
 #include "print_functions.h"
 // https://docs.arduino.cc/tutorials/generic/secrets-of-arduino-pwm/

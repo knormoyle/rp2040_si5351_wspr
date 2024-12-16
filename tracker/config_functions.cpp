@@ -14,7 +14,6 @@
 #include <ctype.h>
 
 // my stuff
-#include "defines.h"
 #include "print_functions.h"
 #include "gps_functions.h"
 #include "led_functions.h"
@@ -961,7 +960,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_println(F("show_values() START" EOL));
 
     // V0_print(F(EOL, CLEAR_SCREEN, UNDERLINE_ON, BRIGHT));
-    // since these macros are "" strings in defines.h, they will just concat here
+    // since these macros are "" strings in print_functions.h, they will just concat here
     // no commas necessary?
 
     V0_print(F("Current values:" EOL));

@@ -71,7 +71,6 @@
 #include "hardware/i2c.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-#include "defines.h"
 #include "si5351_functions.h"
 #include "print_functions.h"
 #include "led_functions.h"

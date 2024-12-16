@@ -6,7 +6,6 @@
 // https://wellys.com/posts/rp2040_arduino_i2c/
 // from https://github.com/lkoepsel/I2C/blob/main/Arduino/Pico/I2C_Scanner/I2C_Scanner.ino
 
-#include "defines.h"
 #include "i2c_functions.h"
 #include "si5351_functions.h"
 #include "print_functions.h"
@@ -29,8 +28,6 @@ extern bool VERBY[10];
 
 // also ../i2c_test/i2c_test.ino for probing si5351 regs, with random read/write
 // FIX! better scanner now from ../i2c_test/bus_scan/bus_scan.ino
-
-// #include "defines.h"
 
 // source: https://raw.githubusercontent.com/raspberrypi/pico-examples/refs/heads/master/i2c/bus_scan/bus_scan.c
 // https://github.com/raspberrypi/pico-examples/blob/master/i2c/bus_scan/bus_scan.c

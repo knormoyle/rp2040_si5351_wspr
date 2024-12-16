@@ -8,6 +8,7 @@
 #include <stdint.h>
 
 //***********************************************
+// these aren't used
 void yPrint(const char* pformat, ...);
 void yPrintf(const char* pformat, ...);
 void yPrintln(const char* pformat, ...);
@@ -16,13 +17,13 @@ void yPrintln(const char* pformat, ...);
 #define kHz 1000U
 
 // hmm. why is \n not sufficient?
-#define EOL "\r\n"
+// escape the double quotes, since we want them
+#define EOL "\"\r\n\""
 // ascii 13
-#define CR "\r"
+#define CR "\"\r\""
 // ascii 10
-#define LF "\n"
+#define LF "\"\n\""
 
-// #define EOL "\n"
 
 //***********************************************
 // this is another compile option

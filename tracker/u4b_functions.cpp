@@ -7,7 +7,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "defines.h"
 #include "u4b_functions.h"
 #include "print_functions.h"
 
