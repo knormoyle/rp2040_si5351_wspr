@@ -1220,7 +1220,7 @@ void loop1() {
 
         if (!fix_valid_all || (fix_age >= GPS_LOCATION_AGE_MAX) ) {
             if (!fix_valid_all) {
-                V1_printf("loop1() WARN: GPS fix issue: not valid. fix_age %lu millisecs" EOL, fix_age);
+                V1_printf("loop1() WARN: GPS fix not valid. fix_age %lu millisecs" EOL, fix_age);
             } else {
                 V1_printf("loop1() WARN: GPS fix issue: valid but fix_age %lu millisecs" EOL, fix_age);
             }
@@ -1232,7 +1232,7 @@ void loop1() {
 
         } else if (fix_sat_cnt <= 3) { // implied also 'not the first if clause' .. i.e good fix
             // FIX! should we have separate led count for 2d fix and 3d fix?
-            V1_println(F("loop1() WARN: GPS fix issues ..not enough sats ..2d only"));
+            V1_printf("loop1() WARN: GPS fix issue: only %lu sats ..2d fix only" EOL, fix_sat_cnt);
             // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
             vfo_turn_off();
             invalidateTinyGpsState();
@@ -1696,7 +1696,11 @@ bool alignMinute(int offset) {
         case 2: {;}
         case 4: {;}
         case 6: {;}
-        case 8: align_minute = (align_minute + offset) % 10; break;
+        case 8: {
+            // add 10 to cover the wrap of 0 to -1 with offset -1 (goes to 9)
+            align_minute = (10 + align_minute + offset ) % 10;
+            break;  
+        }
         default:
             V1_printf("ERROR: Illegal align_minute %d for u4b channel" EOL, align_minute);
             align_minute = 0;
@@ -1704,10 +1708,15 @@ bool alignMinute(int offset) {
 
     // WARN: make sure _go_when_rdy is cleared before real balloon flight!
     if (_go_when_rdy[0] == '1') {
-        // any odd minute for any odd offset (including -1)
-        if ((abs(offset) % 2) == 1) aligned = (minute() % 2) == 1;
-        // any even minute for any even offset
-        else aligned = (minute() % 2) == 0;
+        // add 2 to cover the wrap of 0 to -1 with offset -1 (goes to 1)
+        align_minute = (2 + align_minute + offset ) % 2;
+        aligned = (minute() % 2) == align_minute;
+        if (false) { // old code
+            // any odd minute for any odd offset (including -1)
+            if ((abs(offset) % 2) == 1) aligned = (minute() % 2) == 1;
+            // any even minute for any even offset
+            else aligned = (minute() % 2) == 0;
+        }
     }
     else {
         aligned = (minute() % 10) == align_minute;

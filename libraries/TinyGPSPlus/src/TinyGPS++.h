@@ -111,7 +111,7 @@ public:
    bool valid, updated;
    uint32_t date;
    //*************
-   // HACK: kevin better: make public method and cover fixQuality and fixMode also
+   // HACK: kevin better: make public method
    void flush() { updated = false; valid = false; date = 0; }
    //*************
 
