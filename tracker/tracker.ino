@@ -232,7 +232,18 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // earlephilhower says the hw serial units use the hardware rx fifo
 // so only 32?
 
-// legal choices? 9600 (default ATGM33651) 19200 38400
+//*********************************************
+// extern const int SIM65M_BAUD_RATE = 4800;
+// what we want to change it too
+extern const int SIM65M_BAUD_RATE = 9600;
+// extern const int SIM65M_BAUD_RATE = 19200;
+// extern const int SIM65M_BAUD_RATE = 38400;
+// extern const int SIM65M_BAUD_RATE = 57600;
+// default at power up
+// extern const int SIM65M_BAUD_RATE = 115200;
+//*********************************************
+
+// legal choices? 9600 (default ATGM336H) 19200 38400
 // is in receive fifo 12-bit wide default 32 deep ??
 // https://arduino-pico.readthedocs.io/en/latest/serial.html
 
@@ -263,21 +274,21 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // hmm something was not working with gps warm reset with 4800. back to 9600
 
 // seem to leave the polling for NMEA data too soon at 4800..miss some chars
-// extern const int SERIAL2_BAUD_RATE = 4800;
+// extern const int ATGM336H_BAUD_RATE = 4800;
 // works down to 50 Mhz fine? what's the lowest SYS_PLL_MHZ that works?
-extern const int SERIAL2_BAUD_RATE = 9600;
-// extern const int SERIAL2_BAUD_RATE = 19200;
+extern const int ATGM336H_BAUD_RATE = 9600;
+// extern const int ATGM336H_BAUD_RATE = 19200;
 
 // can't seem to recover to 9600 after trying 38400? full cold reset not working?
 // need to unplug usb to get back to 9600
 
-// extern const int SERIAL2_BAUD_RATE = 38400;
+// extern const int ATGM336H_BAUD_RATE = 38400;
 
 // this is too fast. I can't keep up with incoming data
 // GPS burst: duration is 165 millisecs for 646 chars. 3954 baud effective
-// extern const int SERIAL2_BAUD_RATE = 57600;
+// extern const int ATGM336H_BAUD_RATE = 57600;
 // don't use. rx buffer overruns
-// extern const int SERIAL2_BAUD_RATE = 115200;
+// extern const int ATGM336H_BAUD_RATE = 115200;
 
 //*********************************
 // all extern consts can be externed by a function
@@ -366,6 +377,7 @@ char _testmode[2] = { 0 };
 char _correction[7] = { 0 };
 char _go_when_rdy[2] = { 0 };
 char _factory_reset_done[2] = { 0 };
+char _use_sim65m[2] = { 0 };
 
 //*****************************
 // decoded stuff from config strings: all can be extern'ed by a function
@@ -392,16 +404,16 @@ bool CORE1_PROCEED = false;
 bool TESTMODE = false;
 // decode of _verbose 0-9
 bool VERBY[10] = { false };
+bool USE_SIM65M = false;
 
 //*****************************
 // t_power is clamped to string versions of these. use 0 if illegal
 // int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
 // will differentiate from u4b (10) and traquito (13) by
 // using 3 or 7 in normal callsign tx 3 for low power, 7 for high power
-
 //*********************************
-absolute_time_t GpsStartTime = 0;
 
+absolute_time_t GpsStartTime = 0;
 uint64_t GpsFixMillis = 0;
 uint64_t GpsStartMillis = 0;
 uint64_t loopCnt = 0;
@@ -1599,7 +1611,7 @@ void sleepSeconds(int secs) {
             // 1050: was this causing rx buffer overrun (21 to 32)
             // 1500 was good for 9600 and up
             // not long enough for 4800?
-            if (SERIAL2_BAUD_RATE == 4800) updateGpsDataAndTime(2000);  // milliseconds
+            if ((!USE_SIM65M) && ATGM336H_BAUD_RATE == 4800) updateGpsDataAndTime(2000);  // milliseconds
             else updateGpsDataAndTime(1500);
         } else {
             sleep_ms(1500);

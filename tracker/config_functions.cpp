@@ -61,6 +61,7 @@ extern char _correction[7];  // parts per billion -30000 to 30000. default 0
 // does wait for any 2 minute alignment though
 extern char _go_when_rdy[2];
 extern char _factory_reset_done[2];
+extern char _use_sim65m[2];
 
 //**************************************
 // decodes from _Band _U4B_chan
@@ -81,6 +82,7 @@ extern const uint32_t INTERRUPTS_PER_SYMBOL;
 extern bool TESTMODE; // decode of _testmode
 extern bool VERBY[10]; // decode of verbose 0-9. disabled if BALLOON_MODE
 extern bool BALLOON_MODE; // this is set by setup() when it detects no USB/Serial
+extern bool USE_SIM65M; // ATGM3365N-31 if false
 
 //**************************************
 // Verbosity:
@@ -342,7 +344,7 @@ void user_interface(void) {
         V0_print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
         // no comma to concat strings
         // F() to keep string in flash, not ram
-        V0_println(F("Enter single char command: Z, *, @, /, X, C, U, V, T, K, A, P, D, R, G"));
+        V0_println(F("Enter single char command: Z, *, @, /, X, C, U, V, T, K, A, P, D, R, G, S"));
         V0_print(F(UNDERLINE_OFF NORMAL));
 
         Watchdog.reset();
@@ -530,6 +532,11 @@ void user_interface(void) {
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
                 break;
+            case 'S':
+                get_user_input("Enter use_sim65m: 1 if gps chip is SIM65, 0 if ATGM3365N-31:",
+                    _use_sim65m, sizeof(_use_sim65m));
+                write_FLASH();
+                break;
             case 13:  break;
             case 10:  break;
             default:
@@ -551,7 +558,9 @@ void user_interface(void) {
 
 // background
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
-#define FLASH_BYTES_USED 29
+
+// update whever you add a bit or more to flash used (the offsets used below)
+#define FLASH_BYTES_USED 30
 int read_FLASH(void) {
     Watchdog.reset();
     V1_print("read_FLASH START" EOL);
@@ -614,11 +623,13 @@ int read_FLASH(void) {
     // FIX! change to _band everywhere?
     strncpy(_Band,         flash_target_contents + 17, 2); _Band[2] = 0;
     strncpy(_tx_high,      flash_target_contents + 19, 1); _tx_high[1] = 0;
-    strncpy(_testmode,      flash_target_contents + 20, 1); _testmode[1] = 0;
+    strncpy(_testmode,     flash_target_contents + 20, 1); _testmode[1] = 0;
     strncpy(_correction,   flash_target_contents + 21, 6); _correction[6] = 0;
     strncpy(_go_when_rdy,  flash_target_contents + 27, 1); _go_when_rdy[1] = 0;
     strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
+    strncpy(_use_sim65m,   flash_target_contents + 29, 1); _use_sim65m[1] = 0;
 
+    
     PLL_SYS_MHZ = atoi(_clock_speed);
     // recalc
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
@@ -638,6 +649,9 @@ int read_FLASH(void) {
 
     if (_testmode[0] == '1') TESTMODE = true;
     else TESTMODE = false;
+    if (_use_sim65m[0] == '1') USE_SIM65M = true;
+    else USE_SIM65M = false;
+
     decodeVERBY();
 
     V1_print("read_FLASH END" EOL);
@@ -707,6 +721,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 21, _correction, 6);
     strncpy(data_chunk + 27, _go_when_rdy, 1);
     strncpy(data_chunk + 28, _factory_reset_done, 1);
+    strncpy(data_chunk + 29, _use_sim65m, 1);
 
     // you could theoretically write 16 pages at once (a whole sector).
     // don't interrupt
@@ -947,6 +962,13 @@ int check_data_validity_and_set_defaults(void) {
         result = -1;
     }
     //*****************
+    if (_use_sim65m[0] != '0' && _use_sim65m[0] != '1') {
+        V0_printf(EOL "_use_sim65m %s is not supported/legal, initting to 0" EOL, _use_sim65m);
+        snprintf(_use_sim65m, sizeof(_use_sim65m), "0");
+        write_FLASH();
+        result = -1;
+    }
+    //*****************
     if (_factory_reset_done[0] != '0' && _factory_reset_done[0] != '1') {
         V0_printf(EOL "_factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, _factory_reset_done);
         doFactoryReset(); // no return, reboots
@@ -979,6 +1001,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_printf("correction:%s" EOL, _correction);
     V0_printf("go_when_rdy:%s" EOL, _go_when_rdy);
     V0_printf("factory_reset_done:%s" EOL, _factory_reset_done);
+    V0_printf("use_sim65m %s" EOL, _use_sim65m);
     V0_printf("XMIT_FREQUENCY:%lu" EOL, XMIT_FREQUENCY);
     V0_print(F(EOL "SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
 
@@ -998,13 +1021,14 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_println(F("C: change Callsign (6 char max)"));
     V0_println(F("U: change U4b channel # (0-599)"));
     V0_println(F("A: change band (10,12,15,17,20 default 20)"));
-    V0_println(F("P: change tx power: 1 high: 0 lower default )"));
+    V0_println(F("P: change tx power: 1 high, 0 lower default )"));
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
     V0_printf(   "K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
     V0_println(F("D: TESTMODE (currently: sweep telemetry values) (default: 0)"));
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));
+    V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
 
     V0_print(F("show_values() END" EOL));
 }
@@ -1025,6 +1049,7 @@ void doFactoryReset() {
     // when we read_FLASH, if this is 0, we set everything to default
     // or if user command is '*'
     snprintf(_factory_reset_done, sizeof(_go_when_rdy), "1");
+    snprintf(_use_sim65m, sizeof(_use_sim65m), "0");
 
     // What about the side decodes? Don't worry, just reboot
     write_FLASH();

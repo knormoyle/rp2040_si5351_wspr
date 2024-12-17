@@ -5,6 +5,10 @@
 
 // REMEMBER: no references to Serial.* in BALLOON_MODE! (no usb)
 
+// which gps chip is used?
+// ATGM336N if false
+extern bool USE_SIM65M;
+
 //*******************************************
 // Reference docs (for SIM28 but should apply)
 // can download all from https://simcom.ee/documents/?sort_by=size&sort_as=desc&dir=SIM28/
@@ -86,7 +90,8 @@ extern const int GPS_UART1_RX_PIN;
 extern const int GPS_UART1_TX_PIN;
 
 extern const int SERIAL2_FIFO_SIZE;
-extern const int SERIAL2_BAUD_RATE;
+extern const int ATGM336H_BAUD_RATE;
+extern const int SIM65M_BAUD_RATE;
 
 // for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
 extern absolute_time_t GpsStartTime;  // usecs
@@ -107,7 +112,7 @@ extern bool IGNORE_KEYBOARD_CHARS;
 extern uint32_t PLL_SYS_MHZ;  // decode of _clock_speed
 extern bool BALLOON_MODE;
 
-// ************************************************
+//************************************************
 // false and true work here
 bool LOWEST_POWER_TURN_ON_MODE = true;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
@@ -119,7 +124,7 @@ bool ALLOW_KAZU_SLOW_CLOCKS_MODE = false;
 // try true 12/15/24
 bool ALLOW_KAZU_12MHZ_MODE = true;  // true not working with Serial2?
 
-// ************************************************
+//************************************************
 static bool GpsIsOn_state = false;
 bool GpsIsOn(void) {
     return GpsIsOn_state;
@@ -280,6 +285,7 @@ void setGpsBalloonMode(void) {
 // always GGA GLL GSA GSV RMC
 // nver ZDA TXT
 void setGpsBroadcast(void) {
+    // FIX! we'll have to figure this out for SIM65M
     V1_print(F("setGpsBroadcast START" EOL));
     updateStatusLED();
     Watchdog.reset();
@@ -355,6 +361,7 @@ void setGpsBroadcast(void) {
 }
 //************************************************
 void disableGpsBroadcast(void) {
+    // FIX! we'll have to figure this out for SIM65M
     V1_print(F("disableGpsBroadcast START" EOL));
     updateStatusLED();
     Watchdog.reset();
@@ -399,6 +406,7 @@ void disableGpsBroadcast(void) {
 
 //************************************************
 void setGpsConstellations(int desiredConstellations) {
+    // FIX! we'll have to figure this out for SIM65M
     V1_printf("setConstellations START %d" EOL, desiredConstellations);
     updateStatusLED();
     Watchdog.reset();
@@ -437,6 +445,140 @@ void setGpsConstellations(int desiredConstellations) {
     V1_printf("setGpsConstellations END %d" EOL, desiredConstellations);
 }
 
+void setupSIM65M(int desiredBaud) {
+    // Packet Type:002 PAIR_GNSS_SUBSYS_POWER_ON
+    // Power on the GNSS system. Include DSP/RF/Clock and other GNSS modules.
+    // $PAIR002*38\r\n
+
+    // Packet Type:003 PAIR_GNSS_SUBSYS_POWER_OFF
+    // Power off GNSS system. Include DSP/RF/Clock and other GNSS modules.
+    // CM4 also can receive commands (Include the AT command / the race Command / the part of PAIR
+    // command which is not dependent on DSP.) after sending this command
+    // The location service is not available after this command is executed.
+    // The system can still receive configuration PAIR commands. 
+    // The application is running if necessary.
+    // CM4 will go to sleep if the application is not working at this time. 
+    // The system can be awoken by the GNSS_DATA_IN_EINT pin after going to sleep.
+    // $PAIR003*39\r\n
+
+    // Packet Type:004 PAIR_GNSS_SUBSYS_HOT_START
+    // Hot Start. Use the available data in the NVRAM
+    // $PAIR004*3E\r\n
+
+    // Packet Type:005 PAIR_GNSS_SUBSYS_WARM_START
+    // Warm Start. Not using Ephemeris data at the start
+    // $PAIR005*3F\r\n
+
+    // Packet Type:006 PAIR_GNSS_SUBSYS_COLD_START
+    // Cold Start. Not using the Position, Almanac and Ephemeris data at the start
+    // $PAIR006*3C\r\n
+
+    // Packet Type:007 PAIR_GNSS_SUBSYS_FULL_COLD_START
+    // Full Cold Start
+    // In addition to Cold start, this command clears the system/user configurations at the start
+    // It resets the GNSS module to the factory default
+    // $PAIR007*3D\r\n
+
+    // Packet Type:022 PAIR_READY_TO_READ
+    // Host system wake up notification.
+    // There is no need to use this command, if the host does not enter sleep or HW not set 
+    // the configuration of GNSS_NOTIFY_HOST_WAKEUP_PIN.
+
+    // Application (gnss_demo project) will pull high GNSS_NOTIFY_HOST_WAKEUP_PIN > 10ms when data is
+    // ready to send to wake up host application.
+    // Please send this command as ACK to SIM65M after wakeup done.
+    // GPIO 24 is default to wakeup
+    // $PAIR022*3A\r\n
+
+    // Packet Type:023 PAIR_SYSTEM_REBOOT
+    // Reboot GNSS whole chip, including the GNSS submodule and other all CM4 modules.
+    // $PAIR023*3B\r\n
+
+    // 2.3.32 Packet Type:062
+    // PAIR_COMMON_SET_NMEA_OUTPUT_RATE
+    // Set the NMEA sentence output interval of corresponding NMEA type
+    // see SIM65M Series_NMEA Message_User Guide_V1.00.pdf for details
+
+    // Packet Type:864 PAIR_IO_SET_BAUDRATE
+    // Set port baud rate configuration
+    // Must reboot the device after changing the port baud rate. The change will valid after reboot
+
+    // Port_Type----HW Port Type:
+    // 0: UART [ER1 support]
+    // Port_Index----HW Port Index:
+    // 0: UART0
+    // 1: UART1
+    // 2: UART2
+    // Baudrate----the baud rate need config:
+    // Support 115200, 230400, 460800, 921600, 3000000
+    // $PAIR864,0,0,115200*1B\r\n
+
+    // default baud rate is 115200 maybe?
+
+    // Packet Type:866 PAIR_IO_SET_FLOW_CONTROL
+    // Port_Type----HW Port Type.
+    // 0: UART
+    // Port_Index----HW Port Index
+    // UART - 0: UART0, 1: UART1, 2: UART2
+    // Flow_control
+    // 0, disable flow control. 1, enable SW flow control. 2, enable HW flow control
+    // $PAIR866,0,2,1*2D\r\n ==> Set UART2 SW Flow Control ON
+
+    // Packet Type:860 PAIR_IO_OPEN_PORT
+    // Open a GNSS data port
+    // DataField:
+    // $PAIR860,<Port_Type>,<Port_Index>,<Data_Type>,<Baudrate>,<Flow_control>*CS<CR><LF>
+    // NameUnitDefaultDescription
+    // Port_Type----HW Port Type:
+    // 0: UART [ER1 support]
+    // 1: I2C
+    // [ER2 support]
+    // 2: SPI
+    // [ER2 support]
+    // 3: USB
+    // [ER1 support]
+    // 4: SD-Card [ER3 support]
+    // Port_Index----HW Port Index:
+    // UART - 0: UART0, 1: UART1, 2: UART2
+    // USB - 0: USB Virtual Port 0, 1: USB Virtual Port 1
+    // Others - 0: Only one port
+    // Data_Type----A bitmap to config data type:
+    // GNSS_IO_FLAG_OUT_NMEA 0x01
+    // GNSS_IO_FLAG_OUT_LOG 0x02
+    // GNSS_IO_FLAG_OUT_CMD_RSP 0x04
+    // GNSS_IO_FLAG_OUT_DATA_RSP 0x08
+    // GNSS_IO_FLAG_OUT_RTCM 0x10
+    // GNSS_IO_FLAG_IN_CMD 0x20
+    // GNSS_IO_FLAG_IN_DATA 0x40
+    // GNSS_IO_FLAG_IN_RTCM 0x80
+    // Baudrate----the baud rate must be configured. This parameter is only
+    // valid for UART. Please use 0 for other port type:
+    // Support 110, 300, 1200, 2400, 4800, 9600, 19200, 38400,
+    // 57600, 115200, 230400, 460800, 921600, 3000000
+    // Flow_control----0, disable flow control. 1, enable SW flow control. 2,
+    // enable HW flow control. This parameter is only valid for
+    // UART. Please use 0 for other port type
+
+    // $PAIR860,0,0,37,9600,0*23\r\n ==> Open UART0 to NMEA output without flow control.
+    // Baudrate is 9600.
+    // $PAIR860,0,1,37,9600,0*22\r\n ==> Open UART1 to NMEA output without flow control.
+    // Baudrate is 9600.
+    // $PAIR860,0,2,37,9600,0*21\r\n ==> Open UART2 to NMEA output without flow control.
+    // Baudrate is 9600.
+
+    // $PAIR860,0,0,37,115200,0*2B\r\n ==> Open UART0 to NMEA output without flow control.
+    // Baudrate is 115200.
+    // $PAIR860,0,1,37,115200,0*2A\r\n ==> Open UART1 to NMEA output without flow control.
+    // Baudrate is 115200.
+    // $PAIR860,0,2,37,115200,0*29\r\n ==> Open UART2 to NMEA output without flow control.
+    // Baudrate is 115200.
+
+
+    // Packet Type:862 PAIR_IO_SET_DATA_TYPE
+    // Set GNSS port data type configuration
+    // hopefully default for uart0/1/2 is NMEA output
+}
+
 //************************************************
 void setGpsBaud(int desiredBaud) {
     // Assumes we can talk to gps already at some existing agreed
@@ -453,58 +595,73 @@ void setGpsBaud(int desiredBaud) {
     // https://www.meme.au/nmea-checksum.html
     // should just get legal ones here
     int usedBaud = checkGpsBaudRate(desiredBaud);
-    char nmeaBaudSentence[21] = { 0 };
+    char nmeaBaudSentence[64] = { 0 };
     // BAUD
-    switch (usedBaud) {
-        // this is default. must be 9600?
-        // should it be the p
-        // weird: what is this case gonna do?
-        // case 0:      strncpy(nmeaBaudSentence, "$PMTK251,0*28" CR LF, 21); break;
-        // case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
-        // case 19200:  strncpy(nmeaBaudSentence, "$PMTK251,19200*22" CR LF, 21); break;
-        // case 38400:  strncpy(nmeaBaudSentence, "$PMTK251,38400*27" CR LF, 21); break;
-        // case 57600:  strncpy(nmeaBaudSentence, "$PMTK251,57600*2C" CR LF, 21); break;
-        // case 115200: strncpy(nmeaBaudSentence, "$PMTK251,115200*1F" CR LF, 21); break;
+    if (USE_SIM65M) {
+        switch (usedBaud) {
+            // $PAIR860,0,0,37,9600,0*23\r\n ==> Open UART0 to NMEA output without flow control.
+            // Baudrate is 9600.
+            case 9600:   
+                // alternate baudrate only but says min is 115200?
+                // yes! 9600 works after boot with 115200!. no buffer overflow
+                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,9600*13" CR LF, 64);
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64);
+                break;
+            // $PAIR860,0,0,37,19200,0*16
+            case 19200:  
+                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,19200*26" CR LF, 64);
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,19200,0*16" CR LF, 64); break;
+            // $PAIR860,0,0,37,38400,0*13
+            case 38400:  
+                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,38400*23" CR LF, 64);
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,38400,0*13" CR LF, 64); break;
+            // $PAIR860,0,0,37,57600,0*18
+            case 57600:  
+                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,57600*28" CR LF, 64);
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,57600,0*18" CR LF, 64); break;
+            // $PAIR860,0,0,37,115200,0*2B\r\n ==> Open UART0 to NMEA output without flow control.
+            // Baudrate is 115200.
+            case 115200: 
+                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,115200*1B" CR LF, 64);
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,115200,0*2B" CR LF, 64); break;
+            default:
+                usedBaud = 9600;
+                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,9600*13" CR LF, 64);
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64); break;
+        }
+    } else {
+        switch (usedBaud) {
+            case 4800:   strncpy(nmeaBaudSentence, "$PCAS01,0*1C" CR LF, 21); break;
 
-        // PMTK_SET_NMEA_BAUDRATE per SIM28 manual:
-        // Set NMEA port baudrate.
-        // Using PMTK251 command to setup baud rate setting, the setting will be back
-        // to default value in the two conditions.
-        // 1. Full cold start command is issued !! reverts to 9600?
-        // 2. Enter standby mode (is this when vcc off, vbat on?
-        // PMTK_CMD_STANDY_MODE enters standby mode (one of two SLEEP stages)
+            // didn't work . now it worked?
+            // seems to be okay if chip is in 9600 state
+            case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
+            // worked.. hmm broken? had to restart arduino to get it to work
+            // case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
 
-        case 4800:   strncpy(nmeaBaudSentence, "$PCAS01,0*1C" CR LF, 21); break;
+            // worked
+            case 19200:  strncpy(nmeaBaudSentence, "$PCAS01,2*1E" CR LF, 21); break;
+            // didn't work
+            // case 19200:  strncpy(nmeaBaudSentence, "$PMTK251,19200*22" CR LF, 21); break;
 
-        // didn't work . now it worked?
-        // seems to be okay if chip is in 9600 state
-        case 9600:   strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21); break;
-        // worked.. hmm broken? had to restart arduino to get it to work
-        // case 9600:   strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21); break;
+            // worked
+            case 38400:  strncpy(nmeaBaudSentence, "$PCAS01,3*1F" CR LF, 21); break;
+            // didn't work
+            // case 38400:  strncpy(nmeaBaudSentence, "$PMTK251,38400*27" CR LF, 21); break;
 
-        // worked
-        case 19200:  strncpy(nmeaBaudSentence, "$PCAS01,2*1E" CR LF, 21); break;
-        // didn't work
-        // case 19200:  strncpy(nmeaBaudSentence, "$PMTK251,19200*22" CR LF, 21); break;
-
-        // worked
-        case 38400:  strncpy(nmeaBaudSentence, "$PCAS01,3*1F" CR LF, 21); break;
-        // didn't work
-        // case 38400:  strncpy(nmeaBaudSentence, "$PMTK251,38400*27" CR LF, 21); break;
-
-        // didn't work
-        case 57600:  strncpy(nmeaBaudSentence, "$PCAS01,4*18" CR LF, 21); break;
-        // ?
-        // case 57600:  strncpy(nmeaBaudSentence, "$PMTK251,57600*2C" CR LF, 21); break;
-        // worked (prints). but lots of buffer overrun ERRORs overflowing Rx buffer
-        case 115200: strncpy(nmeaBaudSentence, "$PCAS01,5*19" CR LF, 21); break;
-        // ?
-        // case 115200: strncpy(nmeaBaudSentence, "$PMTK251,115200*1F" CR LF, 21); break;
-
-        default:
-            usedBaud = 9600;
-            // strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21);
-            strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21);
+            // didn't work
+            case 57600:  strncpy(nmeaBaudSentence, "$PCAS01,4*18" CR LF, 21); break;
+            // ?
+            // case 57600:  strncpy(nmeaBaudSentence, "$PMTK251,57600*2C" CR LF, 21); break;
+            // worked (prints). but lots of buffer overrun ERRORs overflowing Rx buffer
+            case 115200: strncpy(nmeaBaudSentence, "$PCAS01,5*19" CR LF, 21); break;
+            // ?
+            // case 115200: strncpy(nmeaBaudSentence, "$PMTK251,115200*1F" CR LF, 21); break;
+            default:
+                usedBaud = 9600;
+                // strncpy(nmeaBaudSentence, "$PMTK251,9600*17" CR LF, 21);
+                strncpy(nmeaBaudSentence, "$PCAS01,1*1D" CR LF, 21);
+        }
     }
 
     // https://forum.arduino.cc/t/solved-proper-way-to-change-baud-rate-after-initial-setup/419860/5
@@ -513,6 +670,7 @@ void setGpsBaud(int desiredBaud) {
     delay(1000);
     Serial2.print(nmeaBaudSentence);
     Serial2.flush();
+
     V1_printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
     // have to wait for the sentence to get out and complete at the GPS
     delay(3000);
@@ -592,12 +750,19 @@ void GpsINIT(void) {
     Serial2.flush();
     Serial2.end();
 
-    // first talk at 9600..but GpsFullColdReset() will do..so a bit redundant
-    Serial2.begin(9600);
+    if (USE_SIM65M) {
+        // default uart baud rate for SIM65
+        Serial2.begin(115200);
+    } else {
+        // first talk at 9600..but GpsFullColdReset() will do..so a bit redundant
+        Serial2.begin(9600);
+    }
     gpsSleepForMillis(500, false);
     //****************
 
     // full cold reset, plus set baud to target baud rate, and setGpsBalloonMode done
+    // FIX! hmm will sim65 reset to 9600 ? will it stay at the new baud rate thru warm reset and cold reset
+    // like ATGM366N (weird) or will it default to 115200 again. 
     GpsFullColdReset();
     // gps is powered up now
 
@@ -931,7 +1096,9 @@ void GpsFullColdReset(void) {
     // gps shold come up at 9600 so look with our uart at 9600?
 
     // FIX! if we're stuck at 4800, okay..this won't matter
-    Serial2.begin(9600);
+    // initially talking to it at what baud rate?
+    if (USE_SIM65M) Serial2.begin(115200);
+    else Serial2.begin(9600);
     // wait for 1 secs before sending commands
     gpsSleepForMillis(1000, false);
     V1_println(F("Should get some output at 9600 after reset?"));
@@ -939,7 +1106,11 @@ void GpsFullColdReset(void) {
     drainInitialGpsOutput();
 
     // But then we'll be good when we transition to the target rate also
-    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+    int BAUD_RATE;
+    if (USE_SIM65M) BAUD_RATE = SIM65M_BAUD_RATE;
+    else BAUD_RATE = ATGM336H_BAUD_RATE;
+
+    int desiredBaud = checkGpsBaudRate(BAUD_RATE);
     setGpsBaud(desiredBaud);
     // this is all done earlier in the experimental mode
     // FIX! we don't need to toggle power to get the effect?
@@ -1007,7 +1178,11 @@ void GpsWarmReset(void) {
 
     // FIX! this is a don't care then? whatever it was? or ??
     // but since we serial2.end() above, we have to restart it on the rp2040
-    int desiredBaud = checkGpsBaudRate(SERIAL2_BAUD_RATE);
+    int BAUD_RATE;
+    if (USE_SIM65M) BAUD_RATE = SIM65M_BAUD_RATE;
+    else BAUD_RATE = ATGM336H_BAUD_RATE;
+
+    int desiredBaud = checkGpsBaudRate(BAUD_RATE);
     // then up the speed to desired (both gps chip and then Serial2
     setGpsBaud(desiredBaud);
     setGpsBalloonMode();
@@ -1052,6 +1227,8 @@ void GpsWarmReset(void) {
 
 //************************************************
 void writeGpsConfigNoBroadcastToFlash() {
+    // FIX! we'll have to figure this out for SIM65M
+
     // risk: do we ever power on and not do this full cold reset
     // that sets up broadcast?
     // the warm gps reset shouldn't get new state from config?

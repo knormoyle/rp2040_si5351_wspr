@@ -18,11 +18,11 @@ void yPrintln(const char* pformat, ...);
 
 // hmm. why is \n not sufficient?
 // escape the double quotes, since we want them
-#define EOL "\"\r\n\""
+#define EOL "\r\n"
 // ascii 13
-#define CR "\"\r\""
+#define CR "\r"
 // ascii 10
-#define LF "\"\n\""
+#define LF "\n"
 
 
 //***********************************************
