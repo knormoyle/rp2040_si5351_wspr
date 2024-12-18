@@ -50,6 +50,17 @@ extern bool USE_SIM65M;
 // I decided to use polling mode, not be interrupt driven on Serial2 data.
 // more deterministic behavior? dunno.
 
+//**************************************************
+// SIM65M
+// Getting AG3352 (core gps chip from Airoha company) in version info from SIM65M
+// https://www.airoha.com/products/p/zy4r082hgNywp1bg
+// AG3352 series
+// The new generation of single-frequency GNSS,
+// in addition to the continuation of the 3352 features,
+// adds the B1C and L1C frequency bands of Beidou-3 and GPS,
+// making the positioning accuracy close to the dual-frequency standard,
+//**************************************************
+
 #include <Arduino.h>
 // for isprint()
 #include <ctype.h>
@@ -135,6 +146,58 @@ bool GpsIsOn(void) {
 #define NMEA_BUFFER_SIZE 8 * 255
 static char nmeaBuffer[NMEA_BUFFER_SIZE] = { 0 };
 
+//************************************************
+// subfunction just to have consistent incomingChar/charsAvailable management
+// in updateGpsDataAndTime() and nmeaBufferFastPoll()
+char incomingChar;
+int charsAvailable;
+void getChar() {
+    // setup for next loop iteration
+    charsAvailable = Serial2.available();
+    if (charsAvailable) incomingChar = Serial2.read();
+    else incomingChar = '0';
+}
+//************************************************
+// tries to get all data from gps without losing any, for a blocking period of time
+// loops as fast as possible into a ram buffer
+void nmeaBufferFastPoll(uint64_t duration_millis, bool printIfFull) {
+    uint64_t start_millis = millis();
+    // nmeaBuffer should be empty the first time we use this?
+    // should be no harm (delay) in checking here?
+    nmeaBufferPrintAndClear();
+    bool spaceChar, nullChar, stopPrint, printable;
+    while (millis() - start_millis < duration_millis) {
+        // set globals: incomingChar, charsAvailable
+        getChar();
+        while (charsAvailable) {
+            // do we get any null chars?
+            // are CR LF unprintable?
+            spaceChar = false;
+            nullChar = false;
+            stopPrint = false;
+            printable = isprint(incomingChar);
+            // good to eliminate garbage to save buffer room
+            // we'll add appropriate EOLs when printing buffer
+            // FIX! will there be enough garbage visible when baud rate is wrong
+            // that we'll still see bad baud rate issues?
+            switch (incomingChar) {
+                case '\n': stopPrint = true; break;
+                case '\r': stopPrint = true; break;
+                case '\0': nullChar = true; break;
+                case ' ':  spaceChar = true; break;
+                default: { ; }
+            }
+            if (!spaceChar && !nullChar && !stopPrint && printable) {
+                nmeaBufferAndPrint(incomingChar, printIfFull);
+            }
+            getChar();
+        }
+        busy_wait_ms(1); // just wait 1 milli?
+    }
+    nmeaBufferPrintAndClear();
+}
+
+//***************************************************
 // Outputs the content of the nmea buffer to stdio (UART and/or USB)
 void nmeaBufferPrintAndClear(void) {
     if (!VERBY[1]) return;
@@ -264,10 +327,43 @@ void drainInitialGpsOutput(void) {
 }
 
 //************************************************
+
 void setGpsBalloonMode(void) {
     V1_println(F("setGpsBalloonMode START"));
+
+    //************************
+    // Interesting! what kind of extra debuglog output?
+    // SIM65M
+    // 2.3.54 Packet Type:087 PAIR_COMMON_GET_DEBUGLOG_OUTPUT
+    // Query setting of debug log output.
+    // $PAIR087*CS<CR><LF>
+    // 2. $PAIR087,<Status>*<checksum>
+    // DataField:
+    // 0: Disable
+    // 1: Enable with full debuglog output
+    // 2: Enable with lite debuglog output
+    // Example:
+    // $PAIR087,1*28*35 ==> Enable Debuglog output
+
+    //************************
+    // SIM65M
+    // Packet Type:080 PAIR_COMMON_SET_NAVIGATION_MODE
+    // Set navigation mode
+    // $PAIR080,<CmdType>*<checksum>
+    // '0' Normal mode: For general purpose
+    // '1' [Default Value] Fitness mode: For running and walking activities so that the low-speed (< 5 m/s)
+    // movement will have more of an effect on the position calculation.
+    // '2' Reserved
+    // '3' Reserved
+    // '4' Stationary mode: For stationary applications where a zero dynamic assumed.
+    // '5' Reserved
+    // '6' Reserved
+    // '7' Swimming mode: For swimming purpose so that it
+    // smooths the trajectory and improves the accuracy of distance calculation.
+    //************************
+
     // FIX! should we not worry about setting balloon mode (3) for ATGM336?
-    // doesn't seem like ATGM336 has a balloon mode. no PCAS10 cmd in 
+    // doesn't seem like ATGM336 has a balloon mode. no PCAS10 cmd in
     // the CASIC specifiction pdf
 
     // Serial2.print("$PSIMNAV,W,3*3A\r\n");
@@ -282,6 +378,63 @@ void setGpsBalloonMode(void) {
 }
 
 //************************************************
+void setGnssOn_SIM65M(void) {
+    // Packet Type:002 PAIR_GNSS_SUBSYS_POWER_ON
+    // Power on the GNSS system. Include DSP/RF/Clock and other GNSS modules.
+    // Please send this command before using any location service.
+
+    // Packet Type:020 PAIR_GET_VERSION
+    // Query the firmware release information
+
+    // Packet Type:021 PAIR_GET_SETTING_INFO
+    // Query the customer related setting,
+    // such as the firmware release information, DCB values, HW interface,
+    // ULP enable and NVRAM auto saving.
+
+    V1_println(F("setGnsOn_SIM65M START"));
+    // PAIR_GET_VERSION
+
+    //*****************
+    Serial2.print("$PAIR020*38" CR LF);
+    // Serial2.flush();
+    // can see that nmeaBufferFastPoll() does get us the responses
+    // we don't validate or wait for responses (yet??)
+    // we can see version numbers here, et
+    // interesting: AG3352Q_V2.5.0.AG3352_20230420
+
+    // I suppose there is some flow control, i.e. I shouldn't send
+    // to many overlapping requests. I guess it depends on the service
+    // that is absorbing and responding to requests..the ACK/NACK responses
+    // aid sw flow control
+
+    // $GNGGA,213449.096,,,,,0,0,,,M,,M
+    // $PAIR001,000,4*3F
+    // $PAIR001,020,0*39
+    // $PAIR020,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,*17
+    nmeaBufferFastPoll(2000, true); // duration_millis, printIfFull
+
+    //*****************
+    // PAIR_GET_SETTING
+    Serial2.print("$PAIR021*39" CR LF);
+    // Serial2.flush();
+    nmeaBufferFastPoll(2000, true); // duration_millis, printIfFull
+
+    //*****************
+    // this worked but does it already default to on after power on or ?? Seems to
+    // FIX! we could change power on config to off,
+    // to have softer power-on peak current?
+    // Could change default power on baud rate config also
+    // (when writing to flash)
+    if (false) {
+        // PAIR_GNSS_SUBSYS_POWER_ON
+        Serial2.print("$PAIR002*38" CR LF);
+        Serial2.flush();
+        sleep_ms(2000);
+    }
+    V1_println(F("setGnsOn_SIM65M END"));
+}
+
+//************************************************
 // always GGA GLL GSA GSV RMC
 // nver ZDA TXT
 void setGpsBroadcast(void) {
@@ -292,69 +445,128 @@ void setGpsBroadcast(void) {
     // room for a 60 char sentence with CR and LF also
     char nmeaSentence[62] = { 0 };
 
-    //*************************************************
-    // ZDA
-    // this time info is in other sentences also?
-    // $–ZDA,hhmmss.ss,xx,xx,xxxx,xx,xx
-    // hhmmss.ss = UTC
-    // xx = Day, 01 to 31
-    // xx = Month, 01 to 12
-    // xxxx = Year // xx = Local zone description, 00 to +/- 13 hours
-    // xx = Local zone minutes description (same sign as hours)
+    if (USE_SIM65M) {
+        //****************
+        // Packet Type:050 PAIR_COMMON_SET_FIX_RATE
+        // Set Position Fix Interval.
+        // If set less than 1000 ms, ASCII NMEA will automatically increase the update interval in order to decrease IO
+        // throughput.  It will return false if the operating voltage setting is not correct.
+        // For SIM65M module, <Fix_Interval> parameter only support 1000 ms.
+        // $PAIR050,<Fix_Interval>*<checksum>
+        // Fix_Intervalmsec--Fix_Interval: Position fix interval in milliseconds (ms).
+        // [Range: 100 ~ 1000]
+        // [Example]
+        // $PAIR050,1000*12
 
-    //*************************************************
-    // from the latest CASIC_ProtocolSpecification_english.pdf
-    // $PCAS03 string nGGA value Message ID, sentence header
+        //****************
+        // Packet Type:062 PAIR_COMMON_SET_NMEA_OUTPUT_RATE
+        // Set the NMEA sentence output interval of corresponding NMEA type
+        // $PAIR062,<Type>,<Output_Rate>*<checksum>
+        // -1 Reset all sentence to default value
+        // 0 NMEA_SEN_GGA, // GGA interval - GPS Fix Data
+        // 1 NMEA_SEN_GLL, // GLL interval - Geographic Position - Latitude longitude
+        // 2 NMEA_SEN_GSA, // GSA interval - GNSS DOPS and Active Satellites
+        // 3 NMEA_SEN_GSV, // GSV interval - GNSS Satellites in View
+        // 4 NMEA_SEN_RMC, // RMC interval - Recommended Minimum Specific GNSS Sentence
+        // 5 NMEA_SEN_VTG, // VTG interval - Course Over Ground and Ground Speed
+        // 6 NMEA_SEN_ZDA, // ZDA interval - Time & Date
 
-    // no 0 or 1 fields?
+        // Output interval: <what is default? should we only output 1 per 5 position fixes?
+        // is the position fix rate 1 per sec to 10 per sec?
+        // 0 - Disabled or not supported sentence
+        // 1 - Output once every one position fix
+        // 2 - Output once every two position fixes
+        // 3 - Output once every three position fixes
+        // 4 - Output once every four position fixes
+        // 5 - Output once every five position fixes
+        strncpy(nmeaSentence, "$PAIR062,0,5*3B" CR LF, 62);
+        Serial2.print(nmeaSentence);
+        busy_wait_us(500);
+        strncpy(nmeaSentence, "$PAIR062,1,5*3A" CR LF, 62);
+        Serial2.print(nmeaSentence);
+        busy_wait_us(500);
+        strncpy(nmeaSentence, "$PAIR062,2,5*39" CR LF, 62);
+        Serial2.print(nmeaSentence);
+        busy_wait_us(500);
+        strncpy(nmeaSentence, "$PAIR062,3,5*38" CR LF, 62);
+        Serial2.print(nmeaSentence);
+        busy_wait_us(500);
+        strncpy(nmeaSentence, "$PAIR062,4,5*3F" CR LF, 62);
+        Serial2.print(nmeaSentence);
+        busy_wait_us(500);
+        strncpy(nmeaSentence, "$PAIR062,5,5*3E" CR LF, 62);
+        Serial2.print(nmeaSentence);
+        busy_wait_us(500);
+        strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
+        Serial2.print(nmeaSentence);
+        busy_wait_us(500);
 
-    // 2  GGA output frequency, statement output frequency is based on positioning update rate
-    // n (0~9) means output once every n positioning times, 0 means no output
-    // If this statement is left blank, the original configuration will be retained.
+    } else {
+        //*************************************************
+        // ATGM336H
 
-    // 3  nGLL GLL output frequency,  same as nGGA
-    // 4  nGSA GSA output frequency,  same as nGGA
-    // 5  nGSV SV output frequency,   same as nGGA
-    // 6  nRMC RMC output frequency,  same as nGGA
-    // 7  nVTG VTG output frequency,  same as nGGA
-    // 8  nZDA ZDA output frequency,  same as nGGA
-    // 9  nANT ANT output frequency,  same as nGGA (this is the antenna open TXT ?)
-    // 10 nDHV DHV output frequency,  same as nGGA
-    // 11 nLPS LPS output frequency,  same as nGGA
-    // 12 res1 reserve
-    // 13 res2 reserve
-    // 14 nUTC UTC output frequency,  same as nGGA
-    // 15 nGST GST output frequency,  same as nGST
-    // 16 res3 reserve
-    // 17 res4 reserve
-    // 18 res5 reserve
-    // 19 nTIM TIM (PCAS60) output frequency, same as nGGA
+        // ZDA
+        // this time info is in other sentences also?
+        // $–ZDA,hhmmss.ss,xx,xx,xxxx,xx,xx
+        // hhmmss.ss = UTC
+        // xx = Day, 01 to 31
+        // xx = Month, 01 to 12
+        // xxxx = Year // xx = Local zone description, 00 to +/- 13 hours
+        // xx = Local zone minutes description (same sign as hours)
 
-    // 20 CSvalue Hexadecimal value checksum,
-    //    XOR result of all characters between $ and * (excluding $ and *)
-    // 21 <CR><LF> charactersCarriage return and line feed
+        //*************************************************
+        // from the latest CASIC_ProtocolSpecification_english.pdf
+        // $PCAS03 string nGGA value Message ID, sentence header
 
-    // hmm this didn't work? still got zda and ANT txt. this was a forum posting. wrong apparently
-    // strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0*02" CR LF, 21);
+        // no 0 or 1 fields?
 
-    // spec has more/new detail. see below
-    // FIX! was I still getting GNZDA and GPTXT ANTENNAOPEN with this?
-    strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
+        // 2  GGA output frequency, statement output frequency is based on positioning update rate
+        // n (0~9) means output once every n positioning times, 0 means no output
+        // If this statement is left blank, the original configuration will be retained.
 
-    // example in pdf
-    // first field after 3, is field ..no it's field 2
-    // reserved fields are empty here
-    // all data
-    // $PCAS03,1,1,1,1,1,1,1,1,0,0,,,1,1,,,,1*33
+        // 3  nGLL GLL output frequency,  same as nGGA
+        // 4  nGSA GSA output frequency,  same as nGGA
+        // 5  nGSV SV output frequency,   same as nGGA
+        // 6  nRMC RMC output frequency,  same as nGGA
+        // 7  nVTG VTG output frequency,  same as nGGA
+        // 8  nZDA ZDA output frequency,  same as nGGA
+        // 9  nANT ANT output frequency,  same as nGGA (this is the antenna open TXT ?)
+        // 10 nDHV DHV output frequency,  same as nGGA
+        // 11 nLPS LPS output frequency,  same as nGGA
+        // 12 res1 reserve
+        // 13 res2 reserve
+        // 14 nUTC UTC output frequency,  same as nGGA
+        // 15 nGST GST output frequency,  same as nGST
+        // 16 res3 reserve
+        // 17 res4 reserve
+        // 18 res5 reserve
+        // 19 nTIM TIM (PCAS60) output frequency, same as nGGA
 
-    // using this:
-    // no ANT or ZDA (example already disabled DHV and LPS)
-    // why is 19 TIM PCAS60 needed? That's another receiver time in "subsequent versions"
-    // $PCAS03,1,1,1,1,1,0,0,1,0,0,,,1,1,,,,1*33
+        // 20 CSvalue Hexadecimal value checksum,
+        //    XOR result of all characters between $ and * (excluding $ and *)
+        // 21 <CR><LF> charactersCarriage return and line feed
 
-    Serial2.print(nmeaSentence);
-    Serial2.flush();
-    // delay(1000);
+        // hmm this didn't work? still got zda and ANT txt. this was a forum posting. wrong apparently
+        // strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0*02" CR LF, 21);
+
+        // spec has more/new detail. see below
+        // FIX! was I still getting GNZDA and GPTXT ANTENNAOPEN with this?
+        strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
+
+        // example in pdf
+        // first field after 3, is field ..no it's field 2
+        // reserved fields are empty here
+        // all data
+        // $PCAS03,1,1,1,1,1,1,1,1,0,0,,,1,1,,,,1*33
+
+        // using this:
+        // no ANT or ZDA (example already disabled DHV and LPS)
+        // why is 19 TIM PCAS60 needed? That's another receiver time in "subsequent versions"
+        // $PCAS03,1,1,1,1,1,0,0,1,0,0,,,1,1,,,,1*33
+        Serial2.print(nmeaSentence);
+        Serial2.flush();
+    }
+
 
     V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
     V1_print(F("setGpsBroadcast END" EOL));
@@ -405,6 +617,32 @@ void disableGpsBroadcast(void) {
 // Indicates the customer number (the customer number is 00000000)
 
 //************************************************
+// re: GSV nmea sentences from SIM65M
+// Depending on the number of satellites tracked,
+// multiple messages of GSV data may be required.
+// In some software versions, maximum number of satellites reported as visible is limited to 12,
+// even though more may be visible
+// Hmm: is this fully compatible with max number expected by TinyGPS++ parsing? investigate.
+
+//************************************************
+// re: SIM65M comments on the *RMC nmea sentences
+// A valid status is derived from all the parameters set in the software.
+// This includes the minimum number of satellites required,
+// any DOP mask setting,
+// presence of DGPS corrections, etc.
+// If the default or current software setting requires that a factor is met,
+// then if that factor is not met, the solution will be marked as invalid
+// Does not support magnetic declination.
+// All “course over ground” data are geodetic WGS84 directions relative to true North
+
+//************************************************
+// re: SIM65M 'PAIR' sentences:
+// PAIR command is an AIROHA proprietary GNSS data transferring protocol.
+// This protocol is used to configure the GNSS module’s parameters,
+// to set/get aiding information,
+// and to receive notifications from the GNSS module.
+// To process data conveniently, the PAIR commands is aligned with the NMEA sentence format.
+
 void setGpsConstellations(int desiredConstellations) {
     // FIX! we'll have to figure this out for SIM65M
     V1_printf("setConstellations START %d" EOL, desiredConstellations);
@@ -448,51 +686,52 @@ void setGpsConstellations(int desiredConstellations) {
 void setupSIM65M(int desiredBaud) {
     // Packet Type:002 PAIR_GNSS_SUBSYS_POWER_ON
     // Power on the GNSS system. Include DSP/RF/Clock and other GNSS modules.
-    // $PAIR002*38\r\n
+    // Please send this command before using any location service.
+    // $PAIR002*38
 
     // Packet Type:003 PAIR_GNSS_SUBSYS_POWER_OFF
     // Power off GNSS system. Include DSP/RF/Clock and other GNSS modules.
     // CM4 also can receive commands (Include the AT command / the race Command / the part of PAIR
     // command which is not dependent on DSP.) after sending this command
     // The location service is not available after this command is executed.
-    // The system can still receive configuration PAIR commands. 
+    // The system can still receive configuration PAIR commands.
     // The application is running if necessary.
-    // CM4 will go to sleep if the application is not working at this time. 
+    // CM4 will go to sleep if the application is not working at this time.
     // The system can be awoken by the GNSS_DATA_IN_EINT pin after going to sleep.
     // $PAIR003*39\r\n
 
     // Packet Type:004 PAIR_GNSS_SUBSYS_HOT_START
     // Hot Start. Use the available data in the NVRAM
-    // $PAIR004*3E\r\n
+    // $PAIR004*3E
 
     // Packet Type:005 PAIR_GNSS_SUBSYS_WARM_START
     // Warm Start. Not using Ephemeris data at the start
-    // $PAIR005*3F\r\n
+    // $PAIR005*3F
 
     // Packet Type:006 PAIR_GNSS_SUBSYS_COLD_START
     // Cold Start. Not using the Position, Almanac and Ephemeris data at the start
-    // $PAIR006*3C\r\n
+    // $PAIR006*3C
 
     // Packet Type:007 PAIR_GNSS_SUBSYS_FULL_COLD_START
     // Full Cold Start
     // In addition to Cold start, this command clears the system/user configurations at the start
     // It resets the GNSS module to the factory default
-    // $PAIR007*3D\r\n
+    // $PAIR007*3D
 
     // Packet Type:022 PAIR_READY_TO_READ
     // Host system wake up notification.
-    // There is no need to use this command, if the host does not enter sleep or HW not set 
+    // There is no need to use this command, if the host does not enter sleep or HW not set
     // the configuration of GNSS_NOTIFY_HOST_WAKEUP_PIN.
 
     // Application (gnss_demo project) will pull high GNSS_NOTIFY_HOST_WAKEUP_PIN > 10ms when data is
     // ready to send to wake up host application.
     // Please send this command as ACK to SIM65M after wakeup done.
     // GPIO 24 is default to wakeup
-    // $PAIR022*3A\r\n
+    // $PAIR022*3A
 
     // Packet Type:023 PAIR_SYSTEM_REBOOT
     // Reboot GNSS whole chip, including the GNSS submodule and other all CM4 modules.
-    // $PAIR023*3B\r\n
+    // $PAIR023*3B
 
     // 2.3.32 Packet Type:062
     // PAIR_COMMON_SET_NMEA_OUTPUT_RATE
@@ -511,7 +750,7 @@ void setupSIM65M(int desiredBaud) {
     // 2: UART2
     // Baudrate----the baud rate need config:
     // Support 115200, 230400, 460800, 921600, 3000000
-    // $PAIR864,0,0,115200*1B\r\n
+    // $PAIR864,0,0,115200*1B
 
     // default baud rate is 115200 maybe?
 
@@ -522,7 +761,7 @@ void setupSIM65M(int desiredBaud) {
     // UART - 0: UART0, 1: UART1, 2: UART2
     // Flow_control
     // 0, disable flow control. 1, enable SW flow control. 2, enable HW flow control
-    // $PAIR866,0,2,1*2D\r\n ==> Set UART2 SW Flow Control ON
+    // $PAIR866,0,2,1*2D ==> Set UART2 SW Flow Control ON
 
     // Packet Type:860 PAIR_IO_OPEN_PORT
     // Open a GNSS data port
@@ -601,27 +840,27 @@ void setGpsBaud(int desiredBaud) {
         switch (usedBaud) {
             // $PAIR860,0,0,37,9600,0*23\r\n ==> Open UART0 to NMEA output without flow control.
             // Baudrate is 9600.
-            case 9600:   
+            case 9600:
                 // alternate baudrate only but says min is 115200?
                 // yes! 9600 works after boot with 115200!. no buffer overflow
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,9600*13" CR LF, 64);
                 else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64);
                 break;
             // $PAIR860,0,0,37,19200,0*16
-            case 19200:  
+            case 19200:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,19200*26" CR LF, 64);
                 else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,19200,0*16" CR LF, 64); break;
             // $PAIR860,0,0,37,38400,0*13
-            case 38400:  
+            case 38400:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,38400*23" CR LF, 64);
                 else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,38400,0*13" CR LF, 64); break;
             // $PAIR860,0,0,37,57600,0*18
-            case 57600:  
+            case 57600:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,57600*28" CR LF, 64);
                 else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,57600,0*18" CR LF, 64); break;
             // $PAIR860,0,0,37,115200,0*2B\r\n ==> Open UART0 to NMEA output without flow control.
             // Baudrate is 115200.
-            case 115200: 
+            case 115200:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,115200*1B" CR LF, 64);
                 else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,115200,0*2B" CR LF, 64); break;
             default:
@@ -762,7 +1001,7 @@ void GpsINIT(void) {
 
     // full cold reset, plus set baud to target baud rate, and setGpsBalloonMode done
     // FIX! hmm will sim65 reset to 9600 ? will it stay at the new baud rate thru warm reset and cold reset
-    // like ATGM366N (weird) or will it default to 115200 again. 
+    // like ATGM366N (weird) or will it default to 115200 again.
     GpsFullColdReset();
     // gps is powered up now
 
@@ -1054,7 +1293,7 @@ void GpsFullColdReset(void) {
     //******************
     Watchdog.reset();
 
-    if (false) {
+    if (false and !USE_SIM65M) {
         // TOTAL HACK experiment
         // since vbat seems to preserve the baud rate, even with NRESET assertion
         // try sending the full cold reset command at all reasonable baud rates
@@ -1097,21 +1336,34 @@ void GpsFullColdReset(void) {
 
     // FIX! if we're stuck at 4800, okay..this won't matter
     // initially talking to it at what baud rate?
-    if (USE_SIM65M) Serial2.begin(115200);
-    else Serial2.begin(9600);
-    // wait for 1 secs before sending commands
-    gpsSleepForMillis(1000, false);
-    V1_println(F("Should get some output at 9600 after reset?"));
-    // we'll see if it's wrong baud rate or not, at this point
-    drainInitialGpsOutput();
 
     // But then we'll be good when we transition to the target rate also
     int BAUD_RATE;
     if (USE_SIM65M) BAUD_RATE = SIM65M_BAUD_RATE;
     else BAUD_RATE = ATGM336H_BAUD_RATE;
-
     int desiredBaud = checkGpsBaudRate(BAUD_RATE);
-    setGpsBaud(desiredBaud);
+
+    // FIX! does SIM65M sometimes come up in 115200 and sometimes in the last BAUD_RATE set?
+    // do both?
+    if (USE_SIM65M) {
+        // it either comes up in desiredBaud from some memory, or comes up in 115200?
+        Serial2.begin(115200);
+        setGpsBaud(desiredBaud);
+        // since Serial2 was reset by setGpsBaud()..could try it again. might aid recovery
+        // setGpsBaud(desiredBaud);
+    } else {
+        // it either comes up in desiredBaud from some memory, or comes up in 9600?
+        Serial2.begin(9600);
+        setGpsBaud(desiredBaud);
+        // since Serial2 was reset by setGpsBaud()..could try it again. might aid recovery
+        // setGpsBaud(desiredBaud);
+    }
+
+    gpsSleepForMillis(1000, false); // 1 sec
+    V1_println(F("Should get some output at 9600 after reset?"));
+    // we'll see if it's wrong baud rate or not, at this point
+    drainInitialGpsOutput();
+
     // this is all done earlier in the experimental mode
     // FIX! we don't need to toggle power to get the effect?
     setGpsBalloonMode();
@@ -1122,8 +1374,10 @@ void GpsFullColdReset(void) {
     // no ZDA/ANT TXT (NMEA sentences) after this:
     setGpsBroadcast();
 
-    drainInitialGpsOutput();
+    // I guess it doesn't power on with location service on
+    if (USE_SIM65M) setGnssOn_SIM65M();
 
+    drainInitialGpsOutput();
     GpsIsOn_state = true;
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
     // a big fix_age
@@ -1169,6 +1423,8 @@ void GpsWarmReset(void) {
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
 
+    //****************************
+    // ATGM336H:
     // if it comes back up in out desired BAUD rate already,
     // everything will be fine and we'll start talking to it
     // as long as the tracker only got one other Baud rate other than 9600
@@ -1178,11 +1434,20 @@ void GpsWarmReset(void) {
 
     // FIX! this is a don't care then? whatever it was? or ??
     // but since we serial2.end() above, we have to restart it on the rp2040
+
+    //****************************
     int BAUD_RATE;
     if (USE_SIM65M) BAUD_RATE = SIM65M_BAUD_RATE;
     else BAUD_RATE = ATGM336H_BAUD_RATE;
-
     int desiredBaud = checkGpsBaudRate(BAUD_RATE);
+
+    //****************************
+    // SIM65M poweron restarts at 115200 always or ??
+    // ATGM366H restarts at whatever baud rate we set it to last?
+    // remember that the *BAUD_RATE values are static, so usedBaud will reflect last
+    if (USE_SIM65M) Serial2.begin(115200);
+    else Serial2.begin(desiredBaud);
+
     // then up the speed to desired (both gps chip and then Serial2
     setGpsBaud(desiredBaud);
     setGpsBalloonMode();
@@ -1217,8 +1482,10 @@ void GpsWarmReset(void) {
     // set desired broadcast
     // we don't need no ZDA/TXT
     setGpsBroadcast();
-
+    // I guess it doesn't power on with location service on
+    if (USE_SIM65M) setGnssOn_SIM65M();
     drainInitialGpsOutput();
+
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
     // a big fix_age
     invalidateTinyGpsState();
@@ -1372,18 +1639,7 @@ void GpsOFF(bool keepTinyGpsState) {
     V1_printf("GpsOFF END GpsIsOn_state %u" EOL, GpsIsOn_state);
 }
 
-//************************************************
-// subfunction just to have consistent incomingChar/charsAvailable management 
-// in updateGpsDataAndTime()
-char incomingChar;
-int charsAvailable;
-void getChar() {
-    // setup for next loop iteration
-    charsAvailable = Serial2.available();
-    if (charsAvailable) incomingChar = Serial2.read();
-    else incomingChar = '0';
-}
- 
+
 //********
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
@@ -1440,18 +1696,18 @@ void updateGpsDataAndTime(int ms) {
     // V0_println(F("debug1"));
     getChar();
     // V0_println(F("debug2"));
-    // fast drain if necessary ..throw away any uart buffered broken sentence at start 
+    // fast drain if necessary ..throw away any uart buffered broken sentence at start
     // (since we're unaligned initially)
     // hmm shouldn't get '0' but I guess it would drain that too
     if (VERBY[1] && charsAvailable && incomingChar != '$')
         StampPrintf("OKAY: did fast draining NMEA backup to '$'. uart rx was %d)" EOL, (int) charsAvailable);
     // if there's backup, means we jumped into the middle of a broadcast burst
-    // probably best to throw away all chars until we hit a '$' that is start of 
+    // probably best to throw away all chars until we hit a '$' that is start of
     // a sentence..like this situation:
     // ,,38,05,,,38,20,71,192,,27,06,12
     // $BDGSV,2,2,06,29,65,316,,30,54,126,*65
     // I suppose only worry about this special 'fast draining' when we first get here
-    // we might totally drain without finding a '$' 
+    // we might totally drain without finding a '$'
     // V0_println(F("debug3"));
     // note this could empty with a sentence in the 32 deep fifo, just fitting
     // UPDATE: maybe keep draining until we know we have enough room so not almost full!
@@ -1473,7 +1729,7 @@ void updateGpsDataAndTime(int ms) {
             if (charsAvailable > 25) { // 25/32 now, because with initial drain, shouldn't hit?
                 // This is the case where we started this function with something in the buffer
                 // Unload each in less than 1ms..so we catch up pretty quick if necessary.
-                // Would think this case shouldn't happen in this loop now that we silently drain 
+                // Would think this case shouldn't happen in this loop now that we silently drain
                 // above to sentence start?
                 if (VERBY[1])
                     StampPrintf("WARN: was NMEA almost full. uart rx was %d)" EOL, (int) charsAvailable);
@@ -1599,7 +1855,7 @@ void updateGpsDataAndTime(int ms) {
         getChar();
         current_millis = millis();
         // V0_println(F("debug7"));
-    } 
+    }
 
     // V0_println(F("debug8"));
 
@@ -1875,7 +2131,7 @@ void kazuClocksRestore() {
         PLL_SYS_MHZ = 12;
         busy_wait_ms(500);
     }
-    
+
 
     // FIX! we need usb at 48 mhz ?
     // pll_init(pll_sys);
@@ -1936,7 +2192,7 @@ void kazuClocksRestore() {
 // blurb on pll_usb -> clk_peri uart 48 Mhz (clk_peri) and i2c can be different
 // https://github.com/raspberrypi/pico-sdk/issues/841
 // rosc @ 1-12 MHz
-// 
+//
 // xosc @ 12 MHz
 //     |
 //     \-- clk_ref @ 12 MHz
@@ -1947,10 +2203,10 @@ void kazuClocksRestore() {
 //             |
 //             \-- pll_sys @ 125 MHz
 //             |       |
-//             |       \-- clk_sys @ 125 MHz           
+//             |       \-- clk_sys @ 125 MHz
 //             |
 //             \-- pll_usb @ 48 MHz
-//                   |               
+//                   |
 //                   \-- clk_peri @ 48 MHz, for UART but not I2C
 //                   |       |
 //                   |       \-- DMA pacing timers
