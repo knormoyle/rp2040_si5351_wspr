@@ -785,7 +785,7 @@ void GpsFullColdReset(void) {
     Watchdog.reset();
 
     GpsIsOn_state = false;
-    GpsStartTime = 0;
+    GpsStartTime = get_absolute_time();  // usecs
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
 
@@ -1136,7 +1136,7 @@ void GpsFullColdReset(void) {
 void GpsWarmReset(void) {
     V1_println(F("GpsWarmReset START"));
     GpsIsOn_state = false;
-    GpsStartTime = 0;
+    GpsStartTime = get_absolute_time();  // usecs
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
     // warm reset doesn't change baud rate from prior config?

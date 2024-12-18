@@ -1064,12 +1064,8 @@ void loop1() {
         GpsTimeToLastFix = 0;
         GpsStartMillis = millis();
     }
-    // just full cold gps reset
-    // this means we get a full cold result on the aruduino IDE with usb power
-    // otherwise usb power means vbat is always on. so a hot reset!
 
-    // we do a full cold reset in setup1() now (part of the GpsInit()?)
-    GpsON(false);
+    GpsON(false); // no full cold reset
 
     //******************
     float solar_voltage;
@@ -1336,10 +1332,10 @@ void loop1() {
                             updateStatusLED();
                         }
                         // will call this with less than or equal to 30 secs to go
-                        V1_printf("%" PRIu64 " wspr: 30 secs to go until starting minute",
+                        V1_printf("%" PRIu64 " wspr: 30 secs until starting minute",
                             loopCnt);
                         // oneliner
-                        V1_printf("%" PRIu64 " wspr: get the vfo going", loopCnt);
+                        V1_print(" wspr: vfo turn on for warmup");
                         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
                         uint32_t hf_freq = XMIT_FREQUENCY;
@@ -1575,7 +1571,9 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     }
 
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-    GpsON(false);  // no gps cold reset
+    // Now: don't turn GPS back on until beginning of loop
+    // then we reset the fix time variables also (on the off -> on transition))
+    // GpsON(false);  // no gps cold reset
 
     V1_println(F("alignAndDoAllSequentialTX END"));
     return 0;  // success
