@@ -575,15 +575,19 @@ void setup() {
         Watchdog.reset();
         // hmm IGNORE_KEYBOARD_CHARS is not factored into this.
         // should always be false at this point?
-        char incomingByte = drainSerialTo_CRorNL(1000);
+        // char incomingByte = drainSerialTo_CRorNL(1000);
+        // only drain for 10ms.. in case user hits <enter>
+        char incomingByte = drainSerialTo_CRorNL(10);
         // CR or LF to interrupt?
         if (incomingByte == 10 || incomingByte == 13) {
             // do this branching BEFORE setting clock speed in case of bad clock speed setting!
-            V1_print(F(EOL "LEAVING SETUP() (1)" EOL EOL));
-            V0_print(F(EOL "Hit <enter> to go to config mode. otherwise it's running (1)" EOL EOL));
+            V0_print(F(EOL "LEAVING SETUP() TO GO TO user_interface() (1)" EOL EOL));
             user_interface();
             // won't return here, since all exits from user_interface reboot
         } else {
+            V0_print(F(EOL "Hit <enter> to go to config mode."));
+            V0_print(F(" Either before gps cold reset, or wait until after" EOL));
+            V0_print(F("otherwise it's running (1)" EOL EOL));
             // we drained but it wasn't CR or LF at the end
             // core1 takes over Watchdog.reset() at this point
             CORE1_PROCEED = true;
@@ -691,9 +695,11 @@ void loop() {
             // random CR or LF if using usb plug with data and no serial window?
             // hopefully not!
             if (incomingByte == 10 || incomingByte == 13) {
+                V0_print(F(EOL "CR or LF detected: Core 0 WILL TRY TO TAKE OVER" EOL EOL));
                 Watchdog.enable(30000);
                 rp2040.idleOtherCore();
                 core1_idled = true;
+                V0_print(F(EOL "Core 1 IDLED" EOL EOL));
                 // we own the led's and the watch dog interface now
                 Watchdog.reset();
 
@@ -724,7 +730,6 @@ void setup1() {
     // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
     // Initialize a core such that the other core can lock it out during flash_safe_execute.
     // see the dire need at the link above (around flash access)
-
     // flash_safe_execute_core_init();
 
     while (!CORE1_PROCEED) {
@@ -861,23 +866,26 @@ void setup1() {
     show_values();
 
     //***************
+    // we know the config read fixed the clock so it's legal
+    // we double check here and recover here, but don't update flash if it's wrong
+    // to avoid flash conflict resolution issues (multi-core)
     uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
     if (!set_sys_clock_khz(freq_khz, false)) {
         V1_printf("ERROR: setup1(): RP2040 can't change clock to %lu Mhz. Using %lu instead" EOL,
             PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
         snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
-        write_FLASH();
+        // FIX! hmm. this guy could try to write flash, while the other guy is reading?
+        // write_FLASH();
         // check the default?
         freq_khz = PLL_SYS_MHZ * 1000UL;
         if (!set_sys_clock_khz(freq_khz, false)) {
             V1_println("ERROR: setup1() The DEFAULT_SYS_MHZ is not legal either. will use 125");
             PLL_SYS_MHZ = 125;
             snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
-            write_FLASH();
+            // write_FLASH();
         }
     }
-
 
     //***************
     // This gets undone if we have kazu slow clocks in gps_functions.cpp (during cold reset)

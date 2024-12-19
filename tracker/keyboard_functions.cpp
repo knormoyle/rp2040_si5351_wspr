@@ -61,12 +61,12 @@ char drainSerialTo_CRorNL (uint32_t millis_max) {
                     break;
                 }
             }
+            if (incomingByte == 10 || incomingByte == 13) break;
             Watchdog.reset();
             sleep_ms(100);
         }
         if (i > max_iter) {
             // V1_println("Must have timed out looking for input char(s) on Serial");
-            ;
         }
 
     }

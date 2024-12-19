@@ -62,6 +62,7 @@
 // (the function will not have been called).
 // PICO_ERROR_INSUFFICIENT_RESOURCES if the method fails due to dynamic resource exhaustion
 // (the function will not have been called)
+// I'm getting -4 ??
 
 // Execute a function with IRQs disabled and with the other core 
 // also not executing/reading flash
@@ -402,8 +403,6 @@ void user_interface(void) {
         if (c_char > 90) c_char -= 32;
 
         // FIX! can we case the int32_t to char. we might lost data with the cast
-        uint32_t freq_khz;
-        bool good;
         char confirm[2] = { 0 };
         switch ( c_char ) {
             case 'Z':
@@ -494,48 +493,8 @@ void user_interface(void) {
                     snprintf(_clock_speed, sizeof(_clock_speed), "%lu",  PLL_SYS_MHZ);
                     write_FLASH();
                 }
+                makeSureClockIsGood();
 
-                // https://www.raspberrypi.com/documentation/pico-sdk/high_level.html#gab3a273e837ba1947bb5fd8fc97cf47e5
-                // says "Note that not all clock frequencies are possible;
-                // it is preferred that you use src/rp2_common/hardware_clocks/scripts/vcocalc.py
-                // to calculate the parameters for use with set_sys_clock_pll".
-                // Probably want to have a read of section 2.15 of
-                // https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
-                // for more information about the PLLs and clock dividers.
-
-                // do only full Mhz work? maybe can do more but we only need integer Mhz here.
-                // This guy say: absolutely can do non Mhz frequencies (just not those between 125 and 126?)
-                // https://github.com/raspberrypi/pico-sdk/issues/1450
-                // None of the frequencies can be exactly matched exactly by the PLL so set_sys_clock_khz fails -
-                // as per the docs, you can use vco_calc.py to find out settings
-                // for set_sys_clock_pll for settings that are close.
-                // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/scripts/vcocalc.py
-
-                // bool check_sys_clock_khz (
-                // uint32_t freq_khz, uint * vco_freq_out, uint * post_div1_out, uint * post_div2_out)
-                uint vco_freq_out[1];
-                uint post_div1_out[1];
-                uint post_div2_out[1];
-                freq_khz = PLL_SYS_MHZ * 1000UL;
-                V0_printf("user_interface: checking with check_sys_clock_khz(%lu)" EOL, freq_khz);
-
-                good = check_sys_clock_khz(freq_khz, vco_freq_out, post_div1_out, post_div2_out);
-                if (good) {
-                    V0_printf("user_interface: good with check_sys_clock_khz(%lu)" EOL, freq_khz);
-                } else {
-                    V0_printf("user_interface: bad with check_sys_clock_khz(%lu)" EOL, freq_khz);
-                }
-
-                // use vcocalc.py to calculate parameters with set_sys_clock_pll()
-                // static bool set_sys_clock_khz ( uint32_t freq_khz, bool required
-                if (!set_sys_clock_khz(freq_khz, false)) {
-                    V0_print("user_interface:");
-                    V0_printf(" RP2040 can't change clock to %lu Mhz.", PLL_SYS_MHZ);
-                    V0_printf(" Using %lu instead" EOL, DEFAULT_PLL_SYS_MHZ);
-                    PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
-                    snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
-                    write_FLASH();
-                }
                 break;
             case 'A':
                 get_user_input("Enter Band (10,12,15,17,20):" EOL, _Band, sizeof(_Band));
@@ -588,6 +547,62 @@ void user_interface(void) {
         }
         show_values();
         V0_println(F("user_interface() END"));
+    }
+}
+
+//********************************************
+void makeSureClockIsGood(void) {
+    // https://www.raspberrypi.com/documentation/pico-sdk/high_level.html#gab3a273e837ba1947bb5fd8fc97cf47e5
+    // says "Note that not all clock frequencies are possible;
+    // it is preferred that you use src/rp2_common/hardware_clocks/scripts/vcocalc.py
+    // to calculate the parameters for use with set_sys_clock_pll".
+    // Probably want to have a read of section 2.15 of
+    // https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf
+    // for more information about the PLLs and clock dividers.
+
+    // do only full Mhz work? maybe can do more but we only need integer Mhz here.
+    // This guy say: absolutely can do non Mhz frequencies (just not those between 125 and 126?)
+    // https://github.com/raspberrypi/pico-sdk/issues/1450
+    // None of the frequencies can be exactly matched exactly by the PLL so set_sys_clock_khz fails -
+    // as per the docs, you can use vco_calc.py to find out settings
+    // for set_sys_clock_pll for settings that are close.
+    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/scripts/vcocalc.py
+
+    // bool check_sys_clock_khz (
+    // uint32_t freq_khz, uint * vco_freq_out, uint * post_div1_out, uint * post_div2_out)
+
+    uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
+    V0_printf("user_interface: checking with set_sys_clock_khz(%lu, false)" EOL, freq_khz);
+    // uint vco_freq_out[1];
+    // uint post_div1_out[1];
+    // uint post_div2_out[1];
+    // good = check_sys_clock_khz(freq_khz, vco_freq_out, post_div1_out, post_div2_out);
+    bool good = set_sys_clock_khz(freq_khz, false);
+    if (good) {
+        // V0_printf("user_interface: good with check_sys_clock_khz(%lu)" EOL, freq_khz);
+        V0_printf("user_interface: good with set_sys_clock_khz(%lu, false)" EOL, freq_khz);
+    } else {
+        // V0_printf("user_interface: bad with check_sys_clock_khz(%lu)" EOL, freq_khz);
+        V0_printf("user_interface: bad with set_sys_clock_khz(%lu, false)" EOL, freq_khz);
+    }
+
+    // can use vcocalc.py to calculate parameters with set_sys_clock_pll()
+    // static bool set_sys_clock_khz ( uint32_t freq_khz, bool required
+    if (!good) {
+        V0_print("makeSureClockIsGood():");
+        V0_printf(" ERROR: RP2040 can't change clock to %lu Mhz.", PLL_SYS_MHZ);
+        V0_printf(" Using %lu instead" EOL, DEFAULT_PLL_SYS_MHZ);
+        PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+        write_FLASH();
+        // check this default?
+        freq_khz = PLL_SYS_MHZ * 1000UL;
+        if (!set_sys_clock_khz(freq_khz, false)) {
+            V1_println("user_interface: ERROR: The DEFAULT_SYS_MHZ is not legal either. will use 125");
+            PLL_SYS_MHZ = 125;
+            snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+            write_FLASH();
+        }
     }
 }
 
@@ -763,6 +778,8 @@ static void call_flash_range_erase(void *param) {
 static void call_flash_range_program(void *param) {
     uint32_t offset = ((uintptr_t*)param)[0];
     const uint8_t *data = (const uint8_t *)((uintptr_t*)param)[1];
+    // uint32_t offset = ((uint8_t*)param)[0];
+    // const uint8_t *data = (const uint8_t *)((uint8_t*)param)[1];
     flash_range_program(offset, data, FLASH_PAGE_SIZE);
 }
 
@@ -797,33 +814,39 @@ void write_FLASH(void) {
     for (int i = 0; i < FLASH_BYTES_USED ; i++) {
         udata_chunk[i] = (uint8_t) data_chunk[i];
     }
-
     // a "Sector" is 4096 bytes
     // FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE, FLASH_PAGE_SIZE = 040000x, 4096, 256
-
     // you could theoretically write 16 pages at once (a whole sector).
-    // don't interrupt..not enough? what about code fetch
-    // uint32_t ints = save_and_disable_interrupts();
 
     V0_print("Erasing FLASH target region" EOL);
-    int rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
-    V0_printf("flash_safe_execute() rc: %d" EOL, rc);
-    // hard_assert(rc == PICO_OK);
-
-    // was 12/18/2024
-    // flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-    // writes 256 bytes (one "page") (16 pages per sector)
+    uint32_t ints;
+    int rc;
+    if (false) {
+        rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
+        V0_printf("flash_safe_execute call_flash_range_erase rc: %d" EOL, rc);
+        // hard_assert(rc == PICO_OK);
+    } else {
+        // was 12/18/2024
+        // don't interrupt..not enough? what about code fetch
+        // uint32_t ints = save_and_disable_interrupts();
+        ints = save_and_disable_interrupts();
+        flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+        // writes 256 bytes (one "page") (16 pages per sector)
+    }
 
     V0_print("Writing FLASH target region" EOL);
-    uintptr_t params[] = {FLASH_TARGET_OFFSET, (uintptr_t) udata_chunk};
-    rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
-    V0_printf("flash_range_program() rc: %d" EOL, rc);
-    // hard_assert(rc == PICO_OK);
-
-    // was 12/18/2024
-    // was this supposed to be FLASH_SECTOR_SIZE?
-    // flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
-    // restore_interrupts(ints);
+    if (false) {
+        uintptr_t params[] = {FLASH_TARGET_OFFSET, (uintptr_t) udata_chunk};
+        // uintptr_t params[] = {FLASH_TARGET_OFFSET, (uint8_t) udata_chunk};
+        rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
+        V0_printf("flash_safe_execute call_flash_range_program() rc: %d" EOL, rc);
+        // hard_assert(rc == PICO_OK);
+    } else {
+        // was 12/18/2024
+        // was this supposed to be FLASH_SECTOR_SIZE?
+        flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
+        restore_interrupts(ints);
+    }
     V1_print("write_FLASH END" EOL);
 }
 
@@ -973,6 +996,7 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
+    
 
     // always recalc these for the current PLL_SYS_MHZ
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);

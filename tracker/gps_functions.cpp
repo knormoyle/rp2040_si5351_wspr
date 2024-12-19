@@ -481,27 +481,31 @@ void setGpsBroadcast(void) {
         // 3 - Output once every three position fixes
         // 4 - Output once every four position fixes
         // 5 - Output once every five position fixes
-        strncpy(nmeaSentence, "$PAIR062,0,5*3B" CR LF, 62);
-        Serial2.print(nmeaSentence);
-        busy_wait_us(500);
-        strncpy(nmeaSentence, "$PAIR062,1,5*3A" CR LF, 62);
-        Serial2.print(nmeaSentence);
-        busy_wait_us(500);
-        strncpy(nmeaSentence, "$PAIR062,2,5*39" CR LF, 62);
-        Serial2.print(nmeaSentence);
-        busy_wait_us(500);
-        strncpy(nmeaSentence, "$PAIR062,3,5*38" CR LF, 62);
-        Serial2.print(nmeaSentence);
-        busy_wait_us(500);
-        strncpy(nmeaSentence, "$PAIR062,4,5*3F" CR LF, 62);
-        Serial2.print(nmeaSentence);
-        busy_wait_us(500);
-        strncpy(nmeaSentence, "$PAIR062,5,5*3E" CR LF, 62);
-        Serial2.print(nmeaSentence);
-        busy_wait_us(500);
-        strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
-        Serial2.print(nmeaSentence);
-        busy_wait_us(500);
+
+        // FIX! do we not get enough info in a single sec if we change to 5 here?
+        if (false) {
+            strncpy(nmeaSentence, "$PAIR062,0,5*3B" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,1,5*3A" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,2,5*39" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,3,5*38" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,4,5*3F" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,5,5*3E" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+        }
 
     } else {
         //*************************************************

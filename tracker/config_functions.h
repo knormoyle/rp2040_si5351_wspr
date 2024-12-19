@@ -19,6 +19,7 @@ int read_FLASH(void);
 void printFLASH(const uint8_t *buf, size_t len);
 void write_FLASH(void);
 int check_data_validity_and_set_defaults(void);
+void makeSureClockIsGood(void);
 
 void user_interface(void);
 void config_intro(void);
