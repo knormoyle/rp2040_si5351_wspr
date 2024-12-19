@@ -114,7 +114,7 @@ extern const int SI5351A_CLK_IDRV_6MA;
 extern const int SI5351A_CLK_IDRV_4MA;
 extern const int SI5351A_CLK_IDRV_2MA;
 
-extern const int PLL_CALCULATION_PRECISION;
+extern const int PLL_CALC_PRECISION;
 
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
@@ -514,7 +514,7 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     // the i2cWriten writes as burst below..maybe that's why?
     // we could keep a static copy of what was written , and only write
     // when values change.
-    if (s_ms_div_prev != 0) {
+    if (s_ms_div_prev != 0) { // global. basically it implies s_PLLB_regs_prev has data
         for (; start < 8; start++) {
             if (PLLB_regs[start] != s_PLLB_regs_prev[start]) break;
         }
@@ -605,6 +605,8 @@ void si5351a_setup_multisynth01(uint32_t div) {
 void si5351a_reset_PLLB(void) {
     V1_println(F("si5351a_reset_PLLB START"));
     i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
+    // wait for the pll reset?
+    sleep_ms(2000);
     V1_println(F("si5351a_reset_PLLB END"));
 }
 
@@ -619,9 +621,6 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq,
     // this is hans code from 2015:
     // https://qrp-labs.com/images/synth/demo6/si5351a.c
 
-    // V1_printf("vfo_set_freq_x16 START clk_num %u freq %lu" EOL, clk_num, freq);
-    // this doesn't change the state of the output enables, just the freq
-
     // hans uses the max frequency?
     const int PLL_MAX_FREQ  = 900000000;
     const int PLL_MIN_FREQ  = 600000000;
@@ -631,9 +630,9 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq,
 
     // divide by 2 result must be integer
     uint32_t PLL_FREQ_TARGET;
-    if (false)
+    if (false) {
         PLL_FREQ_TARGET  = ((PLL_MAX_FREQ + PLL_MIN_FREQ) / 2);
-    else
+    } else {
         // HACK 12/10/24. force a higher pll freq? does this affect power?
         // okay 10M
         // PLL_FREQ_TARGET  = 800000000;
@@ -662,6 +661,7 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq,
 
         // this works with PLL_DENOM = 1000000 ..no matches on pll_Num
         PLL_FREQ_TARGET  = 800000000;
+    }
 
 
     // http://www.wa5bdu.com/programming-the-si5351a-synthesizer/
@@ -706,16 +706,18 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq,
     // Then in the first divider a + b/c, we will make c a constant
     // so we are now down to three required values: a, b and d.
 
-    uint32_t ms_div_here = PLL_FREQ_TARGET / (freq >> PLL_CALCULATION_PRECISION) + 1;
+    // was 12/19/24
+    // uint32_t ms_div_here = PLL_FREQ_TARGET / (freq >> PLL_CALC_PRECISION) + 1;
+    uint32_t ms_div_here = ( ((uint64_t)PLL_FREQ_TARGET << PLL_CALC_PRECISION) / (uint64_t)freq ) + 1;
     ms_div_here &= 0xfffffffe;   // make it even number
 
     // is 900 really the upper limiter or ?? we have 908 for 24Mhz
     // do we need lower pll freq?
     if (false & (ms_div_here < 4 || ms_div_here > 900) )
-        V0_printf("ERROR: ms_div %lu is out of range 4 to 900" EOL, ms_div_here);
+        V1_printf("ERROR: ms_div %lu is out of range 4 to 900" EOL, ms_div_here);
 
     // FIX! we should recalc this to deduce the final real pll_freq?
-    uint32_t pll_freq_here = ((uint64_t)freq * (uint64_t)ms_div_here) >> PLL_CALCULATION_PRECISION;
+    uint32_t pll_freq_here = ((uint64_t)freq * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
     // FIX! should we just apply correction to the crystal frequency? yes.
     // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
     // is just one once
@@ -725,7 +727,7 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq,
     uint32_t pll_mult_here = pll_freq_here / tcxo_freq;
     // mult has to be in the range 15 to 90
     if (pll_mult_here < 15 || pll_mult_here > 90)
-        V0_printf("ERROR: pll_mult %lu is out of range 15 to 90" EOL, pll_mult_here);
+        V1_printf("ERROR: pll_mult %lu is out of range 15 to 90" EOL, pll_mult_here);
 
     // pll_num max 20 bits (0 to 1048575)?
     // In the Si5351A, the "PLL num" refers to a 20-bit register value
@@ -752,20 +754,17 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq,
     uint32_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
 
     // can see the benefit of PLL_DENOM / tcxo_freq being integer here?
-
     // the operation is done with 64 bits? i guess it matters given the size of the numbers
     // I guess there's a truncation rather than rounding when getting pll_num_here
     uint32_t pll_num_here = (uint64_t)pll_remain * (uint64_t)PLL_DENOM / (uint64_t)tcxo_freq;
     if (pll_num_here > 1048575)
-        V0_printf("ERROR: pll_num %lu is out of range 0 to 1048575" EOL, pll_num_here);
+        V1_printf("ERROR: pll_num %lu is out of range 0 to 1048575" EOL, pll_num_here);
 
     // from https://rfzero.net/tutorials/si5351a/
     // When we're done, we can calc what the fout should be ?
-    // uint32_t pll_freq_here = ((uint64_t)freq * (uint64_t)ms_div_here) >> PLL_CALCULATION_PRECISION;
+    // uint32_t pll_freq_here = ((uint64_t)freq * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
     uint32_t actual_here = 
-        ((uint64_t)pll_freq_here << PLL_CALCULATION_PRECISION) / 
-        ((uint64_t)ms_div_here << PLL_CALCULATION_PRECISION);
-
+        ((uint64_t)pll_freq_here << PLL_CALC_PRECISION) / (uint64_t)ms_div_here;
 
     // output so we can print or use
     *ms_div = ms_div_here;
@@ -778,7 +777,7 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq,
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
-void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
+void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq, bool only_pll_num) {
     uint32_t pll_freq;
     uint32_t ms_div;
     uint32_t pll_mult;
@@ -788,22 +787,34 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq) {
 
     if (clk_num != 0) {
         V1_println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
-        // I guess force clk_num, although code is bokren somewhere
+        // I guess force clk_num, although code is broken somewhere
         clk_num = 0;
         // note we only have one s_ms_div_prev copy state also
     }
     // we get pll_denom to know what was used in the calc
     vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
 
+    // if (only_pll_num) {
+    // calcs were done to show that only pll_num needs to change for symbols 0 to 3
+    // we always do an early turn-on with symbol 0 that gets all other state right
+    // and it stays that way for the whole message. Guarantee no pll reset needed!
+    // turns out there's no speedup to make use of this bool
+
     // this has sticky s_regs_prev state that it uses if called multiple times?
     si5351a_setup_PLLB(pll_mult, pll_num, pll_denom);
-    // only reset pll if ms_div changes?
-    if (ms_div != s_ms_div_prev) {
-        // static global?
-        s_ms_div_prev = ms_div;
+
+    if (ms_div != s_ms_div_prev) { // s_ms_div_prev is global
+        // only reset pll if ms_div changed?
+        if (only_pll_num) {
+            V1_printf("ERROR: only_pll_num but ms_div %lu changed. s_ms_div_prev %lu" EOL,
+                ms_div, s_ms_div_prev);
+            V1_print(F("ERROR: will cause si5351a_reset_PLLB()" EOL));
+        }
         // setting up multisynth0 and multisynth1
         si5351a_setup_multisynth01(ms_div);
         si5351a_reset_PLLB();
+        // static global? for comparison next time
+        s_ms_div_prev = ms_div;
     }
     // V1_printf("vfo_set_freq_x16 END clk_num %u freq %lu" EOL, clk_num, freq);
 }
@@ -824,6 +835,7 @@ void vfo_turn_on_clk_out(uint8_t clk_num) {
 
     si5351bx_clken &= ~enable_bit;
     i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+    // FIX! this should always have a pll reset after it?
     V1_println(F("vfo_turn_on_clk_out END"));
 }
 
@@ -1070,8 +1082,8 @@ void vfo_turn_on(uint8_t clk_num) {
     // uint32_t freq = 14097100UL;
     uint32_t freq = XMIT_FREQUENCY;
     V1_printf("initial freq for vfo_set_freq_x16() is %lu" EOL, freq);
-    freq = freq << PLL_CALCULATION_PRECISION;
-    vfo_set_freq_x16(clk_num, freq);
+    freq = freq << PLL_CALC_PRECISION;
+    vfo_set_freq_x16(clk_num, freq, false); // not only_pll_num
 
     // The final state is clk0/clk1 running but outputs not on
     si5351bx_clken = 0xff;
@@ -1083,8 +1095,6 @@ void vfo_turn_on(uint8_t clk_num) {
     // or didn't change initial state?
     // new 11/28/24
     si5351a_reset_PLLB();
-    // wait for the pll reset?
-    sleep_ms(2000);
 
     vfo_turn_on_completed = true;
     V1_printf("vfo_turn_on END clk_num %u" EOL, clk_num);
@@ -1099,7 +1109,7 @@ uint32_t doCorrection(uint32_t freq) {
         // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
         freq_corrected = freq + (atoi(_correction) * freq / 1000000000UL);
     }
-    V0_printf("doCorrection (should be tcxo freq?) freq %lu freq_corrected %lu" EOL,
+    V1_printf("doCorrection (should be tcxo freq?) freq %lu freq_corrected %lu" EOL,
         freq, freq_corrected);
     return freq_corrected;
 }

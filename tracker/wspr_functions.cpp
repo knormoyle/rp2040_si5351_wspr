@@ -62,7 +62,8 @@
 // So: it appears using the PWM based interrupt mechanism avoids all these issues!
 //*******************************************************************************
 extern bool VERBY[10];
-extern const uint32_t INTERRUPTS_PER_SYMBOL;
+// this can get modified for 18 Mhz operation (from 8 to 1?)
+extern uint32_t INTERRUPTS_PER_SYMBOL;
 
 const int WSPR_PWM_SLICE_NUM = 4;
 extern volatile bool PROCEED;
@@ -293,6 +294,7 @@ void disablePwmInterrupts(void) {
 //*******************************************************
 // uses PLL_SYS_MHZ, INTERRUPTS_PER_SYMBOL
 // to figure a good div and wrap cnt period for the PWM (subtract 1 for TOP)
+
 void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
         uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ) {
 

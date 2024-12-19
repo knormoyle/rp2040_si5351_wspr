@@ -36,31 +36,35 @@
 
 // FIX! is the program bigger than 1M ?
 // Once done, we can access this at XIP_BASE + FLASH_TARGET_OFFSET
-#define FLASH_TARGET_OFFSET (4 * 256 * 1024) 
+#define FLASH_TARGET_OFFSET (4 * 256 * 1024)
 
 // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
 // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
 
 
 // https://github.com/raspberrypi/pico-examples/blob/master/flash/program/flash_program.c
-// Flash is "execute in place" and so will be in use when any code that is stored in flash runs, 
+// Flash is "execute in place" and so will be in use when any code that is stored in flash runs,
 // e.g. an interrupt handler or code running on a different core.
-// 
-// Calling flash_range_erase or flash_range_program at the same time as flash is running code would cause a crash.
-// flash_safe_execute disables interrupts and tries to cooperate with the other core to ensure flash is not in use
+//
+// Calling flash_range_erase or flash_range_program at the same time 
+// as flash is running code would cause a crash.
+// flash_safe_execute disables interrupts and tries to cooperate with the 
+// other core to ensure flash is not in use
 // See the documentation for flash_safe_execute and its assumptions and limitations
 // int flash_safe_execute (void(*) (void *) func,
 // void * param,
-// uint32_t enter_exit_timeout_ms 
-// )		
+// uint32_t enter_exit_timeout_ms
+// )
 // Returns
-// PICO_OK on success (the function will have been called). 
-// PICO_TIMEOUT on timeout (the function may have been called). 
-// PICO_ERROR_NOT_PERMITTED if safe execution is not possible (the function will not have been called). 
-// PICO_ERROR_INSUFFICIENT_RESOURCES if the method fails due to dynamic resource exhaustion 
+// PICO_OK on success (the function will have been called).
+// PICO_TIMEOUT on timeout (the function may have been called).
+// PICO_ERROR_NOT_PERMITTED if safe execution is not possible 
+// (the function will not have been called).
+// PICO_ERROR_INSUFFICIENT_RESOURCES if the method fails due to dynamic resource exhaustion
 // (the function will not have been called)
 
-// Execute a function with IRQs disabled and with the other core also not executing/reading flash
+// Execute a function with IRQs disabled and with the other core 
+// also not executing/reading flash
 // int rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
 // hard_assert(rc == PICO_OK);
 
@@ -78,13 +82,13 @@
 
 //**************************************
 extern char _callsign[7];
-extern char _verbose[2]; // 0 is used to disable all. 1 is all printing for now. 2:9 same
+extern char _verbose[2];   // 0 is used to disable all. 1 is all printing for now. 2:9 same
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];
-extern char _Band[3];     // string with 10, 12, 15, 17, 20 legal. null at end
-extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
-extern char _testmode[2]; // currently: sweep telemetry
+extern char _Band[3];      // string with 10, 12, 15, 17, 20 legal. null at end
+extern char _tx_high[2];   // 0 is 2mA si5351. 1 is 8mA si5351
+extern char _testmode[2];  // currently: sweep telemetry
 
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
 extern char _correction[7];  // parts per billion -30000 to 30000. default 0
@@ -105,7 +109,7 @@ extern char _start_minute[2];
 extern char _lane[2];
 
 extern const uint32_t DEFAULT_PLL_SYS_MHZ;
-extern uint32_t PLL_SYS_MHZ; // decode of _clock_speed
+extern uint32_t PLL_SYS_MHZ;  // decode of _clock_speed
 
 // PWM stuff gets recalc'ed if PLL_SYS_MHZ changes
 extern uint32_t PWM_DIV;
@@ -113,10 +117,10 @@ extern uint32_t PWM_WRAP_CNT;
 // this is fixed
 extern const uint32_t INTERRUPTS_PER_SYMBOL;
 
-extern bool TESTMODE; // decode of _testmode
-extern bool VERBY[10]; // decode of verbose 0-9. disabled if BALLOON_MODE
-extern bool BALLOON_MODE; // this is set by setup() when it detects no USB/Serial
-extern bool USE_SIM65M; // ATGM3365N-31 if false
+extern bool TESTMODE;  // decode of _testmode
+extern bool VERBY[10];  // decode of verbose 0-9. disabled if BALLOON_MODE
+extern bool BALLOON_MODE;  // this is set by setup() when it detects no USB/Serial
+extern bool USE_SIM65M;  // ATGM3365N-31 if false
 
 //**************************************
 // Verbosity:
@@ -156,7 +160,7 @@ void forceHACK(void) {
         }
     }
 
-    if (HACK and not BALLOON_MODE) {
+    if (HACK && !BALLOON_MODE) {
         // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
         // recommends to always snprintf(buffer, sizeof(buffer), "%s", string);
 
@@ -196,7 +200,7 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
             timeout_ms += 100;
             // this will eventually watchdog reset timeout if no character?
             updateStatusLED();
-            if (timeout_ms > 60 * 1000) { // 60 secs
+            if (timeout_ms > 60 * 1000) {  // 60 secs
                 V0_println(F("ERROR: exceeded 60 secs timeout waiting for input, rebooting" EOL));
                 V0_flush();
                 Watchdog.enable(5000);  // milliseconds
@@ -242,8 +246,7 @@ void printFLASH(const uint8_t *buf, size_t len) {
         V0_printf("%02x", buf[i]);
         if (i % 16 == 15) {
             V0_print(F(EOL));
-        }
-        else {
+        } else {
             V0_print(F(" "));
         }
     }
@@ -358,9 +361,9 @@ void do_i2c_tests(void) {
         i2cWrRead(SI5351A_OUTPUT_ENABLE_CONTROL, 0);
 
         V0_println(F(EOL "SI5351A read reg 0x00"));
-        i2cWrRead(0, 0x00); // Device Status. D7 should be 1
+        i2cWrRead(0, 0x00);  // Device Status. D7 should be 1
         V0_println(F(EOL "SI5351A read reg 0x00"));
-        i2cWrRead(0, 0x00); // Device Status. D7 should be 1
+        i2cWrRead(0, 0x00);  // Device Status. D7 should be 1
     }
 }
 
@@ -391,7 +394,7 @@ void user_interface(void) {
             V0_print(F("(3) Timeout waiting for input, ..rebooting" EOL));
             sleep_ms(100);
             // milliseconds
-            Watchdog.enable(500);  
+            Watchdog.enable(500);
             while (true) tight_loop_contents();
         }
 
@@ -424,8 +427,7 @@ void user_interface(void) {
                     // and no broadcasts
                     writeGpsConfigNoBroadcastToFlash();
                     // after: it restores desired broadcast, restores constellations to desired
-                }
-                else {
+                } else {
                     V0_print(F("No GPS config write done." EOL));
                 }
 
@@ -442,7 +444,7 @@ void user_interface(void) {
 
             case '*':
                 V0_print(F("Do factory reset of config state to default values (and reboot)" EOL));
-                doFactoryReset(); // doesn't return, reboots
+                doFactoryReset();  // doesn't return, reboots
                 break;
             case 'X':
                 V0_print(F("Goodbye ..rebooting after 'X' command" EOL));
@@ -520,8 +522,7 @@ void user_interface(void) {
                 good = check_sys_clock_khz(freq_khz, vco_freq_out, post_div1_out, post_div2_out);
                 if (good) {
                     V0_printf("user_interface: good with check_sys_clock_khz(%lu)" EOL, freq_khz);
-                }
-                else {
+                } else {
                     V0_printf("user_interface: bad with check_sys_clock_khz(%lu)" EOL, freq_khz);
                 }
 
@@ -674,7 +675,6 @@ int read_FLASH(void) {
     strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
     strncpy(_use_sim65m,   flash_target_contents + 29, 1); _use_sim65m[1] = 0;
 
-    
     PLL_SYS_MHZ = atoi(_clock_speed);
     // recalc
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
@@ -728,7 +728,7 @@ void decodeVERBY(void) {
         for (int i = 0; i < 10 ; i++) VERBY[i] = true;
         return;
     }
-    int j = _verbose[0] - '0' ; // '0' is 48
+    int j = _verbose[0] - '0';  // '0' is 48
     // j and everything below
     // 0 is ascii 48
     // decode '1' to '9' to thermometer code VERBY
@@ -910,8 +910,7 @@ int check_data_validity_and_set_defaults(void) {
     bool bad = false;
     if (_TELEN_config[0] == 0) {
         bad = true;
-    }
-    else {
+    } else {
         for (int i = 0; i <= 3; i++) {
             if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i] != '-') bad = true;
         }
@@ -954,7 +953,7 @@ int check_data_validity_and_set_defaults(void) {
     if (!clock_speedBad) {
         PLL_SYS_MHZ = atoi(_clock_speed);
         if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 18 || PLL_SYS_MHZ > 250) {
-            V0_printf(EOL "check_data_validity...(): (2) illegal _clock_speed: %s" EOL,_clock_speed);
+            V0_printf(EOL "check_data_validity...(): (2) illegal _clock_speed: %s" EOL, _clock_speed);
             clock_speedBad = true;
         }
 
@@ -1026,7 +1025,7 @@ int check_data_validity_and_set_defaults(void) {
     //*****************
     // what does atoi() when null is first char? returns 0
     // detect that case to get ascii 0 in there
-    if (_correction[0]==0 || atoi(_correction) < -30000 || atoi(_correction) > 30000) {
+    if (_correction[0] == 0 || atoi(_correction) < -30000 || atoi(_correction) > 30000) {
         // left room for 6 bytes
         V0_printf(EOL "_correction %s is not supported/legal, initting to 0" EOL, _correction);
         snprintf(_correction, sizeof(_correction), "0");
@@ -1050,7 +1049,7 @@ int check_data_validity_and_set_defaults(void) {
     //*****************
     if (_factory_reset_done[0] != '0' && _factory_reset_done[0] != '1') {
         V0_printf(EOL "_factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, _factory_reset_done);
-        doFactoryReset(); // no return, reboots
+        doFactoryReset();  // no return, reboots
     }
     return result;
 }
@@ -1109,7 +1108,7 @@ void show_commands(void) {
     V0_println(F("P: change tx power: 1 high, 0 lower default )"));
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
-    V0_printf(   "K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
+    V0_printf("K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
     V0_println(F("D: TESTMODE (currently: sweep telemetry values) (default: 0)"));
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));

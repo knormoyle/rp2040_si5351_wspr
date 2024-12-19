@@ -459,22 +459,22 @@ void telemetrySweepAllForTest(void) {
     t_TELEN2_val1 = atoi( telen2_str1); // int
     t_TELEN2_val2 = atoi( telen2_str2); // int
 
-    V0_printf("TESTMODE t_course: %s" EOL, t_course);
-    V0_printf("TESTMODE t_speed: %s" EOL, t_speed);
-    V0_printf("TESTMODE t_altitude: %s" EOL, t_altitude);
-    V0_printf("TESTMODE t_tx_count_0: %s" EOL, t_tx_count_0);
-    V0_printf("TESTMODE t_temp: %s" EOL, t_temp);
-    V0_printf("TESTMODE t_pressure: %s" EOL, t_pressure);
-    V0_printf("TESTMODE t_temp_ext: %s" EOL, t_temp_ext);
-    V0_printf("TESTMODE t_humidity: %s" EOL, t_humidity);
-    V0_printf("TESTMODE t_voltage: %s" EOL, t_voltage);
-    V0_printf("TESTMODE t_sat_count: %s" EOL, t_sat_count);
-    V0_printf("TESTMODE t_hdop: %s" EOL, t_hdop);
+    V1_printf("TESTMODE t_course: %s" EOL, t_course);
+    V1_printf("TESTMODE t_speed: %s" EOL, t_speed);
+    V1_printf("TESTMODE t_altitude: %s" EOL, t_altitude);
+    V1_printf("TESTMODE t_tx_count_0: %s" EOL, t_tx_count_0);
+    V1_printf("TESTMODE t_temp: %s" EOL, t_temp);
+    V1_printf("TESTMODE t_pressure: %s" EOL, t_pressure);
+    V1_printf("TESTMODE t_temp_ext: %s" EOL, t_temp_ext);
+    V1_printf("TESTMODE t_humidity: %s" EOL, t_humidity);
+    V1_printf("TESTMODE t_voltage: %s" EOL, t_voltage);
+    V1_printf("TESTMODE t_sat_count: %s" EOL, t_sat_count);
+    V1_printf("TESTMODE t_hdop: %s" EOL, t_hdop);
 
-    V0_printf("TESTMODE t_TELEN1_val1: %x" EOL, t_TELEN1_val1);
-    V0_printf("TESTMODE t_TELEN1_val2: %x" EOL, t_TELEN1_val2);
-    V0_printf("TESTMODE t_TELEN2_val1: %x" EOL, t_TELEN2_val1);
-    V0_printf("TESTMODE t_TELEN2_val2: %x" EOL, t_TELEN2_val2);
+    V1_printf("TESTMODE t_TELEN1_val1: %x" EOL, t_TELEN1_val1);
+    V1_printf("TESTMODE t_TELEN1_val2: %x" EOL, t_TELEN1_val2);
+    V1_printf("TESTMODE t_TELEN2_val1: %x" EOL, t_TELEN2_val1);
+    V1_printf("TESTMODE t_TELEN2_val2: %x" EOL, t_TELEN2_val2);
 
     V1_println(F("telemetrySweepAllForTest END"));
 }

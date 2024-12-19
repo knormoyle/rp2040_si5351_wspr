@@ -9,14 +9,13 @@
 
 // why was this here?
 // #include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
-// what about the tiny gps library? already included in the .ino?
 
-//************************************************
 bool GpsIsOn(void);
 void GpsINIT(void);
 void GpsFullColdReset(void);
 void GpsWarmReset(void);
-void invalidateTinyGpsState(void);
+// why did this not compile if void in param?
+void invalidateTinyGpsState();
 void GpsON(bool GpsColdReset);
 void GpsOFF(bool keepTinyGpsState);
 void updateGpsDataAndTime(int ms);

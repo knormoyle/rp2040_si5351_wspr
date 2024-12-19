@@ -192,7 +192,7 @@ void nmeaBufferFastPoll(uint64_t duration_millis, bool printIfFull) {
             }
             getChar();
         }
-        busy_wait_ms(1); // just wait 1 milli?
+        busy_wait_ms(1);  // just wait 1 milli?
     }
     nmeaBufferPrintAndClear();
 }
@@ -351,7 +351,8 @@ void setGpsBalloonMode(void) {
     // Set navigation mode
     // $PAIR080,<CmdType>*<checksum>
     // '0' Normal mode: For general purpose
-    // '1' [Default Value] Fitness mode: For running and walking activities so that the low-speed (< 5 m/s)
+    // '1' [Default Value] Fitness mode:
+    // For running and walking activities so that the low-speed (< 5 m/s)
     // movement will have more of an effect on the position calculation.
     // '2' Reserved
     // '3' Reserved
@@ -411,13 +412,13 @@ void setGnssOn_SIM65M(void) {
     // $PAIR001,000,4*3F
     // $PAIR001,020,0*39
     // $PAIR020,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,*17
-    nmeaBufferFastPoll(2000, true); // duration_millis, printIfFull
+    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
 
     //*****************
     // PAIR_GET_SETTING
     Serial2.print("$PAIR021*39" CR LF);
     // Serial2.flush();
-    nmeaBufferFastPoll(2000, true); // duration_millis, printIfFull
+    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
 
     //*****************
     // this worked but does it already default to on after power on or ?? Seems to
@@ -449,11 +450,12 @@ void setGpsBroadcast(void) {
         //****************
         // Packet Type:050 PAIR_COMMON_SET_FIX_RATE
         // Set Position Fix Interval.
-        // If set less than 1000 ms, ASCII NMEA will automatically increase the update interval in order to decrease IO
-        // throughput.  It will return false if the operating voltage setting is not correct.
+        // If set less than 1000 ms, ASCII NMEA will automatically increase
+        // the update interval in order to decrease IO throughput.
+        // It will return false if the operating voltage setting is not correct.
         // For SIM65M module, <Fix_Interval> parameter only support 1000 ms.
         // $PAIR050,<Fix_Interval>*<checksum>
-        // Fix_Intervalmsec--Fix_Interval: Position fix interval in milliseconds (ms).
+        // Fix_Intervalmsec--Position fix interval in milliseconds (ms).
         // [Range: 100 ~ 1000]
         // [Example]
         // $PAIR050,1000*12
@@ -546,7 +548,8 @@ void setGpsBroadcast(void) {
         //    XOR result of all characters between $ and * (excluding $ and *)
         // 21 <CR><LF> charactersCarriage return and line feed
 
-        // hmm this didn't work? still got zda and ANT txt. this was a forum posting. wrong apparently
+        // hmm this didn't work? still got zda and ANT txt.
+        // this was a forum posting. wrong apparently
         // strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0*02" CR LF, 21);
 
         // spec has more/new detail. see below
@@ -714,16 +717,19 @@ void setupSIM65M(int desiredBaud) {
 
     // Packet Type:007 PAIR_GNSS_SUBSYS_FULL_COLD_START
     // Full Cold Start
-    // In addition to Cold start, this command clears the system/user configurations at the start
+    // In addition to Cold start,
+    // this command clears the system/user configurations at the start
     // It resets the GNSS module to the factory default
     // $PAIR007*3D
 
     // Packet Type:022 PAIR_READY_TO_READ
     // Host system wake up notification.
-    // There is no need to use this command, if the host does not enter sleep or HW not set
+    // There is no need to use this command,
+    // if the host does not enter sleep or HW not set
     // the configuration of GNSS_NOTIFY_HOST_WAKEUP_PIN.
 
-    // Application (gnss_demo project) will pull high GNSS_NOTIFY_HOST_WAKEUP_PIN > 10ms when data is
+    // Application (gnss_demo project) will pull high
+    // GNSS_NOTIFY_HOST_WAKEUP_PIN > 10ms when data is
     // ready to send to wake up host application.
     // Please send this command as ACK to SIM65M after wakeup done.
     // GPIO 24 is default to wakeup
@@ -740,7 +746,8 @@ void setupSIM65M(int desiredBaud) {
 
     // Packet Type:864 PAIR_IO_SET_BAUDRATE
     // Set port baud rate configuration
-    // Must reboot the device after changing the port baud rate. The change will valid after reboot
+    // Must reboot the device after changing the port baud rate.
+    // The change will valid after reboot
 
     // Port_Type----HW Port Type:
     // 0: UART [ER1 support]
@@ -849,24 +856,29 @@ void setGpsBaud(int desiredBaud) {
             // $PAIR860,0,0,37,19200,0*16
             case 19200:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,19200*26" CR LF, 64);
-                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,19200,0*16" CR LF, 64); break;
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,19200,0*16" CR LF, 64);
+                break;
             // $PAIR860,0,0,37,38400,0*13
             case 38400:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,38400*23" CR LF, 64);
-                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,38400,0*13" CR LF, 64); break;
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,38400,0*13" CR LF, 64);
+                break;
             // $PAIR860,0,0,37,57600,0*18
             case 57600:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,57600*28" CR LF, 64);
-                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,57600,0*18" CR LF, 64); break;
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,57600,0*18" CR LF, 64);
+                break;
             // $PAIR860,0,0,37,115200,0*2B\r\n ==> Open UART0 to NMEA output without flow control.
             // Baudrate is 115200.
             case 115200:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,115200*1B" CR LF, 64);
-                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,115200,0*2B" CR LF, 64); break;
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,115200,0*2B" CR LF, 64);
+                break;
             default:
                 usedBaud = 9600;
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,9600*13" CR LF, 64);
-                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64); break;
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64);
+                break;
         }
     } else {
         switch (usedBaud) {
@@ -999,8 +1011,9 @@ void GpsINIT(void) {
     gpsSleepForMillis(500, false);
     //****************
 
-    // full cold reset, plus set baud to target baud rate, and setGpsBalloonMode done
-    // FIX! hmm will sim65 reset to 9600 ? will it stay at the new baud rate thru warm reset and cold reset
+    // full cold reset, set baud to target baud rate, and setGpsBalloonMode done
+    // FIX! hmm will sim65 reset to 9600?
+    // will it stay at the new baud rate thru warm reset and cold reset
     // like ATGM366N (weird) or will it default to 115200 again.
     GpsFullColdReset();
     // gps is powered up now
@@ -1130,17 +1143,17 @@ void GpsFullColdReset(void) {
         Watchdog.reset();
         measureMyFreqs();
         if (ALLOW_KAZU_SLOW_CLOCKS_MODE)  {
-            V0_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
-            V0_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz then long sleep" EOL,
+            V1_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
+            V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz then long sleep" EOL,
                 PLL_SYS_MHZ);
-            V0_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
+            V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
         } else {
-            V0_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
-            V0_printf("Going to slow PLL_SYS_MHZ from %lu to 12Mhz before long sleep" EOL,
+            V1_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
+            V1_printf("Going to slow PLL_SYS_MHZ from %lu to 12Mhz before long sleep" EOL,
                 PLL_SYS_MHZ);
-            V0_print("No keyboard interrupts ...disabling USB PLL? or just Serial.end()" EOL);
+            V1_print("No keyboard interrupts ...disabling USB PLL? or just Serial.end()" EOL);
         }
-        // V0_print("Also lowering core voltage to 0.95v" EOL);
+        // V1_print("Also lowering core voltage to 0.95v" EOL);
         V0_flush();
 
         // hmm core0 has to know to drain garbage chars if we assert this? then deassert?
@@ -1196,7 +1209,7 @@ void GpsFullColdReset(void) {
         digitalWrite(GPS_ON_PIN, HIGH);  // assert
 
     } else {
-        V0_print(F("GPS power demand high until after cold reset..sleep for 15 secs" EOL));
+        V1_print(F("GPS power demand high until after cold reset..sleep for 15 secs" EOL));
     }
 
     // Not worth doing if USB is disabled? (no print)
@@ -1211,7 +1224,8 @@ void GpsFullColdReset(void) {
     //******************
     // DRASTIC measures, undo after sleep!
     Watchdog.reset();
-    if (ALLOW_KAZU_SLOW_CLOCKS_MODE) { busy_wait_ms(500);
+    if (ALLOW_KAZU_SLOW_CLOCKS_MODE) {
+        busy_wait_ms(500);
         // FIX! this restores/keeps sys clk to 12mhz and sys pll off
         // the problem is _clock_speed doesn't have 12Mhz?
         // and we need PLL_SYS_MHZ correct for PWM div/wrap calcs
@@ -1242,14 +1256,14 @@ void GpsFullColdReset(void) {
         }
 
         if (ALLOW_KAZU_12MHZ_MODE) {
-            V0_printf("After long sleep, left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL,
+            V1_printf("After long sleep, left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL,
                 PLL_SYS_MHZ);
         } else {
-            V0_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
+            V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
                 PLL_SYS_MHZ);
         }
 
-        V0_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
+        V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
         // V1_print(F("Restored core voltage back to 1.1v" EOL));
         V0_flush();
         measureMyFreqs();
@@ -1279,21 +1293,20 @@ void GpsFullColdReset(void) {
             busy_wait_ms(1000);
         }
 
-        V0_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
+        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
             PLL_SYS_MHZ);
-        V0_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
-        V0_print(F("Hit <enter> if you need to enter config mode. otherwise it's running (3)" EOL));
-        // V0_print(F("Restored core voltage back to 1.1v" EOL));
+        V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
+        V1_print(F("Hit <enter> if you need to enter config mode. otherwise it's running (3)" EOL));
+        // V1_print(F("Restored core voltage back to 1.1v" EOL));
         V0_flush();
         measureMyFreqs();
         IGNORE_KEYBOARD_CHARS = false;
-
     }
 
     //******************
     Watchdog.reset();
 
-    if (false and !USE_SIM65M) {
+    if (false && !USE_SIM65M) {
         // TOTAL HACK experiment
         // since vbat seems to preserve the baud rate, even with NRESET assertion
         // try sending the full cold reset command at all reasonable baud rates
@@ -1359,7 +1372,7 @@ void GpsFullColdReset(void) {
         // setGpsBaud(desiredBaud);
     }
 
-    gpsSleepForMillis(1000, false); // 1 sec
+    gpsSleepForMillis(1000, false);  // 1 sec
     V1_println(F("Should get some output at 9600 after reset?"));
     // we'll see if it's wrong baud rate or not, at this point
     drainInitialGpsOutput();
@@ -1560,7 +1573,6 @@ instead updated TinyGPSPlus (latest) in libraries to make them public, not priva
 */
 
 //************************************************
-
 void invalidateTinyGpsState(void) {
     V1_println(F("invalidateTinyGpsState() START"));
     // gps.date.clear(); // kazu had done this method
@@ -1596,7 +1608,6 @@ void invalidateTinyGpsState(void) {
     // how do we clear a fix from TinyGPS++ ?
     // do we wait until we turn GpsON() on, beforre clearing GPSInvalidAll
     // we can decrement the count only if gps is on? (in setup1())
-
     if (false) {
         // this worked
         gps.date.valid = false;
@@ -1611,9 +1622,7 @@ void invalidateTinyGpsState(void) {
         gps.location.fixModeFlush();
         gps.date.flush();
     }
-    //***********************************
-
-    V1_println(F("invalidateTinyGpsState() START"));
+    V1_println(F("invalidateTinyGpsState() END"));
 }
 
 //************************************************
@@ -1693,14 +1702,15 @@ void updateGpsDataAndTime(int ms) {
     bool printable = true;
 
     // always setup for next loop iteration
-    // V0_println(F("debug1"));
+    // V1_println(F("debug1"));
     getChar();
-    // V0_println(F("debug2"));
+    // V1_println(F("debug2"));
     // fast drain if necessary ..throw away any uart buffered broken sentence at start
     // (since we're unaligned initially)
     // hmm shouldn't get '0' but I guess it would drain that too
     if (VERBY[1] && charsAvailable && incomingChar != '$')
-        StampPrintf("OKAY: did fast draining NMEA backup to '$'. uart rx was %d)" EOL, (int) charsAvailable);
+        StampPrintf("OKAY: did fast draining NMEA backup to '$'. uart rx was %d)" EOL,
+            (int) charsAvailable);
     // if there's backup, means we jumped into the middle of a broadcast burst
     // probably best to throw away all chars until we hit a '$' that is start of
     // a sentence..like this situation:
@@ -1708,33 +1718,34 @@ void updateGpsDataAndTime(int ms) {
     // $BDGSV,2,2,06,29,65,316,,30,54,126,*65
     // I suppose only worry about this special 'fast draining' when we first get here
     // we might totally drain without finding a '$'
-    // V0_println(F("debug3"));
+    // V1_println(F("debug3"));
     // note this could empty with a sentence in the 32 deep fifo, just fitting
     // UPDATE: maybe keep draining until we know we have enough room so not almost full!
     // too much messaging if we're dancing around the buffer close to full, below
     while (charsAvailable > 8 || (charsAvailable && incomingChar != '$')) {
         getChar();
     }
-    // V0_println(F("debug4"));
+    // V1_println(F("debug4"));
 
     // incomingChar will be '0' if charsAvailable is 0 at this point
     // incomingChar could have a valid char if charsAvailable was nonzero.
     // don't drop it. (the '$' start of sentence draining case above)
     current_millis = millis();
     // works if ms is 0
-    while ( (current_millis - entry_millis) < (uint64_t) ms) {
+    while ((current_millis - entry_millis) < (uint64_t) ms) {
         while (charsAvailable > 0) {
             // start the duration timing when we get the first char
             if (start_millis == 0) start_millis = current_millis;
-            if (charsAvailable > 25) { // 25/32 now, because with initial drain, shouldn't hit?
+            if (charsAvailable > 25) {  // 25/32 now, because with initial drain, shouldn't hit?
                 // This is the case where we started this function with something in the buffer
                 // Unload each in less than 1ms..so we catch up pretty quick if necessary.
                 // Would think this case shouldn't happen in this loop now that we silently drain
                 // above to sentence start?
                 if (VERBY[1])
-                    StampPrintf("WARN: was NMEA almost full. uart rx was %d)" EOL, (int) charsAvailable);
+                    StampPrintf("WARN: was NMEA almost full. uart rx was %d)" EOL,
+                        (int) charsAvailable);
             }
-            // V0_println(F("debug5a"));
+            // V1_println(F("debug5a"));
             // always send everything to TinyGPS++ ??
             // does it expect the CR LF ?
             gps.encode(incomingChar);
@@ -1758,13 +1769,13 @@ void updateGpsDataAndTime(int ms) {
             }
             // always strip these here
             bool enableStrip = true;
-            // V0_println(F("debug5b"));
+            // V1_println(F("debug5b"));
             if (enableStrip && (spaceChar || nullChar || !printable)) {
                 getChar();
                 current_millis = millis();
                 continue;
             }
-            // V0_println(F("debug5c"));
+            // V1_println(F("debug5c"));
 
             // stopPrint: don't put CR LF in the nmeaBuffer. will add one on the transition
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
@@ -1807,17 +1818,17 @@ void updateGpsDataAndTime(int ms) {
                     nmeaBufferAndPrint(incomingChar, false);
                 }
             }
-            // V0_println(F("debug5d"));
+            // V1_println(F("debug5d"));
             current_millis = millis();
             last_serial2_millis = current_millis;
             last_stopPrint = stopPrint;
             // setup for loop iteration
             getChar();
-            // V0_println(F("debug5e"));
+            // V1_println(F("debug5e"));
         }
 
         //*******************
-        // V0_println(F("debug5f"));
+        // V1_println(F("debug5f"));
 
         // did we wait more than 50 millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
@@ -1842,7 +1853,7 @@ void updateGpsDataAndTime(int ms) {
             }
             break;
         }
-        // V0_println(F("debug6"));
+        // V1_println(F("debug6"));
 
         // sleep for 50 milliseconds? will we get buffer overflow?
         // 32 symbols at 9600 baud = 33 milliseconds?
@@ -1854,10 +1865,10 @@ void updateGpsDataAndTime(int ms) {
         // setup for loop iteration
         getChar();
         current_millis = millis();
-        // V0_println(F("debug7"));
+        // V1_println(F("debug7"));
     }
 
-    // V0_println(F("debug8"));
+    // V1_println(F("debug8"));
 
     // print/clear any accumulated NMEA sentence stuff
     if (VERBY[1]) {
@@ -2044,7 +2055,7 @@ void gpsDebug() {
 
 //************************************************
 void kazuClocksSlow() {
-    V0_println(F("kazuClocksSlow START" EOL));
+    V1_println(F("kazuClocksSlow START" EOL));
     V0_flush();
     // Change clk_sys and clk_peri to be 12MHz, and disable pll_sys and pll_usb
     // the external crystal is 12mhz
@@ -2072,12 +2083,12 @@ void kazuClocksSlow() {
         // https://github.com/raspberrypi/pico-sdk/issues/1037
 
         clock_configure(clk_peri,
-            0, // No GLMUX
+            0,  // No GLMUX
             CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
             12 * MHZ,
             12 * MHZ);
             // 48 * MHZ,
-            // 8 * MHZ); // should this be 8 per the link above?
+            // 8 * MHZ);  // should this be 8 per the link above?
 
         // was:
         // CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
@@ -2107,7 +2118,7 @@ void kazuClocksSlow() {
     }
 
     // can't print without USB now
-    // V0_println(F("kazuClocksSlow END" EOL));
+    // V1_println(F("kazuClocksSlow END" EOL));
 }
 
 //************************************************
@@ -2116,7 +2127,7 @@ void kazuClocksRestore() {
     // it's not changing anything anything except restoring usb if not balloon mode
 
     // was VERBY cleared while USB was off. no. so don't print here
-    // V0_println(F("kazuClocksRestore START" EOL));
+    // V1_println(F("kazuClocksRestore START" EOL));
     // V0_flush();
 
     // Change clk_sys and clk_peri to be 12MHz, and restore usb to 48 mhz ?
@@ -2182,7 +2193,7 @@ void kazuClocksRestore() {
     }
 
     // I guess printing should work now? (if not BALLOON_MODE)
-    V0_println(F("kazuClocksRestore END" EOL));
+    V1_println(F("kazuClocksRestore END" EOL));
     // The Raspberry Pi Pico's Serial communication uses the same system clock as everything else.
     // The baud rate of the serial communication is derived from this main clock frequency.
     // What does it mean for Serial2 when we're running at 12Mhz?

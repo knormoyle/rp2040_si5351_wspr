@@ -133,8 +133,8 @@ uint16_t Tx_3_cnt = 0;  // increase +1 after every telen2 tx
 // PWM stuff
 uint32_t PWM_DIV;
 uint32_t PWM_WRAP_CNT;
-// we don't recalculate this. assume fixed.
-extern const uint32_t INTERRUPTS_PER_SYMBOL = 8;
+// this can get modified for 18 Mhz operation (to 1?)
+uint32_t INTERRUPTS_PER_SYMBOL = 8;
 
 // below we always loop thru the entire hf_tx_buffer?
 // so we always loop thru 162 symbols, but the last ones might not matter.
@@ -303,7 +303,7 @@ extern const int SI5351A_CLK_IDRV_6MA = (2 << 0);
 extern const int SI5351A_CLK_IDRV_4MA = (1 << 0);
 extern const int SI5351A_CLK_IDRV_2MA = (0 << 0);
 
-extern const int PLL_CALCULATION_PRECISION = 4;
+extern const int PLL_CALC_PRECISION = 4;
 
 extern const int VFO_VDD_ON_N_PIN = 4;
 // are these really on Wire1
@@ -530,7 +530,7 @@ void setup() {
     }
     uint32_t sieValue = get_sie_status();
     // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
-    V0_printf("SETUP() after finding Serial.* sieValue %" PRIx32 EOL, sieValue);
+    V1_printf("SETUP() after finding Serial.* sieValue %" PRIx32 EOL, sieValue);
     Watchdog.reset();
     updateStatusLED();
     // FIX! do we detect Serial if we never open putty, and data + power is connected on USB?
@@ -669,7 +669,7 @@ void loop() {
         // don't use watchog reset..not thread safe?
         if (core1_idled) {
             // hmm..don't do any fetch from nvram with F()
-            V0_print(EOL "loop() LOOPING WITH core1_idled()" EOL EOL);
+            V1_print(EOL "loop() LOOPING WITH core1_idled()" EOL EOL);
             sleep_ms(1000);
         } else {
             // Serial.print(F(EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
@@ -706,8 +706,6 @@ void loop() {
                 updateStatusLED();
                 V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
                 V0_print(F(EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
-
-
                 V0_println(F("tracker.ino: (A) Going to user_interface() from loop()"));
                 user_interface();
                 // won't return here, since all exits from user_interface reboot
@@ -914,21 +912,31 @@ void setup1() {
     Watchdog.reset();
 
     //***************
+    // have the last one be the current PLL_SYS_MHZ,
+    // so we could just use PMW_DIV, PWM_WRAP_CNT to set below
+    // FIX! I didn't test all the different frequencies. But 18 is better with 1
+    // 125/133 was probably tested with 8. some fuzziness okay cause
+    // PWM_DIV/PWM_WRAP_CNT have some range to vary
+    if (PLL_SYS_MHZ <= 18) INTERRUPTS_PER_SYMBOL = 1;
+    else if (PLL_SYS_MHZ <= 33) INTERRUPTS_PER_SYMBOL = 2;
+    else if (PLL_SYS_MHZ <= 66) INTERRUPTS_PER_SYMBOL = 4;
+    else if (PLL_SYS_MHZ <= 133) INTERRUPTS_PER_SYMBOL = 8;
+    else INTERRUPTS_PER_SYMBOL = 16;
+
     // calculate for different PLL_SYS_MHZ
     // just to see if we get a good PWM div/wrap cnt for different freqs.
     if (false) {
+        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 18);
         calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 60);
         calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 100);
         calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 125);
         calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
     }
 
-    // have the last one be the current PLL_SYS_MHZ,
-    // so we could just use PMW_DIV, PWM_WRAP_CNT to set below
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
-    V1_printf("calcPwmDivAndWrap() ");
-    V1_printf("for PLL_SYS_MHZ %lu ...calculated best PWM_DIV %lu PWM_WRAP_CNT %lu" EOL,
-        PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT);
+    V1_printf("calcPwmDivAndWrap() using");
+    V1_printf(" PLL_SYS_MHZ %lu PWM_DIV %lu PWM_WRAP_CNT %lu INTERRUPTS_PER_SYMBOL %lu " EOL,
+        PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL);
 
     //***************
     if (true) checkPLLCalcs_200Hz();
@@ -1488,7 +1496,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // FIX! does this include a full init at the rp2040?
     // vfo_turn_on() doesn't turn on the clk outputs!
     vfo_turn_on(WSPR_TX_CLK_NUM);
-    startSymbolFreq(hf_freq, 0);
+    startSymbolFreq(hf_freq, 0, false); // symbol 0, change more than just pll_num
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
     // GPS will stay off for all
@@ -1857,7 +1865,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
 
         //****************************************************
-        startSymbolFreq(hf_freq, symbol);
+        startSymbolFreq(hf_freq, symbol, false); // symbol 0 to 3, just change pll_num
 
         //****************************************************
         // Don't make StampPrintf log buffer bigger to try to save more
@@ -1973,16 +1981,18 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 }
 
 //**********************************
-void startSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
+void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
     // Calculate the frequency for a symbol
     // Note all the shifting so integer arithmetic is used everywhere,
     // and precision is not lost.
+
+    // not expensive to always recalc the symbol freq
     uint32_t freq_x16_with_symbol = (
-        hf_freq << PLL_CALCULATION_PRECISION) +
-        ((symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096L) / 8192L);
+        hf_freq << PLL_CALC_PRECISION) +
+        ((symbol * (12000L << PLL_CALC_PRECISION) + 4096L) / 8192L);
 
     // FIX! does this change the state of the clock output enable?
-    vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16_with_symbol);
+    vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16_with_symbol, only_pll_num);
 
     // Note: Remember to do setup with the base frequency and symbol == 0,
     // so the i2c writes have seeded the si5351
@@ -2000,9 +2010,9 @@ uint32_t calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     }
 
     uint32_t symbol_freq_shifted =
-        (hf_freq << PLL_CALCULATION_PRECISION) +
-        ((symbol * (12000L << PLL_CALCULATION_PRECISION) + 4096L) / 8192L);
-    uint32_t symbol_freq = symbol_freq_shifted >> PLL_CALCULATION_PRECISION;
+        (hf_freq << PLL_CALC_PRECISION) +
+        ((symbol * (12000L << PLL_CALC_PRECISION) + 4096L) / 8192L);
+    uint32_t symbol_freq = symbol_freq_shifted >> PLL_CALC_PRECISION;
 
     V1_printf("For hf_freq %lu symbol 0: symbol_freq is %lu" EOL, hf_freq, symbol_freq);
     return symbol_freq;
@@ -2021,9 +2031,12 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // when we're not sending wspr, by something above
     uint8_t symbol = 0;  // can only be 0, 1, 2 or 3
     // don't need the symbol_freq for anything..just want a print here
+    // FIX! we could pre-calc the 4 symbol freqs during the first warmup symbol.
+    // so if only_pll_num, use the calc'ed freqs.
+    // make them globals for use by sendWspr()?
     calcSymbolFreq(hf_freq, symbol);
     // get the vfo going!
-    startSymbolFreq(hf_freq, symbol);
+    startSymbolFreq(hf_freq, symbol, true); // only_pll_num (expected)
 
     // encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
     // https://stackoverflow.com/questions/27260304/equivalent-of-atoi-for-unsigned-integers
@@ -2248,8 +2261,8 @@ void checkPLLCalcs_200Hz() {
     // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin
     // (assume freq calibration errors of that much, then symbol the 200hz passband?
 
-    V0_print(F(EOL));
-    V0_printf("test calc'ing 5351a programming starting at %lu" EOL, symbol_freq - 20);
+    V1_print(F(EOL));
+    V1_printf("test calc'ing 5351a programming starting at %lu" EOL, symbol_freq - 20);
     uint32_t pll_num_last = 0;
     for (uint32_t i = 0; i < 200; i++) {
         freq = (symbol_freq - 20) + i;
@@ -2261,19 +2274,19 @@ void checkPLLCalcs_200Hz() {
         // pll_freq 650415785 ms_div 370 pll_mult 25 pll_num 15991 pll_denom 1000000 freq 28126088
 
         // FIX! should we compare freq and actual? (actual isn't correct yet)
-        V0_printf(
+        V1_printf(
             "pll_freq %lu "
             "ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu freq %lu actual %lu" EOL,
             pll_freq, ms_div, pll_mult, pll_num, pll_denom, freq, actual);
 
         // want unique pll_num changes for each 1 Hz change..
         if (pll_num == pll_num_last) {
-            V0_print(F("ERROR: pll_num and pll_num_last same"));
-            V0_print(F(" vfo_calc_div_mult_num() needs higher target pll_freq" EOL));
+            V1_print(F("ERROR: pll_num and pll_num_last same"));
+            V1_print(F(" vfo_calc_div_mult_num() needs higher target pll_freq" EOL));
         }
         pll_num_last = pll_num;
     }
-    V0_print(F(EOL));
+    V1_print(F(EOL));
 }
 
 //**********************
