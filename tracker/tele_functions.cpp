@@ -75,16 +75,18 @@ int legalPowerSize = 19;
 void snapForTelemetry(void) {
     V1_println(F("snapForTelemetry START"));
     if (TESTMODE) {
-        V1_println(F("TESTMODE detected"));
+        V1_println(F("snapForTelemetry TESTMODE detected"));
         telemetrySweepAllForTest();
         // continue sweep inc'ing the static data (and wrapping)
         return;
     }
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
-    if (!gps.location.isValid()) return;
-    else if (gps.location.age() >= 1000 && !gps.location.isUpdated()) return;
-    else if (gps.satellites.value() <= 3) return;
+    // don't qualify here. all of the qualification should be in tracker.ino? 
+    
+    // if (!gps.location.isValid()) return;
+    // else if (gps.location.age() >= 1000 && !gps.location.isUpdated()) return;
+    // else if (gps.satellites.value() <= 3) return;
 
     int course = gps.course.isValid() ? gps.course.deg() : 0;
     if (course < 0)   course = 0;
@@ -240,6 +242,8 @@ void snapForTelemetry(void) {
 
     //*********************************
     // snap callsign just for consistency with everything else
+    // we should never tx callsign or telemetry if we didn't get a fix
+    // so okay if t_callsign is blank until we get a fix?
     snprintf(t_callsign, sizeof(t_callsign), "%s", _callsign);
 
     //*********************************
