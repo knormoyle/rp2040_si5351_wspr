@@ -24,6 +24,7 @@ void user_interface(void);
 void config_intro(void);
 void display_intro(void);
 void show_values(void);
+void show_commands(void);
 void show_TELEN_msg(void);
 void get_user_input(const char *prompt, char *input_variable, int max_length);
 

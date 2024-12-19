@@ -326,6 +326,26 @@ extern const int PICO_I2C_CLK_HZ = (100 * 1000);
 // The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR, which is 0x60
 extern const int SI5351A_I2C_ADDR = 0x60;
 
+
+//**********************************
+//IMPORTANT: GLOBALS and MULTICORE ACCESS
+
+// https://forums.raspberrypi.com/viewtopic.php?t=347326
+// Yes. In the jargon of C, variable x has static storage duration. 
+// That means only one instance of storage is allocated for x and 
+// it has the same lifetime as the execution of the program. 
+// In other words, both cores see the same x.
+// 
+// One must be very careful when accessing a variable from both cores. 
+// Among other things the C compiler is allowed to pretend that there is only one core, 
+// and optimize away accesses of x that it thinks are redundant.
+//
+// You might find making the variable "volatile" helps. 
+// "Volatile" is not technically the correct way to address access to a variable 
+// from multiple cores but it works on RP2040
+// since the config stuff is read in core0, then used in core1, it should be volatile
+//**********************************
+
 // essentially t_* stuff is a telemetry data buffer/structure
 // all can be extern'ed by a function
 // init to 0 is just in case. Should always be set to something valid before use
@@ -365,19 +385,24 @@ int t_snap_cnt = 0;
 // see config_functions.cpp
 // these get set via terminal, and then from NVRAM on boot
 // init with all null
-char _callsign[7] = { 0 };
-char _suffix[2] = { 0 };
-char _verbose[2] = { 0 };
-char _TELEN_config[5] = { 0 };
+
+// hmmm. can't declare these arrays 'volatile'
+volatile char _callsign[7] = { 0 };
+volatile char _suffix[2] = { 0 };
+volatile char _verbose[2] = { 0 };
+volatile char _TELEN_config[5] = { 0 };
+// FIX! why is this a problem if volatile?
+// https://forum.arduino.cc/t/invalid-conversion-from-volatile-char-to-const-char-fpermissive/949522
 char _clock_speed[4] = { 0 };
-char _U4B_chan[4] = { 0 };
-char _Band[3] = { 0 };     // string with 10, 12, 15, 17, 20 legal. null at end
-char _tx_high[2] = { 0 };  // 0 is 2mA si5351. 1 is 8mA si5351
-char _testmode[2] = { 0 };
-char _correction[7] = { 0 };
-char _go_when_rdy[2] = { 0 };
-char _factory_reset_done[2] = { 0 };
-char _use_sim65m[2] = { 0 };
+volatile char _U4B_chan[4] = { 0 };
+// FIX! why is this a problem if volatile?
+char _Band[3] = { 0 };  // string with 10, 12, 15, 17, 20 legal. null at end
+volatile char _tx_high[2] = { 0 };  // 0 is 2mA si5351. 1 is 8mA si5351
+volatile char _testmode[2] = { 0 };
+volatile char _correction[7] = { 0 };
+volatile char _go_when_rdy[2] = { 0 };
+volatile char _factory_reset_done[2] = { 0 };
+volatile char _use_sim65m[2] = { 0 };
 
 //*****************************
 // decoded stuff from config strings: all can be extern'ed by a function
@@ -448,8 +473,18 @@ bool core1_separate_stack = true;
 
 // everything is shared/accessible between two cores, but little is thread safe?
 
+// so we can see the setup() read_FLASH() results later
+int read_FLASH_result1 = 0;
+int read_FLASH_result2 = 0;
 
 void setup() {
+
+    // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
+    // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
+    // Initialize a core such that the other core can lock it out during flash_safe_execute.
+    // see the dire need at the link above (around flash access)
+    // flash_safe_execute_core_init();
+
     // FIX! what if we start with usb connected, boot, do some printing or keyboard
     // and then reboot and unplug usb. Or unplug usb and leave running
     // will it reboot when watch dog timer detects hang on Serial?
@@ -502,7 +537,18 @@ void setup() {
     // eventually we'll time out in config menu and reboot
     // detecting usb is connected
     // read the nvram and decode VERBY and TESTMODE. This will control printing
-    read_FLASH();
+    read_FLASH_result1 = read_FLASH();
+    if (read_FLASH_result1 == -1) {
+        // oneliner
+        V1_print(F("SETUP() WARN: first read_FLASH_result1 -1 ..retrying"));
+        V1_println(F("redo. ..errors were fixed to default"));
+        read_FLASH_result2 = read_FLASH();
+    }
+    Watchdog.reset();
+    if (read_FLASH_result2 == -1) {
+        V1_println(F("SETUP() ERROR: retry read_FLASH_result2 -1 , ignore"));
+    }
+    show_values();
 
     // Get the SIE_STATUS to see if we're connected or what?
     // this is what I see when I'm using the putty window
@@ -620,10 +666,10 @@ void loop() {
             // should have a limited number of ?? chars
             while (Serial.available()) Serial.read();
         }
-
         // don't use watchog reset..not thread safe?
         if (core1_idled) {
-            V0_print(F(EOL "loop() LOOPING WITH core1_idled()" EOL EOL));
+            // hmm..don't do any fetch from nvram with F()
+            V0_print(EOL "loop() LOOPING WITH core1_idled()" EOL EOL);
             sleep_ms(1000);
         } else {
             // Serial.print(F(EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
@@ -676,6 +722,13 @@ void loop() {
 void setup1() {
     // CORE1_PROCEED should start false, so no need to wait?
     sleep_ms(1000);
+    // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
+    // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
+    // Initialize a core such that the other core can lock it out during flash_safe_execute.
+    // see the dire need at the link above (around flash access)
+
+    // flash_safe_execute_core_init();
+
     while (!CORE1_PROCEED) {
         // no printing inside this..potentially BALLOON_MODE/VERBY not setup yet?
         // updateStatusLED();
@@ -796,24 +849,18 @@ void setup1() {
 
     // sets minute/lane/id from chan number.
     // FIX! is it redundant at this point?..remove?
+    
     XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
 
     //***************
-    // get all the _* config state set and fix any bad values (to defaults)
-    int result = read_FLASH();
-    // if anything got fixed to defaults, no read again
 
     Watchdog.reset();
-    if (result == -1) {
-        // oneliner
-        V1_print(F("WARN: read_FLASH got result -1 first time,"));
-        V1_println(F("redo. ..errors were fixed to default"));
-        result = read_FLASH();
-    }
-    Watchdog.reset();
-    if (result == -1) {
-        V1_println(F("ERROR: read_FLASH got result -1 a second time, ignore"));
-    }
+    // FIX! do we really have to read flash again. No..I don't think so!
+    // keeps the read_FLASH in core1() always? no worries about "safe" access to flash 
+    // (interrupts and fetch out of nvram?)
+    V0_printf("prior read_FLASH() results: read_FLASH_result1: %d read_FLASH_result2: %d" EOL,
+        read_FLASH_result1, read_FLASH_result2);
+    show_values();
 
     //***************
     uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
@@ -828,6 +875,8 @@ void setup1() {
         if (!set_sys_clock_khz(freq_khz, false)) {
             V1_println("ERROR: setup1() The DEFAULT_SYS_MHZ is not legal either. will use 125");
             PLL_SYS_MHZ = 125;
+            snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+            write_FLASH();
         }
     }
 
@@ -1439,18 +1488,11 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // FIX! does this include a full init at the rp2040?
     // vfo_turn_on() doesn't turn on the clk outputs!
     vfo_turn_on(WSPR_TX_CLK_NUM);
-
-    // this turns on the clk outputs (is this not in vfo_turn_on() ??
-    // FIX! we shouldn't turn these off. requires pll reset otherwise phase relationship
-    // is random, according to Hans
-    // I suppose the vfo_turn_off/on will clear state that will trigger a pll reset
-    // when we do writes?
-    vfo_turn_on_clk_out(WSPR_TX_CLK_NUM);
     startSymbolFreq(hf_freq, 0);
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
     // GPS will stay off for all
-    char hf_callsign[7];
+    char hf_callsign[7] = {0};
     snprintf(hf_callsign, sizeof(hf_callsign), "%s", t_callsign);
     // same declared size, so could just strncpy
     // strncpy(hf_callsign, t_callsign, 6);
@@ -1462,12 +1504,11 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     char hf_grid6[7] = { 0 };
     char hf_grid4[5] = "AA00";
     get_mh_6(hf_grid6, lat_double, lon_double);
-    // not same declared size, so use snprintf)
     // just the first 4 chars
     for (int i = 0; i < 4; i++) hf_grid4[i] = hf_grid6[i];
     hf_grid4[4] = 0;
 
-    char hf_power[3];
+    char hf_power[3] = { 0 };
     snprintf(hf_power, sizeof(hf_power), "%s", t_power);
     Watchdog.reset();
 

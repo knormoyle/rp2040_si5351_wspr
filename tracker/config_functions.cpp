@@ -35,8 +35,42 @@
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 // FIX! is the program bigger than 1M ?
-// this is 1M from start of flash
-#define FLASH_TARGET_OFFSET (4 * 256 * 1024) // leaves 1M of space for the program
+// Once done, we can access this at XIP_BASE + FLASH_TARGET_OFFSET
+#define FLASH_TARGET_OFFSET (4 * 256 * 1024) 
+
+// https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
+// https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
+
+
+// https://github.com/raspberrypi/pico-examples/blob/master/flash/program/flash_program.c
+// Flash is "execute in place" and so will be in use when any code that is stored in flash runs, 
+// e.g. an interrupt handler or code running on a different core.
+// 
+// Calling flash_range_erase or flash_range_program at the same time as flash is running code would cause a crash.
+// flash_safe_execute disables interrupts and tries to cooperate with the other core to ensure flash is not in use
+// See the documentation for flash_safe_execute and its assumptions and limitations
+// int flash_safe_execute (void(*) (void *) func,
+// void * param,
+// uint32_t enter_exit_timeout_ms 
+// )		
+// Returns
+// PICO_OK on success (the function will have been called). 
+// PICO_TIMEOUT on timeout (the function may have been called). 
+// PICO_ERROR_NOT_PERMITTED if safe execution is not possible (the function will not have been called). 
+// PICO_ERROR_INSUFFICIENT_RESOURCES if the method fails due to dynamic resource exhaustion 
+// (the function will not have been called)
+
+// Execute a function with IRQs disabled and with the other core also not executing/reading flash
+// int rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
+// hard_assert(rc == PICO_OK);
+
+// https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
+// https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
+// Initialize a core such that the other core can lock it out during flash_safe_execute.
+// see the dire need at the link above (around flash access)
+// did this in setup1() and setup()
+// flash_safe_execute_core_init();
+
 
 // already defined?
 // #define FLASH_SECTOR_SIZE 4096
@@ -339,6 +373,7 @@ void user_interface(void) {
     // FIX! do we change the led blink pattern during config?
     config_intro();
     show_values();
+    show_commands();
 
     while (!BALLOON_MODE) {
         V0_print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
@@ -545,7 +580,11 @@ void user_interface(void) {
                 sleep_ms(1000);
                 break;
         }
-        check_data_validity_and_set_defaults();
+        int result = check_data_validity_and_set_defaults();
+        if (result == -1) {
+            // this should include a fix of empty callsign?
+            V0_print(F("ERROR: check_data_validity_and_set_defaults() fixed some illegal value (2)"));
+        }
         show_values();
         V0_println(F("user_interface() END"));
     }
@@ -558,6 +597,9 @@ void user_interface(void) {
 
 // background
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
+// https://github.com/MakerMatrix/RP2040_flash_programming
+// doesn't cover the fetch from FLASH exclusion issue?
+// https://github.com/MakerMatrix/RP2040_flash_programming/blob/main/RP2040_flash/RP2040_flash.ino
 
 // update whever you add a bit or more to flash used (the offsets used below)
 #define FLASH_BYTES_USED 30
@@ -606,10 +648,13 @@ int read_FLASH(void) {
     // const char * const is a const pointer to a const char
 
     // FIX! why is this weird, re above defs?
-    const uint8_t *uflash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
+    // was 12/18/24
+    // const uint8_t *uflash_target_contents = (const uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
+    uint8_t *uflash_target_contents = (uint8_t *) (XIP_BASE + FLASH_TARGET_OFFSET);
     // printFLASH(uflash_target_contents, (int) FLASH_PAGE_SIZE);  // 256
 
     char flash_target_contents[FLASH_BYTES_USED] = { 0 };
+    // FIX! Does the flash read ever get wrong results?
     for (int i = 0; i < FLASH_BYTES_USED ; i++) {
         flash_target_contents[i] = (char) uflash_target_contents[i];
     }
@@ -644,6 +689,10 @@ int read_FLASH(void) {
     // fix anything bad! both in _* variables and FLASH (defaults)
     // -1 if anything got fixed
     int result = check_data_validity_and_set_defaults();
+    if (result == -1) {
+        // this should include a fix of empty callsign?
+        V0_print(F("ERROR: check_data_validity_and_set_defaults() fixed some illegal value (1)"));
+    }
 
     // forceHACK();
 
@@ -700,6 +749,23 @@ void decodeVERBY(void) {
     // V1_print("decodeVERBY END" EOL);
 }
 
+//**************************************
+// https://github.com/raspberrypi/pico-examples/blob/master/flash/program/flash_program.c
+// This function will be called when it's safe to call flash_range_erase
+static void call_flash_range_erase(void *param) {
+    uint32_t offset = (uint32_t)param;
+    flash_range_erase(offset, FLASH_SECTOR_SIZE);
+}
+
+//**************************************
+// https://github.com/raspberrypi/pico-examples/blob/master/flash/program/flash_program.c
+// This function will be called when it's safe to call flash_range_program
+static void call_flash_range_program(void *param) {
+    uint32_t offset = ((uintptr_t*)param)[0];
+    const uint8_t *data = (const uint8_t *)((uintptr_t*)param)[1];
+    flash_range_program(offset, data, FLASH_PAGE_SIZE);
+}
+
 //***************************************
 // Write the user entered data into FLASH
 void write_FLASH(void) {
@@ -723,31 +789,44 @@ void write_FLASH(void) {
     strncpy(data_chunk + 28, _factory_reset_done, 1);
     strncpy(data_chunk + 29, _use_sim65m, 1);
 
-    // you could theoretically write 16 pages at once (a whole sector).
-    // don't interrupt
-    uint32_t ints = save_and_disable_interrupts();
-
-    // a "Sector" is 4096 bytes
-    // FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE, FLASH_PAGE_SIZE = 040000x, 4096, 256
-
-    flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-    // writes 256 bytes (one "page") (16 pages per sector)
-
     // alternative for casting the array to uint8_t
     // https://stackoverflow.com/questions/40579902/how-to-turn-a-character-array-into-uint8-t
-
     // If you're on an architecture where uint8_t is a typedef to unsigned char,
     // then simply take the first char and cast it to uint8_t:
     // int length = (uint8_t)(udata_chunk[0]);
-
     for (int i = 0; i < FLASH_BYTES_USED ; i++) {
         udata_chunk[i] = (uint8_t) data_chunk[i];
     }
 
-    flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
-    restore_interrupts(ints);
+    // a "Sector" is 4096 bytes
+    // FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE, FLASH_PAGE_SIZE = 040000x, 4096, 256
+
+    // you could theoretically write 16 pages at once (a whole sector).
+    // don't interrupt..not enough? what about code fetch
+    // uint32_t ints = save_and_disable_interrupts();
+
+    V0_print("Erasing FLASH target region" EOL);
+    int rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
+    V0_printf("flash_safe_execute() rc: %d" EOL, rc);
+    // hard_assert(rc == PICO_OK);
+
+    // was 12/18/2024
+    // flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+    // writes 256 bytes (one "page") (16 pages per sector)
+
+    V0_print("Writing FLASH target region" EOL);
+    uintptr_t params[] = {FLASH_TARGET_OFFSET, (uintptr_t) udata_chunk};
+    rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
+    V0_printf("flash_range_program() rc: %d" EOL, rc);
+    // hard_assert(rc == PICO_OK);
+
+    // was 12/18/2024
+    // was this supposed to be FLASH_SECTOR_SIZE?
+    // flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
+    // restore_interrupts(ints);
     V1_print("write_FLASH END" EOL);
 }
+
 
 //**************************************
 // Checks validity of user settings and if something is wrong,
@@ -978,14 +1057,14 @@ int check_data_validity_and_set_defaults(void) {
 
 //***************************************
 // print the current config
-void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
+void show_values(void) {
     V0_println(F("show_values() START" EOL));
 
     // V0_print(F(EOL, CLEAR_SCREEN, UNDERLINE_ON, BRIGHT));
     // since these macros are "" strings in print_functions.h, they will just concat here
     // no commas necessary?
 
-    V0_print(F("Current values:" EOL));
+    V0_print(F("FLASH read values:" EOL));
 
     V0_printf("callsign:%s" EOL, _callsign);
     V0_printf("U4B channel:%s", _U4B_chan);
@@ -1005,6 +1084,12 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_printf("XMIT_FREQUENCY:%lu" EOL, XMIT_FREQUENCY);
     V0_print(F(EOL "SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
 
+    V0_println(F("show_values() END" EOL));
+}
+
+// show list of valid commands
+void show_commands(void) {
+    V0_println(F("show_commands() START" EOL));
     // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
     #define sieStatusPtr ((uint32_t*)0x50110050)
     uint32_t sieValue = *sieStatusPtr;
@@ -1030,7 +1115,7 @@ void show_values(void) /* shows current VALUES  AND list of Valid Commands */ {
     V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
 
-    V0_print(F("show_values() END" EOL));
+    V0_print(F("show_commands() END" EOL));
 }
 
 //*****************************************************

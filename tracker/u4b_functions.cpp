@@ -86,7 +86,6 @@ extern char _Band[3];
 extern char _id13[3];
 extern char _U4B_chan[4];
 extern char _lane[2];
-extern char _clock_speed[4];
 extern char _start_minute[2];
 extern char _verbose[2];
 

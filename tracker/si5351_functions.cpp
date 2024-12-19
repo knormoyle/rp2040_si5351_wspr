@@ -761,7 +761,10 @@ void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq,
 
     // from https://rfzero.net/tutorials/si5351a/
     // When we're done, we can calc what the fout should be ?
-    uint32_t actual_here = ((uint64_t)pll_freq_here / (uint64_t)ms_div_here) << PLL_CALCULATION_PRECISION;
+    // uint32_t pll_freq_here = ((uint64_t)freq * (uint64_t)ms_div_here) >> PLL_CALCULATION_PRECISION;
+    uint32_t actual_here = 
+        ((uint64_t)pll_freq_here << PLL_CALCULATION_PRECISION) / 
+        ((uint64_t)ms_div_here << PLL_CALCULATION_PRECISION);
 
 
     // output so we can print or use
