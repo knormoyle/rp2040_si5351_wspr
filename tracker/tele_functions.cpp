@@ -13,9 +13,9 @@
 #include "adc_functions.h"
 #include "tele_functions.h"
 
-#include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
+#include <TinyGPS++.h>  // https://github.com/mikalhart/TinyGPSPlus
 
-extern uint64_t GpsTimeToLastFix; // milliseconds
+extern uint64_t GpsTimeToLastFix;  // milliseconds
 
 extern char t_course[4];      // 3 bytes
 extern char t_speed[4];       // 3 bytes
@@ -82,8 +82,8 @@ void snapForTelemetry(void) {
     }
     // FIX! didn't we already check this?
     // FIX! why does isUpdated() get us past here?
-    // don't qualify here. all of the qualification should be in tracker.ino? 
-    
+    // don't qualify here. all of the qualification should be in tracker.ino?
+
     // if (!gps.location.isValid()) return;
     // else if (gps.location.age() >= 1000 && !gps.location.isUpdated()) return;
     // else if (gps.satellites.value() <= 3) return;
@@ -106,7 +106,7 @@ void snapForTelemetry(void) {
 
     //*********************************
     // FIX! remove. this result is bogus. does it not work for temp? does temp have a /3 divider
-    const float conversionFactor_a = 3.3f / (1 << 12); //read temperature
+    const float conversionFactor_a = 3.3f / (1 << 12);  // read temperature
     int adc_val_a = 0;
 
     // FIX! does this not apply to pi pico?
@@ -187,8 +187,8 @@ void snapForTelemetry(void) {
 
     // FIX! could use this for some TELEN telemetry?
     int hdop = gps.hdop.isValid() ? (int) gps.hdop.value() : 0;
-    if (hdop < 0) hdop = 0; // hundredths. <100 is very good
-    if (hdop > 999) hdop = 999; // can get >999 from the gps, but we don't tx it (usually?)
+    if (hdop < 0) hdop = 0;  // hundredths. <100 is very good
+    if (hdop > 999) hdop = 999;  // can get >999 from the gps, but we don't tx it (usually?)
     snprintf(t_hdop, sizeof(t_hdop), "%3d", hdop);
 
     // FIX! could use this for some TELEN telemetry?
@@ -248,8 +248,8 @@ void snapForTelemetry(void) {
 
     //*********************************
     int power_int;
-    if (_tx_high[0] == '1') power_int = 7; // legal
-    else power_int = 3; // legal
+    if (_tx_high[0] == '1') power_int = 7;  // legal
+    else power_int = 3;  // legal
 
     // we clamp to a legalPower when we snapForTelemetry()
     // basically we look at _tx_high[0] to decide our power level that will be used for rf
@@ -325,7 +325,7 @@ void process_TELEN_data(void) {
 
     int telen_values[4] = { 0 };
     uint32_t timeSinceBoot_secs = millis() / 1000UL;  // seconds
-    for (int i=0; i < 4;i++) {
+    for (int i=0; i < 4; i++) {
         switch (_TELEN_config[i]) {
             case '-':  break;  // do nothing, telen chan is disabled
             case '0':
@@ -342,10 +342,10 @@ void process_TELEN_data(void) {
                 telen_values[i] = round((float)analogRead(3) * conversionFactor * 3.0f);
                 break;
             case '4':
-                telen_values[i] = timeSinceBoot_secs; // seconds since running
+                telen_values[i] = timeSinceBoot_secs;  // seconds since running
                 break;
             case '5':
-                telen_values[i] = GpsTimeToLastFix; // FIX! is always time to fix, now?
+                telen_values[i] = GpsTimeToLastFix;  // FIX! is always time to fix, now?
                 break;
             case '6':
                 telen_values[i] = tx_cnt_0;
@@ -354,7 +354,7 @@ void process_TELEN_data(void) {
                 telen_values[i] = atoi(t_sat_count);
                 break;
             case '8':
-                telen_values[i] = atoi(t_hdop); // hundredths 
+                telen_values[i] = atoi(t_hdop);  // hundredths
                 break;
             case '9': { ; }
                 // FIX! what are these onewire_values?
@@ -379,7 +379,7 @@ void process_TELEN_data(void) {
 // isFloat tells you the string is float not string
 // all strings are null terminated
 void doTelemetrySweepInteger(char *t_string, uint8_t t_length, int t_min, int t_max, int t_inc) {
-    if (t_string[0] == 0) { // empty 
+    if (t_string[0] == 0) {  // empty
         snprintf(t_string, t_length, "%d", t_min);
     }
     int value = atoi(t_string);
@@ -387,39 +387,39 @@ void doTelemetrySweepInteger(char *t_string, uint8_t t_length, int t_min, int t_
     // wrap
     if (value > t_max) value = t_min;
 
-    // snprintf: If the resulting string would be longer than n-1 characters, 
-    // the remaining characters are discarded and not stored, 
+    // snprintf: If the resulting string would be longer than n-1 characters,
+    // the remaining characters are discarded and not stored,
     // but counted for the value returned by the function.
     // A terminating null character is automatically appended after the content written.
     snprintf(t_string, t_length, "%d", value);
 }
 
 //****************************************************
-void doTelemetrySweepFloat (char *t_string, uint8_t t_length, float t_min, float t_max, float t_inc) {
+void doTelemetrySweepFloat(char *t_string,
+    uint8_t t_length, float t_min, float t_max, float t_inc) {
 
     float value;
-    if (t_string[0] == 0) { // empty 
+    if (t_string[0] == 0) {  // empty
         value = t_min;
-    }
-    else {
+    } else {
         value = atof(t_string);
         value = value + t_inc;
         // wrap
         if (value > t_max) value = t_min;
     }
 
-    // snprintf: If the resulting string would be longer than n-1 characters, 
-    // the remaining characters are discarded and not stored, 
+    // snprintf: If the resulting string would be longer than n-1 characters,
+    // the remaining characters are discarded and not stored,
     // but counted for the value returned by the function.
     // A terminating null character is automatically appended after the content written.
-    if (t_length == 7) 
+    if (t_length == 7)
         snprintf(t_string, t_length, "%.2f", value);
-    else if (t_length == 6) 
+    else if (t_length == 6)
         snprintf(t_string, t_length, "%.1f", value);
     else
         snprintf(t_string, t_length, "%.2f", value);
 }
-    
+
 //****************************************************
 void telemetrySweepAllForTest(void) {
     V1_println(F("telemetrySweepAllForTest START"));
@@ -433,13 +433,13 @@ void telemetrySweepAllForTest(void) {
     // walk them thru their range. wrap at boundary
     doTelemetrySweepInteger(t_course, 3, 0, 361, 1);            // 3 bytes (not counting null term)
     doTelemetrySweepInteger(t_speed, 3, 0, 300, 1);             // 3 bytes
-    doTelemetrySweepInteger(t_altitude, 6, 0, 99999, 1);        // 6 bytes 
+    doTelemetrySweepInteger(t_altitude, 6, 0, 99999, 1);        // 6 bytes
     doTelemetrySweepInteger(t_tx_count_0, 3, 0, 999, 1);        // 3 bytes
     doTelemetrySweepFloat(t_temp, 6, -100.1, 200.4, 1.0);       // 6 bytes (float)
     doTelemetrySweepFloat(t_pressure, 7, -20.10, 100.10, 1.0);  // 7 bytes (float)
     doTelemetrySweepFloat(t_temp_ext, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
     doTelemetrySweepFloat(t_humidity, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
-    doTelemetrySweepFloat(t_voltage, 5, 0,  6.00, 6.0);        // 5 bytes (float)
+    doTelemetrySweepFloat(t_voltage, 5, 0,  6.00, 6.0);         // 5 bytes (float)
     doTelemetrySweepInteger(t_sat_count, 2, 0, 99, 1);          // 2 bytes
     doTelemetrySweepInteger(t_hdop, 3, 0, 999, 1);              // 3 bytes
 
@@ -449,15 +449,15 @@ void telemetrySweepAllForTest(void) {
     static char telen2_str1[25] = { 0 };
     static char telen2_str2[25] = { 0 };
 
-    doTelemetrySweepInteger(telen1_str1, 24, 0, 999, 1);        // 3 bytes
-    doTelemetrySweepInteger(telen1_str2, 24, 0, 999, 1);        // 3 bytes
-    doTelemetrySweepInteger(telen2_str1, 24, 0, 999, 1);        // 3 bytes
-    doTelemetrySweepInteger(telen2_str2, 24, 0, 999, 1);        // 3 bytes
+    doTelemetrySweepInteger(telen1_str1, 24, 0, 999, 1);  // 3 bytes
+    doTelemetrySweepInteger(telen1_str2, 24, 0, 999, 1);  // 3 bytes
+    doTelemetrySweepInteger(telen2_str1, 24, 0, 999, 1);  // 3 bytes
+    doTelemetrySweepInteger(telen2_str2, 24, 0, 999, 1);  // 3 bytes
 
-    t_TELEN1_val1 = atoi( telen1_str1); // int
-    t_TELEN1_val2 = atoi( telen1_str2); // int
-    t_TELEN2_val1 = atoi( telen2_str1); // int
-    t_TELEN2_val2 = atoi( telen2_str2); // int
+    t_TELEN1_val1 = atoi(telen1_str1);  // int
+    t_TELEN1_val2 = atoi(telen1_str2);  // int
+    t_TELEN2_val1 = atoi(telen2_str1);  // int
+    t_TELEN2_val2 = atoi(telen2_str2);  // int
 
     V1_printf("TESTMODE t_course: %s" EOL, t_course);
     V1_printf("TESTMODE t_speed: %s" EOL, t_speed);
