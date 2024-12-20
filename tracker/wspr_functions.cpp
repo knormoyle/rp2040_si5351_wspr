@@ -17,49 +17,51 @@
 // https://emalliab.wordpress.com/2021/04/18/raspberry-pi-pico-arduino-core-and-timers/
 
 // has code for these cases:
-// 1) Mbed supports the concept of Tickers and Timeouts 
+// 1) Mbed supports the concept of Tickers and Timeouts
 // an get a microsecond-resolution, periodic function called for any mbed based setup.
 // Not less than 60 usec?
 
 // 2) Raspberry Pi Pico Repeating Timer
-// Is a Pico SDK function for setting up a repeating timer to trigger 
+// Is a Pico SDK function for setting up a repeating timer to trigger
 // a function each time (see chapter 4.2.12 in the Pico C/C++ SDK datasheet).
-// Unfortunately this does not build on the official Arduino RP2040 core.   
-// It turns out that much of the APIs for the micro-second alarm and timer functions 
+// Unfortunately this does not build on the official Arduino RP2040 core.
+// It turns out that much of the APIs for the micro-second alarm and timer functions
 // are conditional on PICO_TIME_DEFAULT_ALARM_POOL_DISABLED not being set.
-// But for the current build this is set (I don’t know why – I haven’t looked into it further) – 
-// so not only is there no “default alarm pool” to which you can attach repeating timers and alarms, 
+// But for the current build this is set (I don’t know why – I haven’t looked into it further) –
+// so not only is there no “default alarm pool” to which you can attach repeating timers and alarms,
 // but even the functions to handle such things are “compiled out”.
 
 // 3) Raspberry Pi Pico Alarm System
-// Ialso looked into the Pico SDK’s alarm system (see chapter 4.2.11 in the Pico C/C++ SDK datasheet). 
-// This provides a number of APIs for setting up alarms based on the system clock and 
-// includes such APIs as “add_alarm_in_us”.  
-// But as with the repeated timer system this appears not to be available (at present) 
+// Looked into the Pico SDK’s alarm system (see chapter 4.2.11 in Pico C/C++ SDK datasheet).
+// This provides a number of APIs for setting up alarms based on the system clock and
+// includes such APIs as “add_alarm_in_us”.
+// But as with the repeated timer system this appears not to be available (at present)
 // in the official Arduino mbed based RP2040 core.
 
 // 4) Pico Low-level Timer Hardware API
-// Pico SDK’s “low level hardware API” directly (see chapter 4.1.22 in the Pico C/C++ SDK datasheet, 
+// Pico SDK’s “low level hardware API” directly (see chapter 4.1.22 in the Pico C/C++ SDK datasheet,
 // and chapter 4.6 in the RP2040 datasheet).
 
-// The RP2040 has the concept of alarms which can be triggered on the main system timer, 
+// The RP2040 has the concept of alarms which can be triggered on the main system timer,
 // and that can be configured as shown in the “timer_lowlevel example” in the Pico GitHub area.
-// From the debug code it would appear that alarm[0] is already used somewhere, 
-// I haven’t investigated where, so I set everything up to use alarm[1].  
+// From the debug code it would appear that alarm[0] is already used somewhere,
+// I haven’t investigated where, so I set everything up to use alarm[1].
 
-// Note that the alarm interrupt routine (alarm_irq) must do two things 
+// Note that the alarm interrupt routine (alarm_irq) must do two things
 // in addition to what ever you need it to do:
 
-//    Clear the interrupt by writing to the appropriate bit in INTR.
-//    Re-arm the alarm to trigger for its next run.
+// -Clear the interrupt by writing to the appropriate bit in INTR.
+// -Re-arm the alarm to trigger for its next run.
 
-// This manual “re-arming” process means that if you need a perfectly accurate “tick” you won’t get it.  
-// The next triggering of the alarm will be equal to the requested period plus whatever time 
-// it has taken to run the code in the interrupt service routine up to the point of you re-arming the alarm. 
+// This manual “re-arming” process means that if you need a perfectly accurate “tick”
+// you won’t get it.
+// The next triggering of the alarm will be equal to the requested period plus whatever time
+// it has taken to run the code in the interrupt service routine up to the point of
+// you re-arming the alarm.
 
 
 //*******************************************************************************
-// So: it appears using the PWM based interrupt mechanism avoids all these issues!
+// So: it appears using the PWM based interrupt mechanism avoids all these issues! (kevin)
 //*******************************************************************************
 extern bool VERBY[10];
 // this can get modified for 18 Mhz operation (from 8 to 1?)
@@ -74,20 +76,12 @@ void wsprSleepForMillis(int n) {
     // if we know watchdog interval is > than the max sleep used here?
     // and ignored led updates
     Watchdog.reset();
-    if (n < 0 || n > 25000) {
-        // V1_printf("ERROR: wsprSleepForMillis() n %d too big (25000 max). Using 1000" EOL, n);
-        // n = 1000;
-        // UPDATE: if this was used while USB is disabled (don't think it would be)
-        // but BALLOON_MODE/VERBY don't protect us ..just don't print here
-        ;
-    }
-
     // interesting it says 'attempts'
-    // void sleep_ms (uint32_t	ms)	
+    // void sleep_ms (uint32_t ms)
     // Wait for the given number of milliseconds before returning.
     // This method attempts to perform a lower power sleep (using WFE) as much as possible.
-    // ms	the number of milliseconds to sleep
-    
+    // ms the number of milliseconds to sleep
+
     if (false) {
         // I guess we don't want to use this, because the led isn't update
         // so that 3 short led, start looking like 3 long (longs are config/error cases)
@@ -127,7 +121,8 @@ void wsprSleepForMillis(int n) {
 // Modulation Continuous phase 4 FSK, with 1.4648 Hz tone separation
 // Occupied bandwidth is about 6 Hz
 // Synchronization is via a 162 bit pseudo-random sync vector.
-// Transmissions nominally start one second into an even UTC minute (e.g., at hh:00:01, hh:02:01, etc.)
+// Transmissions nominally start one second into an even UTC minute
+// (e.g., at hh:00:01, hh:02:01, etc.)
 
 // WSPR Modulation:
 // Each symbol represents a frequency shift of 12000 / 8192 Hz (1.46Hz)
@@ -137,7 +132,8 @@ void wsprSleepForMillis(int n) {
 // takes around 110.6 seconds to send and occupies a bandwidth of approximately 6Hz.
 
 // WSPR protocol specification states:
-// Each tone should last for 8192/12000 = 0.682666667 seconds, and transitions between tones should be done in a phase-continuous manner.
+// Each tone should last for 8192/12000 = 0.682666667 seconds
+// and transitions between tones should be done in a phase-continuous manner.
 
 //*******************************************************
 // The RP2040 PWM block has 8 identical slices.
@@ -147,7 +143,8 @@ void wsprSleepForMillis(int n) {
 
 // All 30 GPIOs can be driven by the PWM block.
 //
-// The PWM hardware functions by continuously comparing the input value to a free-running counter.
+// The PWM hardware functions by continuously comparing the input value to a
+// free-running counter.
 // This produces a toggling output where the amount of time spent at the high output level
 // is proportional to the input value.
 //
@@ -168,8 +165,8 @@ void wsprSleepForMillis(int n) {
 // from the PWM interrupt timer? I guess no reason to.
 // https://reference.arduino.cc/reference/en/libraries/rpi_pico_timerinterrupt
 // https://github.com/khoih-prog/RPI_PICO_TimerInterrupt
-// This library enables you to use Interrupt from Hardware Timers on on RP2040-based boards
-// using Earle Philhower's arduino-pico core.
+// This library enables you to use Interrupt from Hardware Timers on on RP2040-based
+// boards using Earle Philhower's arduino-pico core.
 // As Hardware Timers are rare, and very precious assets of any board,
 // this library now enables you to use up to 16 ISR-based Timers,
 // while consuming only 1 Hardware Timer.
@@ -188,20 +185,21 @@ void PWM4_Handler() {
     pwm_interrupt_total_cnt++;
     if (pwm_interrupt_cnt >= INTERRUPTS_PER_SYMBOL) {
         pwm_interrupt_cnt = 0;
-        // symbol rate is approximately 1.4648 baud (4fsk per sec), or exactly 12,000 Hz / 8192.
+        // symbol rate is approximately
+        // 1.4648 baud (4fsk per sec), or exactly 12,000 Hz / 8192.
         // 0.6826 secs per symbol?
         PROCEED = true;
     }
     // FIX! remove this. redundant and slows down gettng to 'proceed' in tracker.ino
-    if (false and VERBY[1]) {
+    if (false && VERBY[1]) {
         // we might have two extra 'proceed' synchroniations -> 2 * INTERRUPTS_PER_SYMBOL
         // before we start a message now
         uint32_t pwm_interrupt_cnt_162 = pwm_interrupt_total_cnt % 162;
-        if ((pwm_interrupt_total_cnt % 10) == 6) { // instead of 0
+        if ((pwm_interrupt_total_cnt % 10) == 6) {  // instead of 0
             StampPrintf("sym: %lu %lu" EOL, pwm_interrupt_cnt_162, pwm_interrupt_cnt);
         }
 
-        if ((pwm_interrupt_total_cnt % 162) == 16) { // instead of 161
+        if ((pwm_interrupt_total_cnt % 162) == 16) {  // instead of 161
             StampPrintf("sym: %lu %lu" EOL, pwm_interrupt_cnt_162, pwm_interrupt_cnt);
             DoLogPrint();
         }
@@ -213,13 +211,15 @@ void PWM4_Handler() {
 void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     // valid_params_if(HARDWARE_PWM, div >= 1 && div < 256);
     if (PWM_DIV >= 256)
-        V1_printf("ERROR: illegal PWM_DIV  %lu is > 256 ..drops upper bits?" EOL, PWM_DIV);
+        V1_printf("ERROR: illegal PWM_DIV  %lu is > 256 ..drops upper bits?" EOL,
+            PWM_DIV);
     if (PWM_DIV ==  0)
-        V1_print(F("ERROR: illegal PWM_DIV is 0" EOL)); // 0 should be illegal also?
+        V1_print(F("ERROR: illegal PWM_DIV is 0" EOL));  // 0 should be illegal also?
 
     // gets passed as uint16_t
     if (PWM_WRAP_CNT >= (1 << 16))
-        V1_printf("ERROR: illegal PWM_WRAP_CNT %lu is > 2**16 ..drops upper bits?" EOL, PWM_WRAP_CNT);
+        V1_printf("ERROR: illegal PWM_WRAP_CNT %lu is > 2**16 ..drops upper bits?" EOL,
+            PWM_WRAP_CNT);
     if (PWM_WRAP_CNT == 0 )
         V1_print(F("ERROR: illegal PWM_WRAP_CNT is 0" EOL));
     V1_flush();
@@ -228,7 +228,7 @@ void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_pwm/include/hardware/pwm.h
 
     // don't need to program this.. default is always-on (free-running PWM)
-    // static inline void pwm_config_set_clkdiv_mode(pwm_config *c, enum pwm_clkdiv_mode mode) {
+    // static inline void pwm_config_set_clkdiv_mode(pwm_config *c, enum pwm_clkdiv_mode mode)
     // valid_params_if(HARDWARE_PWM, mode == PWM_DIV_FREE_RUNNING ||
     // Configure which event gates the operation of the fractional divider.
     // The default is always-on (free-running PWM).
@@ -241,9 +241,11 @@ void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     static pwm_config wspr_pwm_config = pwm_get_default_config();
     // 250 clocks at 125Mhz .008 uSec per clock, is 250 * .008 = 2 uSec
     // 2uS (at 125Mhz? does it need adjusting at other clks?)
-    // so if we're count at 2uSec intervals to wrap at 683 millis.. that's 500*683 = 341500 counts?
+    // so if we're count at 2uSec intervals to wrap at 683 millis..
+    // that's 500*683 = 341500 counts?
 
-    // the 250 can be a uint? so can be pretty big? Can we make it 5 times bigger (1450 or maybe 1500)
+    // the 250 can be a uint? so can be pretty big? Can we make it 5 times bigger
+    // (1450 or maybe 1500)
     // to bring down the sie of the wrap count
     // or should we count 8 interrupts, and adjust for 1/8th the total target
 
@@ -251,9 +253,10 @@ void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     // can't be bigger than 255!
     // static inline void pwm_config_set_clkdiv_int(pwm_config *c, uint div) {
     // valid_params_if(HARDWARE_PWM, div >= 1 && div < 256);
-    pwm_config_set_clkdiv_int(&wspr_pwm_config, PWM_DIV); // takes uint?
+    pwm_config_set_clkdiv_int(&wspr_pwm_config, PWM_DIV);  // takes uint?
 
-    // Set the highest value the counter will reach before returning to 0. Also known as TOP.
+    // Set the highest value the counter will reach before returning to 0.
+    // Also known as TOP.
     pwm_config_set_wrap(&wspr_pwm_config, ((uint16_t)PWM_WRAP_CNT - 1));
     pwm_init(WSPR_PWM_SLICE_NUM, &wspr_pwm_config, false);
 
@@ -267,8 +270,8 @@ void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     pwm_interrupt_total_cnt = 0;
 
     pwm_set_irq_enabled(WSPR_PWM_SLICE_NUM, true);
-    // does this start it counting to interrupt and toggle PROCEED after completion of first symbol?
-    // first symbol could be "short" as a result (the extra delay in getting first frequency setup)
+    // start it counting to interrupt and toggle PROCEED after completion of first symbol?
+    // first symbol could be "short" as a result (extra delay in getting first frequency setup)
     // setup the base frequency earlier, so we don't see this extra variation on first symbol!
     // due to the "change" optimization in the i2c writes.
     pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
@@ -297,7 +300,6 @@ void disablePwmInterrupts(void) {
 
 void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
         uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ) {
-
     V1_print(F("calcPwmDivAndWrap START"));
     V1_printf(" for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
         INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
@@ -307,7 +309,8 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
     // symbol rate is ~1.4648 baud (4fsk per sec). Exactly: 12000 Hz / 8192.
     // 0.68266666... secs per symbol? (8192/12000). why is 256/375 the same?
 
-    // The WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
+    // The WSPR transmission consists of 162 symbols, each has a duration of
+    // 256/375 seconds.
     // why do some people quote 110.6 secs?
     // 162 * 256/375 = 110.592 secs total
     // 162 * 8192/12000 = 110.592 secs total
@@ -362,7 +365,9 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
         if (wrap_cnt >= (1 << 16)) continue;
 
         // does this come close enough to total time for all symbols
-        float symbolTime = INTERRUPTS_PER_SYMBOL * div_float * PLL_SYS_USECS * 1e-6 * (float) wrap_cnt;
+        float symbolTime = INTERRUPTS_PER_SYMBOL *
+            div_float * PLL_SYS_USECS * 1e-6 * (float) wrap_cnt;
+
         totalSymbolsTime = 162 * symbolTime;
         V1_printf("totalSymbolsTime %.3f wrap_cnt %d div %d" EOL,
             totalSymbolsTime, wrap_cnt, div);
@@ -370,7 +375,8 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
         // good enough total range
         float current_abs_error = abs(totalSymbolsTime - DESIRED_SECS);
         if (current_abs_error < abs_error_so_far) {
-            V1_printf("BETTER: PLL_SYS_MHZ %lu PWM_DIV %d PWM_WRAP_CNT %d" EOL, PLL_SYS_MHZ, div, wrap_cnt);
+            V1_printf("BETTER: PLL_SYS_MHZ %lu PWM_DIV %d PWM_WRAP_CNT %d" EOL,
+                PLL_SYS_MHZ, div, wrap_cnt);
             V1_printf("BETTER: totalSymbolsTime %.3f" EOL, totalSymbolsTime);
             abs_error_so_far = current_abs_error;
             *PWM_DIV = (uint32_t)div;
@@ -384,15 +390,17 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
     // did we go through the full DIV range without getting a break from the bounds compare?
     // we'll still return the best we got
     if (div > DIV_MAX) {
-        V1_printf("ERROR: didn't a great div and wrap_cnt for PLL_SYS_MHZ %lu PLL_SYS_USECS %.7f" EOL,
-            PLL_SYS_MHZ, PLL_SYS_USECS);
-    }
-    else {
-        V1_printf("GOOD: Found a great div and wrap_cnt for PLL_SYS_MHZ %lu PLL_SYS_USECS %.7f" EOL,
-            PLL_SYS_MHZ, PLL_SYS_USECS);
+        V1_printf("ERROR: didn't find a great div and wrap_cnt for PLL_SYS_MHZ %lu",
+            PLL_SYS_MHZ);
+        V1_printf(" PLL_SYS_USECS %.7f" EOL, PLL_SYS_USECS);
+    } else {
+        V1_printf("GOOD: Found a great div and wrap_cnt for PLL_SYS_MHZ %lu",
+            PLL_SYS_MHZ);
+        V1_printf(" PLL_SYS_USECS %.7f" EOL, PLL_SYS_USECS);
     }
 
-    V1_printf("GOOD: PLL_SYS_MHZ %lu PWM_DIV %d PWM_WRAP_CNT %d" EOL, PLL_SYS_MHZ, div, wrap_cnt);
+    V1_printf("GOOD: PLL_SYS_MHZ %lu PWM_DIV %d PWM_WRAP_CNT %d" EOL,
+        PLL_SYS_MHZ, div, wrap_cnt);
     V1_printf("GOOD: totalSymbolsTime %.3f" EOL, totalSymbolsTime);
     V1_printf("calcPwmDivAndWrap END for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
         INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);

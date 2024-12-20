@@ -383,6 +383,13 @@ void setGnssOn_SIM65M(void) {
     // Packet Type:002 PAIR_GNSS_SUBSYS_POWER_ON
     // Power on the GNSS system. Include DSP/RF/Clock and other GNSS modules.
     // Please send this command before using any location service.
+    // $PAIR002*38
+
+    // Packet Type:003 PAIR_GNSS_SUBSYS_POWER_OFF
+    // Power off GNSS system. Include DSP/RF/Clock and other GNSS modules.
+    // CM4 also can receive commands (Include the AT command / the race Command / the part of PAIR
+    // command which is not dependent on DSP.) after sending this command
+    // $PAIR003*39
 
     // Packet Type:020 PAIR_GET_VERSION
     // Query the firmware release information
@@ -392,33 +399,35 @@ void setGnssOn_SIM65M(void) {
     // such as the firmware release information, DCB values, HW interface,
     // ULP enable and NVRAM auto saving.
 
-    V1_println(F("setGnsOn_SIM65M START"));
-    // PAIR_GET_VERSION
+    if (false) {
+        V1_println(F("setGnsOn_SIM65M START"));
+        // PAIR_GET_VERSION
+        Serial2.print("$PAIR020*38" CR LF);
+        // Serial2.flush();
+        // can see that nmeaBufferFastPoll() does get us the responses
+        // we don't validate or wait for responses (yet??)
+        // we can see version numbers here, et
+        // interesting: AG3352Q_V2.5.0.AG3352_20230420
+
+        // I suppose there is some flow control, i.e. I shouldn't send
+        // to many overlapping requests. I guess it depends on the service
+        // that is absorbing and responding to requests..the ACK/NACK responses
+        // aid sw flow control
+
+        // $GNGGA,213449.096,,,,,0,0,,,M,,M
+        // $PAIR001,000,4*3F
+        // $PAIR001,020,0*39
+        // $PAIR020,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,*17
+        nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
+    }
 
     //*****************
-    Serial2.print("$PAIR020*38" CR LF);
-    // Serial2.flush();
-    // can see that nmeaBufferFastPoll() does get us the responses
-    // we don't validate or wait for responses (yet??)
-    // we can see version numbers here, et
-    // interesting: AG3352Q_V2.5.0.AG3352_20230420
-
-    // I suppose there is some flow control, i.e. I shouldn't send
-    // to many overlapping requests. I guess it depends on the service
-    // that is absorbing and responding to requests..the ACK/NACK responses
-    // aid sw flow control
-
-    // $GNGGA,213449.096,,,,,0,0,,,M,,M
-    // $PAIR001,000,4*3F
-    // $PAIR001,020,0*39
-    // $PAIR020,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,*17
-    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
-
-    //*****************
-    // PAIR_GET_SETTING
-    Serial2.print("$PAIR021*39" CR LF);
-    // Serial2.flush();
-    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
+    if (false) {
+        // PAIR_GET_SETTING
+        Serial2.print("$PAIR021*39" CR LF);
+        // Serial2.flush();
+        nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
+    }
 
     //*****************
     // this worked but does it already default to on after power on or ?? Seems to
@@ -426,13 +435,22 @@ void setGnssOn_SIM65M(void) {
     // to have softer power-on peak current?
     // Could change default power on baud rate config also
     // (when writing to flash)
-    if (false) {
-        // PAIR_GNSS_SUBSYS_POWER_ON
-        Serial2.print("$PAIR002*38" CR LF);
-        Serial2.flush();
-        sleep_ms(2000);
-    }
+
+    // PAIR_GNSS_SUBSYS_POWER_ON
+    Serial2.print("$PAIR002*38" CR LF);
+    Serial2.flush();
+    sleep_ms(2000);
     V1_println(F("setGnsOn_SIM65M END"));
+}
+
+//************************************************
+void setGnssOff_SIM65M(void) {
+    V1_println(F("setGnsOff_SIM65M START"));
+    // PAIR_GNSS_SUBSYS_POWER_ON
+    Serial2.print("$PAIR002*38" CR LF);
+    Serial2.flush();
+    sleep_ms(2000);
+    V1_println(F("setGnsOff_SIM65M END"));
 }
 
 //************************************************
@@ -705,7 +723,7 @@ void setupSIM65M(int desiredBaud) {
     // The application is running if necessary.
     // CM4 will go to sleep if the application is not working at this time.
     // The system can be awoken by the GNSS_DATA_IN_EINT pin after going to sleep.
-    // $PAIR003*39\r\n
+    // $PAIR003*39
 
     // Packet Type:004 PAIR_GNSS_SUBSYS_HOT_START
     // Hot Start. Use the available data in the NVRAM
@@ -1488,7 +1506,7 @@ void GpsWarmReset(void) {
     // Does the FLASH have a max # of writes issue? (100k or ??)
     // we only do gps cold reset at start of day.
     // Don't do it in BALLOON_MODE. that should fix the issue
-    if (!USE_SIM65M && ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
+    if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
         // this will init to just GPS for the right then restore as below
         writeGpsConfigNoBroadcastToFlash();
         // restors to desired constellations and broadcast
@@ -1512,30 +1530,75 @@ void GpsWarmReset(void) {
 //************************************************
 void writeGpsConfigNoBroadcastToFlash() {
     // FIX! we'll have to figure this out for SIM65M
+    // let's turn off the GNSS_SUBSYS so it's not on at gps cold reset
+
+    // Packet Type:002 PAIR_GNSS_SUBSYS_POWER_ON
+    // Power on the GNSS system. Include DSP/RF/Clock and other GNSS modules.
+    // Please send this command before using any location service.
+    // $PAIR002*38
+
+    // Packet Type:003 PAIR_GNSS_SUBSYS_POWER_OFF
+    // Power off GNSS system. Include DSP/RF/Clock and other GNSS modules.
+    // CM4 also can receive commands (Include the AT command / the race Command / the part of PAIR
+    // command which is not dependent on DSP.) after sending this command
+    // The location service is not available after this command is executed.
+    // The system can still receive configuration PAIR commands.
+    // $PAIR003*39
 
     // risk: do we ever power on and not do this full cold reset
     // that sets up broadcast?
     // the warm gps reset shouldn't get new state from config?
+
+    // HMM! should we change it to no broadcast, in the FLASH,
+    // so cold reset power on might try to do no broadcast
     disableGpsBroadcast();
     // FIX! just gps. what about 0. would that save power at gps power on?
     setGpsConstellations(1);
 
-    // HMM! should we change it to no broadcast, in the FLASH,
-    // so cold reset power on might try to do no broadcast
-    char nmeaBaudSentence[21] = { 0 };
-    V1_print(F("Write GPS current config state (with no broadcast and just GPS constellations"));
-    V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
+    // this will cause a gps cold reset config with GNSS service off (SIM65M only)
+    if (USE_SIM65M) setGnssOff_SIM65M();
 
-    strncpy(nmeaBaudSentence, "$PCAS00*01" CR LF, 21);
+    if (USE_SIM65M) {
+        V1_print(F("SIM65M: Write GPS current config state (with no broadcast and GNSS service disabled"));
+        V1_print(F("SIM65M: still default constellations? (4) GPS/BDS/GLONASS/GALILEO"));
+        V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
+    } else {
+        V1_print(F("ATGM336H: Write GPS current config state (with no broadcast and just GPS constellations"));
+        V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
+    }
+
+    char nmeaBaudSentence[64] = { 0 };
+    if (USE_SIM65M) {
+        // Packet Type:513 PAIR_NVRAM_SAVE_SETTING
+        // Save the current configuration from RTC RAM to flash.
+        // $PAIR513*3D
+        // In multi-Hz, this command can only be set when the GNSS system is powered off, while 1Hz does not
+        // have this limitation. <what does this mean? we do have GNSS off, so I guess okay?>
+
+        // in case we mess up the gps flash
+        // Packet Type:514 PAIR_NVRAM_RESTORE_DEFAULT_SETTING
+        // Clear the current configuration and restore the default settings.
+        // This function does not support run time restore when GNSS is power on.
+        // Please send PAIR_GNSS_SUBSYS_POWER_OFF to power off GNSS before use this command
+        // $PAIR514*3A
+        strncpy(nmeaBaudSentence, "$PAIR513*3D" CR LF, 64);
+    } else {
+        strncpy(nmeaBaudSentence, "$PCAS00*01" CR LF, 64);
+    }
     V1_printf("%s" EOL, nmeaBaudSentence);
     Serial2.print(nmeaBaudSentence);
     Serial2.flush();
+    sleep_ms(1000);
+    
+    // back on with everything
+    if (USE_SIM65M) setGnssOn_SIM65M();
 
     // set desired constellations
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
     // set desired broadcast.
     setGpsBroadcast();
 }
+
 //************************************************
 void GpsON(bool GpsColdReset) {
     // no print if no cold reset request. So I can grep on GpsColdReset as a special case only
