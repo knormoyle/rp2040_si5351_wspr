@@ -12,6 +12,9 @@ Schematic and board png from jlcpcb are there also. The schematic has a buck/boo
 I could post invoices from some recent orders from jlcpcb.com. Cheaper with jlcpcb.com discounts and larger quantities. But even quantity 5 (the minimum) is cheap. Shouldn't be more than $10-$12 a board. (no bmp280, atgm336n gps). Shipping costs are $20 if you want fast shipping, but only $1.52 !! if you are willing to wait a bit for Global Standard Direct Line shipping.
 No extra pico board needed. RP2040 is integrated. You only have solder gps antenna and hf antenna and power connections. Debug done with usb cable for power/data, and gps antenna and short HF antenna stubs.
 
+## no-code USB serial configuration
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/config_screenshot.png"/>
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/config_screenshot2.png"/>
 
 ## PCB highlights
 
@@ -33,8 +36,6 @@ Hans G0UPL did a review of m5351m in 2021. Other reviews exist (Google). I menti
 |**MCU Clock Freq.**|18-250 MHz|
 |**HF Radio Module**|Si5351A-B-GT or MS5351 (Max 10 mWatt)|
 |**Sensor**|optional BMP280 (pressure and temperature)|
-
-<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/config_screenshot.png"/>
 
 The source code started with AG6NS port of the LightAPRS firmware to his HF + APRS SF-HAB pcb v0.4
 
@@ -63,8 +64,6 @@ top level is here. you can peruse that to see ALL the stuff this layer gives you
 [arduino-pico](https://arduino-pico.readthedocs.io/en/latest/)
 
 ### 2. Configure Board
-
-
 
 Earle says above at the arduino-pico github how to get the arduino-pico stuff in the Arduino IDE. Open up the Arduino IDE and go to File->Preferences. In the dialog that pops up, enter the following URL in the "Additional Boards Manager URLs" field:
 
