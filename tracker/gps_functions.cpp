@@ -126,7 +126,7 @@ extern bool BALLOON_MODE;
 //************************************************
 // false and true work here
 bool LOWEST_POWER_TURN_ON_MODE = true;
-bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
+bool ALLOW_UPDATE_GPS_FLASH_MODE = true;
 
 // why isn't this true 12/15/24..true now. works (18Mhz)
 bool ALLOW_USB_DISABLE_MODE = true;
@@ -1488,7 +1488,7 @@ void GpsWarmReset(void) {
     // Does the FLASH have a max # of writes issue? (100k or ??)
     // we only do gps cold reset at start of day.
     // Don't do it in BALLOON_MODE. that should fix the issue
-    if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
+    if (!USE_SIM65M && ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
         // this will init to just GPS for the right then restore as below
         writeGpsConfigNoBroadcastToFlash();
         // restors to desired constellations and broadcast

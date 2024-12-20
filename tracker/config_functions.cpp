@@ -1089,22 +1089,22 @@ void show_values(void) {
 
     V0_print(F("FLASH read values:" EOL));
 
-    V0_printf("callsign:%s" EOL, _callsign);
-    V0_printf("U4B channel:%s", _U4B_chan);
-    V0_printf(" (id13:%s", _id13);
-    V0_printf(" start Minute:%s", _start_minute);
-    V0_printf(" lane:%s)" EOL, _lane);
-    V0_printf("verbose:%s" EOL, _verbose);
-    V0_printf("TELEN config:%s" EOL, _TELEN_config);
-    V0_printf("clock speed:%sMhz" EOL, _clock_speed);
-    V0_printf("band:%s" EOL, _Band);
-    V0_printf("tx_high:%s" EOL, _tx_high);
-    V0_printf("TESTMODE:%s" EOL, _testmode);
-    V0_printf("correction:%s" EOL, _correction);
-    V0_printf("go_when_rdy:%s" EOL, _go_when_rdy);
-    V0_printf("factory_reset_done:%s" EOL, _factory_reset_done);
-    V0_printf("use_sim65m %s" EOL, _use_sim65m);
-    V0_printf("XMIT_FREQUENCY:%lu" EOL, XMIT_FREQUENCY);
+    V0_printf("callsign: %s" EOL, _callsign);
+    V0_printf("U4B channel: %s", _U4B_chan);
+    V0_printf(" (id13: %s", _id13);
+    V0_printf(" start Minute: %s", _start_minute);
+    V0_printf(" lane: %s)" EOL, _lane);
+    V0_printf("verbose: %s" EOL, _verbose);
+    V0_printf("TELEN config: %s" EOL, _TELEN_config);
+    V0_printf("clock speed: %s (Mhz)" EOL, _clock_speed);
+    V0_printf("band: %s (meters)" EOL, _Band);
+    V0_printf("tx_high: %s" EOL, _tx_high);
+    V0_printf("TESTMODE: %s" EOL, _testmode);
+    V0_printf("correction: %s" EOL, _correction);
+    V0_printf("go_when_rdy: %s" EOL, _go_when_rdy);
+    V0_printf("factory_reset_done: %s" EOL, _factory_reset_done);
+    V0_printf("use_sim65m: %s" EOL, _use_sim65m);
+    V0_printf("XMIT_FREQUENCY: %lu (symbol 0)" EOL, XMIT_FREQUENCY);
     V0_print(F(EOL "SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
 
     V0_println(F("show_values() END" EOL));
@@ -1121,8 +1121,8 @@ void show_commands(void) {
 
 
     V0_println(F(EOL "Valid commands:" EOL));
-    V0_println(F("X: eXit configuration and reboot"));
-    V0_println(F("/: reboot to bootloader mode to drag/drop new .uf2"));
+    V0_println(F("X: exit config mode and reboot"));
+    V0_println(F("/: reboot to drag/drop new .uf2 (not implemented)"));
     V0_println(F("@: write current gps config, no broadcast, 1 constellation to GPS Flash (for boot)"));
     V0_println(F("*: factory reset all config values"));
     V0_println(F("Z: run i2c test or scan: which, currently?"));
@@ -1133,7 +1133,7 @@ void show_commands(void) {
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
     V0_printf("K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
-    V0_println(F("D: TESTMODE (currently: sweep telemetry values) (default: 0)"));
+    V0_println(F("D: TESTMODE (current: sweep telemetry values) (default: 0)"));
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("G: go_when_ready (callsign tx starts at any modulo 2 starting minute (default: 0)"));
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
