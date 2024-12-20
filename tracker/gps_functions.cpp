@@ -75,9 +75,14 @@ extern bool USE_SIM65M;
 // for disabling pll
 // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html
 #include "hardware/pll.h"
-// ugh, do we need to include this for tusb_init()
-#include "tusb.h"
 
+// for setting drive strength/slew rate of gpio
+// https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__gpio.html
+// ugh, do we need to include this for tusb_init()
+#include "hardware/gpio.h"
+
+// for re-init of the tinyUSB
+#include "tusb.h"
 
 // in libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 // for setTime()
@@ -125,6 +130,8 @@ extern bool BALLOON_MODE;
 
 //************************************************
 // false and true work here
+// sort power on for gps cold reset only
+bool PWM_COLD_GPS_POWER_ON_MODE = true;
 bool LOWEST_POWER_TURN_ON_MODE = true;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = true;
 
@@ -501,7 +508,9 @@ void setGpsBroadcast(void) {
         // 5 - Output once every five position fixes
 
         // FIX! do we not get enough info in a single sec if we change to 5 here?
-        if (false) {
+        // enable this, because we're disabling broadcast in default config now
+        // for SIM65M. Assumes the default fix rate is 1000ms (1 per sec?)
+        if (true) {
             strncpy(nmeaSentence, "$PAIR062,0,5*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
@@ -602,10 +611,37 @@ void disableGpsBroadcast(void) {
     V1_print(F("disableGpsBroadcast START" EOL));
     updateStatusLED();
     Watchdog.reset();
-    // room for a 60 char sentence with CR and LF also
-    char nmeaSentence[62] = { 0 };
-    // checksum from https://www.meme.au/nmea-checksum.html
-    strncpy(nmeaSentence, "$PCAS03,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*02" CR LF, 62);
+    char nmeaSentence[64] = { 0 };
+
+    if (USE_SIM65M) {
+        if (true) {
+            // have to disable each NMEA sentence type individually?
+            strncpy(nmeaSentence, "$PAIR062,0,0*3E" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,1,0*3F" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,2,0*3C" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,3,0*3D" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,4,0*3A" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,5,0*3B" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,6,0*38" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+        }
+    } else {
+        // checksum from https://www.meme.au/nmea-checksum.html
+        strncpy(nmeaSentence, "$PCAS03,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*02" CR LF, 64);
+    }
     Serial2.print(nmeaSentence);
     Serial2.flush();
     // delay(1000);
@@ -977,12 +1013,29 @@ void GpsINIT(void) {
     // initted already?
 
     //****************
-    // should have the default 8ma drive strength?
-    gpio_init(GpsPwr);
+    // equations and schematic for gate resistor on the mosfet
+    // https://electronics.stackexchange.com/questions/666204/gate-resistors-on-the-mosfet
+
+    // HEY! can't I control the source impedance of RP2040 GPIO outputs?
+    // What if change the GPIO slew rate controls?
+    // I could use a 2MA output drive and a slow slew rate
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__gpio.html
+    // i.e. (GpsPwr is my mosfet control gpio for the gps power control)
+    // A03401A is a p-channel mosfet
+    // https://www.aosmd.com/sites/default/files/res/datasheets/AO3401A.pdf
+
+    // Doug's inrush current limiting design. affecting gate resistance with the mosfet
+    // https://docs.google.com/document/d/1b1TdheBbXtl7U7HTO9mjVkThD9QHASqJirI2kSnv4LE/edit?tab=t.0#heading=h.lcp1i04bgm4q
+
+    // hmm.. the weak pullup will change the slew rate down also?
+    gpio_init(GpsPwr); // defaults to 8mA drive strength
     pinMode(GpsPwr, OUTPUT);
     gpio_pull_up(GpsPwr);
+    gpio_set_slew_rate(GpsPwr, GPIO_SLEW_RATE_SLOW);
+    gpio_set_drive_strength(GpsPwr, GPIO_DRIVE_STRENGTH_2MA);
     // gpio_put(GpsPwr, HIGH); // deassert
 
+    //****************
     gpio_init(GPS_NRESET_PIN);
     pinMode(GPS_NRESET_PIN, OUTPUT);
     gpio_pull_up(GPS_NRESET_PIN);
@@ -993,6 +1046,8 @@ void GpsINIT(void) {
     gpio_init(GPS_ON_PIN);
     pinMode(GPS_ON_PIN, OUTPUT);
     gpio_pull_down(GPS_ON_PIN);
+
+ 
     // gpio_put(GPS_ON_PIN, LOW); // deassert
     //****************
 
@@ -1046,6 +1101,34 @@ void GpsINIT(void) {
     // sleep 3 secs
     gpsSleepForMillis(3000, false);
     V1_println(F("GpsINIT END"));
+}
+
+//************************************************
+void pwmTheGpsPwrOn() {
+    // soft power-on for GpsPwr (assert low, controls mosfet)
+    // note that vbat doesn't have mosfet control, so it will be high right away
+    // with availability of power
+    uint64_t on_usecs = 1;
+    uint64_t off_usecs = 100;
+    uint64_t duty_cycle;
+    while (duty_cycle < 99) {
+        Watchdog.reset();
+        // shifts to get some accuracy on the division. the delta (1000000/10000) should give a % ? (*100)
+        duty_cycle = (on_usecs * 1000000UL)  / ((on_usecs + off_usecs) * 10000UL) ;
+        // print duty_cycle at every %10 boundary
+        // hmm. the usb pll should be off when we're turing on the gps during cold reset? ..no print
+        // if (false && ((duty_cycle % 100) == 0)) {
+        if (true) {
+            V1_printf("pwmTheGpsPwrOn() duty_cycle (pct) %" PRIu64 EOL, duty_cycle);
+        }
+        digitalWrite(GpsPwr, LOW);  // assert to mosfet
+        sleep_us(on_usecs);  // lower power light sleep
+        digitalWrite(GpsPwr, HIGH);  // deassert to mosfet
+        sleep_us(off_usecs); // lower power light sleep
+        on_usecs += 10;
+    }
+    // make sure it ends with GpsPwr on!
+    digitalWrite(GpsPwr, LOW);
 }
 
 //************************************************
@@ -1121,8 +1204,18 @@ void GpsFullColdReset(void) {
     // change it's behavior. What if we left them floating until after powerup?
     // seems like the gps backs up on the serial data?
 
-    digitalWrite(GpsPwr, LOW);  // assert
-    gpsSleepForMillis(500, false);
+    
+    // we still have usb pll on, and default clock frequency at this point?
+    if (PWM_COLD_GPS_POWER_ON_MODE) {
+        pwmTheGpsPwrOn();
+        // soft power-on for GpsPwr (assert low, controls mosfet)
+        // note that vbat doesn't have mosfet control, so it will be high right away
+        // with availability of power
+        // digitalWrite(GpsPwr, LOW);  // assert to mosfet
+    } else {
+        digitalWrite(GpsPwr, LOW);  // assert to mosfet
+        gpsSleepForMillis(500, false);
+    }
 
     // deassert NRESET after power on (okay in both normal and experimental case)
     // new 12/7/24 disable Serial2 while powering on!
@@ -1190,7 +1283,7 @@ void GpsFullColdReset(void) {
         // https://forums.raspberrypi.com/viewtopic.php?t=342156
 
         busy_wait_ms(500);
-        // remember not to touch Serial if in BALOOON_MODE!!
+        // remember not to touch Serial if in BALOON_MODE!!
         if (!BALLOON_MODE) {
             Serial.flush();
             Serial.end();
@@ -1553,6 +1646,7 @@ void writeGpsConfigNoBroadcastToFlash() {
     // so cold reset power on might try to do no broadcast
     disableGpsBroadcast();
     // FIX! just gps. what about 0. would that save power at gps power on?
+    // FIX! this doesn't change SIM65M default constellations (yet)
     setGpsConstellations(1);
 
     // this will cause a gps cold reset config with GNSS service off (SIM65M only)
@@ -1589,11 +1683,12 @@ void writeGpsConfigNoBroadcastToFlash() {
     Serial2.print(nmeaBaudSentence);
     Serial2.flush();
     sleep_ms(1000);
-    
+
     // back on with everything
     if (USE_SIM65M) setGnssOn_SIM65M();
 
     // set desired constellations
+    // FIX! this doesn't change SIM65M default constellations (yet)
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
     // set desired broadcast.
     setGpsBroadcast();
