@@ -208,7 +208,7 @@ void process_chan_num(char *_id13, char *_start_minute, char *_lane, char *_Band
         V1_printf("ERROR: bad _U4B_chan %d ..using 599" EOL, u4bChannel);
         u4bChannel = 599;
     }
-            
+
     _id13[0]='1';
     // Channels 0 - 199: '0'
     // Channels 200-399: '1'
@@ -247,16 +247,16 @@ void process_chan_num(char *_id13, char *_start_minute, char *_lane, char *_Band
 // 3 parameters for return char arrays.
 // then all variables (char arrays) used from the snapped telemetry:
 // standard u4b telemetry
-void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power, 
+void u4b_encode_std(char *hf_callsign, char *hf_grid4, char *hf_power,
     char *t_grid6, char *t_altitude, char *t_temp, char *t_voltage, char *t_speed) {
 
-    V1_printf( 
+    V1_printf(
         "u4b_encode_char START t_grid6 %s t_altitude %s t_temp %s 5_voltage %s t_speed %s" EOL,
         t_grid6, t_altitude, t_temp, t_voltage, t_speed);
 
     // ..which is then encoded as 126 wspr symbols in tx_buffer,
     // and set out as RF with 4-FSK (each symbol has 4 values?)
-    
+
     if (t_grid6[4] < 'A' || t_grid6[4] > 'X') {
         V1_printf("ERROR: bad t_grid6[4] %s" EOL, t_grid6);
         t_grid6[1] = 'A';
@@ -273,7 +273,7 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     int altitude = atoi(t_altitude);
     int altitudeVal = altitude / 20;
     // there are only 1068 encodings for altitude..clamp to max (or min)
-    if (altitudeVal < 0) altitudeVal = 0; 
+    if (altitudeVal < 0) altitudeVal = 0;
     // this will be a floor divide: t_altitude is int
     else if (altitudeVal > 1067) altitudeVal = 1067;  // 21340 meters?
 
@@ -317,14 +317,15 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     // should it clamp at the bounds? Yes
     if (tempC < -50) tempC = -50;
     // only 0-89 encodings. (90)
-    else if (tempC > (-50 + 89)) tempC = (-50 + 89); // 39C max
-    int tempCNum = (int) tempC + 50; 
+    else if (tempC > (-50 + 89)) tempC = (-50 + 89);  // 39C max
+    int tempCNum = (int) tempC + 50;
 
     // voltage: 20 to 39, 0 to 19 for 3.00 to 4.95V with a resolution of 0.05V
     /// 0 to 39 encodings
     if (voltage > 4.95) voltage = 4.95;
     else if (voltage < 3.00) voltage = 3.00;
-    int voltageNum = (int) (round ((voltage - 3.00) / .05) + 20) % 40; // should only 3 to 4.95
+    // should only 3 to 4.95
+    int voltageNum = (int)(round ((voltage - 3.00) / .05) + 20) % 40;
 
     // FIX! kl3cbr did encoding # of satelites into knots.
     // t_speed is integer
@@ -333,7 +334,7 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     int speedKnotsNum = speed / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
-    if (speedKnotsNum < 0) speedKnotsNum = 0; 
+    if (speedKnotsNum < 0) speedKnotsNum = 0;
     if (speedKnotsNum > 41) speedKnotsNum = 41;
 
     //****************
@@ -360,7 +361,7 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
     uint8_t g1Val    = val % 18; val = val / 18;
 
     // map output radix to presentation
-    char grid4[5] = { 0 }; 
+    char grid4[5] = { 0 };
     grid4[0] = 'A' + g1Val;
     grid4[1] = 'A' + g2Val;
     grid4[2] = '0' + g3Val;
@@ -382,7 +383,7 @@ void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power,
 
 //********************************************************************
 // first 3 parameters are all for return char arrays.
-void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power, 
+void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power,
     uint32_t t_telen_val1, uint32_t t_telen_val2, bool for_telen2) {
 
     V1_printf("u4b_encode_telen() START t_telen_val1 %lu t_telen_val2 %lu" EOL,

@@ -14,7 +14,7 @@
 
 #include "pico/stdlib.h"
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/common/pico_stdlib_headers/include/pico/stdlib.h
-// aggregates  
+// aggregates
 // hardware_divider
 // hardware_gpio
 // hardware_uart
@@ -70,7 +70,7 @@ float readVoltage(void) {
 
     // this shouldn't be needed?
     // adc_select_input(BattPin);
-    // delay(100); 
+    // delay(100);
 
     int adc_val = 0;
     adc_val += analogRead(BattPin);
@@ -92,7 +92,7 @@ float readVoltage(void) {
     // In reality it is the voltage of the pin 3V3
     // - ( ~150uA * 200) which is roughly a 30mv drop. (0.8mv * 30 = 24 steps)
 
-    // this must be a calibrated linear equation? 
+    // this must be a calibrated linear equation?
     // Would only need to calibrate between 2.8v and 5v?
     float voltage = ((float)adc_val / 3.0f - 27.0f) / 412.0f;
 

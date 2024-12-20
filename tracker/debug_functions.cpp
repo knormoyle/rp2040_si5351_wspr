@@ -180,9 +180,11 @@ void StampPrintf(const char* pformat, ...) {
     vsnprintf(message, sizeof(message), pformat, argptr);
     va_end(argptr);
 
-    // make LOG_BUFFER_SIZE bigger and recompile or do more DoLogPrint() if we run into a problem realtime
+    // make LOG_BUFFER_SIZE bigger and recompile
+    // or do more DoLogPrint() if we run into a problem realtime
 
-    // Put the 3 things in the logBuffer more efficiently than doing successive strlen()' and strncat?
+    // Put the 3 things in the logBuffer more efficiently than
+    // doing successive strlen()' and strncat?
     int i = strlen(logBuffer);
     int j = strlen(timestamp);
     int j2 = strlen(message);
@@ -194,15 +196,13 @@ void StampPrintf(const char* pformat, ...) {
             "timestamp %s message %s and EOL. ..ignoring" EOL EOL,
             LOG_BUFFER_SIZE, j + j2 + 1, timestamp, message);
         ignore = true;
-    }
-
     // Will the message fit without dumping the existing buffer?
-    else if ( (i + j + j2 + 1) > LOG_BUFFER_SIZE) {
-          // create timestamp
-    snprintf(timestamp, sizeof(timestamp),
-        "%02lud%02lu:%02lu:%02lu.%06llu [%04lu] ",
-        tm_day, tm_hour, tm_min, tm_sec, tm_us, sTick++);
-    V1_printf(
+    } else if ((i + j + j2 + 1) > LOG_BUFFER_SIZE) {
+        // create timestamp
+        snprintf(timestamp, sizeof(timestamp),
+            "%02lud%02lu:%02lu:%02lu.%06llu [%04lu] ",
+            tm_day, tm_hour, tm_min, tm_sec, tm_us, sTick++);
+        V1_printf(
             EOL "ERROR: LOG_BUFFER_SIZE %d, i %d, adding j + j2 + 1 = %d, "
             "has no room for timestamp %s message %s (+ EOL)" EOL EOL,
             LOG_BUFFER_SIZE, i, j + j2 + 1, timestamp, message);
@@ -214,7 +214,7 @@ void StampPrintf(const char* pformat, ...) {
     if (!ignore) {
         strncpy(logBuffer + i, timestamp, j);
         strncpy(logBuffer + i + j, message, j2);
-        logBuffer[i + j + j2] = 0; // null term
+        logBuffer[i + j + j2] = 0;  // null term
     }
 }
 
@@ -236,7 +236,7 @@ void DoLogPrint() {
 
 //***********************************
 // from: https://sourcevu.sysprogs.com/rp2040/examples/clocks/hello_48MHz/files/hello_48MHz.c#tok293
-// don't namespace collide with measure_freqs() in SPI.h? 
+// don't namespace collide with measure_freqs() in SPI.h?
 void measureMyFreqs(void) {
     V1_print(F("measureMyFreqs() START" EOL));
     // see for frequency_count_khz()
@@ -261,7 +261,6 @@ void measureMyFreqs(void) {
     uint32_t f_clk_usb_get_hz = clock_get_hz(clk_usb);
     uint32_t f_clk_ref_get_hz = clock_get_hz(clk_ref);
 
-    
     // frequency_count_khz() is accurate to +-1Khz
     uint32_t f_pll_sys = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_SYS_CLKSRC_PRIMARY);
     uint32_t f_pll_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_PLL_USB_CLKSRC_PRIMARY);
