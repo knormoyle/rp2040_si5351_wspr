@@ -1196,6 +1196,7 @@ void GpsFullColdReset(void) {
     digitalWrite(GPS_ON_PIN, LOW);  // deassert
     digitalWrite(GPS_NRESET_PIN, LOW);  // assert
     digitalWrite(GpsPwr, HIGH);  // deassert
+    Serial2.end();
     gpsSleepForMillis(500, false);
 
     //******************
@@ -1227,7 +1228,6 @@ void GpsFullColdReset(void) {
     // FIX! hmm. does driving the uart rx/tx to gps while gps is powering up
     // change it's behavior. What if we left them floating until after powerup?
     // seems like the gps backs up on the serial data?
-
     
     // we still have usb pll on, and default clock frequency at this point?
     if (PWM_COLD_GPS_POWER_ON_MODE) {
@@ -1244,7 +1244,6 @@ void GpsFullColdReset(void) {
     // deassert NRESET after power on (okay in both normal and experimental case)
     // new 12/7/24 disable Serial2 while powering on!
     // should we float the rx/tx also somehow?
-    Serial2.end();
     gpsSleepForMillis(500, false);
     digitalWrite(GPS_NRESET_PIN, HIGH);  // deassert
     gpsSleepForMillis(1000, false);
@@ -1267,7 +1266,7 @@ void GpsFullColdReset(void) {
     // we already wakeup periodically to update led, so fine
 
     //******************
-    // so we can undo the testing
+    // so we can undo the temporary lower clock setting
     uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
     // the global IGNORE_KEYBOARD_CHARS is used to guarantee no interrupting of core1
     // while we've messed with clocks during the gps agressive power on control
@@ -1277,7 +1276,7 @@ void GpsFullColdReset(void) {
     Watchdog.reset();
     measureMyFreqs();
     V1_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
-    V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz (?) then long sleep" EOL,
+    V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz (no we don't) then long sleep" EOL,
         PLL_SYS_MHZ);
     V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
     // V1_print("Also lowering core voltage to 0.95v" EOL);
@@ -1326,11 +1325,14 @@ void GpsFullColdReset(void) {
 
     // enums for voltage at:
     // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
-    // vreg_set_voltage(VREG_VOLTAGE_0_95 ); // 0_85 crashes for him. 0.90 worked for him
+
+    // FIX! we never restore from this core voltage. assuming we stay at 18 Mhz
+    if (PLL_SYS_MHZ == 18) {
+        vreg_set_voltage(VREG_VOLTAGE_0_95 );  // 0_85 crashes for him. 0.90 worked for him
+    }
 
     // finally turn on the gps here! (if we didn't already above (experimental mode)
     digitalWrite(GPS_ON_PIN, HIGH);  // assert
-
 
     // Not worth doing if USB is disabled? (no print)
     // but if we can't disable deinit USB (see above), we can?
@@ -1362,9 +1364,6 @@ void GpsFullColdReset(void) {
         set_sys_clock_khz(freq_khz, true);
         PLL_SYS_MHZ = freq_khz / 1000UL;
     }
-    // FIX! is Serial2 okay now or broken?
-    // it gets restarted below
-
     busy_wait_ms(500);
     if (ALLOW_USB_DISABLE_MODE && !BALLOON_MODE) {
         pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
@@ -1465,6 +1464,37 @@ void GpsFullColdReset(void) {
     // this is all done earlier in the experimental mode
     // FIX! we don't need to toggle power to get the effect?
     setGpsBalloonMode();
+
+    // from the CASIC_ProtocolSpecification_english.pdf page 24
+    // Could be dangerous, since it's writing a baud rate to the power off/on reset config state?
+    // could change it from 9600 and we'd lose track of what it is?
+    // As long as we stick with 9600 we should be safe
+    // CAS00. Description Save the current configuration information to FLASH.
+    // Even if the receiver is completely powered off, the information in FLASH will not be lost.
+    // Format $PCAS00*CS<CR><LF>
+    // Example $PCAS00*01<CR><LF>
+
+    if (USE_SIM65M) {
+        V1_print(F("SIM65M: Write GPS current config state (with no broadcast and GNSS service disabled"));
+        V1_print(F("SIM65M: still default constellations? (4) GPS/BDS/GLONASS/GALILEO"));
+        V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
+    } else {
+        V1_print(F("ATGM336H: Write GPS current config state (with no broadcast and just GPS constellations"));
+        V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
+    }
+
+    // will this help us to boot in a better config so
+    // we don't get the power demand peaks we see (on subsequent boots)
+    // maybe we shouldn't do this all the time? just once.
+    // Does the FLASH have a max # of writes issue? (100k or ??)
+    // we only do gps cold reset at start of day.
+    // Don't do it in BALLOON_MODE. that should fix the issue
+    if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
+        // this will init to just GPS for the right then restore as below
+        writeGpsConfigNoBroadcastToFlash();
+        // restores to desired constellations and broadcast
+    }
+
     // all constellations GPS/BaiDou/Glonass
     // setGpsConstellations(7);
     // FIX! try just gps to see effect on power on current
@@ -1550,32 +1580,11 @@ void GpsWarmReset(void) {
     setGpsBaud(desiredBaud);
     setGpsBalloonMode();
 
-    // all constellations
     // setGpsConstellations(7);
-    // FIX! try just gps to see effect on power on current
-
-    // from the CASIC_ProtocolSpecification_english.pdf page 24
-    // Could be dangerous, since it's writing a baud rate to the power off/on reset config state?
-    // could change it from 9600 and we'd lose track of what it is?
-    // As long as we stick with 9600 we should be safe
-    // CAS00. Description Save the current configuration information to FLASH.
-    // Even if the receiver is completely powered off, the information in FLASH will not be lost.
-    // Format $PCAS00*CS<CR><LF>
-    // Example $PCAS00*01<CR><LF>
-
-    // will this help us to boot in a better config so
-    // we don't get the power demand peaks we see (on subsequent boots)
-    // maybe we shouldn't do this all the time? just once.
-    // Does the FLASH have a max # of writes issue? (100k or ??)
-    // we only do gps cold reset at start of day.
-    // Don't do it in BALLOON_MODE. that should fix the issue
-    if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
-        // this will init to just GPS for the right then restore as below
-        writeGpsConfigNoBroadcastToFlash();
-        // restors to desired constellations and broadcast
-    }
+    // FIX! try just GPS to see effect on power on current
 
     // redundant sometimes
+    // all constellations
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
     // set desired broadcast
     // we don't need no ZDA/TXT
@@ -1592,6 +1601,7 @@ void GpsWarmReset(void) {
 
 //************************************************
 void writeGpsConfigNoBroadcastToFlash() {
+    V1_println(F("writeGpsConfigNoBroadcastToFlash() START"));
     // FIX! we'll have to figure this out for SIM65M
     // let's turn off the GNSS_SUBSYS so it's not on at gps cold reset
 
@@ -1622,15 +1632,6 @@ void writeGpsConfigNoBroadcastToFlash() {
     // this will cause a gps cold reset config with GNSS service off (SIM65M only)
     if (USE_SIM65M) setGnssOff_SIM65M();
 
-    if (USE_SIM65M) {
-        V1_print(F("SIM65M: Write GPS current config state (with no broadcast and GNSS service disabled"));
-        V1_print(F("SIM65M: still default constellations? (4) GPS/BDS/GLONASS/GALILEO"));
-        V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
-    } else {
-        V1_print(F("ATGM336H: Write GPS current config state (with no broadcast and just GPS constellations"));
-        V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
-    }
-
     char nmeaBaudSentence[64] = { 0 };
     if (USE_SIM65M) {
         // Packet Type:513 PAIR_NVRAM_SAVE_SETTING
@@ -1654,6 +1655,7 @@ void writeGpsConfigNoBroadcastToFlash() {
     Serial2.flush();
     sleep_ms(1000);
 
+
     // back on with everything
     if (USE_SIM65M) setGnssOn_SIM65M();
 
@@ -1662,6 +1664,8 @@ void writeGpsConfigNoBroadcastToFlash() {
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
     // set desired broadcast.
     setGpsBroadcast();
+
+    V1_println(F("writeGpsConfigNoBroadcastToFlash() END"));
 }
 
 //************************************************
