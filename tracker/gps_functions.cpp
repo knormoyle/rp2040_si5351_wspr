@@ -1330,7 +1330,7 @@ void GpsFullColdReset(void) {
     // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
 
     // FIX! we never restore from this core voltage. assuming we stay at 18 Mhz
-    if (PLL_SYS_MHZ == 18) {
+    if (false && PLL_SYS_MHZ == 18) {
         vreg_set_voltage(VREG_VOLTAGE_0_95 );  // 0_85 crashes for him. 0.90 worked for him
     }
 
@@ -1344,7 +1344,7 @@ void GpsFullColdReset(void) {
 
     // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
     // this should have no printing either?
-    gpsSleepForMillis(15000, false);  // 15 secs
+    gpsSleepForMillis(5000, false);  // 5 secs
 
     //******************
     // DRASTIC measures, undo after sleep!
