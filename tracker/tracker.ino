@@ -1258,11 +1258,13 @@ void loop1() {
         // some detail on TinyGPS. precision?
         // https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps
         // fix_age will be 4294967295 if not valid
+        V1_print(F(EOL));
         V1_printf("fix_valid_all %u" EOL, fix_valid_all);
         V1_printf("fix_valid %u" EOL, fix_valid);
         V1_printf("fix_age %lu millisecs" EOL, fix_age);
         V1_printf("fix_sat_cnt %lu" EOL, fix_sat_cnt);
         V1_printf("fix_updated %u" EOL, fix_updated);
+        V1_print(F(EOL));
 
         if ( !(fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX)) ) {
             if (fix_valid_all) {
