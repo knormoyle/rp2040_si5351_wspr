@@ -1114,12 +1114,12 @@ void GpsINIT(void) {
 }
 
 //************************************************
-void pwmTheGpsPwrOn() {
+void pwmGpsPwrOn() {
     // soft power-on for GpsPwr (assert low, controls mosfet)
     // note that vbat doesn't have mosfet control, so it will be high right away
     // with availability of power
+    // NO: doesn't work because externally there's a 10k ohm pullup on the pcb
     bool WEAK_PULLDOWN_FOR_ASSERT = false;
-    // NO: doesn't help because externally there's a 10k ohm pullup on the pcb
     if (WEAK_PULLDOWN_FOR_ASSERT) {
         // assumed current gpio GpsPwr state (driving the mosfet for gps chip power)
         // output, driven with 1, with pullup (by Init) (active deassert)
@@ -1132,22 +1132,25 @@ void pwmTheGpsPwrOn() {
         gpio_put(GpsPwr, LOW);  // assert with active driver now!
     } else {
         uint64_t on_usecs = 1;
-        uint64_t off_usecs = 1000;
+        uint64_t off_usecs = 200;
         uint64_t duty_cycle;
-        while (duty_cycle < 99) {
+        while (off_usecs > 0) {
             Watchdog.reset();
+            digitalWrite(GpsPwr, LOW);  // assert to mosfet
+            sleep_us(on_usecs);  // lower power light sleep
+            digitalWrite(GpsPwr, HIGH);  // deassert to mosfet
+            sleep_us(off_usecs); // lower power light sleep
+
             // shifts to get some accuracy on the division. the delta (1000000/10000) should give a % ? (*100)
             duty_cycle = (on_usecs * 1000000UL)  / ((on_usecs + off_usecs) * 10000UL) ;
             // print duty_cycle at every %10 boundary
             // hmm. the usb pll should be off when we're turing on the gps during cold reset? ..no print
             if (false && ((duty_cycle % 100) == 0)) {
-                V1_printf("pwmTheGpsPwrOn() duty_cycle (pct) %" PRIu64 EOL, duty_cycle);
+                V1_printf("pwmGpsPwrOn() duty_cycle (pct) %" PRIu64 EOL, duty_cycle);
             }
-            digitalWrite(GpsPwr, LOW);  // assert to mosfet
-            sleep_us(on_usecs);  // lower power light sleep
-            digitalWrite(GpsPwr, HIGH);  // deassert to mosfet
-            sleep_us(off_usecs); // lower power light sleep
-            on_usecs += 50;
+
+            on_usecs += 20;
+            off_usecs -= 20;
         }
         // make sure it ends with GpsPwr on!
         digitalWrite(GpsPwr, LOW);
@@ -1231,7 +1234,7 @@ void GpsFullColdReset(void) {
     
     // we still have usb pll on, and default clock frequency at this point?
     if (PWM_COLD_GPS_POWER_ON_MODE) {
-        pwmTheGpsPwrOn();
+        pwmGpsPwrOn();
         // soft power-on for GpsPwr (assert low, controls mosfet)
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
