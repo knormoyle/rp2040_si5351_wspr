@@ -511,8 +511,8 @@ void setup() {
     // to avoid setting clock speed or ??
     // if anything was found by incomingByte above, go to the config menu
     // (potentially a balloon weird case would timeout)
-    BALLOON_MODE = true;
-    decodeVERBY();  // BALLOON_MODE forces all false
+    BALLOON_MODE = false;
+    decodeVERBY();  
 
     Watchdog.enable(30000);
     initStatusLED();
@@ -553,16 +553,16 @@ void setup() {
     // Get the SIE_STATUS to see if we're connected or what?
     // this is what I see when I'm using the putty window
     // SIE_STATUS:0x40050009
-
-    // why am I not getting bit 16 when connected?
-
     bool usbConnected = Serial && get_sie_connected();
+    V0_printf("SETUP() usbConnected %u" EOL, usbConnected);
 
-    // FIX! is 'Serial" sufficient? it's not formed if I don't open a putty window?
-    // FORCE_BALLLON_MODE is test mode: guarantees balloon mode for debug when plugged into USB
+    // FIX! is 'Serial" sufficient? it's not formed putty window not opened?
+    // FORCE_BALLLON_MODE is test mode: 
+    // guarantees balloon mode for debug when plugged into USB power
     if (FORCE_BALLOON_MODE | !usbConnected) {
+        V0_print(F(EOL "SETUP() set BALLOON_MODE true" EOL));
         BALLOON_MODE = true;
-        decodeVERBY();
+        decodeVERBY(); 
         // BALLOON_MODE forces all false, so no point in printing here?
         Watchdog.reset();
         // Serial on core1 is only used for printing (no keyboard input)
@@ -571,7 +571,7 @@ void setup() {
     } else {
         BALLOON_MODE = false;
         decodeVERBY();
-        V0_print(F(EOL "SETUP() ..Found usb Serial. BALLOON_MODE false" EOL));
+        V0_print(F(EOL "SETUP() ..Found usb serial. set BALLOON_MODE false" EOL));
         Watchdog.reset();
         // hmm IGNORE_KEYBOARD_CHARS is not factored into this.
         // should always be false at this point?
@@ -843,20 +843,10 @@ void setup1() {
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
-    V1_println("setup1() ..Serial() is true");
-
-    //**********************
     Watchdog.reset();
-    // FIX! why would there be a second init . there is one in setup1()
-    // vfo_init();
-
     // sets minute/lane/id from chan number.
     // FIX! is it redundant at this point?..remove?
-    
     XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
-
-    //***************
-
     Watchdog.reset();
     // FIX! do we really have to read flash again. No..I don't think so!
     // keeps the read_FLASH in core1() always? no worries about "safe" access to flash 
@@ -865,29 +855,6 @@ void setup1() {
         read_FLASH_result1, read_FLASH_result2);
     show_values();
 
-    //***************
-    // we know the config read fixed the clock so it's legal
-    // we double check here and recover here, but don't update flash if it's wrong
-    // to avoid flash conflict resolution issues (multi-core)
-    uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
-    if (!set_sys_clock_khz(freq_khz, false)) {
-        V1_printf("ERROR: setup1(): RP2040 can't change clock to %lu Mhz. Using %lu instead" EOL,
-            PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
-        PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
-        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
-        // FIX! hmm. this guy could try to write flash, while the other guy is reading?
-        // write_FLASH();
-        // check the default?
-        freq_khz = PLL_SYS_MHZ * 1000UL;
-        if (!set_sys_clock_khz(freq_khz, false)) {
-            V1_println("ERROR: setup1() The DEFAULT_SYS_MHZ is not legal either. will use 125");
-            PLL_SYS_MHZ = 125;
-            snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
-            // write_FLASH();
-        }
-    }
-
-    //***************
     // This gets undone if we have kazu slow clocks in gps_functions.cpp (during cold reset)
     initPicoClock(PLL_SYS_MHZ);
     // figure out tcxo correction once. here.
@@ -2169,53 +2136,31 @@ int initPicoClock(int PLL_SYS_MHZ) {
     // frequencies like 205 mhz will PANIC,
     // System clock of 205000 kHz cannot be exactly achieved
     // should detect the failure and change the nvram, otherwise we're stuck even on reboot
+
+    // we know the config read fixed the clock so it's legal
+    // we double check here and recover here, but don't update flash if it's wrong
+    // to avoid flash conflict resolution issues (multi-core)
     uint32_t clk_khz = PLL_SYS_MHZ * 1000UL;
-    uint32_t clk_mhz = PLL_SYS_MHZ * 1000000UL;
     if (!set_sys_clock_khz(clk_khz, false)) {
-      V1_printf("ERROR: Can not set rp2040 clock to PLL_SYS_MHZ %d", PLL_SYS_MHZ);
-      V1_print(F("pico PLL mults cannot be achieved" EOL));
-      return -1;
+        V1_printf("ERROR: setup1(): RP2040 can't change clock to %lu Mhz. Using %lu instead" EOL,
+            PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
+        PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
+        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+        // FIX! hmm. this guy could try to write flash, while the other guy is reading?
+        // write_FLASH();
+        // check the default?
+        clk_khz = PLL_SYS_MHZ * 1000UL;
+        if (!set_sys_clock_khz(clk_khz, false)) {
+            V1_println("ERROR: setup1() The DEFAULT_SYS_MHZ is not legal either. will use 125");
+            PLL_SYS_MHZ = 125;
+            snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+            // write_FLASH();
+        }
     }
 
     V1_printf("Attempt to set rp2040 clock to PLL_SYS_MHZ %d (legal)" EOL, PLL_SYS_MHZ);
     // 2nd arg is "required"
     set_sys_clock_khz(clk_khz, true);
-    // bool clock_configure ( enum clock_index clk_index, uint32_t src,
-    //     uint32_t auxsrc, uint32_t src_freq, uint32_t freq )
-    // clk_index: The clock to configure
-    // src: The main clock source, can be 0.
-    // auxsrc: The auxiliary clock source, depends on which clock is being set, can be 0.
-    // src_freq: Frequency of the input clock source
-    // freq: Requested frequency
-
-    // Hmm. I guess I don't need any clock_configure() ?
-    if (false) {
-        clock_configure(clk_peri, 0,
-            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
-            clk_mhz,
-            clk_mhz);
-    }
-
-    // what about this. clk_peri is derived from clk_sys by default
-    if (false) {
-        clock_configure(clk_sys,
-            CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
-            CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_SYS,
-            /* default pll freq: */ 125 * MHZ ,
-            /* new sys freq: */ 42 * MHZ);
-    }
-
-
-    // changing to 48Mhz possible?
-    // Change clk_sys to be 48MHz. The simplest way is to take this from PLL_USB
-    // which has a source frequency of 48MHz
-    if (false) {
-        clock_configure(clk_sys,
-            CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
-            CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
-            48 * MHZ,
-            48 * MHZ);
-    }
 
     V1_println(F("initPicoClock END"));
     return 0;

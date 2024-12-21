@@ -18,11 +18,11 @@
 
 // has code for these cases:
 // 1) Mbed supports the concept of Tickers and Timeouts
-// an get a microsecond-resolution, periodic function called for any mbed based setup.
+// can get a microsecond-resolution, periodic function called for any mbed based setup.
 // Not less than 60 usec?
 
 // 2) Raspberry Pi Pico Repeating Timer
-// Is a Pico SDK function for setting up a repeating timer to trigger
+// is a Pico SDK function for setting up a repeating timer to trigger
 // a function each time (see chapter 4.2.12 in the Pico C/C++ SDK datasheet).
 // Unfortunately this does not build on the official Arduino RP2040 core.
 // It turns out that much of the APIs for the micro-second alarm and timer functions
@@ -164,6 +164,7 @@ void wsprSleepForMillis(int n) {
 // FIX! what about just using hardware timers on pi pico. and migrating away
 // from the PWM interrupt timer? I guess no reason to.
 // https://reference.arduino.cc/reference/en/libraries/rpi_pico_timerinterrupt
+
 // https://github.com/khoih-prog/RPI_PICO_TimerInterrupt
 // This library enables you to use Interrupt from Hardware Timers on on RP2040-based
 // boards using Earle Philhower's arduino-pico core.
@@ -297,7 +298,6 @@ void disablePwmInterrupts(void) {
 //*******************************************************
 // uses PLL_SYS_MHZ, INTERRUPTS_PER_SYMBOL
 // to figure a good div and wrap cnt period for the PWM (subtract 1 for TOP)
-
 void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
         uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ) {
     V1_print(F("calcPwmDivAndWrap START"));
@@ -405,13 +405,3 @@ void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
     V1_printf("calcPwmDivAndWrap END for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
         INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 }
-
-// out of date. updated the total time
-// GOOD: PLL_SYS_MHZ 60 PWM_DIV 250 PWM_WRAP_CNT 20479
-// GOOD: totalSymbolsTime 110.587
-// GOOD: PLL_SYS_MHZ 100 PWM_DIV 250 PWM_WRAP_CNT 34133
-// GOOD: totalSymbolsTime 110.591
-// GOOD: PLL_SYS_MHZ 133 PWM_DIV 250 PWM_WRAP_CNT 45397
-// GOOD: totalSymbolsTime 110.591
-// GOOD: PLL_SYS_MHZ 125 PWM_DIV 250 PWM_WRAP_CNT 42666
-// GOOD: totalSymbolsTime 110.590

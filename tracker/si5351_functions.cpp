@@ -190,7 +190,6 @@ void vfo_set_power_on(bool turn_on) {
 
     if (turn_on) {
         V1_printf("set Si5351Pwr %d LOW (power on) before" EOL, Si5351Pwr);
-        V1_println("power on Si5351");
         gpio_init(Si5351Pwr);
         pinMode(Si5351Pwr, OUTPUT_4MA);
         digitalWrite(Si5351Pwr, LOW);

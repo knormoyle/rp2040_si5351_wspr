@@ -148,11 +148,12 @@ void snapForTelemetry(void) {
 
     V1_printf("tempC_a %.f tempC_b %.f tempC_c %.f" EOL,
         tempC_a, tempC_b, tempC_c);
-    float tempC = tempC_c;
+    // tempC_b is best
+    float tempC = tempC_b;
 
-    // tempC_c is best? 10*3 = 30 reads though ..tempC_b is just 3 reads
     // turn floats into strings
     // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string);
+
     if (tempC < -999.9) tempC = -999.9;
     if (tempC > 999.9) tempC = 999.9;
     snprintf(t_temp, sizeof(t_temp), "%6.1f", tempC);

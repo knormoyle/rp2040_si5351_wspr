@@ -1106,6 +1106,11 @@ void show_values(void) {
     V0_printf("use_sim65m: %s" EOL, _use_sim65m);
     V0_printf("XMIT_FREQUENCY: %lu (symbol 0)" EOL, XMIT_FREQUENCY);
     V0_print(F(EOL "SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
+    // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
+    #define sieStatusPtr ((uint32_t*)0x50110050)
+    uint32_t sieValue = *sieStatusPtr;
+    // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
+    V0_printf("SIE_STATUS: 0x%" PRIx32 EOL, sieValue);
 
     V0_println(F("show_values() END" EOL));
 }
@@ -1113,12 +1118,6 @@ void show_values(void) {
 // show list of valid commands
 void show_commands(void) {
     V0_println(F("show_commands() START" EOL));
-    // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
-    #define sieStatusPtr ((uint32_t*)0x50110050)
-    uint32_t sieValue = *sieStatusPtr;
-    // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
-    V0_printf("SIE_STATUS: 0x%" PRIx32 EOL, sieValue);
-
 
     V0_println(F(EOL "Valid commands:" EOL));
     V0_println(F("X: exit config mode and reboot"));
