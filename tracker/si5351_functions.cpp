@@ -759,7 +759,7 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // from https://rfzero.net/tutorials/si5351a/
     // When we're done, we can calc what the fout should be ?
     // uint32_t pll_freq_here = ((uint64_t)freq * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
-   // have time to print the 4 symbol freqs that will be used 
+   // have time to print the 4 symbol freqs that will be used
 
     // AH this has more precision in it..can't just shift down to print it!
     // Doug has WSPR_TONE_SPACING_HUNDREDTHS_HZ = 146 (1.4648 Hz)
@@ -767,7 +767,7 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // need to make that a real number
 
     double calcPrecisionDivisor = pow(2, PLL_CALC_PRECISION);
-    double actual_here = 
+    double actual_here =
         ((double)pll_freq_here * calcPrecisionDivisor) / (double)ms_div_here;
 
     // output so we can print or use
@@ -781,7 +781,7 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
-void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq, bool only_pll_num) {
+void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq, bool only_pll_num) {
     uint32_t pll_freq;
     uint32_t ms_div;
     uint32_t pll_mult;
@@ -820,7 +820,7 @@ void vfo_set_freq_x16(uint8_t clk_num, uint32_t freq, bool only_pll_num) {
         // static global? for comparison next time
         s_ms_div_prev = ms_div;
     }
-    // V1_printf("vfo_set_freq_x16 END clk_num %u freq %lu" EOL, clk_num, freq);
+    // V1_printf("vfo_set_freq_x128 END clk_num %u freq %lu" EOL, clk_num, freq);
 }
 
 //****************************************************
@@ -870,7 +870,7 @@ void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     s_vfo_drive_strength[clk_num] = strength;
 
     //**********************
-    // reset the s_ms_div_prev to force vfo_set_freq_x16()
+    // reset the s_ms_div_prev to force vfo_set_freq_x128()
     // to call si5351a_setup_multisynth1() next time
     s_ms_div_prev = 0;
     // new 11/24/24 ..maybe clear all this old state too!
@@ -1085,9 +1085,11 @@ void vfo_turn_on(uint8_t clk_num) {
     // debug only, on 20M
     // uint32_t freq = 14097100UL;
     uint32_t freq = XMIT_FREQUENCY;
-    V1_printf("initial freq for vfo_set_freq_x16() is %lu" EOL, freq);
-    freq = freq << PLL_CALC_PRECISION;
-    vfo_set_freq_x16(clk_num, freq, false); // not only_pll_num
+
+    // this is aligned to integer. (symbol 0)
+    V1_printf("initial freq for vfo_set_freq_x128() is %lu" EOL, freq);
+    uint32_t freq_x128 = freq << PLL_CALC_PRECISION;
+    vfo_set_freq_x128(clk_num, freq_x128, false); // not only_pll_num
 
     // The final state is clk0/clk1 running but outputs not on
     si5351bx_clken = 0xff;
@@ -1095,7 +1097,7 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // FIX! hmm. we need a pll reset if we turn on the clk_out
     // where does that happen? Do one here (do we have to wait?) just in case?
-    // it was done in vfo_set_freq_x16 if we didn't have initial state
+    // it was done in vfo_set_freq_x128 if we didn't have initial state
     // or didn't change initial state?
     // new 11/28/24
     si5351a_reset_PLLB();
@@ -1164,31 +1166,31 @@ double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     }
 
     // the frequency shift is 12000 / 8192 (approx 1.46hz)
-    double symbol_freq_x16 =
+    double symbol_freq_x128 =
         (hf_freq << PLL_CALC_PRECISION) +
         ((symbol * (12000L << PLL_CALC_PRECISION) + 4096L) / 8192L);
 
     double calcPrecisionDivisor = pow(2, PLL_CALC_PRECISION);
-    double symbolFreq = (double) symbol_freq_x16 / calcPrecisionDivisor;
+    double symbolFreq = (double) symbol_freq_x128 / calcPrecisionDivisor;
 
     double symbolOffset = symbolFreq - hf_freq;
     double expectedSymbolOffset = ((double) symbol * 12000.0) / 8192.0;  // 1.46..Hz per symbol
-    V1_printf("For hf_freq %lu symbol %u symbolFreq is %.4f", 
+    V1_printf("For hf_freq %lu symbol %u symbolFreq is %.4f",
         hf_freq, symbol, symbolFreq);
-    V1_printf(" symbolOffset %.4f expectedSymbolOffset %.4f" EOL, 
+    V1_printf(" symbolOffset %.4f expectedSymbolOffset %.4f" EOL,
         symbolOffset, expectedSymbolOffset);
 
     return symbolFreq;
 }
 
 //**********************************
-uint32_t calcSymbolFreq_x16(uint32_t hf_freq, uint8_t symbol) {
+uint32_t calcSymbolFreq_x128(uint32_t hf_freq, uint8_t symbol) {
     // not expensive to always recalc the symbol freq
     // don't want printing though (too slow)
-    uint32_t freq_x16_with_symbol = (
+    uint32_t freq_x128_with_symbol = (
         hf_freq << PLL_CALC_PRECISION) +
         ((symbol * (12000L << PLL_CALC_PRECISION) + 4096L) / 8192L);
-    return freq_x16_with_symbol;
+    return freq_x128_with_symbol;
 }
 
 //**********************************
@@ -1198,18 +1200,18 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
     // and precision is not lost.
     static bool oneShotDebugPrinted = false;
     if (!oneShotDebugPrinted) {
-        // if it's the first startSymbolFreq with only_pll_num false, we 
-        // have time to print the 4 symbol freqs that will be used 
+        // if it's the first startSymbolFreq with only_pll_num false, we
+        // have time to print the 4 symbol freqs that will be used
         // we can shift down, so they will be what the sdr sees
         // AH this has more precision in it..can't just shift down to print it!
         // Doug has WSPR_TONE_SPACING_HUNDREDTHS_HZ = 146 (1.4648 Hz)
 
         // don't do the >> PLL_CALC_PRECISION here, as that's integer roundff
-        /// do float division by 16!  
-        float symbol_0_freq = calcSymbolFreq(hf_freq, 0);
-        float symbol_1_freq = calcSymbolFreq(hf_freq, 1);
-        float symbol_2_freq = calcSymbolFreq(hf_freq, 2);
-        float symbol_3_freq = calcSymbolFreq(hf_freq, 3);
+        /// do float division by 16!
+        double symbol_0_freq = calcSymbolFreq(hf_freq, 0);
+        double symbol_1_freq = calcSymbolFreq(hf_freq, 1);
+        double symbol_2_freq = calcSymbolFreq(hf_freq, 2);
+        double symbol_3_freq = calcSymbolFreq(hf_freq, 3);
         V1_print(F(EOL));
         V1_printf("symbol_0_freq %.4f" EOL, symbol_0_freq);
         V1_printf("symbol_1_freq %.4f" EOL, symbol_1_freq);
@@ -1220,9 +1222,9 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
     }
 
     // not expensive to always recalc the symbol freq
-    uint32_t freq_x16_with_symbol = calcSymbolFreq_x16(hf_freq, symbol);
+    uint32_t freq_x128_with_symbol = calcSymbolFreq_x128(hf_freq, symbol);
     // FIX! does this change the state of the clock output enable?
-    vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16_with_symbol, only_pll_num);
+    vfo_set_freq_x128(WSPR_TX_CLK_NUM, freq_x128_with_symbol, only_pll_num);
 
     // Note: Remember to do setup with the base frequency and symbol == 0,
     // so the i2c writes have seeded the si5351
@@ -1316,44 +1318,44 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 
 //**************************************************
 // comparing to traquito 12/21/24: https://groups.io/g/picoballoon/topic/110236980#msg18787
-// thanks doug. I sorted it out as a print issue, not a config issue. 
+// thanks doug. I sorted it out as a print issue, not a config issue.
 // Although I probably should adjust the math to be as close to perfect as you are
-//  
+//
 // details:
-// We both operate in a shifted integer domain, when calculating what to init si5351a with. 
+// We both operate in a shifted integer domain, when calculating what to init si5351a with.
 // You work in a *100 domain so you maintain precision to the hundredths for symbol frequency
-// To go back and forth from integer domain to the *100 domain, 
+// To go back and forth from integer domain to the *100 domain,
 // you probably use *10 and /10
-//  
+//
 // I work in the shifted integer domain of *16...
-// you can get there and back with shifts ..i.e. << 4 and >> 4 
+// you can get there and back with shifts ..i.e. << 4 and >> 4
 // (arguably shifts were better to do with older slower microcontrollers)
-//  
+//
 // but that means my precision is in 1/16ths, not 1/100ths like you
-//  
-// so when I did the printing correctly (the config was already correct), 
+//
+// so when I did the printing correctly (the config was already correct),
 // casting things to float doubles, so no precision lost on the print,
 // I get the following:
-//  
-// Comparing the actual symbol freqs I use, 
+//
+// Comparing the actual symbol freqs I use,
 // versus what the most accurate should be (to 4 decimal places)
 // assuming each expected offset is 1200/8192 per the wspr spec
 // so I'm pretty close..symbolOffset compared to expectedSymbolOffset
 // but could be better slightly.
-//  
+//
 // Band 10 BAND_XMIT_FREQ  28126020
 // For hf_freq 28126020 symbol 0 symbolFreq is 28126020.0000 symbolOffset 0.0000 expectedSymbolOffset 0.0000
 // For hf_freq 28126020 symbol 1 symbolFreq is 28126021.4375 symbolOffset 1.4375 expectedSymbolOffset 1.4648
 // For hf_freq 28126020 symbol 2 symbolFreq is 28126022.9375 symbolOffset 2.9375 expectedSymbolOffset 2.9297
 // For hf_freq 28126020 symbol 3 symbolFreq is 28126024.3750 symbolOffset 4.3750 expectedSymbolOffset 4.3945
-//  
+//
 // If instead  I work in a shifted domain of 7 bit shift..i.e. *128 ..
 // I can still shift left and right  rather than multiply and divide
 // for uint32_t datatype that leaves 25 bits of room for calculations..
 // estimating  enough up to 32Mhz worth of non-shifted target freq
 // I do have some intermediate calcs in uint64_t to make sure I don't lose bits.
 // If I have to, i can move more calcs to uint64_t (64-bit integer, unsigned)
-// So I think if i increase my shifted domain to be in the *128 domain, 
+// So I think if i increase my shifted domain to be in the *128 domain,
 // I should get about as accurate as your *100 integer domain calcs
 // (for symbol freqs)
-//  
+//

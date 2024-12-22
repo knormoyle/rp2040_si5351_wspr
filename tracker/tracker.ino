@@ -2189,6 +2189,17 @@ void checkPLLCalcs_200Hz() {
     V1_printf(EOL "channel 0 symbol_2_freq %.4f", symbol_2_freq); // should be +2 * (12000/8196) Hz [2.928 Hz] 
     V1_printf(EOL "channel 0 symbol_3_freq %.4f", symbol_3_freq); // should be +3 * (12000/8196) Hz [4.392 Hz]
 
+    // now check what pll_num gets calced in the freq_x128 (shifted) domain
+    uint32_t symbol_0_freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 0);
+    vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
+    V1_printf("channel 0 symbol 0 pll_num %lu" EOL, pll_num);
+    uint32_t symbol_1_freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 1);
+    V1_printf("channel 0 symbol 1 pll_num %lu" EOL, pll_num);
+    uint32_t symbol_2_freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 2);
+    V1_printf("channel 0 symbol 2 pll_num %lu" EOL, pll_num);
+    uint32_t symbol_3_freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 3);
+    V1_printf("channel 0 symbol 3 pll_num %lu" EOL, pll_num);
+
     V1_print(F(EOL));
     V1_printf("test calc'ing 5351a programming starting at %.4f" EOL, symbol_0_freq - 20);
     V1_print(F(EOL "200 Hz sweep at 1 hz increment" EOL));
