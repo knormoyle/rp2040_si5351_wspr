@@ -1,6 +1,5 @@
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr
-// Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
-// Author/Gather: Kevin Normoyle AD6Z initially 11/2024
+// Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 #ifndef SI5351_FUNCTIONS_H
 #define SI5351_FUNCTIONS_H
@@ -61,9 +60,12 @@ void si5351a_setup_multisynth0(uint32_t div);
 // this will give the freq you should see on wsjt-tx if hf_freq is the XMIT_FREQ for a channel
 // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin 
 // (assume freq calibration errors of that much, then symbol the 200hz passband?
-uint32_t calcSymbolFreq(uint32_t hf_freq, uint8_t symbol);
+double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol);
+uint32_t calcSymbolFreq_x16(uint32_t hf_freq, uint8_t symbol);
+void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num);
+
 // used to print (not change) for walking a range in setup, just to see what changes
-void vfo_calc_div_mult_num(uint32_t *actual, uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t freq);
+void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t freq);
 
 void vfo_set_freq_x16(uint8_t clk_number, uint32_t freq, bool only_pll_num);
 void vfo_turn_on_clk_out(uint8_t clk_number);

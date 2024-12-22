@@ -303,7 +303,10 @@ extern const int SI5351A_CLK_IDRV_6MA = (2 << 0);
 extern const int SI5351A_CLK_IDRV_4MA = (1 << 0);
 extern const int SI5351A_CLK_IDRV_2MA = (0 << 0);
 
-extern const int PLL_CALC_PRECISION = 4;
+// was 4, but not getting enough precision. see si5351_functions.cpp
+// 7 will give 1/128ths precision after the decimal (for symbol frequency), 
+// as opposed to 1/16ths
+extern const int PLL_CALC_PRECISION = 7;
 
 extern const int VFO_VDD_ON_N_PIN = 4;
 // are these really on Wire1
@@ -325,7 +328,6 @@ extern const int PICO_I2C_CLK_HZ = (100 * 1000);
 
 // The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR, which is 0x60
 extern const int SI5351A_I2C_ADDR = 0x60;
-
 
 //**********************************
 //IMPORTANT: GLOBALS and MULTICORE ACCESS
@@ -437,7 +439,6 @@ bool USE_SIM65M = false;
 // will differentiate from u4b (10) and traquito (13) by
 // using 3 or 7 in normal callsign tx 3 for low power, 7 for high power
 //*********************************
-
 absolute_time_t GpsStartTime = 0;
 uint64_t GpsFixMillis = 0;
 uint64_t GpsStartMillis = 0;
@@ -1958,44 +1959,6 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 }
 
 //**********************************
-void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
-    // Calculate the frequency for a symbol
-    // Note all the shifting so integer arithmetic is used everywhere,
-    // and precision is not lost.
-
-    // not expensive to always recalc the symbol freq
-    uint32_t freq_x16_with_symbol = (
-        hf_freq << PLL_CALC_PRECISION) +
-        ((symbol * (12000L << PLL_CALC_PRECISION) + 4096L) / 8192L);
-
-    // FIX! does this change the state of the clock output enable?
-    vfo_set_freq_x16(WSPR_TX_CLK_NUM, freq_x16_with_symbol, only_pll_num);
-
-    // Note: Remember to do setup with the base frequency and symbol == 0,
-    // so the i2c writes have seeded the si5351
-    // so the first symbol won't have different delay than the subsequent symbols
-    // hmm wonder what the typical "first symbol" is for a real wspr message?
-}
-
-//**********************************
-// calculate the actual tx frequency for a symbol,
-// given the base XMIT_FREQ for the u4b channel config'ed
-uint32_t calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
-    if (symbol > 3) {
-        V1_printf("ERROR: calcSymbolFreq symbol %u is not 0 to 3 ..using 0" EOL, symbol);
-        symbol = 0;
-    }
-
-    uint32_t symbol_freq_shifted =
-        (hf_freq << PLL_CALC_PRECISION) +
-        ((symbol * (12000L << PLL_CALC_PRECISION) + 4096L) / 8192L);
-    uint32_t symbol_freq = symbol_freq_shifted >> PLL_CALC_PRECISION;
-
-    V1_printf("For hf_freq %lu symbol 0: symbol_freq is %lu" EOL, hf_freq, symbol_freq);
-    return symbol_freq;
-}
-
-//**********************************
 void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
     V1_printf("syncAndSendWSPR() START now: minute: %d second: %d" EOL, minute(), second());
@@ -2011,7 +1974,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // FIX! we could pre-calc the 4 symbol freqs during the first warmup symbol.
     // so if only_pll_num, use the calc'ed freqs.
     // make them globals for use by sendWspr()?
-    calcSymbolFreq(hf_freq, symbol);
+
     // get the vfo going!
     startSymbolFreq(hf_freq, symbol, true); // only_pll_num (expected)
 
@@ -2131,7 +2094,7 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
 }
 
 //**********************************
-int initPicoClock(int PLL_SYS_MHZ) {
+int initPicoClock(uint32_t PLL_SYS_MHZ) {
     V1_println(F("initPicoClock START"));
     // frequencies like 205 mhz will PANIC,
     // System clock of 205000 kHz cannot be exactly achieved
@@ -2158,7 +2121,7 @@ int initPicoClock(int PLL_SYS_MHZ) {
         }
     }
 
-    V1_printf("Attempt to set rp2040 clock to PLL_SYS_MHZ %d (legal)" EOL, PLL_SYS_MHZ);
+    V1_printf("Attempt to set rp2040 clock to PLL_SYS_MHZ %lu (legal)" EOL, PLL_SYS_MHZ);
     // 2nd arg is "required"
     set_sys_clock_khz(clk_khz, true);
 
@@ -2182,14 +2145,14 @@ void freeMem() {
 //**********************
 void checkPLLCalcs_200Hz() {
     // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
-    // for possible tx in a band
+    // for possible tx in a band. all assuming u4b channel 0 freq bin.
     uint32_t pll_freq;
     uint32_t ms_div;
     uint32_t pll_mult;
     uint32_t pll_num;
     uint32_t pll_denom;
     uint32_t freq;
-    uint32_t actual;
+    double actual;
 
     enum XMIT_FREQS {
         BXF10M = 28124600UL + 1400UL + 20,
@@ -2210,17 +2173,30 @@ void checkPLLCalcs_200Hz() {
         default: BAND_XMIT_FREQ = BXF20M;
     }
 
-    uint32_t symbol_freq = calcSymbolFreq(BAND_XMIT_FREQ, 0);
+    V0_printf("_Band %s BAND_XMIT_FREQ  %lu" EOL, _Band, BAND_XMIT_FREQ);
+    double symbol_0_freq = calcSymbolFreq(BAND_XMIT_FREQ, 0);
+    double symbol_1_freq = calcSymbolFreq(BAND_XMIT_FREQ, 1);
+    double symbol_2_freq = calcSymbolFreq(BAND_XMIT_FREQ, 2);
+    double symbol_3_freq = calcSymbolFreq(BAND_XMIT_FREQ, 3);
 
     // this will give the freq you should see on wsjt-tx if hf_freq is the XMIT_FREQ for a channel
     // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin
     // (assume freq calibration errors of that much, then symbol the 200hz passband?
 
+    // FIX! could compare these offsets from the symbol_0_freq? (offset 1.46412884334 Hz)
+    V1_printf(EOL "channel 0 symbol_0_freq %.4f", symbol_0_freq); // + 0 Hz
+    V1_printf(EOL "channel 0 symbol_1_freq %.4f", symbol_1_freq); // should be +1 * (12000/8196) Hz [1.464 Hz]
+    V1_printf(EOL "channel 0 symbol_2_freq %.4f", symbol_2_freq); // should be +2 * (12000/8196) Hz [2.928 Hz] 
+    V1_printf(EOL "channel 0 symbol_3_freq %.4f", symbol_3_freq); // should be +3 * (12000/8196) Hz [4.392 Hz]
+
     V1_print(F(EOL));
-    V1_printf("test calc'ing 5351a programming starting at %lu" EOL, symbol_freq - 20);
+    V1_printf("test calc'ing 5351a programming starting at %.4f" EOL, symbol_0_freq - 20);
+    V1_print(F(EOL "200 Hz sweep at 1 hz increment" EOL));
     uint32_t pll_num_last = 0;
     for (uint32_t i = 0; i < 200; i++) {
-        freq = (symbol_freq - 20) + i;
+        // should be okay to cast symbol_0_freq to int here? 
+        // Should be No fractional part in the double? (since it's the base symbol 0 freq?)
+        freq = ( (uint32_t) symbol_0_freq - 20) + i;
         // note this will include any correction to SI5351_TCXO_FREQ (already done)
         vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
 
@@ -2228,10 +2204,9 @@ void checkPLLCalcs_200Hz() {
         // pll_freq 650415761 ms_div 370 pll_mult 25 pll_num 15990 pll_denom 1000000 freq 28126087
         // pll_freq 650415785 ms_div 370 pll_mult 25 pll_num 15991 pll_denom 1000000 freq 28126088
 
-        // FIX! should we compare freq and actual? (actual isn't correct yet)
         V1_printf(
             "pll_freq %lu "
-            "ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu freq %lu actual %lu" EOL,
+            "ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu freq %lu actual %.2f" EOL,
             pll_freq, ms_div, pll_mult, pll_num, pll_denom, freq, actual);
 
         // want unique pll_num changes for each 1 Hz change..
