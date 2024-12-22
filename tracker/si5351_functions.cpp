@@ -670,13 +670,14 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // that’s an even number.
 
     int PLL_DENOM;
-    if (false) {
+    if (true) {
         // hans uses 1048575 as max (which is 0xfffff) (2^20 - 1)
         // I guess no matter what, we will have fractional stuff with the 6 hz symbol adjustments
         // be interesting to see how close to desired freq, we get on the sdr?
         const int PLL_DENOM_MAX = 0x000fffff;
         PLL_DENOM = PLL_DENOM_MAX;
     } else {
+        // this was sort of okay on 12/21/24. could it be better with PLL_DENOM_MAX above though?
         PLL_DENOM = 1000000;
     }
 
