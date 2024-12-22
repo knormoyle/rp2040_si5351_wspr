@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-// HACK stay in balloon mode for debug.  Normally should be false.
+// HACK to stay in balloon mode for debug.  Normally should be false.
 bool FORCE_BALLOON_MODE = false;
 
 // These are in arduino-pio core
@@ -65,7 +65,6 @@ bool FORCE_BALLOON_MODE = false;
 // TinyGPSPlus is a Arduino library for parsing NMEA data streams provided
 // by GPS modules.
 
-// this is included in gps_functions.cpp? shouldn't be needed here or maybe need for Watchdog.* ?
 // in libraries: wget https://github.com/adafruit/Adafruit_SleepyDog/archive/refs/heads/master.zip
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
@@ -80,10 +79,9 @@ bool FORCE_BALLOON_MODE = false;
 // #include <Adafruit_I2CDevice.h>  // https://github.com/adafruit/Adafruit_BusIO
 
 #include <JTEncode.h>  // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
-// in libraries: wget https://github.com/etherkit/JTEncode/archive/refs/heads/master.zip
-
-// setTime() use moved to gps_functions.cpp
-// libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
+// in libraries, getting more recent (if necessary)
+// wget https://github.com/etherkit/JTEncode/archive/refs/heads/master.zip
+// wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 
@@ -118,14 +116,9 @@ uint16_t Tx_3_cnt = 0;  // increase +1 after every telen2 tx
 // The maximum number of binary channel symbols in a WSPR message is 162.
 // This is calculated by adding the constraint length (K) of 32 to the
 // total number of bits in a standard message (50), and then multiplying by 2.
-
-// the library agrees
-// JTEncode.h:#define WSPR_SYMBOL_COUNT 162
-
 // background
 // https://hackaday.io/project/166875-careless-wspr/log/167301-encoding-wsprs
 // http://www.g4jnt.com/Coding/WSPR_Coding_Process.pdf
-
 // python code for playing around with wspr encoding
 // https://github.com/robertostling/wspr-tools
 
@@ -137,13 +130,11 @@ uint32_t PWM_WRAP_CNT;
 uint32_t INTERRUPTS_PER_SYMBOL = 8;
 
 // below we always loop thru the entire hf_tx_buffer?
-// so we always loop thru 162 symbols, but the last ones might not matter.
-// is this less than 256? probaby the real max?
-// just make it 162 so when we clear it, it's faster
 uint8_t hf_tx_buffer[162] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
 
 // FIX! why is this volatile? Because it's set by the ISR for PWM interrupts?
-// alternatives discussed here
+// alternatives discussed here. Interesting there's also a potential issue
+// for cross-core global references, like this
 // https://forums.raspberrypi.com/viewtopic.php?t=312685
 volatile bool PROCEED = false;
 
@@ -175,7 +166,6 @@ TinyGPSPlus gps;
 #include "gps_functions.h"
 
 //*********************************
-// in AdaFruit_I2CDevice.h
 // extern so it links okay
 extern const int BMP280_I2C1_SDA_PIN = 2;
 extern const int BMP280_I2C1_SCL_PIN = 3;
@@ -185,10 +175,10 @@ JTEncode jtencode;
 
 //*********************************
 // all extern consts can be externed by a function
+// the linker will will fail on these global constants unless labelled
+// extern here also (like in the other files that reference this)
 extern const int STATUS_LED_PIN = 25;
-// these are the short blinks
-// we should create long blinks for the 8 and 9 error cases
-
+// these are the short blinks or long blinks, depending on value
 extern const int LED_STATUS_NO_GPS = 1;
 extern const int LED_STATUS_GPS_TIME = 2;
 extern const int LED_STATUS_GPS_FIX = 3;
@@ -207,9 +197,9 @@ extern const int LED_STATUS_USER_CONFIG = 9;       // this does 4 long blinks?
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 
 //*********************************
-// all extern consts can be externed by a function
+// all extern consts can be externed for reference in another file
 // so it can be used in gps_functions.cpp
-// extern is needed or the linker doesn't find it.
+// extern is needed here or the linker doesn't find it.
 // see https://forum.arduino.cc/t/linker-problems-with-extern-const-struct/647136/2
 extern const int GpsPwr = 16;  // output ..this cuts VCC, leaves VBAT. assert low
 
@@ -227,7 +217,8 @@ extern const int GPS_1PPS_PIN = 17;   // input
 extern const int GPS_UART1_TX_PIN = 8;
 extern const int GPS_UART1_RX_PIN = 9;
 
-// talks to gps. can't really make the hardware uart fifo size bigger
+// Serial2 talks to gps.
+// can't really make the hardware uart fifo size bigger
 extern const int SERIAL2_FIFO_SIZE = 32;
 // earlephilhower says the hw serial units use the hardware rx fifo
 // so only 32?
@@ -291,8 +282,6 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // extern const int ATGM336H_BAUD_RATE = 115200;
 
 //*********************************
-// all extern consts can be externed by a function
-// when we set both?
 extern const int WSPR_TX_CLK_1_NUM = 1;
 // this is the other differential clock for wspr? (was aprs)
 extern const int WSPR_TX_CLK_0_NUM = 0;
@@ -304,7 +293,7 @@ extern const int SI5351A_CLK_IDRV_4MA = (1 << 0);
 extern const int SI5351A_CLK_IDRV_2MA = (0 << 0);
 
 // was 4, but not getting enough precision. see si5351_functions.cpp
-// 7 will give 1/128ths precision after the decimal (for symbol frequency), 
+// 7 will give 1/128ths precision after the decimal (for symbol frequency),
 // as opposed to 1/16ths
 extern const int PLL_CALC_PRECISION = 7;
 
@@ -319,31 +308,32 @@ extern const int VFO_I2C0_SCL_HZ = (100 * 1000);
 extern const int BMP_I2C1_SDA_PIN = 2;
 extern const int BMP_I2C1_SCL_PIN = 3;
 
-// FIX! are the pcb pullups less aggressive on BMP i2c? maybe have to stay slower?
+// FIX! are the pcb pullups less aggressive on BMP i2c?
+// maybe have to stay slower on speed?
 extern const int BMP_I2C1_SCL_HZ = (100 * 1000);
 
 // FIX! used in i2c_functions for test of both i2c0 and i2c1
-// update to use separate, since pullup resistors are different on each?
+// pullup resistors are different on each i2c bus on the pcb
 extern const int PICO_I2C_CLK_HZ = (100 * 1000);
 
 // The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR, which is 0x60
 extern const int SI5351A_I2C_ADDR = 0x60;
 
 //**********************************
-//IMPORTANT: GLOBALS and MULTICORE ACCESS
+// IMPORTANT: GLOBALS and MULTICORE ACCESS
 
 // https://forums.raspberrypi.com/viewtopic.php?t=347326
-// Yes. In the jargon of C, variable x has static storage duration. 
-// That means only one instance of storage is allocated for x and 
-// it has the same lifetime as the execution of the program. 
+// Yes. In the jargon of C, variable x has static storage duration.
+// That means only one instance of storage is allocated for x and
+// it has the same lifetime as the execution of the program.
 // In other words, both cores see the same x.
-// 
-// One must be very careful when accessing a variable from both cores. 
-// Among other things the C compiler is allowed to pretend that there is only one core, 
+//
+// One must be very careful when accessing a variable from both cores.
+// Among other things the C compiler is allowed to pretend that there is only one core,
 // and optimize away accesses of x that it thinks are redundant.
 //
-// You might find making the variable "volatile" helps. 
-// "Volatile" is not technically the correct way to address access to a variable 
+// You might find making the variable "volatile" helps.
+// "Volatile" is not technically the correct way to address access to a variable
 // from multiple cores but it works on RP2040
 // since the config stuff is read in core0, then used in core1, it should be volatile
 //**********************************
@@ -357,7 +347,7 @@ extern const int SI5351A_I2C_ADDR = 0x60;
 char t_course[4] = { 0 };      // 3 bytes + null term (like all here
 // always positive? 0-250 knots. clamp to 0 I guess
 char t_speed[4] = { 0 };       // 3 bytes
-// 60000 meters. plus 1 in case negative?
+// allow 60000 meters. plus 1 in case negative?
 char t_altitude[7] = { 0 };    // 6 bytes
 // 24 * 30 per hour = 720 per day if every two minutes
 // reboot once per day? (starts at 0)
@@ -384,6 +374,7 @@ int t_snap_cnt = 0;
 
 //***********************************************************
 // config strings: all can be extern'ed by a function
+// but there is also decode of them to another global that is used instead.
 // see config_functions.cpp
 // these get set via terminal, and then from NVRAM on boot
 // init with all null
@@ -393,11 +384,11 @@ volatile char _callsign[7] = { 0 };
 volatile char _suffix[2] = { 0 };
 volatile char _verbose[2] = { 0 };
 volatile char _TELEN_config[5] = { 0 };
-// FIX! why is this a problem if volatile?
+// FIX! why is this a compiler problem if volatile?
 // https://forum.arduino.cc/t/invalid-conversion-from-volatile-char-to-const-char-fpermissive/949522
 char _clock_speed[4] = { 0 };
 volatile char _U4B_chan[4] = { 0 };
-// FIX! why is this a problem if volatile?
+// FIX! why is this a compiler problem if volatile?
 char _Band[3] = { 0 };  // string with 10, 12, 15, 17, 20 legal. null at end
 volatile char _tx_high[2] = { 0 };  // 0 is 2mA si5351. 1 is 8mA si5351
 volatile char _testmode[2] = { 0 };
@@ -452,7 +443,8 @@ bool IGNORE_KEYBOARD_CHARS = false;
 bool IGNORE_KEYBOARD_CHARS_last = false;
 
 //***********************************************************
-// FIX! should this be non-zero?
+// FIX! should this be non-zero? 0 disables any if/else behavior
+// associated with the voltage read (rp2040 adc)
 // Maybe all a don't care now with the voltage monitor that causes reset.
 float GpsMinVolt = 0.0;   // min Volts for GPS to wake up.
 float BattMin = 0.0;      // min Volts to wake up.
@@ -471,7 +463,6 @@ bool core1_separate_stack = true;
 // Generally Serial is not thread-safe.
 // simple V1_print() might be thread safe
 // but not V1_println or especially not Serial.printf()
-
 // everything is shared/accessible between two cores, but little is thread safe?
 
 // so we can see the setup() read_FLASH() results later
@@ -479,7 +470,6 @@ int read_FLASH_result1 = 0;
 int read_FLASH_result2 = 0;
 
 void setup() {
-
     // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
     // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
     // Initialize a core such that the other core can lock it out during flash_safe_execute.
@@ -513,7 +503,7 @@ void setup() {
     // if anything was found by incomingByte above, go to the config menu
     // (potentially a balloon weird case would timeout)
     BALLOON_MODE = false;
-    decodeVERBY();  
+    decodeVERBY();
 
     Watchdog.enable(30000);
     initStatusLED();
@@ -558,12 +548,12 @@ void setup() {
     V0_printf("SETUP() usbConnected %u" EOL, usbConnected);
 
     // FIX! is 'Serial" sufficient? it's not formed putty window not opened?
-    // FORCE_BALLLON_MODE is test mode: 
+    // FORCE_BALLLON_MODE is test mode:
     // guarantees balloon mode for debug when plugged into USB power
     if (FORCE_BALLOON_MODE | !usbConnected) {
         V0_print(F(EOL "SETUP() set BALLOON_MODE true" EOL));
         BALLOON_MODE = true;
-        decodeVERBY(); 
+        decodeVERBY();
         // BALLOON_MODE forces all false, so no point in printing here?
         Watchdog.reset();
         // Serial on core1 is only used for printing (no keyboard input)
@@ -850,7 +840,7 @@ void setup1() {
     XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
     Watchdog.reset();
     // FIX! do we really have to read flash again. No..I don't think so!
-    // keeps the read_FLASH in core1() always? no worries about "safe" access to flash 
+    // keeps the read_FLASH in core1() always? no worries about "safe" access to flash
     // (interrupts and fetch out of nvram?)
     V0_printf("prior read_FLASH() results: read_FLASH_result1: %d read_FLASH_result2: %d" EOL,
         read_FLASH_result1, read_FLASH_result2);
@@ -915,7 +905,8 @@ void setup1() {
         PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL);
 
     //***************
-    if (true) checkPLLCalcs_200Hz();
+    // no need to do the calcs if we're not going to print them!
+    if (VERBY[1]) checkPLLCalcsForDebug();
     //***************
     V1_println(F("setup1() END"));
     // show we're done with setup1() with long 2 sec on, 2 sec off
@@ -1098,7 +1089,7 @@ void loop1() {
         GpsStartMillis = millis();
     }
 
-    GpsON(false); // no full cold reset
+    GpsON(false);  // no full cold reset
 
     //******************
     float solar_voltage;
@@ -1474,7 +1465,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // FIX! does this include a full init at the rp2040?
     // vfo_turn_on() doesn't turn on the clk outputs!
     vfo_turn_on(WSPR_TX_CLK_NUM);
-    startSymbolFreq(hf_freq, 0, false); // symbol 0, change more than just pll_num
+    startSymbolFreq(hf_freq, 0, false);  // symbol 0, change more than just pll_num
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
     // GPS will stay off for all
@@ -1636,7 +1627,8 @@ void sleepSeconds(int secs) {
             // 1050: was this causing rx buffer overrun (21 to 32)
             // 1500 was good for 9600 and up
             // not long enough for 4800?
-            if ((!USE_SIM65M) && ATGM336H_BAUD_RATE == 4800) updateGpsDataAndTime(2000);  // milliseconds
+            // arg is milliseconds
+            if ((!USE_SIM65M) && ATGM336H_BAUD_RATE == 4800) updateGpsDataAndTime(2000);
             else updateGpsDataAndTime(1500);
         } else {
             sleep_ms(1500);
@@ -1656,11 +1648,8 @@ void sleepSeconds(int secs) {
         // I suppose we really want to know how long it's been off
         // shouldn't keep it off if we don't have a valid fix
         // and shouldn't keep it off for more than 1 minute.
-        if (!GpsIsOn()) {
-            GpsON(false);  // don't keep TinyGps state
-        } else {
-            ;
-        }
+        if (!GpsIsOn()) GpsON(false);  // don't keep TinyGps state
+
         // all the data should be valid to consider it a good fix.
         // this doesn't need qualification on whether we got a good date/time
         // since we check that first, before we do any looking for a 3d fix
@@ -1843,7 +1832,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
 
         //****************************************************
-        startSymbolFreq(hf_freq, symbol, false); // symbol 0 to 3, just change pll_num
+        startSymbolFreq(hf_freq, symbol, false);  // symbol 0 to 3, just change pll_num
 
         //****************************************************
         // Don't make StampPrintf log buffer bigger to try to save more
@@ -1976,7 +1965,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // make them globals for use by sendWspr()?
 
     // get the vfo going!
-    startSymbolFreq(hf_freq, symbol, true); // only_pll_num (expected)
+    startSymbolFreq(hf_freq, symbol, true);  // only_pll_num (expected)
 
     // encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
     // https://stackoverflow.com/questions/27260304/equivalent-of-atoi-for-unsigned-integers
@@ -2129,7 +2118,7 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
     return 0;
 }
 
-//**********************
+//**********************************
 void freeMem() {
     V1_println(F("freeMem() START"));
     if (!VERBY[1]) return;
@@ -2142,8 +2131,9 @@ void freeMem() {
     V1_println(F(" byte"));
     V1_println(F("freeMem() END"));
 }
-//**********************
-void checkPLLCalcs_200Hz() {
+
+//**********************************
+void checkPLLCalcsForDebug() {
     // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
     // for possible tx in a band. all assuming u4b channel 0 freq bin.
     uint32_t pll_freq;
@@ -2152,6 +2142,7 @@ void checkPLLCalcs_200Hz() {
     uint32_t pll_num;
     uint32_t pll_denom;
     uint32_t freq;
+    uint32_t freq_x128;
     double actual;
 
     enum XMIT_FREQS {
@@ -2183,35 +2174,48 @@ void checkPLLCalcs_200Hz() {
     // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin
     // (assume freq calibration errors of that much, then symbol the 200hz passband?
 
-    // FIX! could compare these offsets from the symbol_0_freq? (offset 1.46412884334 Hz)
-    V1_printf(EOL "channel 0 symbol_0_freq %.4f", symbol_0_freq); // + 0 Hz
-    V1_printf(EOL "channel 0 symbol_1_freq %.4f", symbol_1_freq); // should be +1 * (12000/8196) Hz [1.464 Hz]
-    V1_printf(EOL "channel 0 symbol_2_freq %.4f", symbol_2_freq); // should be +2 * (12000/8196) Hz [2.928 Hz] 
-    V1_printf(EOL "channel 0 symbol_3_freq %.4f", symbol_3_freq); // should be +3 * (12000/8196) Hz [4.392 Hz]
+    // in calcSymbolFreq(), could compare these offsets from the symbol_0_freq to expected?
+    // (offset 1.46412884334 Hz)
+    V1_print(F(EOL));
+    V1_printf("channel 0 symbol 0 freq %.4f" EOL, symbol_0_freq);  // + 0 Hz
+    V1_printf("channel 0 symbol 1 freq %.4f" EOL, symbol_1_freq);  // +1*(12000/8196) Hz [1.464 Hz]
+    V1_printf("channel 0 symbol 2 freq %.4f" EOL, symbol_2_freq);  // +2*(12000/8196) Hz [2.928 Hz]
+    V1_printf("channel 0 symbol 3 freq %.4f" EOL, symbol_3_freq);  // +3*(12000/8196) Hz [4.392 Hz]
+    V1_print(F(EOL));
 
-    // now check what pll_num gets calced in the freq_x128 (shifted) domain
-    uint32_t symbol_0_freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 0);
-    vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
+    // check what pll_num gets calced in the freq_x128 (shifted) domain
+    freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 0);
+    vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq_x128);
     V1_printf("channel 0 symbol 0 pll_num %lu" EOL, pll_num);
-    uint32_t symbol_1_freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 1);
+
+    freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 1);
+    vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq_x128);
     V1_printf("channel 0 symbol 1 pll_num %lu" EOL, pll_num);
-    uint32_t symbol_2_freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 2);
+
+    freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 2);
+    vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq_x128);
     V1_printf("channel 0 symbol 2 pll_num %lu" EOL, pll_num);
-    uint32_t symbol_3_freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 3);
+
+    freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 3);
+    vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq_x128);
     V1_printf("channel 0 symbol 3 pll_num %lu" EOL, pll_num);
 
     V1_print(F(EOL));
     V1_printf("test calc'ing 5351a programming starting at %.4f" EOL, symbol_0_freq - 20);
     V1_print(F(EOL "200 Hz sweep at 1 hz increment" EOL));
+
     uint32_t pll_num_last = 0;
     for (uint32_t i = 0; i < 200; i++) {
-        // should be okay to cast symbol_0_freq to int here? 
+        // should be okay to cast symbol_0_freq to int here?
         // Should be No fractional part in the double? (since it's the base symbol 0 freq?)
-        freq = ( (uint32_t) symbol_0_freq - 20) + i;
+        freq = (((uint32_t) symbol_0_freq - 20) + i);
+        freq_x128 = freq << PLL_CALC_PRECISION;
         // note this will include any correction to SI5351_TCXO_FREQ (already done)
-        vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
+        vfo_calc_div_mult_num(&actual, &pll_freq, 
+            &ms_div, &pll_mult, &pll_num, &pll_denom, 
+            freq_x128);
 
-        // not ideal if two pll_nums are the same (sequentially) ..the pll_freq isn't correct then?
+        // not ideal if two pll_nums are the same (sequentially)
         // pll_freq 650415761 ms_div 370 pll_mult 25 pll_num 15990 pll_denom 1000000 freq 28126087
         // pll_freq 650415785 ms_div 370 pll_mult 25 pll_num 15991 pll_denom 1000000 freq 28126088
 

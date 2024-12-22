@@ -85,7 +85,7 @@
 #include <Wire.h>
 
 // from tracker.ino
-extern uint32_t SI5351_TCXO_FREQ; // 26 mhz with correction already done
+extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
 extern const int SI5351A_I2C_ADDR;
 extern const int VFO_I2C0_SCL_HZ;
 
@@ -224,45 +224,47 @@ bool reserved_reg(uint8_t reg) {
     // hung on read of d8 (216)
     bool bad = false;
     switch (reg) {
-        case 4: ;
-        case 5: ;
-        case 6: ;
-        case 7: ;
-        case 8: ;
-        case 10: ;
-        case 11: ;
-        case 12: ;
-        case 13: ;
-        case 14: ;
-        case 173: ;
-        case 174: ;
-        case 175: ;
-        case 176: ;
-        case 178: ;
-        case 179: ;
-        case 180: ;
-        case 181: ;
+        case 4: {}
+        case 5: {}
+        case 6: {}
+        case 7: {}
+        case 8: {}
+        case 10: {}
+        case 11: {}
+        case 12: {}
+        case 13: {}
+        case 14: {}
+        case 173: {}
+        case 174: {}
+        case 175: {}
+        case 176: {}
+        case 178: {}
+        case 179: {}
+        case 180: {}
+        case 181: {}
         case 182: bad = true; break;
         // possible range is already constrained to 255 by uint8_t size
         default: if (reg >= 184) bad = true;
     }
     switch (reg) {
-        case 0: ; // has some status bits
-        case 1: ; bad = true; break; // has some status bits
+        case 0: {}  // has some status bits
+        case 1: ; bad = true; break;  // has some status bits
 
         // FIX! we should check these rules for bad multisynth?
         // multisynth3 thru multisynth7 ??
         // do invalid numbers write ? what happens?
         // This 8-bit number is the Multisynth divide ratio.
-        // can only be even integers greater than or equal to 6. All other divide values are invalid.
-        // Si5351B and C are 8-outputs. Si5351a we use is only 3. (there is 8 output version) that's why.
+        // can only be even integers greater than or equal to 6.
+        // All other divide values are invalid.
+        // Si5351B and C are 8-outputs. Si5351a we use is only 3.
+        // (there is 8 output version) that's why.
         default: if (reg >= 66 && reg <= 91) bad = true;
     }
-
-    // also say the reg that don't return exact pattern just written are "reserved"
+    // for i2c test: reg that don't return exact pattern just written are considered "reserved"
     // terms of this test can't just do write than read and compare data.
+    // i guess in normal balloon operation, that's just status bits, which we don't check
+    // so okay to call them reserved here
     return bad;
-
 }
 
 //****************************************************
@@ -281,8 +283,7 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
         V1_printf("ERROR: i2cWrite reserved reg %u" EOL, reg);
         // make this a unique error to recognize my reserved reg detection
         res = 127;
-    }
-    else {
+    } else {
         // V1_printf("i2cWrite doing i2c_write_blocking reg %02x val %02x" EOL, reg, val);
         // res = i2c_write_timeout_us(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false, 1000);
         res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false);
@@ -290,7 +291,6 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
         if (res == 127) {
             V1_printf("BAD: reserved reg %d detected on i2cWrite" EOL, reg);
         } else if (res == 2) {
-            ;
             // V1_printf("GOOD: res %d after i2cWrite" EOL, res);
         } else if (res == PICO_ERROR_GENERIC) {
             V1_printf("ERROR: res %d after i2cWrite %d" EOL, res, reg);
@@ -375,7 +375,7 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
     V1_printf("i2cWrRead START reg %02x val %02x" EOL, reg, *val);
     uint8_t i2c_buf[2];
     i2c_buf[0] = reg;
-    i2c_buf[1] = 254; // a fixed value that should be overwritten?
+    i2c_buf[1] = 254;  // a fixed value that should be overwritten?
 
     // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
     int res;
@@ -393,14 +393,12 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
     //     PICO_ERROR_BADAUTH = -7,
     //     PICO_ERROR_CONNECT_FAILED = -8,
     // };
-
     if (reserved_reg(reg)) {
         // don't want to hang on a reserved reg. so don't send
         V1_printf("ERROR: i2cWrRead reserved reg %u" EOL, reg);
         // make this a unique error to recognize my reserved reg detection
         res = 127;
-    }
-    else {
+    } else {
         V1_print(F("i2cWrRead doing i2c_write_blockin then i2c_read_blocking" EOL));
         int res1, res2;
         // FIX! should these be _timeout_us instead?
@@ -416,16 +414,16 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {  // read reg via i2c
         else if (res2 == PICO_ERROR_GENERIC || res2 != 1)
             res = PICO_ERROR_GENERIC;
         else if (res1 == 1 && res2 == 1)
-            res = 1; // good one byte read! both parts
+            res = 1;  // good one byte read! both parts
     }
 
     // cover all - errors above
     if (res == 127) {
-        ; // my decode for reserved
+        // my decode for reserved
     } else if (res == PICO_ERROR_GENERIC || res < 0) {
         V1_printf("ERROR: i2cWrRead() got bad res %d reg %02x val %02x" EOL,
             res, reg, *val);
-    } else if (res==1) {
+    } else if (res == 1) {
         V1_printf("GOOD: i2cWrRead() got good res %d reg %02x val %02x" EOL,
             res, reg, *val);
     } else {
@@ -464,12 +462,10 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
         // V1_printf("i2cWriten doing i2c_write_blocking reg %02x " EOL, reg);
         // res = i2c_write_timeout_us(VFO_I2C_INSTANCE,
         res = i2c_write_blocking(VFO_I2C_INSTANCE,
-            SI5351A_I2C_ADDR, i2c_buf, (vcnt + 1), false); // addr + data (byte)
-
+            SI5351A_I2C_ADDR, i2c_buf, (vcnt + 1), false);  // addr + data (byte)
         if (res == 127) {
             V1_printf("BAD: reserved reg %d detected on i2cWriten" EOL, reg);
         } else if (res == (1 + (int) vcnt)) {
-            ;
             // V1_printf("GOOD: res %d after i2cWriten" EOL, res);
         } else if (res == PICO_ERROR_GENERIC) {
             V1_printf("ERROR: res %d after i2cWriten" EOL, res);
@@ -509,7 +505,7 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     // the i2cWriten writes as burst below..maybe that's why?
     // we could keep a static copy of what was written , and only write
     // when values change.
-    if (s_ms_div_prev != 0) { // global. basically it implies s_PLLB_regs_prev has data
+    if (s_ms_div_prev != 0) {  // global. basically it implies s_PLLB_regs_prev has data
         for (; start < 8; start++) {
             if (PLLB_regs[start] != s_PLLB_regs_prev[start]) break;
         }
@@ -609,7 +605,7 @@ void si5351a_reset_PLLB(void) {
 // good for doing calc only, so see what changes with freq changes
 void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num,
-    uint32_t *pll_denom, uint32_t freq) {
+    uint32_t *pll_denom, uint32_t freq_x128) {
 
     // interesting they had relatively low pll freq (620Mhz) for 15M case
     // https://rfzero.net/documentation/tools/si5351a-frequency-tool/
@@ -684,7 +680,8 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // the divider is 'a + b/c' or "Feedback Multisynth Divider"
     // c is PLL_DENOM
 
-    // Following the VCO is another divider stage that divides the VCO frequency by a value of ‘d + e/f’ and
+    // Following the VCO is another divider stage
+    // that divides the VCO frequency by a value of ‘d + e/f’ and
     // can be used to take the frequency down into the low MHz range.
     // The chip will provide an output with lower jitter if this value is an integer.
     // better still if it is an even integer.
@@ -702,24 +699,24 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // Then in the first divider a + b/c, we will make c a constant
     // so we are now down to three required values: a, b and d.
 
-    // was 12/19/24
-    // uint32_t ms_div_here = PLL_FREQ_TARGET / (freq >> PLL_CALC_PRECISION) + 1;
-    uint32_t ms_div_here = ( ((uint64_t)PLL_FREQ_TARGET << PLL_CALC_PRECISION) / (uint64_t)freq ) + 1;
+    uint32_t ms_div_here = 1 +
+        (((uint64_t)PLL_FREQ_TARGET << PLL_CALC_PRECISION) / (uint64_t)freq_x128);
+
     ms_div_here &= 0xfffffffe;   // make it even number
 
     // is 900 really the upper limiter or ?? we have 908 for 24Mhz
     // do we need lower pll freq?
-    if (false & (ms_div_here < 4 || ms_div_here > 900) )
+    if (false & (ms_div_here < 4 || ms_div_here > 900))
         V1_printf("ERROR: ms_div %lu is out of range 4 to 900" EOL, ms_div_here);
 
     // FIX! we should recalc this to deduce the final real pll_freq?
-    uint32_t pll_freq_here = ((uint64_t)freq * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
+    uint32_t pll_freq_here = ((uint64_t)freq_x128 * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
     // FIX! should we just apply correction to the crystal frequency? yes.
     // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
     // is just one once
 
     // I suppose there are integer roundoff issues in these operations?
-    uint32_t tcxo_freq = SI5351_TCXO_FREQ; // 26 mhz?
+    uint32_t tcxo_freq = SI5351_TCXO_FREQ;  // 26 mhz?
     uint32_t pll_mult_here = pll_freq_here / tcxo_freq;
     // mult has to be in the range 15 to 90
     if (pll_mult_here < 15 || pll_mult_here > 90)
@@ -731,7 +728,6 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // allowing for fine-tuning of the internal PLL frequency within a specified range;
     // essentially, it provides the fractional part of the multiplication factor
     // with 20 bits of precision.
-
     // also look at https://github.com/etherkit/Si5351Arduino
 
     // new method.
@@ -759,16 +755,19 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // from https://rfzero.net/tutorials/si5351a/
     // When we're done, we can calc what the fout should be ?
     // uint32_t pll_freq_here = ((uint64_t)freq * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
-   // have time to print the 4 symbol freqs that will be used
+    // have time to print the 4 symbol freqs that will be used
 
-    // AH this has more precision in it..can't just shift down to print it!
+    // Ah. this has more precision in it..can't just shift down to print it!
     // Doug has WSPR_TONE_SPACING_HUNDREDTHS_HZ = 146 (1.4648 Hz)
     // hmm. looking at the sweep of "actual" seems like they are 2 hz steps?
     // need to make that a real number
 
     double calcPrecisionDivisor = pow(2, PLL_CALC_PRECISION);
+    // note we return a double here...only for printing
     double actual_here =
-        ((double)pll_freq_here * calcPrecisionDivisor) / (double)ms_div_here;
+        // old
+        // ((double)pll_freq_here * calcPrecisionDivisor) / (double)ms_div_here;
+        (double)pll_freq_here / (double)ms_div_here;
 
     // output so we can print or use
     *ms_div = ms_div_here;
@@ -781,7 +780,7 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
-void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq, bool only_pll_num) {
+void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     uint32_t pll_freq;
     uint32_t ms_div;
     uint32_t pll_mult;
@@ -796,7 +795,9 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq, bool only_pll_num) {
         // note we only have one s_ms_div_prev copy state also
     }
     // we get pll_denom to know what was used in the calc
-    vfo_calc_div_mult_num(&actual, &pll_freq, &ms_div, &pll_mult, &pll_num, &pll_denom, freq);
+    vfo_calc_div_mult_num(&actual, &pll_freq,
+        &ms_div, &pll_mult, &pll_num, &pll_denom,
+        freq_x128);
 
     // if (only_pll_num) {
     // calcs were done to show that only pll_num needs to change for symbols 0 to 3
@@ -807,7 +808,7 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq, bool only_pll_num) {
     // this has sticky s_regs_prev state that it uses if called multiple times?
     si5351a_setup_PLLB(pll_mult, pll_num, pll_denom);
 
-    if (ms_div != s_ms_div_prev) { // s_ms_div_prev is global
+    if (ms_div != s_ms_div_prev) {  // s_ms_div_prev is global
         // only reset pll if ms_div changed?
         if (only_pll_num) {
             V1_printf("ERROR: only_pll_num but ms_div %lu changed. s_ms_div_prev %lu" EOL,
@@ -829,7 +830,8 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq, bool only_pll_num) {
 void vfo_turn_on_clk_out(uint8_t clk_num) {
     V1_printf("vfo_turn_on_clk_out START clk_num %u" EOL, clk_num);
     if (clk_num != 0)
-        V1_printf("ERROR: vfo_turn_on_clk_out should only have clk_num 0 not %u" EOL, clk_num);
+        V1_printf("ERROR: vfo_turn_on_clk_out should only have clk_num 0 not %u"
+            EOL, clk_num);
 
     // enable clock 0 and 1
     //  0 is enable
@@ -881,9 +883,11 @@ void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
 
     // Triggering a pll reset requires some delay afterwards
     // so we don't want that to happen or be required (to retain 180 degree antiphase)
-    // if we change enough, and don't pll reset, we can lose the 180 degree phase relationship
-    // between CLK0 and CLK1. see comments from Hans. (not well documented when a
-    // pll reset is required). Not for the small Hz shifts during symbol tx
+    // if we change enough, and don't pll reset,
+    // we can lose the 180 degree phase relationship
+    // between CLK0 and CLK1. see comments from Hans.
+    // (not well documented when a pll reset is required).
+    // Not for the small Hz shifts during symbol tx
     //**********************
 
     V1_printf("vfo_set_drive_strength END clk_num %u" EOL, clk_num);
@@ -950,7 +954,8 @@ void vfo_turn_on(uint8_t clk_num) {
     // if (vfo_is_on()) return;
 
     // could there be reset problems ..we need to off then on?
-    // FIX! we could remove the explict extra vfo_set_power_on(true) when callin vfo_turn_on()
+    // FIX! we could remove the explict extra vfo_set_power_on(true)
+    // when calling vfo_turn_on()
     vfo_set_power_on(false);
     sleep_ms(1000);
     vfo_set_power_on(true);
@@ -1089,7 +1094,7 @@ void vfo_turn_on(uint8_t clk_num) {
     // this is aligned to integer. (symbol 0)
     V1_printf("initial freq for vfo_set_freq_x128() is %lu" EOL, freq);
     uint32_t freq_x128 = freq << PLL_CALC_PRECISION;
-    vfo_set_freq_x128(clk_num, freq_x128, false); // not only_pll_num
+    vfo_set_freq_x128(clk_num, freq_x128, false);  // not only_pll_num
 
     // The final state is clk0/clk1 running but outputs not on
     si5351bx_clken = 0xff;
@@ -1161,7 +1166,8 @@ void vfo_turn_off(void) {
 // THIS MUST NOT BE USED FOR SI5351A work..just for printing!
 double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     if (symbol > 3) {
-        V1_printf("ERROR: calcSymbolFreq symbol %u is not 0 to 3 ..using 0" EOL, symbol);
+        V1_printf("ERROR: calcSymbolFreq symbol %u is not 0 to 3 ..using 0"
+            EOL, symbol);
         symbol = 0;
     }
 
@@ -1174,7 +1180,8 @@ double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     double symbolFreq = (double) symbol_freq_x128 / calcPrecisionDivisor;
 
     double symbolOffset = symbolFreq - hf_freq;
-    double expectedSymbolOffset = ((double) symbol * 12000.0) / 8192.0;  // 1.46..Hz per symbol
+    // 1.46..Hz per symbol
+    double expectedSymbolOffset = ((double) symbol * 12000.0) / 8192.0;
     V1_printf("For hf_freq %lu symbol %u symbolFreq is %.4f",
         hf_freq, symbol, symbolFreq);
     V1_printf(" symbolOffset %.4f expectedSymbolOffset %.4f" EOL,
@@ -1292,7 +1299,8 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // and while there are tricks you can play with the divider fractions,
 // some reference frequencies make this easier than others.
 //
-// So 27 MHz is a good frequency, but unless you care about exact WSPR tone step frequencies
+// So 27 MHz is a good frequency, but unless you care about
+// exact WSPR tone step frequencies
 // 25 MHz is probably just as good.
 //
 // BTW, there are two identical PLL/divider sections in this chip
@@ -1358,4 +1366,4 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // So I think if i increase my shifted domain to be in the *128 domain,
 // I should get about as accurate as your *100 integer domain calcs
 // (for symbol freqs)
-//
+

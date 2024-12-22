@@ -1036,11 +1036,11 @@ void GpsINIT(void) {
     // }
 
     // hmm.. the weak pullup will change the slew rate down also?
-    gpio_init(GpsPwr); // defaults to 8mA drive strength
+    gpio_init(GpsPwr);  // defaults to 8mA drive strength
     pinMode(GpsPwr, OUTPUT);
     // this will be undone by the next thing that uses gpio_set_pulls()
     gpio_pull_up(GpsPwr);
-    gpio_put(GpsPwr, HIGH); // deassert
+    gpio_put(GpsPwr, HIGH);  // deassert
     // if you set them to input after this, they will be high impedance!
     gpio_set_slew_rate(GpsPwr, GPIO_SLEW_RATE_SLOW);
     gpio_set_drive_strength(GpsPwr, GPIO_DRIVE_STRENGTH_2MA);
@@ -1056,11 +1056,9 @@ void GpsINIT(void) {
     gpio_init(GPS_ON_PIN);
     pinMode(GPS_ON_PIN, OUTPUT);
     gpio_pull_down(GPS_ON_PIN);
-
- 
     // gpio_put(GPS_ON_PIN, LOW); // deassert
-    //****************
 
+    //****************
     // Updated: Do a full reset since vbat may have kept old settings
     // don't know if that includes baud rate..maybe?
     digitalWrite(GpsPwr, HIGH);
@@ -1069,6 +1067,7 @@ void GpsINIT(void) {
     V1_printf("set GPS_NRESET_PIN %d HIGH" EOL, GPS_NRESET_PIN);
     digitalWrite(GPS_ON_PIN, LOW);
     V1_printf("set GPS_ON_PIN %d LOW" EOL, GPS_ON_PIN);
+
     //****************
 
     V1_printf("GPS_UART1_RX_PIN %d" EOL, GPS_UART1_RX_PIN);
@@ -1134,17 +1133,20 @@ void pwmGpsPwrOn() {
         uint64_t on_usecs = 1;
         uint64_t off_usecs = 200;
         uint64_t duty_cycle;
+
+        // 10 iterations taking approx 200 usec/iteration? 2 secs total?
         while (off_usecs > 0) {
             Watchdog.reset();
             digitalWrite(GpsPwr, LOW);  // assert to mosfet
             sleep_us(on_usecs);  // lower power light sleep
             digitalWrite(GpsPwr, HIGH);  // deassert to mosfet
-            sleep_us(off_usecs); // lower power light sleep
+            sleep_us(off_usecs);  // lower power light sleep
 
-            // shifts to get some accuracy on the division. the delta (1000000/10000) should give a % ? (*100)
-            duty_cycle = (on_usecs * 1000000UL)  / ((on_usecs + off_usecs) * 10000UL) ;
+            // shifts to get some accuracy on the division.
+            // the delta (1000000/10000) should give a % ? (*100)
+            duty_cycle = (on_usecs * 1000000UL)  / ((on_usecs + off_usecs) * 10000UL);
             // print duty_cycle at every %10 boundary
-            // hmm. the usb pll should be off when we're turing on the gps during cold reset? ..no print
+            // USB pll should be off when we're turing on the gps during cold reset? no print
             if (false && ((duty_cycle % 100) == 0)) {
                 V1_printf("pwmGpsPwrOn() duty_cycle (pct) %" PRIu64 EOL, duty_cycle);
             }
@@ -1155,7 +1157,6 @@ void pwmGpsPwrOn() {
         // make sure it ends with GpsPwr on!
         digitalWrite(GpsPwr, LOW);
     }
-
 }
 
 //************************************************
@@ -1182,9 +1183,7 @@ void GpsFullColdReset(void) {
     // to other pins temporarily?
     // https://github.com/earlephilhower/arduino-pico/discussions/199
 
-
     // assert reset during power off
-
     // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
     // just go into light sleep to reduce rp2040 power demand for 1 minute
     // i.e. guarantee that cold reset, takes 1 minute?
@@ -1231,10 +1230,14 @@ void GpsFullColdReset(void) {
     // FIX! hmm. does driving the uart rx/tx to gps while gps is powering up
     // change it's behavior. What if we left them floating until after powerup?
     // seems like the gps backs up on the serial data?
-    
+
     // we still have usb pll on, and default clock frequency at this point?
     if (PWM_COLD_GPS_POWER_ON_MODE) {
+        // this is probably at least 2 secs. let's measure
+        uint64_t start_millis = millis();
         pwmGpsPwrOn();
+        uint64_t duration_millis = millis() - start_millis;
+        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 "millisecs" EOL, duration_millis);
         // soft power-on for GpsPwr (assert low, controls mosfet)
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
@@ -1331,7 +1334,7 @@ void GpsFullColdReset(void) {
 
     // FIX! we never restore from this core voltage. assuming we stay at 18 Mhz
     if (false && PLL_SYS_MHZ == 18) {
-        vreg_set_voltage(VREG_VOLTAGE_0_95 );  // 0_85 crashes for him. 0.90 worked for him
+        vreg_set_voltage(VREG_VOLTAGE_0_95);  // 0_85 crashes for him. 0.90 worked for him
     }
 
     // finally turn on the gps here! (if we didn't already above (experimental mode)
@@ -1478,11 +1481,11 @@ void GpsFullColdReset(void) {
     // Example $PCAS00*01<CR><LF>
 
     if (USE_SIM65M) {
-        V1_print(F("SIM65M: Write GPS current config state (with no broadcast and GNSS service disabled"));
+        V1_print(F("SIM65M: Write GPS current config (no broadcast, GNSS service disabled"));
         V1_print(F("SIM65M: still default constellations? (4) GPS/BDS/GLONASS/GALILEO"));
         V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
     } else {
-        V1_print(F("ATGM336H: Write GPS current config state (with no broadcast and just GPS constellations"));
+        V1_print(F("ATGM336H: Write GPS current config (no broadcast, just GPS constellations"));
         V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
     }
 
@@ -1560,9 +1563,7 @@ void GpsWarmReset(void) {
     // everything will be fine and we'll start talking to it
     // as long as the tracker only got one other Baud rate other than 9600
     // all will be fine
-
     // or will this come out of warm reset at 9600 baud and we can't talk to it?
-
     // FIX! this is a don't care then? whatever it was? or ??
     // but since we serial2.end() above, we have to restart it on the rp2040
 
@@ -1640,8 +1641,9 @@ void writeGpsConfigNoBroadcastToFlash() {
         // Packet Type:513 PAIR_NVRAM_SAVE_SETTING
         // Save the current configuration from RTC RAM to flash.
         // $PAIR513*3D
-        // In multi-Hz, this command can only be set when the GNSS system is powered off, while 1Hz does not
-        // have this limitation. <what does this mean? we do have GNSS off, so I guess okay?>
+        // In multi-Hz, this command can only be set when the GNSS system is powered off,
+        // while 1Hz does not have this limitation.
+        // <what does that mean? we do have GNSS off, so I guess okay?>
 
         // in case we mess up the gps flash
         // Packet Type:514 PAIR_NVRAM_RESTORE_DEFAULT_SETTING
@@ -1658,10 +1660,8 @@ void writeGpsConfigNoBroadcastToFlash() {
     Serial2.flush();
     sleep_ms(1000);
 
-
     // back on with everything
     if (USE_SIM65M) setGnssOn_SIM65M();
-
     // set desired constellations
     // FIX! this doesn't change SIM65M default constellations (yet)
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
@@ -1791,6 +1791,8 @@ void GpsOFF(bool keepTinyGpsState) {
 //********
 // FIX! why was this static void before?
 void updateGpsDataAndTime(int ms) {
+    // to make sure we get some update, even if fix_age is larger than 1 sec.
+    static bool gpsTimeWasUpdated = false;
     V1_println(F("updateGpsDataAndTime START"));
     Watchdog.reset();
 
@@ -2065,12 +2067,74 @@ void updateGpsDataAndTime(int ms) {
         // we actually don't care about hour..but good to be aligned with that
         // uint8_t for gps data
         // the Time things are int
-        if (hour() != gps.time.hour() ||
-            minute() != gps.time.minute() ||
-            second() != gps.time.second()) {
-            setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
-            V1_printf("setTime(%02u:%02u:%02u)" EOL,
-                gps.time.hour(), gps.time.minute(), gps.time.second());
+        // see example https://arduiniana.org/libraries/TinyGPS/
+
+        if (false) {
+            // old way
+            if (hour() != gps.time.hour() ||
+                minute() != gps.time.minute() ||
+                second() != gps.time.second()) {
+                setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
+                V1_printf("setTime(%02u:%02u:%02u)" EOL,
+                    gps.time.hour(), gps.time.minute(), gps.time.second());
+            }
+        } else {
+            // new way. more accurate syncing?
+            uint16_t gps_year;
+            // not used
+            // uint8_t gps_month, gps_day, 
+            uint8_t gps_hour, gps_minute, gps_second, gps_hundredths;
+            uint32_t fix_age;
+            //  Use gps.time.age()?
+            // also duplicate this check to say it's a valid date in TinyGPS
+            fix_age = gps.time.age();
+            gps_year = gps.date.year();
+            // gps_month = gps.date.month();
+            // gps_day = gps.date.day();
+            gps_hour = gps.time.hour();
+            gps_minute = gps.time.minute();
+            gps_second = gps.time.second();
+            bool gps_date_valid = gps_year >= 2024 && gps_year <= 2034;
+
+            // function doesn't exist anymore?
+            // gps.crack_datetime(&gps_year, &gps_month, &gps_day, &gps_hour, 
+            //     &gps_minute, &gps_second, &gps_hundredths, &fix_age);
+
+            // NOTE: looks like grep of fix_age in putty.log can be frequently 
+            // just 125 to 143 millisecs
+            // so how about we only update when fix_age is < 300 millisecs??
+            if (!gpsTimeWasUpdated || (
+                 (gps_date_valid && fix_age <= 300) && (
+                    hour() != gps_hour ||
+                    minute() != gps_minute ||
+                    second() != gps_second) )) {
+                // use hundredths from the gps, to busy_wait_usecs until we're more likely 
+                // aligned to the second exactly. 
+                if (gps_hundredths < 99) {
+                    V1_printf("ERROR: TinyGPS gps_hundredths %u shouldn't be > 99. using 100" 
+                        EOL, gps_hundredths);
+                    gps_hundredths = 0;
+                }
+                // we've actually got some total code delay beyond the gps hundredths but assume 0.
+                // that will be our fixed error. (positive relative to gps). should be < 1.0 sec
+                // since we're polling gps NMEA every sec? Hmm, we should only use it if fix_age is small
+                // fix_age is millisecs. So to keep error below 1 sec, lets only update if fix_millisecs < 1000
+                // or if we never updated.
+                uint32_t usecsToAlign = 1000000 - (gps_hundredths * 10000);
+                busy_wait_us(usecsToAlign);
+                // now we're one more second past the gps time we got from TinyGPS. 
+                // adjust the second before we use it.
+                gps_second += 1;
+                // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
+                // year can be given as full four digit year or two digts (2010 or 10 for 2010);  
+                // it is converted to years since 1970
+                // we don't compare day/month/year on time anywhere, except when looking 
+                // for bad time from TinyGPS state (tracker.ino)
+                setTime(gps_hour, gps_minute, gps_second, 0, 0, 0);
+                gpsTimeWasUpdated = true;
+                V1_printf("TinyGPS state caused setTime(%02u, %02u, %02u, 0, 0, 0)"     
+                    EOL, gps_hour, gps_minute, gps_second);
+            }
         }
     }
 
@@ -2116,7 +2180,7 @@ void gpsDebug() {
         printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
 
         printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
-        printDateTime(gps.date, gps.time);
+        printDateTime(gps.date, gps.time); // gps.time.age() exists?
         printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);
