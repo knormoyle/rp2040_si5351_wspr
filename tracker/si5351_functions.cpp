@@ -632,7 +632,7 @@ void si5351a_reset_PLLB(void) {
 
 //****************************************************
 // good for doing calc only, so see what changes with freq changes
-void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
+void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
     uint32_t *r_divisor, uint32_t freq_x128) {
 
@@ -709,9 +709,6 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // NEW: we hardwire in a divide-by-4 in the R0 and R1 output dividers
     // so this ms_div is 1/4th what it would be for a divide-by-1 R0 and R1
     // the << 2 in the divisor
-    // old
-    // uint32_t ms_div_here = 1 +
-    //    (((uint64_t)PLL_FREQ_TARGET << PLL_CALC_PRECISION) / (uint64_t)freq_x128;
     uint64_t ms_div_here =
         ( (PLL_FREQ_TARGET << PLL_CALC_PRECISION) / ((uint64_t)freq_x128 << R_DIVISOR_SHIFT) ) + 1;
     ms_div_here &= 0xfffffffe;   // make it even number
@@ -733,8 +730,7 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // I suppose there are integer roundoff issues in these operations?
     // uint32_t tcxo_freq = SI5351_TCXO_FREQ;  // 26 mhz?
     uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
-    // uint32_t pll_mult_here = pll_freq_here / tcxo_freq;
-    // NEW:
+    // remember: floor division (integer)
     uint64_t pll_mult_here = pll_freq_here / tcxo_freq;
     // mult has to be in the range 15 to 90
     if (pll_mult_here < 15 || pll_mult_here > 90) {
@@ -787,33 +783,31 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // Doug has WSPR_TONE_SPACING_HUNDREDTHS_HZ = 146 (1.4648 Hz)
     // hmm. looking at the sweep of "actual" seems like they are 2 hz steps?
     // need to make that a real number
+    double actual_pll_freq_here = (double)tcxo_freq * ((double)pll_mult_here + ((double)pll_num_here / (double)PLL_DENOM));
 
     // note we return a double here...only for printing
-    double actual_here =
-        // old:
-        // (double)pll_freq_here / (double)ms_div_here;
-        // with the /4 R0 and R1 divider
-        (double)pll_freq_here / (double)(ms_div_here << R_DIVISOR_SHIFT);
+    double actual_here = actual_pll_freq_here / (double)(ms_div_here << R_DIVISOR_SHIFT);
 
     // output so we can print or use
     *ms_div    = (uint32_t)ms_div_here;
     *pll_mult  = (uint32_t)pll_mult_here;
     *pll_num   = (uint32_t)pll_num_here;
-    *pll_freq  = (uint32_t)pll_freq_here;
     *pll_denom = (uint32_t)PLL_DENOM;
     *r_divisor = (uint32_t)pow(2, R_DIVISOR_SHIFT);
     *actual = actual_here;
+    *actual_pll_freq = actual_pll_freq_here;
 }
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
-    uint32_t pll_freq;
     uint32_t ms_div;
     uint32_t pll_mult;
     uint32_t pll_num;
     uint32_t pll_denom;
     uint32_t r_divisor;
+
+    double actual_pll_freq;
     double actual;
 
     if (clk_num != 0) {
@@ -824,7 +818,7 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     }
     // we get pll_denom to know what was used in the calc
     // R_DIVISOR_SHIFT is hardwired constant  (/4 => shift 2)
-    vfo_calc_div_mult_num(&actual, &pll_freq,
+    vfo_calc_div_mult_num(&actual, &actual_pll_freq,
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor,
         freq_x128);
 

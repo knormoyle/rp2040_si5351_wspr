@@ -2117,7 +2117,7 @@ void checkPLLCalcsForDebug() {
     // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
     // for possible tx in a band. all assuming u4b channel 0 freq bin.
     // stuff that's returned by vfo_calc_div_mult_num()
-    uint32_t pll_freq;
+    double actual_pll_freq;
     uint32_t ms_div;
     uint32_t pll_mult;
     uint32_t pll_num;
@@ -2171,22 +2171,22 @@ void checkPLLCalcsForDebug() {
     // of the *128 'shifted domain' integer representation
     freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 0);
     // actual returned is now a double
-    vfo_calc_div_mult_num(&actual, &pll_freq, 
+    vfo_calc_div_mult_num(&actual, &actual_pll_freq, 
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
     V1_printf("channel 0 symbol 0 pll_num %lu actual %.4f" EOL, pll_num, actual);
 
     freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 1);
-    vfo_calc_div_mult_num(&actual, &pll_freq, 
+    vfo_calc_div_mult_num(&actual, &actual_pll_freq, 
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
     V1_printf("channel 0 symbol 1 pll_num %lu actual %.4f" EOL, pll_num, actual);
 
     freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 2);
-    vfo_calc_div_mult_num(&actual, &pll_freq, 
+    vfo_calc_div_mult_num(&actual, &actual_pll_freq, 
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
     V1_printf("channel 0 symbol 2 pll_num %lu actual %.4f" EOL, pll_num, actual);
 
     freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 3);
-    vfo_calc_div_mult_num(&actual, &pll_freq, 
+    vfo_calc_div_mult_num(&actual, &actual_pll_freq, 
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
     V1_printf("channel 0 symbol 3 pll_num %lu actual %.4f" EOL, pll_num, actual);
 
@@ -2213,16 +2213,16 @@ void checkPLLCalcsForDebug() {
             
         // note this will include any correction to SI5351_TCXO_FREQ (already done)
         // everything is 32 bit in and out of this, but 64-bit calcs inside it.
-        vfo_calc_div_mult_num(&actual, &pll_freq, 
+        vfo_calc_div_mult_num(&actual, &actual_pll_freq, 
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor,
             freq_x128);
 
         // pow() returns double
         double freq_float = (double)freq_x128 / pow(2, PLL_CALC_PRECISION);
         V1_printf(
-            "pll_freq %lu "
+            "actual_pll_freq %.4f "
             "ms_div %lu pll_mult %lu pll_num %lu pll_denom %lu r_divisor %lu freq %.3f actual %.2f" EOL,
-            pll_freq, ms_div, pll_mult, pll_num, pll_denom, r_divisor, freq_float, actual);
+            actual_pll_freq, ms_div, pll_mult, pll_num, pll_denom, r_divisor, freq_float, actual);
 
         // no good if two pll_nums are the same (sequentially)
         // want unique pll_num changes for each 1 Hz change..
