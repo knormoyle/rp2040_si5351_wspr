@@ -65,7 +65,7 @@ uint32_t calcSymbolFreq_x128(uint32_t hf_freq, uint8_t symbol);
 void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num);
 
 // used to print (not change) for walking a range in setup, just to see what changes
-void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t freq);
+void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t *r_divisor, uint32_t freq_x128);
 
 void vfo_set_freq_x128(uint8_t clk_number, uint32_t freq, bool only_pll_num);
 void vfo_turn_on_clk_out(uint8_t clk_number);

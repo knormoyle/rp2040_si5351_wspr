@@ -2094,6 +2094,9 @@ void updateGpsDataAndTime(int ms) {
             gps_hour = gps.time.hour();
             gps_minute = gps.time.minute();
             gps_second = gps.time.second();
+            // FIX! hmm. we don't get hundredths any more?
+            // so we could be off by +- 0.5 sec + code delay? (300 millisecs + ?)
+            gps_hundredths = 0;
             bool gps_date_valid = gps_year >= 2024 && gps_year <= 2034;
 
             // function doesn't exist anymore?
@@ -2110,7 +2113,7 @@ void updateGpsDataAndTime(int ms) {
                     second() != gps_second) )) {
                 // use hundredths from the gps, to busy_wait_usecs until we're more likely 
                 // aligned to the second exactly. 
-                if (gps_hundredths < 99) {
+                if (gps_hundredths > 99) {
                     V1_printf("ERROR: TinyGPS gps_hundredths %u shouldn't be > 99. using 100" 
                         EOL, gps_hundredths);
                     gps_hundredths = 0;

@@ -543,6 +543,12 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
 // best/obvious to just memcpy for just 8 bytes
 
 //****************************************************
+// divide-by-4. to add >1Hz accuracy for symbol freqs on 10M (easier on 20M)
+// was getting +- 0.5Hz. This will give +- 0.125 hz ?
+// maybe increase it to 3 for divide-by-8
+// always have to verify that only pll_num changes in the range of symbol freqs 
+// (or safer: full 200Hz passband?)
+const uint8_t R_DIVISOR_SHIFT = 2; 
 // div must be even number
 void si5351a_setup_multisynth01(uint32_t div) {
     V1_printf("si5351a_setup_multisynth01 START div %lu" EOL, div);
@@ -554,7 +560,31 @@ void si5351a_setup_multisynth01(uint32_t div) {
     uint32_t p1 = 128 * div - 512;
     s_regs[0] = 0;
     s_regs[1] = 1;
-    s_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
+    // R_DIVISOR_SHIFT is hardwired constant  (/4 => shift 2)
+
+    uint8_t R_OUTPUT_DIVIDER_ENCODE;
+    switch(R_DIVISOR_SHIFT) {
+        case 0: R_OUTPUT_DIVIDER_ENCODE = 0b000; break; // divide-by-1
+        case 1: R_OUTPUT_DIVIDER_ENCODE = 0b001; break; // divide-by-2
+        case 2: R_OUTPUT_DIVIDER_ENCODE = 0b010; break; // divide-by-4
+        case 3: R_OUTPUT_DIVIDER_ENCODE = 0b011; break; // divide-by-8
+        case 4: R_OUTPUT_DIVIDER_ENCODE = 0b100; break; // divide-by-16
+        case 5: R_OUTPUT_DIVIDER_ENCODE = 0b101; break; // divide-by-32
+        case 6: R_OUTPUT_DIVIDER_ENCODE = 0b110; break; // divide-by-64
+        case 7: R_OUTPUT_DIVIDER_ENCODE = 0b111; break; // divide-by-128
+        default: R_OUTPUT_DIVIDER_ENCODE = 0b000; // divide-by-1
+    }
+    // bits [2:0] are R0 Output Divider
+    // 000b: Divide by 1
+    // 001b: Divide by 2
+    // 010b: Divide by 4
+    // 011b: Divide by 8
+    // 100b: Divide by 16
+    // ..
+    // s_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
+    // 11/22/24 force divide by 4 and propagate to all other calc
+    // R_OUTPUT_DIVIDER_ENCODE is bits 6:4
+    s_regs[2] = (R_OUTPUT_DIVIDER_ENCODE << 4) | ((uint8_t)(p1 >> 16) & 0x03);
     s_regs[3] = (uint8_t)(p1 >> 8);
     s_regs[4] = (uint8_t)p1;
     s_regs[5] = 0;
@@ -580,7 +610,6 @@ void si5351a_setup_multisynth01(uint32_t div) {
     // old #endif
     V1_printf("VFO_DRIVE_STRENGTH CLK0: %d" EOL, (int)s_vfo_drive_strength[0]);
     V1_printf("VFO_DRIVE_STRENGTH CLK1: %d" EOL, (int)s_vfo_drive_strength[1]);
-
     V1_printf("si5351a_setup_multisynth01 END div %lu" EOL, div);
 }
 
@@ -604,8 +633,8 @@ void si5351a_reset_PLLB(void) {
 //****************************************************
 // good for doing calc only, so see what changes with freq changes
 void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
-    uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num,
-    uint32_t *pll_denom, uint32_t freq_x128) {
+    uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, 
+    uint32_t *r_divisor, uint32_t freq_x128) {
 
     // interesting they had relatively low pll freq (620Mhz) for 15M case
     // https://rfzero.net/documentation/tools/si5351a-frequency-tool/
@@ -616,44 +645,21 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     const int PLL_MAX_FREQ  = 900000000;
     const int PLL_MIN_FREQ  = 600000000;
 
-    // TRY: what about PLL_DENOM_MAX = 1000000
-    // and PLL freq 800000000 ? (integer ratios?
-
     // divide by 2 result must be integer
-    uint32_t PLL_FREQ_TARGET;
+    // uint32_t PLL_FREQ_TARGET;
+    uint64_t PLL_FREQ_TARGET;
     if (false) {
-        PLL_FREQ_TARGET  = ((PLL_MAX_FREQ + PLL_MIN_FREQ) / 2);
+        PLL_FREQ_TARGET  = ((PLL_MAX_FREQ + PLL_MIN_FREQ) / R_DIVISOR_SHIFT);
     } else {
-        // HACK 12/10/24. force a higher pll freq? does this affect power?
-        // okay 10M
-        // PLL_FREQ_TARGET  = 800000000;
-        // okay 10M
-        // PLL_FREQ_TARGET  = 700000000;
-        // for 10M resulted in pll_freq like 699638105 and pll_num 909157
-        // for 700000000:
-        // pll_freq 699634747 ms_div 398 pll_mult 26 pll_num 909028 pll_denom 1000000 freq 28126020
-        // got a matching pll_num for 1Hz change. not good on 10M
-        // PLL_FREQ_TARGET  = 650000000;
-        // hmm. this didn't work. got mult problems?
-        // PLL_FREQ_TARGET  = 67000000;
-
-        // this had a pll_num match issue
-        // PLL_FREQ_TARGET  = 700000000;
-        // pll_freq 699634598 ms_div 398 pll_mult 26 pll_num 909023 pll_denom 1000000 freq 28126014
-        // pll_freq 699634623 ms_div 398 pll_mult 26 pll_num 909023 pll_denom 1000000 freq 28126015
-
-        // changing PLL_DENOM to max with this again
-        // PLL_FREQ_TARGET  = 700000000;
-        // one match with PLL_DENOM_MAX
-        // pll_freq 699636240 ms_div 398 pll_mult 26 pll_num 953245 pll_denom 1048575 freq 28126080
-        // pll_freq 699636264 ms_div 398 pll_mult 26 pll_num 953245 pll_denom 1048575 freq 28126081
-        // still got matches with PLL_DENOM = 1000000;
-        // PLL_FREQ_TARGET  = 700000000;
-
+        PLL_FREQ_TARGET  = 700000000;
         // this works with PLL_DENOM = 1000000 ..no matches on pll_Num
-        PLL_FREQ_TARGET  = 800000000;
-    }
+        // good symbol freq accuracy on 20M, but not great on 10M ..good enough I guess
+        // PLL_FREQ_TARGET  = 800000000;
 
+        // maybe this will get better accuracy on 10M. Using the top end legal PLL freq.
+        // getting over 900Mhz with this..better to back off?
+        // PLL_FREQ_TARGET  = 900000000;
+    }
 
     // http://www.wa5bdu.com/programming-the-si5351a-synthesizer/
     // http://www.wa5bdu.com/si5351a-quadrature-vfo/
@@ -665,12 +671,12 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // better still if it is an even integer. So we let e/f be zero and select a value for d
     // that’s an even number.
 
-    int PLL_DENOM;
+    uint64_t PLL_DENOM;
     if (true) {
         // hans uses 1048575 as max (which is 0xfffff) (2^20 - 1)
         // I guess no matter what, we will have fractional stuff with the 6 hz symbol adjustments
         // be interesting to see how close to desired freq, we get on the sdr?
-        const int PLL_DENOM_MAX = 0x000fffff;
+        const uint64_t PLL_DENOM_MAX = 0x000fffff;
         PLL_DENOM = PLL_DENOM_MAX;
     } else {
         // this was sort of okay on 12/21/24. could it be better with PLL_DENOM_MAX above though?
@@ -699,28 +705,41 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // Then in the first divider a + b/c, we will make c a constant
     // so we are now down to three required values: a, b and d.
 
-    uint32_t ms_div_here = 1 +
-        (((uint64_t)PLL_FREQ_TARGET << PLL_CALC_PRECISION) / (uint64_t)freq_x128);
-
+    // NEW: we hardwire in a divide-by-4 in the R0 and R1 output dividers
+    // so this ms_div is 1/4th what it would be for a divide-by-1 R0 and R1
+    // the << 2 in the divisor
+    // old
+    // uint32_t ms_div_here = 1 +
+    //    (((uint64_t)PLL_FREQ_TARGET << PLL_CALC_PRECISION) / (uint64_t)freq_x128;
+    uint64_t ms_div_here =
+        ( (PLL_FREQ_TARGET << PLL_CALC_PRECISION) / ((uint64_t)freq_x128 << R_DIVISOR_SHIFT) ) + 1;
     ms_div_here &= 0xfffffffe;   // make it even number
 
     // is 900 really the upper limiter or ?? we have 908 for 24Mhz
     // do we need lower pll freq?
-    if (false & (ms_div_here < 4 || ms_div_here > 900))
-        V1_printf("ERROR: ms_div %lu is out of range 4 to 900" EOL, ms_div_here);
+    if (ms_div_here < 4 || ms_div_here > 900)
+        V1_printf("ERROR: ms_div %" PRIu64 " is out of range 4 to 900" EOL, ms_div_here);
 
     // FIX! we should recalc this to deduce the final real pll_freq?
-    uint32_t pll_freq_here = ((uint64_t)freq_x128 * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
+    // uint32_t pll_freq_here = ((uint64_t)freq_x128 * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
+    // NEW: *4 for the R0 and R1 output divider. don't lose bits beyond 32-bits
+    uint64_t pll_freq_here = ((uint64_t)freq_x128 * ms_div_here) >> PLL_CALC_PRECISION;
+    pll_freq_here = pll_freq_here << 2;
     // FIX! should we just apply correction to the crystal frequency? yes.
     // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
     // is just one once
 
     // I suppose there are integer roundoff issues in these operations?
-    uint32_t tcxo_freq = SI5351_TCXO_FREQ;  // 26 mhz?
-    uint32_t pll_mult_here = pll_freq_here / tcxo_freq;
+    // uint32_t tcxo_freq = SI5351_TCXO_FREQ;  // 26 mhz?
+    uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
+    // uint32_t pll_mult_here = pll_freq_here / tcxo_freq;
+    // NEW: 
+    uint64_t pll_mult_here = pll_freq_here / tcxo_freq;
     // mult has to be in the range 15 to 90
-    if (pll_mult_here < 15 || pll_mult_here > 90)
-        V1_printf("ERROR: pll_mult %lu is out of range 15 to 90" EOL, pll_mult_here);
+    if (pll_mult_here < 15 || pll_mult_here > 90) {
+        V1_printf("ERROR: pll_mult %" PRIu64 " is out of range 15 to 90" EOL, pll_mult_here);
+        V1_printf("pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL, pll_mult_here, tcxo_freq);
+    }
 
     // pll_num max 20 bits (0 to 1048575)?
     // In the Si5351A, the "PLL num" refers to a 20-bit register value
@@ -743,14 +762,16 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // B = x1 % y1
     // C = y1
 
-    uint32_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
+    // uint32_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
+    uint64_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
 
     // can see the benefit of PLL_DENOM / tcxo_freq being integer here?
     // the operation is done with 64 bits? i guess it matters given the size of the numbers
     // I guess there's a truncation rather than rounding when getting pll_num_here
-    uint32_t pll_num_here = (uint64_t)pll_remain * (uint64_t)PLL_DENOM / (uint64_t)tcxo_freq;
+    // uint32_t pll_num_here = (uint64_t)pll_remain * (uint64_t)PLL_DENOM / (uint64_t)tcxo_freq;
+    uint64_t pll_num_here = pll_remain * PLL_DENOM / tcxo_freq;
     if (pll_num_here > 1048575)
-        V1_printf("ERROR: pll_num %lu is out of range 0 to 1048575" EOL, pll_num_here);
+        V1_printf("ERROR: pll_num %" PRIu64 " is out of range 0 to 1048575" EOL, pll_num_here);
 
     // from https://rfzero.net/tutorials/si5351a/
     // When we're done, we can calc what the fout should be ?
@@ -762,19 +783,20 @@ void vfo_calc_div_mult_num(double *actual, uint32_t *pll_freq,
     // hmm. looking at the sweep of "actual" seems like they are 2 hz steps?
     // need to make that a real number
 
-    double calcPrecisionDivisor = pow(2, PLL_CALC_PRECISION);
     // note we return a double here...only for printing
     double actual_here =
-        // old
-        // ((double)pll_freq_here * calcPrecisionDivisor) / (double)ms_div_here;
-        (double)pll_freq_here / (double)ms_div_here;
+        // old:
+        // (double)pll_freq_here / (double)ms_div_here;
+        // with the /4 R0 and R1 divider
+        (double)pll_freq_here / (double)(ms_div_here << R_DIVISOR_SHIFT) ;
 
     // output so we can print or use
-    *ms_div = ms_div_here;
-    *pll_mult = pll_mult_here;
-    *pll_num = pll_num_here;
-    *pll_freq = pll_freq_here;
-    *pll_denom = PLL_DENOM;
+    *ms_div    = (uint32_t)ms_div_here;
+    *pll_mult  = (uint32_t)pll_mult_here;
+    *pll_num   = (uint32_t)pll_num_here;
+    *pll_freq  = (uint32_t)pll_freq_here;
+    *pll_denom = (uint32_t)PLL_DENOM;
+    *r_divisor = (uint32_t)pow(2, R_DIVISOR_SHIFT);
     *actual = actual_here;
 }
 
@@ -786,6 +808,7 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     uint32_t pll_mult;
     uint32_t pll_num;
     uint32_t pll_denom;
+    uint32_t r_divisor;
     double actual;
 
     if (clk_num != 0) {
@@ -795,8 +818,9 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
         // note we only have one s_ms_div_prev copy state also
     }
     // we get pll_denom to know what was used in the calc
+    // R_DIVISOR_SHIFT is hardwired constant  (/4 => shift 2)
     vfo_calc_div_mult_num(&actual, &pll_freq,
-        &ms_div, &pll_mult, &pll_num, &pll_denom,
+        &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor,
         freq_x128);
 
     // if (only_pll_num) {
@@ -1366,4 +1390,46 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // So I think if i increase my shifted domain to be in the *128 domain,
 // I should get about as accurate as your *100 integer domain calcs
 // (for symbol freqs)
+
+// other ideas for creating programming values
+// https://groups.io/g/QRPLabs/topic/si5351a_issues_with_frequency/96467329
+
+// https://github.com/roncarr880/QRP_LABS_WSPR
+// he does this
+//   When using even output divider, PLL c parameter...
+//   For 1 hz resolution,  c = CLOCK / divider.
+//   For 1.46 hz resolution, c = CLOCK / ( 1.46 * divider ).
+//     Can then send WSPR by just adding to the b parameter 0,1,2,or3.
+//   Smallest divider for 1 hz resolution, about 26.
+//   Max value of c is 1048575
+//   Use of the R dividers will complicate this.
+
+// poster notes difficulties at 144Mhz
+// You might be able to generate a particular frequency 
+// with the right crystal and fractional divider, 
+// but you can't then step the frequency in uniform sub-Hz steps. 
+// This would make WSPR on 144 a difficult task, 
+// though maybe you can get close enough to the 1.465Hz tone spacing to 
+// get it to work (sometimes?). 
+
+
+// It looks as though to generate signals in the 144mhz range, 
+// the Si5351 will be using a fixed output divider of 6.  
+// A simple Si5351 library that uses fixed point and does nothing fancy 
+// but does allow fractional frequencies should have a 1/6 hz accuracy, 
+// in that the PLL frequency is calculated to the nearest hz using fixed point.  
+// To get a one hz change at 144mhz the PLL will change by 6 hz.  ( divider is 6 ).  
+// To do better would require calculating the PLL frequency to a fractional frequency.  
+
+// hans says:
+// The Si5351A is capable of very high precision, 
+// you can achieve better than a milli-Hz at 144MHz and 
+// I suspect a few orders of magnitude higher precision than that. 
+// The PLL feedback and the Division down from the internal 
+// PLL VCO are both fractional, of the form a + b / c. 
+// Both b and c are 20-bit integers. 
+// Most code and libraries you see just fix c at 0xFFFFF and just vary b. 
+// This is what limits the resolution. 
+
+
 
