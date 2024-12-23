@@ -2191,8 +2191,8 @@ void checkPLLCalcsForDebug() {
     V1_printf("channel 0 symbol 3 pll_num %lu actual %.4f" EOL, pll_num, actual);
 
     V1_print(F(EOL));
-    V1_printf("Now: sweep calc 5351a programming starting at %.4f" EOL, symbol_0_freq - 20);
-    V1_print(F(EOL "200 Hz sweep at 1 hz increment" EOL));
+    V1_printf("Now: sweep calc 5351a programming starting at %.4f" EOL, symbol_0_freq);
+    V1_print(F(EOL "partial sweep at 0.25hz increment" EOL));
 
     uint32_t pll_num_last = 0;
     // Should be No fractional part in the double? (since it's the base symbol 0 freq?)
