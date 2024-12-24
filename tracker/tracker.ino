@@ -3,6 +3,13 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
+// Uses 4 space indent, OTBS (One True Brace) indentation style
+// although single statement blocks can exclude braces.
+// https://en.wikipedia.org/wiki/Indentation_style
+// vim users can use this in .vimrc to good effect:
+// set tabstop=4 softtabstop=0 expandtab shiftwidth=4 smarttab
+
+
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
@@ -295,7 +302,7 @@ extern const int SI5351A_CLK_IDRV_2MA = (0 << 0);
 // was 4, but not getting enough precision. see si5351_functions.cpp
 // 7 will give 1/128ths precision after the decimal (for symbol frequency),
 // as opposed to 1/16ths
-extern const int PLL_CALC_PRECISION = 7;
+extern const int PLL_CALC_SHIFT = 7;
 
 extern const int VFO_VDD_ON_N_PIN = 4;
 // are these really on Wire1

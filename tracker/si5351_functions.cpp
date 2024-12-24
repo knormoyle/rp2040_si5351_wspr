@@ -115,7 +115,7 @@ extern const int SI5351A_CLK_IDRV_6MA;
 extern const int SI5351A_CLK_IDRV_4MA;
 extern const int SI5351A_CLK_IDRV_2MA;
 
-extern const int PLL_CALC_PRECISION;
+extern const int PLL_CALC_SHIFT;
 
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
@@ -720,7 +720,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         PLL_DENOM = 1000000;
     }
 
-    uint64_t PLL_DENOM_x128 = PLL_DENOM << PLL_CALC_PRECISION;
+    uint64_t PLL_DENOM_x128 = PLL_DENOM << PLL_CALC_SHIFT;
 
     // the divider is 'a + b/c' or "Feedback Multisynth Divider"
     // c is PLL_DENOM
@@ -750,7 +750,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
     // old
     uint64_t ms_div_here = 1 + (
-        (PLL_FREQ_TARGET << PLL_CALC_PRECISION) / 
+        (PLL_FREQ_TARGET << PLL_CALC_SHIFT) / 
         ((uint64_t)freq_x128 << R_DIVISOR_SHIFT) 
         );
     ms_div_here &= 0xfffffffe;   // make it even number
@@ -768,14 +768,14 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // NEW: *4 for the R0 and R1 output divider. don't lose bits beyond 32-bits
     uint64_t pll_freq_x128 = ((uint64_t)freq_x128 * ms_div_here) << R_DIVISOR_SHIFT;
     // this is just integer. not useful!
-    uint64_t pll_freq_here = pll_freq_x128 >> PLL_CALC_PRECISION;
+    uint64_t pll_freq_here = pll_freq_x128 >> PLL_CALC_SHIFT;
 
     // FIX! should we just apply correction to the crystal frequency? yes.
     // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
     // is just one once
 
     uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
-    uint64_t tcxo_freq_x128 = tcxo_freq << PLL_CALC_PRECISION;
+    uint64_t tcxo_freq_x128 = tcxo_freq << PLL_CALC_SHIFT;
 
     // remember: floor division (integer)
     // tcxo_freq is integer..
@@ -814,8 +814,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint64_t pnh_x128 = (pll_remain_x128 * PLL_DENOM_x128) / tcxo_freq_x128;
     // here's how we add 0.5 (in the scaled domain) to get rounding effect before shift down
     // the r divisor reduces
-    uint64_t pll_num_x128 = pnh_x128 + (1 << (PLL_CALC_PRECISION - 1));
-    uint64_t pll_num_here = pll_num_x128 >> PLL_CALC_PRECISION;
+    uint64_t pll_num_x128 = pnh_x128 + (1 << (PLL_CALC_SHIFT - 1));
+    uint64_t pll_num_here = pll_num_x128 >> PLL_CALC_SHIFT;
     if (pll_num_here > 1048575)
         V1_printf("ERROR: pll_num %" PRIu64 " is out of range 0 to 1048575" EOL, pll_num_here);
 
@@ -1160,7 +1160,7 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // this is aligned to integer. (symbol 0)
     V1_printf("initial freq for vfo_set_freq_x128() is %lu" EOL, freq);
-    uint32_t freq_x128 = freq << PLL_CALC_PRECISION;
+    uint32_t freq_x128 = freq << PLL_CALC_SHIFT;
     vfo_set_freq_x128(clk_num, freq_x128, false);  // not only_pll_num
 
     // The final state is clk0/clk1 running but outputs not on
@@ -1240,10 +1240,10 @@ double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
 
     // the frequency shift is 12000 / 8192 (approx 1.46hz)
     double symbol_freq_x128 =
-        (hf_freq << PLL_CALC_PRECISION) +
-        ((symbol * (12000L << PLL_CALC_PRECISION) + 4096L) / 8192L);
+        (hf_freq << PLL_CALC_SHIFT) +
+        ((symbol * (12000L << PLL_CALC_SHIFT) + 4096L) / 8192L);
 
-    double calcPrecisionDivisor = pow(2, PLL_CALC_PRECISION);
+    double calcPrecisionDivisor = pow(2, PLL_CALC_SHIFT);
     double symbolFreq = (double) symbol_freq_x128 / calcPrecisionDivisor;
 
     double symbolOffset = symbolFreq - hf_freq;
@@ -1262,8 +1262,8 @@ uint32_t calcSymbolFreq_x128(uint32_t hf_freq, uint8_t symbol) {
     // not expensive to always recalc the symbol freq
     // don't want printing though (too slow)
     uint32_t freq_x128_with_symbol = (
-        hf_freq << PLL_CALC_PRECISION) +
-        ((symbol * (12000L << PLL_CALC_PRECISION) + 4096L) / 8192L);
+        hf_freq << PLL_CALC_SHIFT) +
+        ((symbol * (12000L << PLL_CALC_SHIFT) + 4096L) / 8192L);
     return freq_x128_with_symbol;
 }
 
@@ -1280,7 +1280,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
         // AH this has more precision in it..can't just shift down to print it!
         // Doug has WSPR_TONE_SPACING_HUNDREDTHS_HZ = 146 (1.4648 Hz)
 
-        // don't do the >> PLL_CALC_PRECISION here, as that's integer roundff
+        // don't do the >> PLL_CALC_SHIFT here, as that's integer roundff
         /// do float division by 16!
         double symbol_0_freq = calcSymbolFreq(hf_freq, 0);
         double symbol_1_freq = calcSymbolFreq(hf_freq, 1);
@@ -1590,13 +1590,13 @@ double checkPLLCalcsForDebug() {
     uint32_t freq = (uint32_t) symbol0desired;
     // sweep 200 * 0.25 hz = 50hz (1/4th the passband)
     for (int i = 0; i < 100; i++) {
-        freq_x128 = freq << PLL_CALC_PRECISION;
-        freq_x128 += (i/4) << PLL_CALC_PRECISION;
+        freq_x128 = freq << PLL_CALC_SHIFT;
+        freq_x128 += (i/4) << PLL_CALC_SHIFT;
         switch(i % 4) {
             case 0: break;
-            case 1: freq_x128 += ((1 << PLL_CALC_PRECISION) >> 2); break; // adds 0.25 (shifted)
-            case 2: freq_x128 += ((2 << PLL_CALC_PRECISION) >> 2); break; // adds 0.50 (shifted)
-            case 3: freq_x128 += ((3 << PLL_CALC_PRECISION) >> 2); break; // adds 0.75 (shifted)
+            case 1: freq_x128 += ((1 << PLL_CALC_SHIFT) >> 2); break; // adds 0.25 (shifted)
+            case 2: freq_x128 += ((2 << PLL_CALC_SHIFT) >> 2); break; // adds 0.50 (shifted)
+            case 3: freq_x128 += ((3 << PLL_CALC_SHIFT) >> 2); break; // adds 0.75 (shifted)
         }
 
         // note this will include any correction to SI5351_TCXO_FREQ (already done)
@@ -1607,7 +1607,7 @@ double checkPLLCalcsForDebug() {
 
         // pow() returns double
         // not used (float version of the desired freq which was given in the *128 domain
-        // double freq_float = (double)freq_x128 / pow(2, PLL_CALC_PRECISION);
+        // double freq_float = (double)freq_x128 / pow(2, PLL_CALC_SHIFT);
 
         // hmm. don't bother printing the target freq_float values? enough to show the actual
         // changes we get during the sweep of target values?
