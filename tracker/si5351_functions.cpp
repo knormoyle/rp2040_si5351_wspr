@@ -654,8 +654,33 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // two pll_nums per 0.5 hz on 14M
         // PLL_FREQ_TARGET  = 700000000;
         // this works with PLL_DENOM = 1000000 ..no matches on pll_Num
-        // good symbol freq accuracy on 20M, but not great on 10M ..good enough I guess
-        PLL_FREQ_TARGET  = 800000000;
+
+        // good. pll_num 2 steps, 20m. PLL_DENOM max
+        // the actual_pll_freq was much higher. because of /4 R?
+        // actual_pll_freq 900032632.8589 for symbol 0
+        // PLL_FREQ_TARGET  = 800000000;
+        // channel 0 symbol 1 actual 28126021.3266 shift0to1 1.5497
+        // channel 0 symbol 2 actual 28126022.8763 shift0to2 3.0994
+        // channel 0 symbol 3 actual 28126024.4260 shift0to3 4.6492
+
+        // trying:
+        PLL_FREQ_TARGET  = 900000000;
+
+        // now seeing this with 700
+        // actual_pll_freq 675024468.4453
+        // 4 pll_num the same per 1 hz?
+        // PLL_FREQ_TARGET  = 700000000;
+        // errors are higher
+        // channel 0 symbol 0 pll_num 1009232 actual 28126019.5186
+        // channel 0 symbol 1 pll_num 1009234 actual 28126021.5848
+        // channel 0 symbol 2 pll_num 1009235 actual 28126022.6180
+        // channel 0 symbol 3 pll_num 1009237 actual 28126024.6843
+        // 
+        // Showing shifts in symbol frequencies, as opposed to absolute errorchannel 0 symbol 0 actual 28126019.5186
+        // channel 0 symbol 1 actual 28126021.5848 shift0to1 2.0663
+        // channel 0 symbol 2 actual 28126022.6180 shift0to2 3.0994
+        // channel 0 symbol 3 actual 28126024.6843 shift0to3 5.1657
+
 
         // maybe this will get better accuracy on 10M. Using the top end legal PLL freq.
         // getting over 900Mhz with this..better to back off?
@@ -684,6 +709,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         PLL_DENOM = 1000000;
     }
 
+    uint64_t PLL_DENOM_x128 = PLL_DENOM << PLL_CALC_PRECISION;
+
     // the divider is 'a + b/c' or "Feedback Multisynth Divider"
     // c is PLL_DENOM
 
@@ -709,8 +736,10 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // NEW: we hardwire in a divide-by-4 in the R0 and R1 output dividers
     // so this ms_div is 1/4th what it would be for a divide-by-1 R0 and R1
     // the << 2 in the divisor
-    uint64_t ms_div_here =
-        ( (PLL_FREQ_TARGET << PLL_CALC_PRECISION) / ((uint64_t)freq_x128 << R_DIVISOR_SHIFT) ) + 1;
+    uint64_t ms_div_here = 1 + (
+        (PLL_FREQ_TARGET << PLL_CALC_PRECISION) / 
+        ((uint64_t)freq_x128 << R_DIVISOR_SHIFT) 
+        );
     ms_div_here &= 0xfffffffe;   // make it even number
 
     // is 900 really the upper limiter or ?? we have 908 for 24Mhz
@@ -718,24 +747,26 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     if (ms_div_here < 4 || ms_div_here > 900)
         V1_printf("ERROR: ms_div %" PRIu64 " is out of range 4 to 900" EOL, ms_div_here);
 
-    // FIX! we should recalc this to deduce the final real pll_freq?
-    // uint32_t pll_freq_here = ((uint64_t)freq_x128 * (uint64_t)ms_div_here) >> PLL_CALC_PRECISION;
     // NEW: *4 for the R0 and R1 output divider. don't lose bits beyond 32-bits
-    uint64_t pll_freq_here = ((uint64_t)freq_x128 * ms_div_here) >> PLL_CALC_PRECISION;
-    pll_freq_here = pll_freq_here << 2;
+    uint64_t pll_freq_x128 = ((uint64_t)freq_x128 * ms_div_here) << R_DIVISOR_SHIFT;
+    // this is just integer. not useful!
+    uint64_t pll_freq_here = pll_freq_x128 >> PLL_CALC_PRECISION;
+
     // FIX! should we just apply correction to the crystal frequency? yes.
     // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
     // is just one once
 
-    // I suppose there are integer roundoff issues in these operations?
-    // uint32_t tcxo_freq = SI5351_TCXO_FREQ;  // 26 mhz?
     uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
+    uint64_t tcxo_freq_x128 = tcxo_freq << PLL_CALC_PRECISION;
+
     // remember: floor division (integer)
-    uint64_t pll_mult_here = pll_freq_here / tcxo_freq;
+    // tcxo_freq is integer..
+    uint64_t pll_mult_here = pll_freq_x128 / tcxo_freq_x128; 
+
     // mult has to be in the range 15 to 90
     if (pll_mult_here < 15 || pll_mult_here > 90) {
         V1_printf("ERROR: pll_mult %" PRIu64 " is out of range 15 to 90" EOL, pll_mult_here);
-        V1_printf("pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL, pll_mult_here, tcxo_freq);
+        V1_printf("integer pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL, pll_freq_here, tcxo_freq);
     }
 
     // pll_num max 20 bits (0 to 1048575)?
@@ -746,7 +777,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // with 20 bits of precision.
     // also look at https://github.com/etherkit/Si5351Arduino
 
-    // new method.
+    // a new method. (greatest common divisor?)
     // https://github.com/etherkit/Si5351Arduino/issues/79
 
     // he says to choose INTEGER_FACTOR1 to be 10e*
@@ -759,18 +790,14 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // B = x1 % y1
     // C = y1
 
-    // uint32_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
-    uint64_t pll_remain = pll_freq_here - (pll_mult_here * tcxo_freq);
-
-    // can see the benefit of PLL_DENOM / tcxo_freq being integer here?
-    // the operation is done with 64 bits? i guess it matters given the size of the numbers
-    // I guess there's a truncation rather than rounding when getting pll_num_here
-    // uint32_t pll_num_here = (uint64_t)pll_remain * (uint64_t)PLL_DENOM / (uint64_t)tcxo_freq;
-
-    // shift left 1 and then add 1 (0.5 scaled), to round, then shift right 1
-    // otherwise it's just a floor divide here
-    uint64_t pnh = ((pll_remain * PLL_DENOM) << 2) / tcxo_freq;
-    uint64_t pll_num_here = (pnh + 1)  >> 2;
+    // it's interesting these are done in the non-scaled domain (not *128)
+    // since pll_freq_here is what we want to get to, shouldn't we be scaled here?
+    uint64_t pll_remain_x128 = pll_freq_x128 - (pll_mult_here * tcxo_freq_x128);
+    uint64_t pnh_x128 = (pll_remain_x128 * PLL_DENOM_x128) / tcxo_freq_x128;
+    // here's how we add 0.5 (in the scaled domain) to get rounding effect before shift down
+    // the r divisor reduces
+    uint64_t pll_num_x128 = pnh_x128 + (1 << (PLL_CALC_PRECISION - 1));
+    uint64_t pll_num_here = pll_num_x128 >> PLL_CALC_PRECISION;
     if (pll_num_here > 1048575)
         V1_printf("ERROR: pll_num %" PRIu64 " is out of range 0 to 1048575" EOL, pll_num_here);
 
@@ -783,7 +810,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // Doug has WSPR_TONE_SPACING_HUNDREDTHS_HZ = 146 (1.4648 Hz)
     // hmm. looking at the sweep of "actual" seems like they are 2 hz steps?
     // need to make that a real number
-    double actual_pll_freq_here = (double)tcxo_freq * ((double)pll_mult_here + ((double)pll_num_here / (double)PLL_DENOM));
+    double actual_pll_freq_here = (double)tcxo_freq * 
+        ((double)pll_mult_here + ((double)pll_num_here / (double)PLL_DENOM));
 
     // note we return a double here...only for printing
     double actual_here = actual_pll_freq_here / (double)(ms_div_here << R_DIVISOR_SHIFT);
