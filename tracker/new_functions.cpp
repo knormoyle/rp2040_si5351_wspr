@@ -80,8 +80,8 @@ void r2cf( uint64_t *last_denom, uint32_t *q, double rn) {
 
     uint64_t q_int;
     uint64_t r_int;
-    uint8_t iter = 0;
-    for (int iter = 1; iter < 5; iter++) {
+    uint8_t iter;
+    for (iter = 1; iter < 5; iter++) {
 	    qr(&q_int, &r_int, a_int, b_int, iter);
         V1_printf(" q_int %" PRIu64 " r_int %" PRIu64 " a_int %" PRIu64 " b_int %" PRIu64 " iter %u" EOL,
             q_int, r_int, a_int, b_int, iter);
@@ -120,8 +120,8 @@ void new_vfo_calc(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
     uint32_t *r_divisor, uint32_t freq_x128, uint32_t use_this_denom) {
 
-    const int PLL_MAX_FREQ  = 900000000;
-    const int PLL_MIN_FREQ  = 600000000;
+    // const int PLL_MAX_FREQ  = 900000000;
+    // const int PLL_MIN_FREQ  = 600000000;
 
     uint64_t PLL_FREQ_TARGET;
     PLL_FREQ_TARGET  = 900000000;

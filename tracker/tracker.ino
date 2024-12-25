@@ -404,11 +404,9 @@ volatile char _go_when_rdy[2] = { 0 };
 volatile char _factory_reset_done[2] = { 0 };
 volatile char _use_sim65m[2] = { 0 };
 
-//*****************************
 // decoded stuff from config strings: all can be extern'ed by a function
 // decodes from _Band _U4B_chan
 // 0 should never happen for XMIT_FREQUENCY
-uint32_t XMIT_FREQUENCY = 0;
 char _id13[3] = { 0 };
 char _start_minute[2] = { 0 };
 char _lane[2] = { 0 };
@@ -420,8 +418,16 @@ char _lane[2] = { 0 };
 // so I could do 12Mhz with crystal osc.
 extern const uint32_t DEFAULT_PLL_SYS_MHZ = 18;
 uint32_t PLL_SYS_MHZ = 0;  // should never try to use it while it's 0
+
+//*****************************
 // this gets correction if any in setup()
 uint32_t SI5351_TCXO_FREQ = 26000000;
+// changed for band/u4b channel
+uint32_t XMIT_FREQUENCY;
+// optimized?
+uint32_t PLL_DENOM_OPTIMIZE = 1048575;
+
+//*****************************
 
 bool BALLOON_MODE = true;
 bool CORE1_PROCEED = false;
@@ -475,6 +481,21 @@ bool core1_separate_stack = true;
 // so we can see the setup() read_FLASH() results later
 int read_FLASH_result1 = 0;
 int read_FLASH_result2 = 0;
+
+//***********************************************************
+void set_PLL_DENOM_OPTIMIZE() {
+    // FIX! hack! we should have fixed values per band? do they vary by freq bin?
+    uint32_t PLL_DENOM_MAX = 1048575;
+    V1_print("WARN: leave PLL_DENOM_OPTIMIZE with optimal 554667 from spreadsheet for 10M" EOL);
+    switch (atoi(_Band)) {
+        case 10: PLL_DENOM_OPTIMIZE = 554667; break;
+        // from 10M optimization code? starting with above
+        // case 10: PLL_DENOM = 624017; break;
+        // default to 20M in case of error cases
+        default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+    }
+}
+//***********************************************************
 
 void setup() {
     // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
@@ -912,10 +933,89 @@ void setup1() {
         PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL);
 
     //***************
-    // no need to do the calcs if we're not going to print them!
-    if (VERBY[1]) {
-        checkPLLCalcsForDebug();
+    if (true and VERBY[1]) {
+        set_PLL_DENOM_OPTIMIZE();
+        checkPLLCalcSweep();
     }
+    //***************
+    // no need to do the calcs if we're not going to print them!
+    // the optimized values should be baked into si5351_functions.cpp()
+    // so we don't have to calc. one magic denom per band?
+    // check the freq bin boundaries. (channel 0 and 599?)
+    if (true and VERBY[1]) {
+        double sumShiftError;
+        double sumAbsoluteError;
+        double last_sumShiftError = 1e6;
+        double last_sumAbsoluteError = 1e6;
+
+        // start in the middle of the PLL_DENOM legal range
+        // uint32_t PLL_DENOM_MAX = 1048575;
+        // PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX >> 1; // divide-by-2
+        // hans spreadsheet
+        // PLL_DENOM_OPTIMIZE = 554667;
+        // better for 10M?
+        // PLL_DENOM_OPTIMIZE = 554683;
+        set_PLL_DENOM_OPTIMIZE();
+
+        checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
+        last_sumShiftError = sumShiftError;
+        last_sumAbsoluteError = sumAbsoluteError;
+        uint32_t STEP = PLL_DENOM_OPTIMIZE >> 1; // divide-by-4
+
+        //**********
+        uint8_t iter;
+        int stepDir;
+        for (iter = 1; iter <= 30; iter++) {
+            if (STEP == 0) break;
+            // iter 1. Assume convex curve on the error function, over the whole range?
+            uint32_t last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
+            uint32_t PLL_DENOM_OPTIMIZE_pos = PLL_DENOM_OPTIMIZE + STEP;
+            uint32_t PLL_DENOM_OPTIMIZE_neg = PLL_DENOM_OPTIMIZE - STEP;
+            V1_printf("try PLL_DENOM_OPTIMIZE_pos %lu with +STEP %lu" EOL, PLL_DENOM_OPTIMIZE_pos, STEP);
+            PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
+            checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
+            // both should improve
+            stepDir = 0;
+            // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
+            if (sumShiftError < last_sumShiftError) {
+                stepDir = 1;
+                last_sumShiftError = sumShiftError;
+                last_sumAbsoluteError = sumAbsoluteError;
+            }
+            // try negative
+            V1_printf("try PLL_DENOM_OPTIMIZE_neg %lu with -STEP %lu" EOL, PLL_DENOM_OPTIMIZE_neg, STEP);
+            PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
+            checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
+            // both should improve
+            // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
+            if (sumShiftError < last_sumShiftError) {
+                stepDir = -1;
+                last_sumShiftError = sumShiftError;
+                last_sumAbsoluteError = sumAbsoluteError;
+            }
+            if ((stepDir == 1) || (stepDir == -1)) {
+                if (stepDir == 1) PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
+                else PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
+
+                V1_print(F(EOL));
+                V1_printf("iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumAbsoluteError %.8f" EOL,
+                    iter, stepDir, PLL_DENOM_OPTIMIZE, last_sumAbsoluteError);
+                V1_printf("iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumShiftError %.8f" EOL,
+                    iter, stepDir, PLL_DENOM_OPTIMIZE, last_sumShiftError);
+            } else {
+                // stepDir 0
+                PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
+                V1_printf("iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu" EOL,
+                    iter, stepDir, PLL_DENOM_OPTIMIZE);
+                // reduce the step size (1/2)
+                STEP = STEP >> 1;
+            }
+        }
+        //**********
+    }
+    // restore to know fixed values per band
+    set_PLL_DENOM_OPTIMIZE();
+
     //***************
     V1_println(F("setup1() END"));
     // show we're done with setup1() with long 2 sec on, 2 sec off
@@ -1475,6 +1575,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // vfo_turn_on() doesn't turn on the clk outputs!
     vfo_turn_on(WSPR_TX_CLK_NUM);
     startSymbolFreq(hf_freq, 0, false);  // symbol 0, change more than just pll_num
+    // will print programming if false, since we have time
+
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
     // GPS will stay off for all

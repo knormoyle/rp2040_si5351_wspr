@@ -78,6 +78,7 @@
 #include "si5351_functions.h"
 #include "print_functions.h"
 #include "led_functions.h"
+#include "u4b_functions.h"
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
@@ -89,6 +90,11 @@ extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
 extern const int SI5351A_I2C_ADDR;
 extern const int VFO_I2C0_SCL_HZ;
 
+// we do a concave optimization (stepwise) on this
+// assuming pll_num and pll_denom can optimize independently one at a time?
+
+// starts with the max;
+extern uint32_t PLL_DENOM_OPTIMIZE;
 extern uint32_t XMIT_FREQUENCY;
 // decode of _verbose 0-9
 extern bool VERBY[10];
@@ -96,6 +102,7 @@ extern bool VERBY[10];
 extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
+extern char _lane[2]; // string with 1,2,3,4
 
 
 extern const int Si5351Pwr;
@@ -687,7 +694,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // channel 0 symbol 1 pll_num 1009234 actual 28126021.5848
         // channel 0 symbol 2 pll_num 1009235 actual 28126022.6180
         // channel 0 symbol 3 pll_num 1009237 actual 28126024.6843
-        // 
+        //
         // Showing shifts in symbol frequencies, as opposed to absolute errorchannel 0 symbol 0 actual 28126019.5186
         // channel 0 symbol 1 actual 28126021.5848 shift0to1 2.0663
         // channel 0 symbol 2 actual 28126022.6180 shift0to2 3.0994
@@ -704,23 +711,43 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // Following the VCO is another divider stage that divides the VCO frequency
     // by a value of ‘d + e/f’
     // and can be used to take the frequency down into the low MHz range.
-    // However the chip will provide an output with lower jitter if this value is an integer 
-    // and // better still if it is an even integer. 
+    // However the chip will provide an output with lower jitter if this value is an integer
+    // and // better still if it is an even integer.
     // So we let e/f be zero and select a value for d that’s an even number.
 
+    //*****************************
+    const uint64_t PLL_DENOM_MAX = 0x000fffff;
     uint64_t PLL_DENOM;
     if (true) {
-        // hans uses 1048575 as max (which is 0xfffff) (2^20 - 1)
+        // from Hans spreadsheet for optimal 10M denom (minimal shift error, okay if small
+        // absolute error. This is computed for 26Mhz tcxo.
+        PLL_DENOM = PLL_DENOM_OPTIMIZE;
+    } else if (true) {
+        // from Hans spreadsheet for optimal 10M denom (minimal shift error, okay if small
+        // absolute error. This is computed for 26Mhz tcxo.
+        switch (atoi(_Band)) {
+            case 10: PLL_DENOM = 554667; break;
+            // from 10M optimization code? starting with above
+            // case 10: PLL_DENOM = 624017; break;
+
+            // default to 20M in case of error cases
+            default: PLL_DENOM = PLL_DENOM_MAX;
+        }
+    } else if (true) {
+        // hans old code uses 1048575 as max (which is 0xfffff) (2^20 - 1)
         // I guess no matter what, we will have fractional stuff with the 6 hz symbol adjustments
         // be interesting to see how close to desired freq, we get on the sdr?
-        const uint64_t PLL_DENOM_MAX = 0x000fffff;
         PLL_DENOM = PLL_DENOM_MAX;
     } else {
         // this was sort of okay on 12/21/24. could it be better with PLL_DENOM_MAX above though?
         PLL_DENOM = 1000000;
     }
 
+    // search algo may have gone out of bounds?
+    // should never negative
+    if (PLL_DENOM > 1048575) PLL_DENOM = 1048575;
     uint64_t PLL_DENOM_x128 = PLL_DENOM << PLL_CALC_SHIFT;
+    //*****************************
 
     // the divider is 'a + b/c' or "Feedback Multisynth Divider"
     // c is PLL_DENOM
@@ -750,11 +777,11 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
     // old
     uint64_t ms_div_here = 1 + (
-        (PLL_FREQ_TARGET << PLL_CALC_SHIFT) / 
-        ((uint64_t)freq_x128 << R_DIVISOR_SHIFT) 
+        (PLL_FREQ_TARGET << PLL_CALC_SHIFT) /
+        ((uint64_t)freq_x128 << R_DIVISOR_SHIFT)
         );
     ms_div_here &= 0xfffffffe;   // make it even number
-    // on 10m I had 32 with the 1 + above. 
+    // on 10m I had 32 with the 1 + above.
     // with total abs(actual - desired) for 4 symbols of 0.4463
     // clockbuilder pro had 30 for 25Mhz tcxo, and got to exact symbol 1 freq 28126021.4688
     // with a tuned DENOM ?
@@ -779,7 +806,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
     // remember: floor division (integer)
     // tcxo_freq is integer..
-    uint64_t pll_mult_here = pll_freq_x128 / tcxo_freq_x128; 
+    uint64_t pll_mult_here = pll_freq_x128 / tcxo_freq_x128;
 
     // mult has to be in the range 15 to 90
     if (pll_mult_here < 15 || pll_mult_here > 90) {
@@ -826,7 +853,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // Doug has WSPR_TONE_SPACING_HUNDREDTHS_HZ = 146 (1.4648 Hz)
     // hmm. looking at the sweep of "actual" seems like they are 2 hz steps?
     // need to make that a real number
-    double actual_pll_freq_here = (double)tcxo_freq * 
+    double actual_pll_freq_here = (double)tcxo_freq *
         ((double)pll_mult_here + ((double)pll_num_here / (double)PLL_DENOM));
 
     // note we return a double here...only for printing
@@ -1378,17 +1405,6 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // settable output drive strength, and some very effective jitter attenuators.
 
 
-// looking at the putty.log for u4b channel 0, on 10m
-// seems like we got reasonable pll_num values and actual frequencies?
-// but we should do the same sweep for the actual symbol frequencies?
-// test calc'ing 5351a programming starting at 28126000.0000
-// pll_freq 801591570 ms_div 456 pll_mult 30 pll_num 830443 pll_denom 1000000 freq 28126020 actual 28126020.00
-// pll_freq 801591598 ms_div 456 pll_mult 30 pll_num 830444 pll_denom 1000000 freq 28126021 actual 28126020.98
-// pll_freq 801591627 ms_div 456 pll_mult 30 pll_num 830446 pll_denom 1000000 freq 28126022 actual 28126022.00
-// pll_freq 801591655 ms_div 456 pll_mult 30 pll_num 830447 pll_denom 1000000 freq 28126023 actual 28126022.98
-// pll_freq 801591684 ms_div 456 pll_mult 30 pll_num 830448 pll_denom 1000000 freq 28126024 actual 28126024.00
-// pll_freq 801591712 ms_div 456 pll_mult 30 pll_num 830449 pll_denom 1000000 freq 28126025 actual 28126024.98
-// pll_freq 801591741 ms_div 456 pll_mult 30 pll_num 830450 pll_denom 1000000 freq 28126026 actual 28126026.00
 
 
 //**************************************************
@@ -1475,47 +1491,32 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // This is what limits the resolution.
 
 //**********************************
-double checkPLLCalcsForDebug() {
+void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError) {
     // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
     // for possible tx in a band. all assuming u4b channel 0 freq bin.
     // stuff that's returned by vfo_calc_div_mult_num()
+    double actual;
     double actual_pll_freq;
     uint32_t ms_div;
     uint32_t pll_mult;
     uint32_t pll_num;
     uint32_t pll_denom;
     uint32_t r_divisor;
-    double actual;
 
     // stuff that's input to vfo_calc_div_mult_num()
     uint32_t freq_x128;
 
-    enum XMIT_FREQS {
-        BXF10M = 28124600UL + 1400UL + 20,
-        BXF12M = 24924600UL + 1400UL + 20,
-        BXF15M = 21094600UL + 1400UL + 20,
-        BXF17M = 18104600UL + 1400UL + 20,
-        BXF20M = 14095600UL + 1400UL + 20,
-    };
+    // should already be set for band, channel? (XMIT_FREQUENCY)
+    // uint32_t XMIT_FREQ = init_rf_freq(_Band, _lane);
+    uint32_t XMIT_FREQ = XMIT_FREQUENCY;
+    V0_printf("_Band %s XMIT_FREQ  %lu" EOL, _Band, XMIT_FREQ);
 
-    uint32_t BAND_XMIT_FREQ;
-    switch (atoi(_Band)) {
-        case 20: BAND_XMIT_FREQ = BXF20M; break;
-        case 17: BAND_XMIT_FREQ = BXF17M; break;
-        case 15: BAND_XMIT_FREQ = BXF15M; break;
-        case 12: BAND_XMIT_FREQ = BXF12M; break;
-        case 10: BAND_XMIT_FREQ = BXF10M; break;
-        // default to 20M in case of error cases
-        default: BAND_XMIT_FREQ = BXF20M;
-    }
-
-    V0_printf("_Band %s BAND_XMIT_FREQ  %lu" EOL, _Band, BAND_XMIT_FREQ);
     // compute the actual shifts too, which are the more important thing
     // as opposed to actual freq (since tcxo causes fixed error too (assume no drift thru the tx)
-    double symbol0desired = calcSymbolFreq(BAND_XMIT_FREQ, 0);
-    double symbol1desired = calcSymbolFreq(BAND_XMIT_FREQ, 1);
-    double symbol2desired = calcSymbolFreq(BAND_XMIT_FREQ, 2);
-    double symbol3desired = calcSymbolFreq(BAND_XMIT_FREQ, 3);
+    double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0);
+    double symbol1desired = calcSymbolFreq(XMIT_FREQ, 1);
+    double symbol2desired = calcSymbolFreq(XMIT_FREQ, 2);
+    double symbol3desired = calcSymbolFreq(XMIT_FREQ, 3);
 
     // this will give the freq you should see on wsjt-tx if hf_freq is the XMIT_FREQ for a channel
     // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin
@@ -1525,7 +1526,7 @@ double checkPLLCalcsForDebug() {
     // (offset 1.46412884334 Hz)
     V1_print(F(EOL));
     // + 0 Hz
-    V1_printf("channel 0 desired symbol 0 freq %.4f" EOL, symbol0desired);  
+    V1_printf("channel 0 desired symbol 0 freq %.4f" EOL, symbol0desired);
     // +1*(12000/8196) Hz [1.464 Hz]
     V1_printf("channel 0 desired symbol 1 freq %.4f" EOL, symbol1desired);
     // +2*(12000/8196) Hz [2.928 Hz]
@@ -1537,34 +1538,36 @@ double checkPLLCalcsForDebug() {
     // check what pll_num gets calced in the freq_x128 (shifted) domain
     // and also, the fp respresentation (actual) of the actual frequency after /128
     // of the *128 'shifted domain' integer representation
-    freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 0);
+    freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, 0);
     // actual returned is now a double
+
+    // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
     vfo_calc_div_mult_num(&actual, &actual_pll_freq,
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
     double symbol0actual = actual;
-    V1_printf("channel 0 symbol 0 pll_num %lu actual %.4f" EOL, pll_num, actual);
+    V1_printf("channel 0 symbol 0 pll_num %lu pll_denom %lu actual %.4f" EOL, pll_num, pll_denom, actual);
 
-    freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 1);
+    freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, 1);
     vfo_calc_div_mult_num(&actual, &actual_pll_freq,
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
     double symbol1actual = actual;
-    V1_printf("channel 0 symbol 1 pll_num %lu actual %.4f" EOL, pll_num, actual);
+    V1_printf("channel 0 symbol 1 pll_num %lu pll_denom %lu actual %.4f" EOL, pll_num, pll_denom, actual);
 
-    freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 2);
+    freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, 2);
     vfo_calc_div_mult_num(&actual, &actual_pll_freq,
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
     double symbol2actual = actual;
-    V1_printf("channel 0 symbol 2 pll_num %lu actual %.4f" EOL, pll_num, actual);
+    V1_printf("channel 0 symbol 2 pll_num %lu pll_denom %lu actual %.4f" EOL, pll_num, pll_denom, actual);
 
-    freq_x128 = calcSymbolFreq_x128(BAND_XMIT_FREQ, 3);
+    freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, 3);
     vfo_calc_div_mult_num(&actual, &actual_pll_freq,
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
     double symbol3actual = actual;
-    V1_printf("channel 0 symbol 3 pll_num %lu actual %.4f" EOL, pll_num, actual);
+    V1_printf("channel 0 symbol 3 pll_num %lu pll_denom %lu actual %.4f" EOL, pll_num, pll_denom, actual);
 
     V1_print(F(EOL));
     V1_print(F("Showing shifts in symbol frequencies, as opposed to absolute error" EOL));
-    V1_printf("channel 0 symbol 0 actual %.4f" EOL, 
+    V1_printf("channel 0 symbol 0 actual %.4f" EOL,
         symbol0actual);
     V1_printf("channel 0 symbol 1 actual %.4f shift0to1 %.4f" EOL,
         symbol1actual, symbol1actual - symbol0actual);
@@ -1573,30 +1576,74 @@ double checkPLLCalcsForDebug() {
     V1_printf("channel 0 symbol 3 actual %.4f shift0to3 %.4f" EOL,
         symbol3actual, symbol3actual - symbol0actual);
 
-    double totalError =
-        abs(symbol0actual - symbol0desired) +
-        abs(symbol1actual - symbol1desired) +
-        abs(symbol2actual - symbol2desired) +
-        abs(symbol3actual - symbol3desired); 
+    // just one absolute error
+    double sumAbsoluteError_here =
+        // abs(symbol0actual - symbol0desired) +
+        abs(symbol1actual - symbol1desired);
+        // abs(symbol2actual - symbol2desired) +
+        // abs(symbol3actual - symbol3desired);
+
+    // just 0->1 0->2 0->3 incremental shift errors. compared to expected 12000/8192
+    double expectedShift = 12000.0 / 8192.0;
+    // assume it's a positive shift
+
+    // just one shift
+    double sumShiftError_here =
+        abs((symbol1actual - symbol0actual) - expectedShift);
+        // ((symbol2actual - symbol1actual) - expectedShift) +
+        // ((symbol3actual - symbol2actual) - expectedShift);
+
+    *sumShiftError = sumShiftError_here;
+    *sumAbsoluteError = sumAbsoluteError_here;
+
     V1_print(F(EOL));
-    V1_printf("sum of abs(actual-desired) for all symbols: %.4f" EOL, totalError);
+    V1_printf("sumAbsoluteError (for all symbols): %.4f" EOL, sumAbsoluteError_here);
+    V1_printf("sumShiftError (for all symbols): %.4f" EOL, sumShiftError_here);
     V1_print(F(EOL));
+    V1_print("checkPLLCalcDebug() END" EOL);
+}
+
+//**********************************
+void checkPLLCalcSweep(void) {
+    V1_print("checkPLLCalcSweep() START" EOL);
+
+    // should already be set for band, channel? (XMIT_FREQUENCY)
+    // uint32_t XMIT_FREQ = init_rf_freq(_Band, _lane);
+    uint32_t XMIT_FREQ = XMIT_FREQUENCY;
+    V0_printf("_Band %s XMIT_FREQ  %lu" EOL, _Band, XMIT_FREQ);
+    double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0);
+
     V1_printf("Now: sweep calc 5351a programming starting at %.4f" EOL, symbol0desired);
     V1_print(F(EOL "partial sweep at 0.25hz increment" EOL));
-
     uint32_t pll_num_last = 0;
-    // Should be No fractional part in the double? (since it's the base symbol 0 freq?)
+    // integer start freq.
+    // should be no fractional part in the double? (since it's the base symbol 0 freq?)
     // start at middle of the bin, u4b channel 0, symbol 0
     uint32_t freq = (uint32_t) symbol0desired;
+    uint32_t freq_x128;
+
+    double actual;
+    double actual_pll_freq;
+    uint32_t ms_div;
+    uint32_t pll_mult;
+    uint32_t pll_num;
+    uint32_t pll_denom;
+    uint32_t r_divisor;
     // sweep 200 * 0.25 hz = 50hz (1/4th the passband)
-    for (int i = 0; i < 100; i++) {
-        freq_x128 = freq << PLL_CALC_SHIFT;
-        freq_x128 += (i/4) << PLL_CALC_SHIFT;
-        switch(i % 4) {
-            case 0: break;
-            case 1: freq_x128 += ((1 << PLL_CALC_SHIFT) >> 2); break; // adds 0.25 (shifted)
-            case 2: freq_x128 += ((2 << PLL_CALC_SHIFT) >> 2); break; // adds 0.50 (shifted)
-            case 3: freq_x128 += ((3 << PLL_CALC_SHIFT) >> 2); break; // adds 0.75 (shifted)
+    // sweep 80 * 1 hz = 80hz
+    for (int i = 0; i < 80; i++) {
+        if (false) {
+            // use this for 0.25 steps
+            freq_x128 = (freq + i/4) << PLL_CALC_SHIFT;
+            switch(i % 4) {
+                case 0: break;
+                case 1: freq_x128 += ((1 << PLL_CALC_SHIFT) >> 2); break; // adds 0.25 (shifted)
+                case 2: freq_x128 += ((2 << PLL_CALC_SHIFT) >> 2); break; // adds 0.50 (shifted)
+                case 3: freq_x128 += ((3 << PLL_CALC_SHIFT) >> 2); break; // adds 0.75 (shifted)
+            }
+        } else {
+            // use for 1.0 steps
+            freq_x128 = (freq + i) << PLL_CALC_SHIFT;
         }
 
         // note this will include any correction to SI5351_TCXO_FREQ (already done)
@@ -1624,7 +1671,7 @@ double checkPLLCalcsForDebug() {
         pll_num_last = pll_num;
     }
     V1_print(F(EOL));
-    return(totalError);
+    V1_print("checkPLLCalcSweep() END" EOL);
 }
 
 

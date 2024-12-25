@@ -76,8 +76,7 @@ void vfo_turn_off_clk_out(uint8_t clk_number);
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength);
 uint32_t doCorrection(uint32_t hf_freq);
 
-double checkPLLCalcsForDebug();
-
-
+void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError);
+void checkPLLCalcSweep(void);
 
 #endif  // SI5351_FUNCTIONS_H
