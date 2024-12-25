@@ -86,7 +86,7 @@ extern char _callsign[7];
 extern char _verbose[2];   // 0 is used to disable all. 1 is all printing for now. 2:9 same
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
-extern char _U4B_chan[4];
+extern char _U4B_chan[4];  // always fill with 3 digits?
 extern char _Band[3];      // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _tx_high[2];   // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _testmode[2];  // currently: sweep telemetry
@@ -96,7 +96,7 @@ extern char _correction[7];  // parts per billion -30000 to 30000. default 0
 // traquito: 500 correction does  ~7 hz lower on 20M (14095.600 base freq)
 // traquito: 500 correction does ~14 hz lower on 10M (28124.600 base freq)
 
-// test only: 1 means you don't wait for starting minute from _U4B_channel
+// test only: 1 means you don't wait for starting minute from _U4B_chan
 // does wait for any 2 minute alignment though
 extern char _go_when_rdy[2];
 extern char _factory_reset_done[2];
@@ -520,7 +520,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'G':
-                V0_print(F("test only: 1 means you don't wait for starting minute from _U4B_channel" EOL));
+                V0_print(F("test only: 1 means you don't wait for starting minute from _U4B_chan" EOL));
                 V0_print(F("does wait for any 2 minute alignment though" EOL));
                 V0_print(F("MAKE SURE YOU ZERO THIS BEFORE BALLOON FLIGHT!! ignores BALLOON_MODE" EOL));
                 get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1):",
@@ -1005,7 +1005,7 @@ int check_data_validity_and_set_defaults(void) {
     // be sure to null terminate
     if (_U4B_chan[0] == 0 || atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
         V0_printf(EOL "_U4B_chan %s is not supported/legal, initting to 599" EOL, _U4B_chan);
-        snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
+        snprintf(_U4B_chan, sizeof(_U4B_chan), "%3s", "599");
         write_FLASH();
         // this will set _lane, _id13, _start_minute
         process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
@@ -1147,7 +1147,7 @@ void doFactoryReset() {
     snprintf(_verbose, sizeof(_verbose), "1");
     snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
     snprintf(_clock_speed, sizeof(_clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
-    snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
+    snprintf(_U4B_chan, sizeof(_U4B_chan), "%3s", "599"); // always 3 chars
     snprintf(_Band, sizeof(_Band), "20");
     snprintf(_tx_high, sizeof(_tx_high), "1");
     snprintf(_testmode, sizeof(_testmode), "0");

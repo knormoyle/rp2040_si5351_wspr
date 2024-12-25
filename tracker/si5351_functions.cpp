@@ -103,6 +103,7 @@ extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _lane[2]; // string with 1,2,3,4
+extern char _U4B_chan[4]; // string with 0-599
 
 
 extern const int Si5351Pwr;
@@ -1491,7 +1492,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // This is what limits the resolution.
 
 //**********************************
-void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError) {
+void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError, bool print) {
     // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
     // for possible tx in a band. all assuming u4b channel 0 freq bin.
     // stuff that's returned by vfo_calc_div_mult_num()
@@ -1509,7 +1510,9 @@ void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError) {
     // should already be set for band, channel? (XMIT_FREQUENCY)
     // uint32_t XMIT_FREQ = init_rf_freq(_Band, _lane);
     uint32_t XMIT_FREQ = XMIT_FREQUENCY;
-    V0_printf("_Band %s XMIT_FREQ  %lu" EOL, _Band, XMIT_FREQ);
+    if (print) {
+        V0_printf("_Band %s XMIT_FREQ  %lu" EOL, _Band, XMIT_FREQ);
+    }
 
     // compute the actual shifts too, which are the more important thing
     // as opposed to actual freq (since tcxo causes fixed error too (assume no drift thru the tx)
@@ -1524,57 +1527,57 @@ void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError) {
 
     // in calcSymbolFreq(), could compare these offsets from the symbol0desired to expected?
     // (offset 1.46412884334 Hz)
-    V1_print(F(EOL));
-    // + 0 Hz
-    V1_printf("channel 0 desired symbol 0 freq %.4f" EOL, symbol0desired);
-    // +1*(12000/8196) Hz [1.464 Hz]
-    V1_printf("channel 0 desired symbol 1 freq %.4f" EOL, symbol1desired);
-    // +2*(12000/8196) Hz [2.928 Hz]
-    V1_printf("channel 0 desired symbol 2 freq %.4f" EOL, symbol2desired);
-    // +3*(12000/8196) Hz [4.392 Hz]
-    V1_printf("channel 0 desired symbol 3 freq %.4f" EOL, symbol3desired);
-    V1_print(F(EOL));
+    if (print) {
+        V1_print(F(EOL));
+        // + 0 Hz
+        V1_printf("channel %s desired symbol 0 freq %.4f" EOL, _U4B_chan, symbol0desired);
+        // +1*(12000/8196) Hz [1.464 Hz]
+        V1_printf("channel %s desired symbol 1 freq %.4f" EOL, _U4B_chan, symbol1desired);
+        // +2*(12000/8196) Hz [2.928 Hz]
+        V1_printf("channel %s desired symbol 2 freq %.4f" EOL, _U4B_chan, symbol2desired);
+        // +3*(12000/8196) Hz [4.392 Hz]
+        V1_printf("channel %s desired symbol 3 freq %.4f" EOL, _U4B_chan, symbol3desired);
+        V1_print(F(EOL));
+    }
 
     // check what pll_num gets calced in the freq_x128 (shifted) domain
     // and also, the fp respresentation (actual) of the actual frequency after /128
     // of the *128 'shifted domain' integer representation
-    freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, 0);
     // actual returned is now a double
 
-    // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
-    vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-        &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
-    double symbol0actual = actual;
-    V1_printf("channel 0 symbol 0 pll_num %lu pll_denom %lu actual %.4f" EOL, pll_num, pll_denom, actual);
+    double symbol0actual;
+    double symbol1actual;
+    double symbol2actual;
+    double symbol3actual;
+    for (uint8_t symbol = 0; symbol <= 3; symbol++) {
+        freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, symbol);
+        // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
+        vfo_calc_div_mult_num(&actual, &actual_pll_freq,
+            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
+        if (print) {
+            V1_printf("channel %s symbol %u pll_num %lu pll_denom %lu actual %.4f" EOL, 
+                _U4B_chan, symbol,  pll_num, pll_denom, actual);
+        }
+        switch(symbol) {
+            case 0: symbol0actual = actual; break;
+            case 1: symbol1actual = actual; break;
+            case 2: symbol2actual = actual; break;
+            case 3: symbol3actual = actual; break;
+        }
+    }
 
-    freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, 1);
-    vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-        &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
-    double symbol1actual = actual;
-    V1_printf("channel 0 symbol 1 pll_num %lu pll_denom %lu actual %.4f" EOL, pll_num, pll_denom, actual);
-
-    freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, 2);
-    vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-        &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
-    double symbol2actual = actual;
-    V1_printf("channel 0 symbol 2 pll_num %lu pll_denom %lu actual %.4f" EOL, pll_num, pll_denom, actual);
-
-    freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, 3);
-    vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-        &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
-    double symbol3actual = actual;
-    V1_printf("channel 0 symbol 3 pll_num %lu pll_denom %lu actual %.4f" EOL, pll_num, pll_denom, actual);
-
-    V1_print(F(EOL));
-    V1_print(F("Showing shifts in symbol frequencies, as opposed to absolute error" EOL));
-    V1_printf("channel 0 symbol 0 actual %.4f" EOL,
-        symbol0actual);
-    V1_printf("channel 0 symbol 1 actual %.4f shift0to1 %.4f" EOL,
-        symbol1actual, symbol1actual - symbol0actual);
-    V1_printf("channel 0 symbol 2 actual %.4f shift0to2 %.4f" EOL,
-        symbol2actual, symbol2actual - symbol0actual);
-    V1_printf("channel 0 symbol 3 actual %.4f shift0to3 %.4f" EOL,
-        symbol3actual, symbol3actual - symbol0actual);
+    if (print) {
+        V1_print(F(EOL));
+        V1_print(F("Showing shifts in symbol frequencies, rather than absolute error" EOL));
+        V1_printf("channel %s symbol 0 actual %.4f" EOL,
+            _U4B_chan, symbol0actual);
+        V1_printf("channel %s symbol 1 actual %.4f shift0to1 %.4f" EOL,
+            _U4B_chan, symbol1actual, symbol1actual - symbol0actual);
+        V1_printf("channel %s symbol 2 actual %.4f shift0to2 %.4f" EOL,
+            _U4B_chan, symbol2actual, symbol2actual - symbol0actual);
+        V1_printf("channel %s symbol 3 actual %.4f shift0to3 %.4f" EOL,
+            _U4B_chan, symbol3actual, symbol3actual - symbol0actual);
+    }
 
     // just one absolute error
     double sumAbsoluteError_here =
@@ -1596,11 +1599,13 @@ void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError) {
     *sumShiftError = sumShiftError_here;
     *sumAbsoluteError = sumAbsoluteError_here;
 
-    V1_print(F(EOL));
-    V1_printf("sumAbsoluteError (for all symbols): %.4f" EOL, sumAbsoluteError_here);
-    V1_printf("sumShiftError (for all symbols): %.4f" EOL, sumShiftError_here);
-    V1_print(F(EOL));
-    V1_print("checkPLLCalcDebug() END" EOL);
+    if (print) {
+        V1_print(F(EOL));
+        V1_printf("sumAbsoluteError (for all symbols): %.4f" EOL, sumAbsoluteError_here);
+        V1_printf("sumShiftError (for all symbols): %.4f" EOL, sumShiftError_here);
+        V1_print(F(EOL));
+        V1_print("checkPLLCalcDebug() END" EOL);
+    }
 }
 
 //**********************************

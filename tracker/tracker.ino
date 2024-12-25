@@ -492,7 +492,9 @@ void set_PLL_DENOM_OPTIMIZE() {
         case 12: PLL_DENOM_OPTIMIZE = 986074; break;
         case 15: PLL_DENOM_OPTIMIZE = 845206; break;
         // can't seem to get anything better
-        case 17: PLL_DENOM_OPTIMIZE = 1048575; break;
+        // case 17: PLL_DENOM_OPTIMIZE = 1048575; break;
+        // this is better but out of range
+        // case 17: PLL_DENOM_OPTIMIZE = 1064960; break;
         // hans spreadsheet said 277333 for 0
         // 194230 num
         case 20: PLL_DENOM_OPTIMIZE = 277333; break;
@@ -954,6 +956,8 @@ void setup1() {
         double sumAbsoluteError;
         double last_sumShiftError = 1e6;
         double last_sumAbsoluteError = 1e6;
+        uint32_t last_PLL_DENOM_OPTIMIZE;
+        uint32_t STEP;
 
         // start in the middle of the PLL_DENOM legal range
         // uint32_t PLL_DENOM_MAX = 1048575;
@@ -963,21 +967,23 @@ void setup1() {
         // better for 10M?
         // PLL_DENOM_OPTIMIZE = 554683;
 
-        // best initial values per band are in there
+        // Instead: use the best initial values per band in this function (history)
         set_PLL_DENOM_OPTIMIZE();
-
-        checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
+        checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError, true);  // print
         last_sumShiftError = sumShiftError;
         last_sumAbsoluteError = sumAbsoluteError;
-        uint32_t STEP = PLL_DENOM_OPTIMIZE >> 1; // divide-by-4
+        last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
+        STEP = PLL_DENOM_OPTIMIZE >> 1; // divide-by-4
 
         //**********
         uint8_t iter;
         int stepDir;
+        // FIX! what's the max # of iterations that the algo could take over the range
+        // have to account for some iters not changing the STEP !!
         for (iter = 1; iter <= 30; iter++) {
             if (STEP == 0) break;
             // iter 1. Assume convex curve on the error function, over the whole range?
-            uint32_t last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
+            last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
             uint32_t PLL_DENOM_OPTIMIZE_pos;
             uint32_t PLL_DENOM_OPTIMIZE_neg;
 
@@ -989,7 +995,7 @@ void setup1() {
             V1_print(F(EOL "***********************"));
             V1_printf("try PLL_DENOM_OPTIMIZE_pos %lu with +STEP %lu" EOL, PLL_DENOM_OPTIMIZE_pos, STEP);
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
-            checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
+            checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError, false);  // don't print
             // both should improve
             stepDir = 0;
             // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
@@ -1002,7 +1008,7 @@ void setup1() {
             V1_print(F(EOL "***********************"));
             V1_printf("try PLL_DENOM_OPTIMIZE_neg %lu with -STEP %lu" EOL, PLL_DENOM_OPTIMIZE_neg, STEP);
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
-            checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
+            checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError, false);  // don't print
             // both should improve
             // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
             if (sumShiftError < last_sumShiftError) {
@@ -1028,8 +1034,12 @@ void setup1() {
                 STEP = STEP >> 1;
             }
         }
-        //**********
-    }
+        V1_print(F(EOL "***********************"));
+        PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
+        V1_printf(EOL "Results for best PLL_DENOM_OPTIMIZE: %lu" EOL, PLL_DENOM_OPTIMIZE);
+        checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError, true);  // print
+    } // end of the optimization search
+
     // restore to know fixed values per band
     set_PLL_DENOM_OPTIMIZE();
 
