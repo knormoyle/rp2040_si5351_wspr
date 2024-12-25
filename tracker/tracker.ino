@@ -486,9 +486,16 @@ int read_FLASH_result2 = 0;
 void set_PLL_DENOM_OPTIMIZE() {
     // FIX! hack! we should have fixed values per band? do they vary by freq bin?
     uint32_t PLL_DENOM_MAX = 1048575;
-    V1_print("WARN: leave PLL_DENOM_OPTIMIZE with optimal 554667 from spreadsheet for 10M" EOL);
+    V1_print("WARN: leave PLL_DENOM_OPTIMIZE with optimal values so far" EOL);
     switch (atoi(_Band)) {
         case 10: PLL_DENOM_OPTIMIZE = 554667; break;
+        case 12: PLL_DENOM_OPTIMIZE = 986074; break;
+        case 15: PLL_DENOM_OPTIMIZE = 845206; break;
+        // can't seem to get anything better
+        case 17: PLL_DENOM_OPTIMIZE = 1048575; break;
+        // hans spreadsheet said 277333 for 0
+        // 194230 num
+        case 20: PLL_DENOM_OPTIMIZE = 277333; break;
         // from 10M optimization code? starting with above
         // case 10: PLL_DENOM = 624017; break;
         // default to 20M in case of error cases
@@ -955,6 +962,8 @@ void setup1() {
         // PLL_DENOM_OPTIMIZE = 554667;
         // better for 10M?
         // PLL_DENOM_OPTIMIZE = 554683;
+
+        // best initial values per band are in there
         set_PLL_DENOM_OPTIMIZE();
 
         checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
@@ -969,8 +978,15 @@ void setup1() {
             if (STEP == 0) break;
             // iter 1. Assume convex curve on the error function, over the whole range?
             uint32_t last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
-            uint32_t PLL_DENOM_OPTIMIZE_pos = PLL_DENOM_OPTIMIZE + STEP;
-            uint32_t PLL_DENOM_OPTIMIZE_neg = PLL_DENOM_OPTIMIZE - STEP;
+            uint32_t PLL_DENOM_OPTIMIZE_pos;
+            uint32_t PLL_DENOM_OPTIMIZE_neg;
+
+            PLL_DENOM_OPTIMIZE_pos = PLL_DENOM_OPTIMIZE + STEP;
+            if (PLL_DENOM_OPTIMIZE_pos > 1048575) PLL_DENOM_OPTIMIZE_pos = 1048575;
+            if (STEP > PLL_DENOM_OPTIMIZE) PLL_DENOM_OPTIMIZE_neg = 0;
+            else PLL_DENOM_OPTIMIZE_neg = PLL_DENOM_OPTIMIZE - STEP;
+                
+            V1_print(F(EOL "***********************"));
             V1_printf("try PLL_DENOM_OPTIMIZE_pos %lu with +STEP %lu" EOL, PLL_DENOM_OPTIMIZE_pos, STEP);
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
             checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
@@ -983,6 +999,7 @@ void setup1() {
                 last_sumAbsoluteError = sumAbsoluteError;
             }
             // try negative
+            V1_print(F(EOL "***********************"));
             V1_printf("try PLL_DENOM_OPTIMIZE_neg %lu with -STEP %lu" EOL, PLL_DENOM_OPTIMIZE_neg, STEP);
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
             checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError);
