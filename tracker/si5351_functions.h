@@ -62,7 +62,7 @@ void si5351a_setup_multisynth0(uint32_t div);
 // Can subtract 20 hz to get the low end of the bin
 // (assume freq calibration errors of that much,
 // then symbol the 200hz passband?
-double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol);
+double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print);
 uint32_t calcSymbolFreq_x128(uint32_t hf_freq, uint8_t symbol);
 void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num);
 
@@ -76,7 +76,7 @@ void vfo_turn_off_clk_out(uint8_t clk_number);
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength);
 uint32_t doCorrection(uint32_t hf_freq);
 
-void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError, bool print);
-void checkPLLCalcSweep(void);
+void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, bool print);
+void si5351a_calc_sweep(void);
 
 #endif  // SI5351_FUNCTIONS_H

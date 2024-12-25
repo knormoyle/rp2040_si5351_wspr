@@ -944,7 +944,7 @@ void setup1() {
     //***************
     if (true and VERBY[1]) {
         set_PLL_DENOM_OPTIMIZE();
-        checkPLLCalcSweep();
+        si5351a_calc_sweep();
     }
     //***************
     // no need to do the calcs if we're not going to print them!
@@ -957,6 +957,7 @@ void setup1() {
         double last_sumShiftError = 1e6;
         double last_sumAbsoluteError = 1e6;
         uint32_t last_PLL_DENOM_OPTIMIZE;
+        uint32_t pll_num;
         uint32_t STEP;
 
         // start in the middle of the PLL_DENOM legal range
@@ -969,7 +970,7 @@ void setup1() {
 
         // Instead: use the best initial values per band in this function (history)
         set_PLL_DENOM_OPTIMIZE();
-        checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError, true);  // print
+        si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  // print
         last_sumShiftError = sumShiftError;
         last_sumAbsoluteError = sumAbsoluteError;
         last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
@@ -992,10 +993,12 @@ void setup1() {
             if (STEP > PLL_DENOM_OPTIMIZE) PLL_DENOM_OPTIMIZE_neg = 0;
             else PLL_DENOM_OPTIMIZE_neg = PLL_DENOM_OPTIMIZE - STEP;
                 
-            V1_print(F(EOL "***********************"));
-            V1_printf("try PLL_DENOM_OPTIMIZE_pos %lu with +STEP %lu" EOL, PLL_DENOM_OPTIMIZE_pos, STEP);
+            // try positive step. one liner print
+            V1_print(F("***********************"));
+            V1_printf(" try PLL_DENOM_OPTIMIZE_pos %lu with pos STEP %lu", PLL_DENOM_OPTIMIZE_pos, STEP);
+            V1_print(F(" ***********************" EOL));
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
-            checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError, false);  // don't print
+            si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, false);  // don't print
             // both should improve
             stepDir = 0;
             // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
@@ -1004,11 +1007,12 @@ void setup1() {
                 last_sumShiftError = sumShiftError;
                 last_sumAbsoluteError = sumAbsoluteError;
             }
-            // try negative
-            V1_print(F(EOL "***********************"));
-            V1_printf("try PLL_DENOM_OPTIMIZE_neg %lu with -STEP %lu" EOL, PLL_DENOM_OPTIMIZE_neg, STEP);
+            // try negative step. one liner print
+            V1_print(F("***********************"));
+            V1_printf(" try PLL_DENOM_OPTIMIZE_neg %lu with neg STEP %lu", PLL_DENOM_OPTIMIZE_neg, STEP);
+            V1_print(F(" ***********************" EOL));
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
-            checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError, false);  // don't print
+            si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, false);  // don't print
             // both should improve
             // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
             if (sumShiftError < last_sumShiftError) {
@@ -1019,14 +1023,14 @@ void setup1() {
             if ((stepDir == 1) || (stepDir == -1)) {
                 if (stepDir == 1) PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
                 else PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
-
                 V1_print(F(EOL));
-                V1_printf("iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumAbsoluteError %.8f" EOL,
+                V1_printf("FOUND BETTER: iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumAbsoluteError %.8f" EOL,
                     iter, stepDir, PLL_DENOM_OPTIMIZE, last_sumAbsoluteError);
-                V1_printf("iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumShiftError %.8f" EOL,
+                V1_printf("FOUND BETTER: iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumShiftError %.8f" EOL,
                     iter, stepDir, PLL_DENOM_OPTIMIZE, last_sumShiftError);
+                // note how we don't change the step size until we confirm we're stuck at the new place
             } else {
-                // stepDir 0
+                // stepDir 0, stuck at this place, change step size
                 PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
                 V1_printf("iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu" EOL,
                     iter, stepDir, PLL_DENOM_OPTIMIZE);
@@ -1034,10 +1038,17 @@ void setup1() {
                 STEP = STEP >> 1;
             }
         }
+
+        // Final report.. we don't have the pll_num returned?
         V1_print(F(EOL "***********************"));
         PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
-        V1_printf(EOL "Results for best PLL_DENOM_OPTIMIZE: %lu" EOL, PLL_DENOM_OPTIMIZE);
-        checkPLLCalcDebug(&sumShiftError, &sumAbsoluteError, true);  // print
+        V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE: %lu", PLL_DENOM_OPTIMIZE);
+        V1_print(F(" ***********************" EOL));
+        si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  // print
+        V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
+        V1_printf(" last_sumAbsoluteError %.8f last_sumShiftError %.8f" EOL, 
+            last_sumAbsoluteError, last_sumShiftError);
+
     } // end of the optimization search
 
     // restore to know fixed values per band

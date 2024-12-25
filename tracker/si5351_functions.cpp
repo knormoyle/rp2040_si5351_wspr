@@ -1259,7 +1259,7 @@ void vfo_turn_off(void) {
 // calculate the actual tx frequency for a symbol,
 // given the base XMIT_FREQ for the u4b channel config'ed
 // THIS MUST NOT BE USED FOR SI5351A work..just for printing!
-double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
+double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print) {
     if (symbol > 3) {
         V1_printf("ERROR: calcSymbolFreq symbol %u is not 0 to 3 ..using 0"
             EOL, symbol);
@@ -1277,10 +1277,12 @@ double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol) {
     double symbolOffset = symbolFreq - hf_freq;
     // 1.46..Hz per symbol
     double expectedSymbolOffset = ((double) symbol * 12000.0) / 8192.0;
-    V1_printf("For hf_freq %lu symbol %u symbolFreq is %.4f",
-        hf_freq, symbol, symbolFreq);
-    V1_printf(" symbolOffset %.4f expectedSymbolOffset %.4f" EOL,
-        symbolOffset, expectedSymbolOffset);
+    if (print) {
+        V1_printf("For hf_freq %lu symbol %u symbolFreq is %.4f",
+            hf_freq, symbol, symbolFreq);
+        V1_printf(" symbolOffset %.4f expectedSymbolOffset %.4f" EOL,
+            symbolOffset, expectedSymbolOffset);
+    }
 
     return symbolFreq;
 }
@@ -1310,10 +1312,10 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 
         // don't do the >> PLL_CALC_SHIFT here, as that's integer roundff
         /// do float division by 16!
-        double symbol_0_freq = calcSymbolFreq(hf_freq, 0);
-        double symbol_1_freq = calcSymbolFreq(hf_freq, 1);
-        double symbol_2_freq = calcSymbolFreq(hf_freq, 2);
-        double symbol_3_freq = calcSymbolFreq(hf_freq, 3);
+        double symbol_0_freq = calcSymbolFreq(hf_freq, 0, true);  // print
+        double symbol_1_freq = calcSymbolFreq(hf_freq, 1, true);  // print
+        double symbol_2_freq = calcSymbolFreq(hf_freq, 2, true);  // print
+        double symbol_3_freq = calcSymbolFreq(hf_freq, 3, true);  // print
         V1_print(F(EOL));
         V1_printf("symbol_0_freq %.4f" EOL, symbol_0_freq);
         V1_printf("symbol_1_freq %.4f" EOL, symbol_1_freq);
@@ -1492,7 +1494,8 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // This is what limits the resolution.
 
 //**********************************
-void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError, bool print) {
+void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, 
+    bool print) {
     // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
     // for possible tx in a band. all assuming u4b channel 0 freq bin.
     // stuff that's returned by vfo_calc_div_mult_num()
@@ -1500,7 +1503,7 @@ void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError, bool pri
     double actual_pll_freq;
     uint32_t ms_div;
     uint32_t pll_mult;
-    uint32_t pll_num;
+    uint32_t pll_num_here;
     uint32_t pll_denom;
     uint32_t r_divisor;
 
@@ -1516,11 +1519,11 @@ void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError, bool pri
 
     // compute the actual shifts too, which are the more important thing
     // as opposed to actual freq (since tcxo causes fixed error too (assume no drift thru the tx)
-    double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0);
-    double symbol1desired = calcSymbolFreq(XMIT_FREQ, 1);
-    double symbol2desired = calcSymbolFreq(XMIT_FREQ, 2);
-    double symbol3desired = calcSymbolFreq(XMIT_FREQ, 3);
-
+    double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0, false);  // no print
+    double symbol1desired = calcSymbolFreq(XMIT_FREQ, 1, false);  // no print
+    double symbol2desired = calcSymbolFreq(XMIT_FREQ, 2, false);  // no print
+    double symbol3desired = calcSymbolFreq(XMIT_FREQ, 3, false);  // no print
+  // no print
     // this will give the freq you should see on wsjt-tx if hf_freq is the XMIT_FREQ for a channel
     // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin
     // (assume freq calibration errors of that much, then symbol the 200hz passband?
@@ -1553,10 +1556,10 @@ void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError, bool pri
         freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128);
+            &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor, freq_x128);
         if (print) {
             V1_printf("channel %s symbol %u pll_num %lu pll_denom %lu actual %.4f" EOL, 
-                _U4B_chan, symbol,  pll_num, pll_denom, actual);
+                _U4B_chan, symbol,  pll_num_here, pll_denom, actual);
         }
         switch(symbol) {
             case 0: symbol0actual = actual; break;
@@ -1598,25 +1601,26 @@ void checkPLLCalcDebug(double *sumShiftError, double *sumAbsoluteError, bool pri
 
     *sumShiftError = sumShiftError_here;
     *sumAbsoluteError = sumAbsoluteError_here;
+    *pll_num = pll_num_here;
 
     if (print) {
         V1_print(F(EOL));
         V1_printf("sumAbsoluteError (for all symbols): %.4f" EOL, sumAbsoluteError_here);
         V1_printf("sumShiftError (for all symbols): %.4f" EOL, sumShiftError_here);
         V1_print(F(EOL));
-        V1_print("checkPLLCalcDebug() END" EOL);
+        V1_print("si5351a_calc_optimize() END" EOL);
     }
 }
 
 //**********************************
-void checkPLLCalcSweep(void) {
-    V1_print("checkPLLCalcSweep() START" EOL);
+void si5351a_calc_sweep(void) {
+    V1_print("si5351a_calc_sweep() START" EOL);
 
     // should already be set for band, channel? (XMIT_FREQUENCY)
     // uint32_t XMIT_FREQ = init_rf_freq(_Band, _lane);
     uint32_t XMIT_FREQ = XMIT_FREQUENCY;
     V0_printf("_Band %s XMIT_FREQ  %lu" EOL, _Band, XMIT_FREQ);
-    double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0);
+    double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0, true); // print
 
     V1_printf("Now: sweep calc 5351a programming starting at %.4f" EOL, symbol0desired);
     V1_print(F(EOL "partial sweep at 0.25hz increment" EOL));
@@ -1676,7 +1680,7 @@ void checkPLLCalcSweep(void) {
         pll_num_last = pll_num;
     }
     V1_print(F(EOL));
-    V1_print("checkPLLCalcSweep() END" EOL);
+    V1_print("si5351a_calc_sweep() END" EOL);
 }
 
 
