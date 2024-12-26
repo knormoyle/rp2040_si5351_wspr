@@ -9,8 +9,7 @@
 
 uint32_t init_rf_freq(char *_Band, char *_lane);
 void process_chan_num(char *_id13, char *_start_minute, char *_lane, char *_Band, char *_U4B_chan);
-void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power, char *t_grid6, char *t_altitude, char *t_temp, char *t_voltage, char *t_speed);
-void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power, uint32_t telen_val1, uint32_t telen_val2, bool for_telen2);
-
+void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power, uint32_t telen_val1, uint32_t telen_val2, bool for_telen2, char *id13);
+void u4b_encode_std( char *hf_callsign, char *hf_grid4, char *hf_power, char *t_grid6, char *t_altitude, char *t_temp, char *t_voltage, char *t_speed, char *id13);
 
 #endif

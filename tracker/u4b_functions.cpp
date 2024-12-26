@@ -82,13 +82,6 @@ extern char t_grid6[7];  // 6 bytes
 // Further range clamping is done here, given restrictions of u4b-like telemetry
 // but the above can be assumed to be always true.
 
-extern char _Band[3];
-extern char _id13[3];
-extern char _U4B_chan[4];
-extern char _lane[2];
-extern char _start_minute[2];
-extern char _verbose[2];
-
 //*******************************
 char EncodeBase36(uint8_t val) {
     char retVal;
@@ -198,7 +191,7 @@ txBand is:
 void process_chan_num(char *id13, char *start_minute, char *lane, char *band, char *u4b_chan) {
     int u4bChannel = atoi(u4b_chan);
     if (u4bChannel < 0 || u4bChannel > 599) {
-        V1_printf("ERROR: bad _U4B_chan %d ..using 599" EOL, u4bChannel);
+        V1_printf("ERROR: bad u4bChannel %d ..using 599" EOL, u4bChannel);
         u4bChannel = 599;
     }
 
@@ -243,7 +236,8 @@ void process_chan_num(char *id13, char *start_minute, char *lane, char *band, ch
 // then all variables (char arrays) used from the snapped telemetry:
 // standard u4b telemetry
 void u4b_encode_std(char *hf_callsign, char *hf_grid4, char *hf_power,
-    char *t_grid6, char *t_altitude, char *t_temp, char *t_voltage, char *t_speed) {
+    char *t_grid6, char *t_altitude, char *t_temp, char *t_voltage, char *t_speed, 
+    char *id13) {
 
     V1_printf(
         "u4b_encode_char START t_grid6 %s t_altitude %s t_temp %s 5_voltage %s t_speed %s" EOL,
@@ -296,9 +290,9 @@ void u4b_encode_std(char *hf_callsign, char *hf_grid4, char *hf_power,
 
     char callsign[7];
     // string id13[0], id2, id13[1], id4, id5, id6
-    callsign[0] =  _id13[0];
+    callsign[0] =  id13[0];
     callsign[1] =  id2;
-    callsign[2] =  _id13[1];
+    callsign[2] =  id13[1];
     callsign[3] =  id4;
     callsign[4] =  id5;
     callsign[5] =  id6;
@@ -379,7 +373,7 @@ void u4b_encode_std(char *hf_callsign, char *hf_grid4, char *hf_power,
 //********************************************************************
 // first 3 parameters are all for return char arrays.
 void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power,
-    uint32_t t_telen_val1, uint32_t t_telen_val2, bool for_telen2) {
+    uint32_t t_telen_val1, uint32_t t_telen_val2, bool for_telen2, char *id13) {
 
     V1_printf("u4b_encode_telen() START t_telen_val1 %lu t_telen_val2 %lu" EOL,
             t_telen_val1, t_telen_val2);
@@ -437,9 +431,9 @@ void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power,
     // the last bit, the old GPS-sat bit, is always 0 now.
 
     char callsign[7];
-    callsign[0] = _id13[0];
+    callsign[0] = id13[0];
     callsign[1] = telen_chars[0];
-    callsign[2] = _id13[1];
+    callsign[2] = id13[1];
     callsign[3] = telen_chars[1];
     callsign[4] = telen_chars[2];
     callsign[5] = telen_chars[3];

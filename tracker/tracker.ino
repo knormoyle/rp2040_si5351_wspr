@@ -1673,7 +1673,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_flush();
 
     u4b_encode_std(hf_callsign, hf_grid4, hf_power,
-        t_grid6, t_altitude, t_temp, t_voltage, t_speed);
+        t_grid6, t_altitude, t_temp, t_voltage, t_speed, _id13);
     V1_print(EOL);
     V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
     V1_printf("hf_callsign %-6s" EOL, hf_callsign);
@@ -1695,15 +1695,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
          (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEN1);
 
-        // void u4b_encode_telen(uint32_t telen_val1, uint32_t telen_val2, for_telen2) {
-        // output: modifies globals: hf_callsign, hf_grid4, hf_power
-        // unint32_t globals? could be just int? don't use full range
-        // input: TELEN1_val1/2 are ints?
         txNum = 2;
         V1_printf("WSPR txNum %d Preparing with u4b_encode_telen().." EOL, txNum);
         V1_flush();
 
-        u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false);
+        u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, true, _id13);
+
         V1_print(EOL);
         V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
         V1_printf("hf_callsign %-6s" EOL, hf_callsign);
@@ -1726,7 +1723,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         txNum = 3;
         V1_printf("WSPR txNum %d Preparing with u4b_encode_telen().." EOL, txNum);
         V1_flush();
-        u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false);
+        u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false, _id13);
         V1_print(EOL);
         V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
         V1_printf("hf_callsign %-6s" EOL, hf_callsign);
