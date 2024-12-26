@@ -491,16 +491,8 @@ void set_PLL_DENOM_OPTIMIZE() {
         case 10: PLL_DENOM_OPTIMIZE = 554667; break;
         case 12: PLL_DENOM_OPTIMIZE = 986074; break;
         case 15: PLL_DENOM_OPTIMIZE = 845206; break;
-        // can't seem to get anything better
-        // case 17: PLL_DENOM_OPTIMIZE = 1048575; break;
-        // this is better but out of range
-        // case 17: PLL_DENOM_OPTIMIZE = 1064960; break;
-        // hans spreadsheet said 277333 for 0
-        // 194230 num
+        case 17: PLL_DENOM_OPTIMIZE = 1048575; break; // can't do better?
         case 20: PLL_DENOM_OPTIMIZE = 277333; break;
-        // from 10M optimization code? starting with above
-        // case 10: PLL_DENOM = 624017; break;
-        // default to 20M in case of error cases
         default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
     }
 }
@@ -968,9 +960,11 @@ void setup1() {
         // better for 10M?
         // PLL_DENOM_OPTIMIZE = 554683;
 
-        // Instead: use the best initial values per band in this function (history)
+        // Instead: use the best initial values per band in this function 
+        // (from spreadsheet or prior runs for a band)
         set_PLL_DENOM_OPTIMIZE();
-        si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  // print
+        // print
+        si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  
         last_sumShiftError = sumShiftError;
         last_sumAbsoluteError = sumAbsoluteError;
         last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
@@ -999,6 +993,9 @@ void setup1() {
             V1_print(F(" ***********************" EOL));
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
             si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, false);  // don't print
+            V1_printf("best pll_num %lu for pll_denom %lu -> sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
+                pll_num, PLL_DENOM_OPTIMIZE, sumAbsoluteError, sumShiftError);
+            
             // both should improve
             stepDir = 0;
             // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
@@ -1013,6 +1010,8 @@ void setup1() {
             V1_print(F(" ***********************" EOL));
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
             si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, false);  // don't print
+            V1_printf("best pll_num %lu for pll_denom %lu -> sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
+                pll_num, PLL_DENOM_OPTIMIZE, sumAbsoluteError, sumShiftError);
             // both should improve
             // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
             if (sumShiftError < last_sumShiftError) {

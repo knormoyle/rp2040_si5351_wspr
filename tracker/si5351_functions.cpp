@@ -717,36 +717,16 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // So we let e/f be zero and select a value for d that’s an even number.
 
     //*****************************
-    const uint64_t PLL_DENOM_MAX = 0x000fffff;
+    const uint64_t PLL_DENOM_MAX = 0x000fffff; // 1048575
     uint64_t PLL_DENOM;
-    if (true) {
-        // from Hans spreadsheet for optimal 10M denom (minimal shift error, okay if small
-        // absolute error. This is computed for 26Mhz tcxo.
-        PLL_DENOM = PLL_DENOM_OPTIMIZE;
-    } else if (true) {
-        // from Hans spreadsheet for optimal 10M denom (minimal shift error, okay if small
-        // absolute error. This is computed for 26Mhz tcxo.
-        switch (atoi(_Band)) {
-            case 10: PLL_DENOM = 554667; break;
-            // from 10M optimization code? starting with above
-            // case 10: PLL_DENOM = 624017; break;
-
-            // default to 20M in case of error cases
-            default: PLL_DENOM = PLL_DENOM_MAX;
-        }
-    } else if (true) {
-        // hans old code uses 1048575 as max (which is 0xfffff) (2^20 - 1)
-        // I guess no matter what, we will have fractional stuff with the 6 hz symbol adjustments
-        // be interesting to see how close to desired freq, we get on the sdr?
-        PLL_DENOM = PLL_DENOM_MAX;
-    } else {
-        // this was sort of okay on 12/21/24. could it be better with PLL_DENOM_MAX above though?
-        PLL_DENOM = 1000000;
-    }
+    // set from either optimize algo, or known best (per band) in tracker.ino
+    // either by set_PLL_DENOM_OPTIMIZE() or by si5351a_calc_optimize() which can be
+    // overwritten by the former
+    PLL_DENOM = PLL_DENOM_OPTIMIZE;
 
     // search algo may have gone out of bounds?
     // should never negative
-    if (PLL_DENOM > 1048575) PLL_DENOM = 1048575;
+    if (PLL_DENOM > PLL_DENOM_MAX) PLL_DENOM = PLL_DENOM_MAX;
     uint64_t PLL_DENOM_x128 = PLL_DENOM << PLL_CALC_SHIFT;
     //*****************************
 
@@ -1519,6 +1499,7 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint
 
     // compute the actual shifts too, which are the more important thing
     // as opposed to actual freq (since tcxo causes fixed error too (assume no drift thru the tx)
+    // this is floats, because it's for printing only (accuracy)
     double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0, false);  // no print
     double symbol1desired = calcSymbolFreq(XMIT_FREQ, 1, false);  // no print
     double symbol2desired = calcSymbolFreq(XMIT_FREQ, 2, false);  // no print
@@ -1547,7 +1528,6 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint
     // and also, the fp respresentation (actual) of the actual frequency after /128
     // of the *128 'shifted domain' integer representation
     // actual returned is now a double
-
     double symbol0actual;
     double symbol1actual;
     double symbol2actual;
@@ -1605,8 +1585,8 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint
 
     if (print) {
         V1_print(F(EOL));
-        V1_printf("sumAbsoluteError (for all symbols): %.4f" EOL, sumAbsoluteError_here);
-        V1_printf("sumShiftError (for all symbols): %.4f" EOL, sumShiftError_here);
+        V1_printf("sumAbsoluteError (just symbol 1): %.4f" EOL, sumAbsoluteError_here);
+        V1_printf("sumShiftError (just symbol 1): %.4f" EOL, sumShiftError_here);
         V1_print(F(EOL));
         V1_print("si5351a_calc_optimize() END" EOL);
     }
@@ -1682,5 +1662,35 @@ void si5351a_calc_sweep(void) {
     V1_print(F(EOL));
     V1_print("si5351a_calc_sweep() END" EOL);
 }
+// does this work? no
+// alternate way to get steps of 1 on 144Mhz
+// with 26Mhz
+// c = 26e6 / 1.4648 in a + b/c equation
+// 17749863. too large
+// or  to require 3 steps:
+// c = (3 * 26e6) / 1.4648 in a + b/c equation
 
+// https://groups.io/g/QRPLabs/topic/si5351a_issues_with_frequency/96467329
+// 
+// What I have done with one of my WSPR projects is divide the XTAL frequency by my output divider and 
+// then divide again by my desired step, in my case 1.4648 and use that number for my value for c  
+// in the a + b/c equation.  
+// What this does is make each increment of b  in the equation result in 
+// the output frequency changing by the desired step, 
+// and then I have manipulated b directly to send the WSPR signals. 
+// 
+// In your case if you divide 25mhz by 6 and then by 6.66666667 
+// you get the somewhat magic value (rounded) of 625000.
 
+// 0.6080016 * 625000 is 380001 exactly.  
+
+// The downside of this method is that setting your base frequency will have error, 
+// but the steps up from that frequency will be accurate.  
+// (must be careful using this approach  as c needs to be below 1048575, but works for 6.6667 steps on 144mhz ).
+// 
+// I took a look at the Adafruit library and it is an interesting way to approach things.  
+// It does use float calculations for the divisions so I think it will have some error.
+// 
+// My WSPR code using this method is here: https://github.com/roncarr880/QRP_LABS_WSPR
+// The Si5351 routines would need changes to work on 144mhz with the fixed divider of 6.  
+// This project also used an R divider for the transmit which would need to be removed.
