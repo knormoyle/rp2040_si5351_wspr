@@ -85,6 +85,10 @@
 #include <SPI.h>
 #include <Wire.h>
 
+// this is the target PLL freq when making muliplier/divider initial calculations
+// set in tracker.ino
+extern uint64_t PLL_FREQ_TARGET;
+
 // from tracker.ino
 extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
 extern const int SI5351A_I2C_ADDR;
@@ -660,52 +664,14 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // this is hans code from 2015:
     // https://qrp-labs.com/images/synth/demo6/si5351a.c
 
-    // hans uses the max frequency?
-    const int PLL_MAX_FREQ  = 900000000;
-    const int PLL_MIN_FREQ  = 600000000;
+    // const int PLL_MAX_FREQ  = 900000000;
+    // const int PLL_MIN_FREQ  = 600000000;
 
-    // divide by 2 result must be integer
-    // uint32_t PLL_FREQ_TARGET;
-    uint64_t PLL_FREQ_TARGET;
-    if (false) {
-        // halfway?
-        PLL_FREQ_TARGET = (PLL_MAX_FREQ + PLL_MIN_FREQ) / 2;
-    } else {
-        // two pll_nums per 0.5 hz on 14M
-        // PLL_FREQ_TARGET  = 700000000;
-        // this works with PLL_DENOM = 1000000 ..no matches on pll_Num
-
-        // good. pll_num 2 steps, 20m. PLL_DENOM max
-        // the actual_pll_freq was much higher. because of /4 R?
-        // actual_pll_freq 900032632.8589 for symbol 0
-        // PLL_FREQ_TARGET  = 800000000;
-        // channel 0 symbol 1 actual 28126021.3266 shift0to1 1.5497
-        // channel 0 symbol 2 actual 28126022.8763 shift0to2 3.0994
-        // channel 0 symbol 3 actual 28126024.4260 shift0to3 4.6492
-
-        // trying:
-        PLL_FREQ_TARGET  = 900000000;
-
-        // now seeing this with 700
-        // actual_pll_freq 675024468.4453
-        // 4 pll_num the same per 1 hz?
-        // PLL_FREQ_TARGET  = 700000000;
-        // errors are higher
-        // channel 0 symbol 0 pll_num 1009232 actual 28126019.5186
-        // channel 0 symbol 1 pll_num 1009234 actual 28126021.5848
-        // channel 0 symbol 2 pll_num 1009235 actual 28126022.6180
-        // channel 0 symbol 3 pll_num 1009237 actual 28126024.6843
-        //
-        // Showing shifts in symbol frequencies, as opposed to absolute errorchannel 0 symbol 0 actual 28126019.5186
-        // channel 0 symbol 1 actual 28126021.5848 shift0to1 2.0663
-        // channel 0 symbol 2 actual 28126022.6180 shift0to2 3.0994
-        // channel 0 symbol 3 actual 28126024.6843 shift0to3 5.1657
-
-
-        // maybe this will get better accuracy on 10M. Using the top end legal PLL freq.
-        // getting over 900Mhz with this..better to back off?
-        // PLL_FREQ_TARGET  = 900000000;
-    }
+    // all my spread sheet stuff was with band mult/div targeting 900Mhz
+    // PLL_FREQ_TARGET  = 900000000;
+    // new: what if we target 750Mhz? 
+    // PLL_FREQ_TARGET  = 700000000;
+    // set in tracker.ino now. Might change per band!
 
     // http://www.wa5bdu.com/programming-the-si5351a-synthesizer/
     // http://www.wa5bdu.com/si5351a-quadrature-vfo/
@@ -1475,6 +1441,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 
 //**********************************
 void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, 
+    V1_print("si5351a_calc_optimize() START" EOL);
     bool print) {
     // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
     // for possible tx in a band. all assuming u4b channel 0 freq bin.
@@ -1670,15 +1637,17 @@ void si5351a_calc_sweep(void) {
 // or  to require 3 steps:
 // c = (3 * 26e6) / 1.4648 in a + b/c equation
 
-// https://groups.io/g/QRPLabs/topic/si5351a_issues_with_frequency/96467329
+// kbn: with the added choice of 1, 2 or 3 numerator steps to get the desired single wspr transition
+// per: https://groups.io/g/QRPLabs/topic/si5351a_issues_with_frequency/96467329
 // 
-// What I have done with one of my WSPR projects is divide the XTAL frequency by my output divider and 
-// then divide again by my desired step, in my case 1.4648 and use that number for my value for c  
+// divide the XTAL frequency by my output divider and then divide again by my desired step, 
+// wpsr: 1.4648 and use that number for my value for c  
 // in the a + b/c equation.  
 // What this does is make each increment of b  in the equation result in 
 // the output frequency changing by the desired step, 
 // and then I have manipulated b directly to send the WSPR signals. 
-// 
+
+//*********************************************************************************
 // In your case if you divide 25mhz by 6 and then by 6.66666667 
 // you get the somewhat magic value (rounded) of 625000.
 
