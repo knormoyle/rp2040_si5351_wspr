@@ -306,9 +306,10 @@ extern const int PLL_CALC_SHIFT = 7;
 // this is the target PLL freq when making muliplier/divider initial calculations
 // could change this per band?
 // the implied mul/div for 5 bands is covered by denom choices from spreadsheet for 700000000
-uint64_t PLL_FREQ_TARGET = 700000000;
-// the implied mul/div for 5 bands is covered by denom choices from spreadsheet for 900000000
 // uint64_t PLL_FREQ_TARGET = 900000000;
+// uint32_t PLL_FREQ_TARGET = 700000000;
+uint32_t PLL_FREQ_TARGET = 600000000;
+
 // anything else will use PLL_DENOM_MAX
 // double check the values if the algo for div/mul in si5351_functios.cpp changes relative
 // to reaction to PLL_FREQ_TARGET
@@ -492,54 +493,6 @@ int read_FLASH_result1 = 0;
 int read_FLASH_result2 = 0;
 
 //***********************************************************
-void set_PLL_DENOM_OPTIMIZE() {
-    V1_println(F("set_PLL_DENOM_OPTIMIZE START"));
-    // FIX! hack! we should have fixed values per band? do they vary by freq bin?
-    uint32_t PLL_DENOM_MAX = 1048575;
-    V1_print("WARN: leave PLL_DENOM_OPTIMIZE with optimal values so far" EOL);
-    // this is the target PLL freq when making muliplier/divider initial calculations
-    // set in tracker.ino
-    // from 900 history
-    // goal seek result
-    // case 17: PLL_DENOM_OPTIMIZE = 1048575; break; // can't do better?
-    // goal seek result
-    // case 20: PLL_DENOM_OPTIMIZE = 277333; break;
-    // wspr_calc_direct_shift.xlsx result
-    switch(PLL_FREQ_TARGET) {
-        case 90000000:
-            switch (atoi(_Band)) {
-                case 10: PLL_DENOM_OPTIMIZE = 554667; break;
-                case 12: PLL_DENOM_OPTIMIZE = 986074; break;
-                case 15: PLL_DENOM_OPTIMIZE = 845206; break;
-                case 17: PLL_DENOM_OPTIMIZE = 709973; break;
-                case 20: PLL_DENOM_OPTIMIZE = 832000; break;
-                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
-            }
-            break;
-        case 700000000:
-            switch (atoi(_Band)) {
-                case 10: PLL_DENOM_OPTIMIZE = 739556; break;
-                case 12: PLL_DENOM_OPTIMIZE = 633905; break;
-                case 15: PLL_DENOM_OPTIMIZE = 1044078; break;
-                case 17: PLL_DENOM_OPTIMIZE = 934175; break;
-                case 20: PLL_DENOM_OPTIMIZE = 709973; break;
-                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
-            }
-            break;
-        default:
-            switch (atoi(_Band)) {
-                case 10: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
-                case 12: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
-                case 15: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
-                case 17: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
-                case 20: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
-                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
-            }
-    }
-    V1_println(F("set_PLL_DENOM_OPTIMIZE END"));
-}
-//***********************************************************
-
 void setup() {
     // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
     // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
@@ -975,9 +928,13 @@ void setup1() {
         PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL);
 
     //***************
+    // varies by band PLL_FREQ_TARGET
     if (true and VERBY[1]) {
-        set_PLL_DENOM_OPTIMIZE();
+        set_PLL_DENOM_OPTIMIZE(_Band);
         si5351a_calc_sweep();
+    }
+    if (true and VERBY[1]) {
+        si5351a_calc_sweep_band();
     }
     //***************
     // no need to do the calcs if we're not going to print them!
@@ -995,7 +952,7 @@ void setup1() {
 
         // Instead: use the best initial values per band in this function 
         // (from spreadsheet or prior runs for a band)
-        set_PLL_DENOM_OPTIMIZE();
+        set_PLL_DENOM_OPTIMIZE(_Band);
         // print
         si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  
         V1_printf("SEED values: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
@@ -1089,7 +1046,7 @@ void setup1() {
     } // end of the optimization search
 
     // restore to know fixed values per band
-    set_PLL_DENOM_OPTIMIZE();
+    set_PLL_DENOM_OPTIMIZE(_Band);
 
     //***************
     V1_println(F("setup1() END"));

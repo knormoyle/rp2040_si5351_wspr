@@ -98,14 +98,7 @@ char EncodeBase36(uint8_t val) {
 }
 
 //*******************************
-// use:
-//  uint32_t XMIT_FREQUENCY = init_rf_freq()
-
-// inputs: extern char[*] globals
-// _U4B_chan
-// _id13
-// _Band
-uint32_t init_rf_freq(char *_Band, char *_lane) {
+uint32_t init_rf_freq(char *band, char *lane) {
     // base frequencies for different bands
     // 136000 474200 1836600 3568600 5364700 7038600 10138700
     // 14095600 18104600 21094600 24924600 28124600
@@ -120,34 +113,34 @@ uint32_t init_rf_freq(char *_Band, char *_lane) {
         BF10M = 28124600UL
     };
 
-    uint32_t BASE_FREQ_USED;
-    switch (atoi(_Band)) {
-        case 20: BASE_FREQ_USED = BF20M; break;
-        case 17: BASE_FREQ_USED = BF17M; break;
-        case 15: BASE_FREQ_USED = BF15M; break;
-        case 12: BASE_FREQ_USED = BF12M; break;
-        case 10: BASE_FREQ_USED = BF10M; break;
+    uint32_t base_freq_used;
+    switch (atoi(band)) {
+        case 20: base_freq_used = BF20M; break;
+        case 17: base_freq_used = BF17M; break;
+        case 15: base_freq_used = BF15M; break;
+        case 12: base_freq_used = BF12M; break;
+        case 10: base_freq_used = BF10M; break;
         // default to 20M in case of error cases
-        default: BASE_FREQ_USED = BF20M;
+        default: base_freq_used = BF20M;
     }
 
-    XMIT_FREQUENCY = BASE_FREQ_USED + 1400UL;
+    uint32_t xmit_frequency = base_freq_used + 1400UL;
     // offset from base for start of passband. same for all bands
     // add offset based on lane ..same for every band
-    switch (_lane[0]) {
-            case '1':XMIT_FREQUENCY += 20UL;  break;
-            case '2':XMIT_FREQUENCY += 60UL;  break;
-            case '3':XMIT_FREQUENCY += 140UL; break;
-            case '4':XMIT_FREQUENCY += 180UL; break;
+    switch (lane[0]) {
+            case '1': xmit_frequency += 20UL;  break;
+            case '2': xmit_frequency += 60UL;  break;
+            case '3': xmit_frequency += 140UL; break;
+            case '4': xmit_frequency += 180UL; break;
             // in case invalid lane was read from EEPROM.
             // This is center passband?? (not a valid lane?)
-            default: XMIT_FREQUENCY += 100UL;
+            default: xmit_frequency += 100UL;
         }
 
         // printf uint32_t with %u
-        V1_printf(EOL "rf_freq_init _Band %s BASE_FREQ_USED %lu XMIT_FREQUENCY %lu " EOL,
-            _Band, BASE_FREQ_USED, XMIT_FREQUENCY);
-        return XMIT_FREQUENCY;
+        V1_printf(EOL "rf_freq_init band %s base_freq_used %lu xmit_frequency %lu " EOL,
+            band, base_freq_used, xmit_frequency);
+        return xmit_frequency;
 }
 
 /*
@@ -202,36 +195,38 @@ txBand is:
 14: 2m
 */
 
-void process_chan_num(char *_id13, char *_start_minute, char *_lane, char *_Band, char *_U4B_chan) {
-    int u4bChannel = atoi(_U4B_chan);
+void process_chan_num(char *id13, char *start_minute, char *lane, char *band, char *u4b_chan) {
+    int u4bChannel = atoi(u4b_chan);
     if (u4bChannel < 0 || u4bChannel > 599) {
         V1_printf("ERROR: bad _U4B_chan %d ..using 599" EOL, u4bChannel);
         u4bChannel = 599;
     }
 
-    _id13[0]='1';
+    id13[0]='1';
     // Channels 0 - 199: '0'
     // Channels 200-399: '1'
     // Channels 400-599: 'Q'
-    if  (u4bChannel < 200) _id13[0]='0';
-    if  (u4bChannel > 399) _id13[0]='Q';
+    if  (u4bChannel < 200) id13[0]='0';
+    if  (u4bChannel > 399) id13[0]='Q';
 
     // (channel % 200) / 20
-    int id3 = u4bChannel % 200 / 20;
-    _id13[1] = id3 + '0';
+    int id3_here = u4bChannel % 200 / 20;
+    id13[1] = id3_here + '0';
+    id13[2] = '0';
 
     // Frequency discrimination:
     // Frequency sector is
     // (channel % 20) / 5
-    int lane = (u4bChannel % 20) / 5;
-    _lane[0] = lane + '1';
+    int lane_here = (u4bChannel % 20) / 5;
+    lane[0] = lane_here + '1';
+    lane[1] = '0';
 
     // The transmit slot (txSlot) is first calculated as (channel % 5).
     // Then the start time in minutes past the hour, repeated every 10 minutes
     // 2 * ((txSlot + 2 * txBand) % 5);
     int txSlot = u4bChannel % 5;
     int txBand;
-    switch (atoi(_Band)) {
+    switch (atoi(band)) {
         case 20: txBand = 7;  break;  // 20m
         case 17: txBand = 8;  break;  // 17m
         case 15: txBand = 9;  break;  // 15m
@@ -240,7 +235,7 @@ void process_chan_num(char *_id13, char *_start_minute, char *_lane, char *_Band
         default: txBand = 7;  break;  // default to 20M in case of error cases
     }
     // will be char 0, 2, 4, 6 or 8 only
-    _start_minute[0] = '0' + (2 * ((txSlot + (txBand * 2)) % 5));
+    start_minute[0] = '0' + (2 * ((txSlot + (txBand * 2)) % 5));
 }
 
 //*******************************************

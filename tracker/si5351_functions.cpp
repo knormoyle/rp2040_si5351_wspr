@@ -1,3 +1,4 @@
+
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
@@ -87,7 +88,7 @@
 
 // this is the target PLL freq when making muliplier/divider initial calculations
 // set in tracker.ino
-extern uint64_t PLL_FREQ_TARGET;
+extern uint32_t PLL_FREQ_TARGET;
 
 // from tracker.ino
 extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
@@ -724,8 +725,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
     // old
     uint64_t ms_div_here = 1 + (
-        (PLL_FREQ_TARGET << PLL_CALC_SHIFT) /
-        ((uint64_t)freq_x128 << R_DIVISOR_SHIFT)
+        (((uint64_t)PLL_FREQ_TARGET) << PLL_CALC_SHIFT) /
+        (((uint64_t)freq_x128) << R_DIVISOR_SHIFT)
         );
     ms_div_here &= 0xfffffffe;   // make it even number
     // on 10m I had 32 with the 1 + above.
@@ -1383,12 +1384,6 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // so I'm pretty close..symbolOffset compared to expectedSymbolOffset
 // but could be better slightly.
 //
-// Band 10 BAND_XMIT_FREQ  28126020
-// For hf_freq 28126020 symbol 0 symbolFreq is 28126020.0000 symbolOffset 0.0000 expectedSymbolOffset 0.0000
-// For hf_freq 28126020 symbol 1 symbolFreq is 28126021.4375 symbolOffset 1.4375 expectedSymbolOffset 1.4648
-// For hf_freq 28126020 symbol 2 symbolFreq is 28126022.9375 symbolOffset 2.9375 expectedSymbolOffset 2.9297
-// For hf_freq 28126020 symbol 3 symbolFreq is 28126024.3750 symbolOffset 4.3750 expectedSymbolOffset 4.3945
-//
 // If instead  I work in a shifted domain of 7 bit shift..i.e. *128 ..
 // I can still shift left and right  rather than multiply and divide
 // for uint32_t datatype that leaves 25 bits of room for calculations..
@@ -1440,9 +1435,9 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 // This is what limits the resolution.
 
 //**********************************
-void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, 
+void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, 
+    uint32_t *pll_num, bool print) {
     V1_print("si5351a_calc_optimize() START" EOL);
-    bool print) {
     // just to see what we get, calculate the si5351 stuff for all the 1 Hz variations
     // for possible tx in a band. all assuming u4b channel 0 freq bin.
     // stuff that's returned by vfo_calc_div_mult_num()
@@ -1629,7 +1624,9 @@ void si5351a_calc_sweep(void) {
     V1_print(F(EOL));
     V1_print("si5351a_calc_sweep() END" EOL);
 }
-// does this work? no
+//*********************************************************************************
+// does this work? no. Hans method on 144Mhz is to fix the numerator and step the denominator
+// causes non-uniform symbol shift
 // alternate way to get steps of 1 on 144Mhz
 // with 26Mhz
 // c = 26e6 / 1.4648 in a + b/c equation
@@ -1663,3 +1660,111 @@ void si5351a_calc_sweep(void) {
 // My WSPR code using this method is here: https://github.com/roncarr880/QRP_LABS_WSPR
 // The Si5351 routines would need changes to work on 144mhz with the fixed divider of 6.  
 // This project also used an R divider for the transmit which would need to be removed.
+
+//*********************************************************************************
+// sweep the bands for the current PLL_FREQ_TARGET to get the mult/div for the spreadsheet
+// to compute optimum denom for the PLL_FREQ_TARGET
+void si5351a_calc_sweep_band() {
+    V1_print("si5351a_calc_sweep_band() START" EOL);
+    double actual;
+    double actual_pll_freq;
+    uint32_t ms_div;
+    uint32_t pll_mult;
+    uint32_t pll_num_here;
+    uint32_t pll_denom;
+    uint32_t r_divisor;
+    uint32_t freq_x128;
+
+    char band[3];
+
+    for (uint8_t i = 0; i <= 4 ; i++) {
+        switch(i) {
+            case 0: snprintf(band, sizeof(band), "10"); break;
+            case 1: snprintf(band, sizeof(band), "12"); break;
+            case 2: snprintf(band, sizeof(band), "15"); break;
+            case 3: snprintf(band, sizeof(band), "17"); break;
+            case 4: snprintf(band, sizeof(band), "20"); break;
+        }
+        // will pick the _lane we're using for the current u4b channel config
+        uint8_t symbol = 0;
+        char lane[2] = { 0 }; // '1', '2', '3', '4'
+        lane[0] = '1'; // first freq bin
+
+        set_PLL_DENOM_OPTIMIZE(band);
+        uint32_t XMIT_FREQ = init_rf_freq(band, lane);
+        freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, symbol);
+        // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
+        vfo_calc_div_mult_num(&actual, &actual_pll_freq,
+            &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor, freq_x128);
+
+        V1_print(F(EOL));
+        V1_printf("sweep band %s XMIT_FREQ %lu PLL_FREQ_TARGET %lu r_divisor %lu" EOL, 
+            band, XMIT_FREQ, PLL_FREQ_TARGET, r_divisor);
+        V1_printf("sweep band %s lane %s symbol %u pll_mult %lu ms_div %lu actual_pll_freq %.4f" EOL,
+            band, lane, symbol, pll_mult, ms_div, actual_pll_freq);
+        V1_printf("sweep band %s lane %s symbol %u pll_num %lu pll_denom %lu actual %.4f" EOL, 
+            band, lane, symbol, pll_num_here, pll_denom, actual);
+        V1_print(F(EOL));
+    }
+
+    V1_print("si5351a_calc_sweep_band() END" EOL);
+}
+
+//*********************************************************************************
+void set_PLL_DENOM_OPTIMIZE(char *band) {
+    V1_println(F(EOL "set_PLL_DENOM_OPTIMIZE START"));
+    // FIX! hack! we should have fixed values per band? do they vary by freq bin?
+    uint32_t PLL_DENOM_MAX = 1048575;
+    V1_print("WARN: leave PLL_DENOM_OPTIMIZE with optimal values so far" EOL);
+    // this is the target PLL freq when making muliplier/divider initial calculations
+    // set in tracker.ino
+    // from 900 history
+    // goal seek result
+    // case 17: PLL_DENOM_OPTIMIZE = 1048575; break; // can't do better?
+    // goal seek result
+    // case 20: PLL_DENOM_OPTIMIZE = 277333; break;
+    // wspr_calc_direct_shift.xlsx result
+    int b = atoi(band); 
+    switch(PLL_FREQ_TARGET) {
+        case 90000000:
+            switch (b) {
+                case 10: PLL_DENOM_OPTIMIZE = 554667; break;
+                case 12: PLL_DENOM_OPTIMIZE = 986074; break;
+                case 15: PLL_DENOM_OPTIMIZE = 845206; break;
+                case 17: PLL_DENOM_OPTIMIZE = 709973; break;
+                case 20: PLL_DENOM_OPTIMIZE = 832000; break;
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+            }
+            break;
+        case 700000000:
+            switch (b) {
+                case 10: PLL_DENOM_OPTIMIZE = 739556; break;
+                case 12: PLL_DENOM_OPTIMIZE = 633905; break;
+                case 15: PLL_DENOM_OPTIMIZE = 1044078; break;
+                case 17: PLL_DENOM_OPTIMIZE = 934175; break;
+                case 20: PLL_DENOM_OPTIMIZE = 709973; break;
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+            }
+            break;
+        case 600000000:
+            switch (b) {
+                case 10: PLL_DENOM_OPTIMIZE = 806788; break;
+                case 12: PLL_DENOM_OPTIMIZE = 739556; break;
+                case 15: PLL_DENOM_OPTIMIZE = 633905; break;
+                case 17: PLL_DENOM_OPTIMIZE = 522039; break;
+                case 20: PLL_DENOM_OPTIMIZE = 845206; break;
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+            }
+            break;
+        default:
+            switch (b) {
+                case 10: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
+                case 12: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
+                case 15: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
+                case 17: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
+                case 20: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+            }
+    }
+    V1_println(F("set_PLL_DENOM_OPTIMIZE END" EOL));
+}

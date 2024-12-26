@@ -74,9 +74,11 @@ void vfo_set_freq_x128(uint8_t clk_number, uint32_t freq, bool only_pll_num);
 void vfo_turn_on_clk_out(uint8_t clk_number);
 void vfo_turn_off_clk_out(uint8_t clk_number);
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength);
-uint32_t doCorrection(uint32_t hf_freq);
+uint32_t doCorrection(uint32_t freq);
 
 void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, bool print);
 void si5351a_calc_sweep(void);
+void si5351a_calc_sweep_band(void);
+void set_PLL_DENOM_OPTIMIZE(char *band);
 
 #endif  // SI5351_FUNCTIONS_H
