@@ -949,6 +949,7 @@ void setup1() {
         uint32_t last_PLL_DENOM_OPTIMIZE;
         uint32_t pll_num;
         uint32_t STEP;
+        int sse;
 
         // Instead: use the best initial values per band in this function 
         // (from spreadsheet or prior runs for a band)
@@ -958,6 +959,11 @@ void setup1() {
         V1_printf("SEED values: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
         V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
             sumAbsoluteError, sumShiftError);
+        // check 4 digits of precision
+        sse = (int)10000 * sumShiftError;
+        if (sse != 0) {
+            V1_printf("WARN: SEED sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
+        }
 
         last_sumShiftError = sumShiftError;
         last_sumAbsoluteError = sumAbsoluteError;
@@ -1040,9 +1046,15 @@ void setup1() {
         V1_print(F(" ***********************" EOL));
         si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  // print
         V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
-        V1_printf(" last_sumAbsoluteError %.8f last_sumShiftError %.8f" EOL, 
-            last_sumAbsoluteError, last_sumShiftError);
+        V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
+            sumAbsoluteError, sumShiftError);
 
+        // check 4 digits of precision
+        sse = (int)10000 * sumShiftError;
+        if (sse != 0) {
+            V1_printf("WARN: BEST FOUND sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
+        }
+            
     } // end of the optimization search
 
     // restore to know fixed values per band
