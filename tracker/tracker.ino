@@ -767,9 +767,6 @@ void setup1() {
     Watchdog.reset();
     V1_println(F("setup1() START"));
 
-    // show we're here.. unless it goes to user config?
-    blockingLongBlinkLED(6);
-    // back to non-blocking blinking
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
@@ -782,19 +779,11 @@ void setup1() {
     V0_flush();
     Watchdog.reset();
 
-    //*************************************
-    // HACK: didn't get here
-    //*************************************
-
     // was 12/26/24
-    // no reason to turn it on during the setup init?
+    // no reason to turn si5351a on during the setup init?
     // but need it on during the repeated inits
     // just get rid of the vfo_init in setup!
     // vfo_init();
-
-    //*************************************
-    // HACK! didn't get here
-    //*************************************
 
     //**********************
     // Some notes in case we ever use Wire
@@ -829,18 +818,12 @@ void setup1() {
     // also turns on and checks for output
     // does a full gps cold reset now?
 
-    //*************************************
-    // HACK: didn't get here?
-    //*************************************
 
+    blockingLongBlinkLED(8);
     // 12/7/24. the GpsINIT covers GpsON() now?
     GpsINIT();
     GpsFixMillis = 0;
     GpsStartMillis = millis();
-
-    //*************************************
-    // HACK: didn't get here
-    //*************************************
 
     // usb power means vbat is always on. so a hot reset!
     // we already did a cold reset in the GpsINIT() ..don't do it again!
@@ -861,9 +844,6 @@ void setup1() {
             }
         }
     }
-
-    blockingLongBlinkLED(3);
-    //*************************
 
     // back to blinking
     initStatusLED();

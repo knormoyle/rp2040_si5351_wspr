@@ -132,8 +132,8 @@ bool PWM_COLD_GPS_POWER_ON_MODE = false;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 
 // why isn't this true 12/15/24..true now. works (18Mhz)
-// bool ALLOW_USB_DISABLE_MODE = true;
-bool ALLOW_USB_DISABLE_MODE = false;
+bool ALLOW_USB_DISABLE_MODE = true;
+// bool ALLOW_USB_DISABLE_MODE = false;
 // try true 12/15/24
 bool ALLOW_KAZU_12MHZ_MODE = false;  // true not working with Serial2?
 
@@ -1157,9 +1157,6 @@ void pwmGpsPwrOn() {
 
 //************************************************
 void GpsFullColdReset(void) {
-    //*************************************
-    // HACK didn't get here
-    //*************************************
     // BUG: can't seem to reset the baud rate to 9600 when
     // the GPS chip has a non-working baud rate?
 
@@ -1278,9 +1275,10 @@ void GpsFullColdReset(void) {
     // it should always be re-enabled after 15 secs.
     // Worst case to recover: unplug power and plug in again
 
+    // HACK: made it to here (3)
     Watchdog.reset();
     // don't bother in balloon mode
-    if (!BALLOON_MODE) measureMyFreqs();
+    if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
 
     V1_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
     V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz (no we don't) then long sleep" EOL,
@@ -1308,10 +1306,6 @@ void GpsFullColdReset(void) {
         busy_wait_ms(500);
     }
 
-    //*************************************
-    // HACK didn't get here
-    //*************************************
-
     // includes deinit of the usb pll now?
     kazuClocksSlow();
 
@@ -1322,9 +1316,8 @@ void GpsFullColdReset(void) {
 
 
     // Release/uninitialise specified PLL.This will turn off the power to the specified PLL.
-    // This function does not check if the PLL is in use before powering it off. (use care)
-    // this seems to cause a crap out
-    // pll_deinit(pll_usb);
+    // pll_deinit(pll_usb) does not check if the PLL is in use before powering it off. (use care)
+    // this seems to cause a reboot
 
     // examples: https://sourcevu.sysprogs.com/rp2040/picosdk/symbols/pll_deinit
     // sidenote: pi pico sdk has set_sys_clock_48mhz() function
@@ -1347,8 +1340,7 @@ void GpsFullColdReset(void) {
 
     // Not worth doing if USB is disabled? (no print)
     // but if we can't disable deinit USB (see above), we can?
-    if (!ALLOW_USB_DISABLE_MODE && !BALLOON_MODE)
-        measureMyFreqs();
+    if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
 
     // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
     // this should have no printing either?
@@ -1376,7 +1368,7 @@ void GpsFullColdReset(void) {
         PLL_SYS_MHZ = freq_khz / 1000UL;
     }
     busy_wait_ms(500);
-    if (ALLOW_USB_DISABLE_MODE && !BALLOON_MODE) {
+    if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
         pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
         busy_wait_ms(500);
         tusb_init();
@@ -1396,7 +1388,7 @@ void GpsFullColdReset(void) {
     // V1_print(F("Restored core voltage back to 1.1v" EOL));
     V0_flush();
     // don't bother if ?
-    if (!BALLOON_MODE) measureMyFreqs();
+    if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
     IGNORE_KEYBOARD_CHARS = false;
 
     //******************
@@ -1820,9 +1812,6 @@ void updateGpsDataAndTime(int ms) {
 
     // clear the StampPrintf buffer, in case it had anything.
     if (VERBY[1]) DoLogPrint();
-    //*************************************
-    // HACK didn't get here
-    //*************************************
 
     // FIX! we could leave here after we get N sentences?
     // we could keep track of how many sentences we get?
@@ -2282,8 +2271,12 @@ void kazuClocksSlow() {
 
     // Turn off pll sys and pll usb to save power
     pll_deinit(pll_sys);
-    // this will stop the ability to print
-    pll_deinit(pll_usb);
+    if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
+        // this will stop the ability to print
+        // in BALLOON_MODE, this causes a reboot cause no usb
+        pll_deinit(pll_usb);
+    }
+    blockingLongBlinkLED(3);
 
     // don't do this. because we actually restore to a pll sys value
     // so we should not change these..assume go back just the same as it was
