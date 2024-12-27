@@ -238,7 +238,9 @@ void DoLogPrint() {
 // from: https://sourcevu.sysprogs.com/rp2040/examples/clocks/hello_48MHz/files/hello_48MHz.c#tok293
 // don't namespace collide with measure_freqs() in SPI.h?
 void measureMyFreqs(void) {
+    if (!VERBY[1]) return;
     V1_print(F("measureMyFreqs() START" EOL));
+
     // see for frequency_count_khz()
     // evidently uses a special frequency counter ??
     // https://sourcevu.sysprogs.com/rp2040/picosdk/files/src/rp2_common/hardware_clocks/clocks.c#tok966
@@ -292,5 +294,8 @@ void measureMyFreqs(void) {
 
     // Can't measure clk_ref / xosc as it is the ref
     V1_print(F("measureMyFreqs() END" EOL));
+    V1_flush();
+    // FIX! need a delay after flush also? (usb can be disabled soon)
+    busy_wait_ms(1000);
 }
 

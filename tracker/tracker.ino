@@ -9,7 +9,6 @@
 // vim users can use this in .vimrc to good effect:
 // set tabstop=4 softtabstop=0 expandtab shiftwidth=4 smarttab
 
-
 #include <Arduino.h>
 #include <math.h>
 #include <stdio.h>
@@ -310,6 +309,7 @@ extern const int PLL_CALC_SHIFT = 7;
 // uint32_t PLL_FREQ_TARGET = 700000000;
 uint32_t PLL_FREQ_TARGET = 600000000;
 
+
 // anything else will use PLL_DENOM_MAX
 // double check the values if the algo for div/mul in si5351_functios.cpp changes relative
 // to reaction to PLL_FREQ_TARGET
@@ -401,11 +401,12 @@ volatile char _callsign[7] = { 0 };
 volatile char _suffix[2] = { 0 };
 volatile char _verbose[2] = { 0 };
 volatile char _TELEN_config[5] = { 0 };
-// FIX! why is this a compiler problem if volatile?
+// FIX! why is this a compiler problem if volatile? an snprintf() fails
 // https://forum.arduino.cc/t/invalid-conversion-from-volatile-char-to-const-char-fpermissive/949522
 char _clock_speed[4] = { 0 };
 volatile char _U4B_chan[4] = { 0 };
-// FIX! why is this a compiler problem if volatile?
+// FIX! why is this a compiler problem if volatile? parameter to function fails
+// error: invalid convesion fro 'volatile char*' to 'char*'
 char _Band[3] = { 0 };  // string with 10, 12, 15, 17, 20 legal. null at end
 volatile char _tx_high[2] = { 0 };  // 0 is 2mA si5351. 1 is 8mA si5351
 volatile char _testmode[2] = { 0 };
@@ -438,7 +439,6 @@ uint32_t XMIT_FREQUENCY;
 uint32_t PLL_DENOM_OPTIMIZE = 1048575;
 
 //*****************************
-
 bool BALLOON_MODE = true;
 bool CORE1_PROCEED = false;
 // decode of _testmode
@@ -579,7 +579,12 @@ void setup() {
         BALLOON_MODE = true;
         decodeVERBY();
         // BALLOON_MODE forces all false, so no point in printing here?
-        Watchdog.reset();
+        // Watch out! Once enabled, the RP2040's Watchdog Timer can NOT be disabled.
+        // Watchdog.disable();
+        // just make it very long?
+        Watchdog.enable(60000);
+
+        // Watchdog.reset();
         // Serial on core1 is only used for printing (no keyboard input)
         // so okay to manage that with VERBY
         CORE1_PROCEED = true;
@@ -663,8 +668,9 @@ absolute_time_t loop_us_start = 0;
 bool core1_idled = false;
 void loop() {
     if (BALLOON_MODE) {
-        // just sleep
-        sleep_ms(100000);
+        // just sleep. hmm do we have any interrupts to deal with
+        // shouldn't sleep for a long time? try 5 secs
+        sleep_ms(5000);
         // hmm could just return, loop will be called again
         // return;
     }
@@ -761,32 +767,34 @@ void setup1() {
     Watchdog.reset();
     V1_println(F("setup1() START"));
 
-    // show we're here.. unless it goes to user config? 2 sec long
-    turnOnLED(true);
-    sleep_ms(2000);
-    turnOnLED(false);
-    sleep_ms(2000);
-    // back to blinking
+    // show we're here.. unless it goes to user config?
+    blockingLongBlinkLED(6);
+    // back to non-blocking blinking
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
+    //*************************************
+    Watchdog.reset();
     Watchdog.enable(30000);
     Watchdog.reset();
 
-    // any use for Watchdog.sleep() from SleepyDog library?
-    // instead of sleep_ms() ?
-    // To enter low power sleep mode call Watchdog.sleep() like below
-    // and the watchdog will allow low power sleep for as long as possible.
-    // The actual amount of time spent in sleep will be returned in // milliseconds).
-
-    // FIX! should we use this?
-    // int sleepMS = Watchdog.sleep();
-
-    Watchdog.reset();
     adc_INIT();
-
+    V0_flush();
     Watchdog.reset();
-    vfo_init();
+
+    //*************************************
+    // HACK: didn't get here
+    //*************************************
+
+    // was 12/26/24
+    // no reason to turn it on during the setup init?
+    // but need it on during the repeated inits
+    // just get rid of the vfo_init in setup!
+    // vfo_init();
+
+    //*************************************
+    // HACK! didn't get here
+    //*************************************
 
     //**********************
     // Some notes in case we ever use Wire
@@ -821,10 +829,19 @@ void setup1() {
     // also turns on and checks for output
     // does a full gps cold reset now?
 
+    //*************************************
+    // HACK: didn't get here?
+    //*************************************
+
     // 12/7/24. the GpsINIT covers GpsON() now?
     GpsINIT();
     GpsFixMillis = 0;
     GpsStartMillis = millis();
+
+    //*************************************
+    // HACK: didn't get here
+    //*************************************
+
     // usb power means vbat is always on. so a hot reset!
     // we already did a cold reset in the GpsINIT() ..don't do it again!
 
@@ -839,20 +856,15 @@ void setup1() {
                 // maybe just force it off?
                 // (after always on above)?
                 // show we're gonna reboot with long 1 sec on, 1 sec off
-                turnOnLED(true);
-                sleep_ms(1000);
-                turnOnLED(false);
-                sleep_ms(1000);
+                blockingLongBlinkLED(5);
                 // updateStatusLED();
             }
         }
     }
 
-    // show we're here.. unless it goes to user config? 4 sec long
-    turnOnLED(true);
-    sleep_ms(4000);
-    turnOnLED(false);
-    sleep_ms(4000);
+    blockingLongBlinkLED(3);
+    //*************************
+
     // back to blinking
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -929,11 +941,11 @@ void setup1() {
 
     //***************
     // varies by band PLL_FREQ_TARGET
-    if (true and VERBY[1]) {
+    if (true && VERBY[1]) {
         set_PLL_DENOM_OPTIMIZE(_Band);
         si5351a_calc_sweep();
     }
-    if (true and VERBY[1]) {
+    if (true && VERBY[1]) {
         si5351a_calc_sweep_band();
     }
     //***************
@@ -941,7 +953,7 @@ void setup1() {
     // the optimized values should be baked into si5351_functions.cpp()
     // so we don't have to calc. one magic denom per band?
     // check the freq bin boundaries. (channel 0 and 599?)
-    if (true and VERBY[1]) {
+    if (true && VERBY[1]) {
         double sumShiftError;
         double sumAbsoluteError;
         double last_sumShiftError = 1e6;
@@ -955,6 +967,7 @@ void setup1() {
         // (from spreadsheet or prior runs for a band)
         set_PLL_DENOM_OPTIMIZE(_Band);
         // print
+        uint32_t default_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
         si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  
         V1_printf("SEED values: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
         V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
@@ -1039,7 +1052,8 @@ void setup1() {
             }
         }
 
-        // Final report.. we don't have the pll_num returned?
+        //************************
+        // Final report.
         V1_print(F(EOL "***********************"));
         PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
         V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE: %lu", PLL_DENOM_OPTIMIZE);
@@ -1054,6 +1068,16 @@ void setup1() {
         if (sse != 0) {
             V1_printf("WARN: BEST FOUND sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
         }
+
+        if (PLL_DENOM_OPTIMIZE == default_PLL_DENOM_OPTIMIZE) {
+            V1_printf("GOOD: couldn't improve on hard-wired PLL_DENOM_OPTIMIZE" EOL);
+        }
+        else {
+            V1_printf("ERROR: shouldn't have improved on hard-wired PLL_DENOM_OPTIMIZE" EOL);
+            V1_printf("ERROR: default_PLL_DENOM_OPTIMIZE %lu PLL_DENOM_OPTIMIZE %lu " EOL, 
+                default_PLL_DENOM_OPTIMIZE, PLL_DENOM_OPTIMIZE);
+        }
+        //************************
             
     } // end of the optimization search
 
@@ -1066,13 +1090,9 @@ void setup1() {
     // the other core won't be messing with led's at this time
     // unless it goes to user config?
     Watchdog.reset();
-
     // so we can tell we're here?
-    turnOnLED(true);
-    sleep_ms(2000);
-    turnOnLED(false);
-    sleep_ms(2000);
-    // back to blinking
+    blockingLongBlinkLED(4);
+    // back to non-blocking blinking
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 }

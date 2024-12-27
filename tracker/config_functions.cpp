@@ -23,7 +23,6 @@
 #include "si5351_functions.h"
 #include "wspr_functions.h"
 #include "i2c_functions.h"
-
 #include "config_functions.h"
 //*****************************************************
 // include the SI5351Arduino library and Wire for it (for testing?)
@@ -86,7 +85,7 @@ extern char _callsign[7];
 extern char _verbose[2];   // 0 is used to disable all. 1 is all printing for now. 2:9 same
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
-extern char _U4B_chan[4];  // always fill with 3 digits?
+extern char _U4B_chan[4];  // 1 to 3 digits?
 extern char _Band[3];      // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _tx_high[2];   // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _testmode[2];  // currently: sweep telemetry
@@ -730,7 +729,7 @@ void decodeVERBY(void) {
     // VERBY[0] guarantees that, even for config
     // Currently VERBY[1] covers everything else
     if (BALLOON_MODE) {
-        for (int i = 0; i < 10 ; i++) VERBY[i] = false;
+        for (int i = 0; i <= 9 ; i++) VERBY[i] = false;
         return;
     }
     // always set VERBY[0] if not BALLOON_MODE, so we
@@ -1005,7 +1004,7 @@ int check_data_validity_and_set_defaults(void) {
     // be sure to null terminate
     if (_U4B_chan[0] == 0 || atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
         V0_printf(EOL "_U4B_chan %s is not supported/legal, initting to 599" EOL, _U4B_chan);
-        snprintf(_U4B_chan, sizeof(_U4B_chan), "%3s", "599");
+        snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
         write_FLASH();
         // this will set _lane, _id13, _start_minute
         process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
@@ -1090,7 +1089,7 @@ void show_values(void) {
     V0_print(F("FLASH read values:" EOL));
 
     V0_printf("C: callsign: %s" EOL, _callsign);
-    V0_printf("U: U4B channel: %s", _U4B_chan);
+    V0_printf("U: U4B channel: %s" EOL, _U4B_chan);
     V0_printf("A: band: %s (meters)" EOL, _Band);
     V0_printf(" (id13: %s", _id13);
     V0_printf(" start Minute: %s", _start_minute);
@@ -1147,7 +1146,7 @@ void doFactoryReset() {
     snprintf(_verbose, sizeof(_verbose), "1");
     snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
     snprintf(_clock_speed, sizeof(_clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
-    snprintf(_U4B_chan, sizeof(_U4B_chan), "%3s", "599"); // always 3 chars
+    snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599"); // always 3 chars?
     snprintf(_Band, sizeof(_Band), "20");
     snprintf(_tx_high, sizeof(_tx_high), "1");
     snprintf(_testmode, sizeof(_testmode), "0");

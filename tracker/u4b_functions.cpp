@@ -205,14 +205,14 @@ void process_chan_num(char *id13, char *start_minute, char *lane, char *band, ch
     // (channel % 200) / 20
     int id3_here = u4bChannel % 200 / 20;
     id13[1] = id3_here + '0';
-    id13[2] = '0';
+    id13[2] = 0;
 
     // Frequency discrimination:
     // Frequency sector is
     // (channel % 20) / 5
     int lane_here = (u4bChannel % 20) / 5;
     lane[0] = lane_here + '1';
-    lane[1] = '0';
+    lane[1] = 0;
 
     // The transmit slot (txSlot) is first calculated as (channel % 5).
     // Then the start time in minutes past the hour, repeated every 10 minutes

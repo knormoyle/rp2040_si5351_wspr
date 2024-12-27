@@ -107,7 +107,6 @@ extern bool VERBY[10];
 extern char _tx_high[2];  // 0 is 2mA si5351. 1 is 8mA si5351
 extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
-extern char _lane[2]; // string with 1,2,3,4
 extern char _U4B_chan[4]; // string with 0-599
 
 
@@ -161,7 +160,11 @@ static uint32_t s_ms_div_prev = 0;
 // https://github.com/lkoepsel/I2C/blob/main/Arduino/Pico/I2C_Scanner/I2C_Scanner.ino
 //****************************************************
 void vfo_init(void) {
+    //*************************************
+    // HACK didn't get here
+    //*************************************
     V1_println(F("vfo_init START"));
+    Watchdog.reset();
 
     // clear any old remembered state we have outside of the si5351
     // hmm. maybe not this though
@@ -176,17 +179,28 @@ void vfo_init(void) {
     gpio_init(Si5351Pwr);
     pinMode(Si5351Pwr, OUTPUT);
 
+    // was 12/26/24
     // FIX! remove pull_up to save power. Don't need it?
-    gpio_pull_up(Si5351Pwr);
+    // gpio_pull_up(Si5351Pwr);
+
+    // was 12/26/24
+    // no reason to turn it on during the setup init?
+    // but need it on during the repeated inits
+    // just get rid of the vfo_init in setup!
     gpio_put(Si5351Pwr, 0);
 
+    //*************************************
+    // HACK didn't get here
+    //*************************************
     // init I2C0 for VFO
     i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+    // let it float if we don't drive the i2c?
     gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
     gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
     gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
     V1_println(F("vfo_init END"));
+    Watchdog.reset();
 }
 
 //****************************************************
@@ -194,7 +208,7 @@ void vfo_set_power_on(bool turn_on) {
     // this works even if s_is_on is wrong relative to current on state
     // doesn't turn off/on first
     V1_printf("vfo_set_power_on START %u" EOL, turn_on);
-    V0_flush();
+    V1_flush();
 
     // don't make it dependent on s_is_on state
     // if (turn_on == s_is_on) return;
@@ -219,8 +233,8 @@ void vfo_set_power_on(bool turn_on) {
     memset(s_PLLB_regs_prev, 0, 8);
     memset(s_vfo_drive_strength, 0, 3);
 
-    V0_flush();
-    V1_println(F("vfo_set_power_on After V0_flush()"));
+    V1_flush();
+    V1_println(F("vfo_set_power_on After V1_flush()"));
 
     // always just turn it on!
     s_is_on = turn_on;
@@ -230,7 +244,7 @@ void vfo_set_power_on(bool turn_on) {
     // gpio_set_dir(Si5351Pwr, (turn_on ? GPIO_OUT : GPIO_IN));
 
     V1_printf("vfo_set_power_on END %u" EOL, s_is_on);
-    V0_flush();
+    V1_flush();
 }
 
 //****************************************************
@@ -1005,6 +1019,9 @@ void vfo_turn_on(uint8_t clk_num) {
 
     vfo_turn_on_completed = false;
     vfo_turn_off_completed = false;
+
+    // this should have been done once in setup
+    // but we disable the i2c now on turn off? so have to turn it on again?
     vfo_init();
     Watchdog.reset();
     // 2 secs enough?
@@ -1019,18 +1036,17 @@ void vfo_turn_on(uint8_t clk_num) {
     uint8_t reg;
     // Disable all CLK output drivers
     V1_println(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
-    V0_flush();
+    V1_flush();
 
-    // HACK ..don't iterate
     int tries = 0;
     // any error
     int res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff);
     V1_printf("vfo_turn_on first res %d of i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL" EOL , res);
-    V0_flush();
+    V1_flush();
     while (res != 2) {
         if (tries > 5) {
             V1_println("Rebooting because couldn't init VFO_I2C_INSTANCE after 5 tries");
-            V0_flush();
+            V1_flush();
             Watchdog.enable(1000);  // milliseconds
             for (;;) {
                 // FIX! put a bad status in the leds?
@@ -1040,7 +1056,7 @@ void vfo_turn_on(uint8_t clk_num) {
         Watchdog.reset();
         tries++;
         V1_println("VFO_I2C_INSTANCE trying re-init, after trying a i2cWrite and it failed");
-        V0_flush();
+        V1_flush();
 
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
         V1_println("i2c_deinit() start");
@@ -1073,7 +1089,7 @@ void vfo_turn_on(uint8_t clk_num) {
         V1_printf("vfo_turn_on re-iinit the I2C0 pins inside loop. tries %d" EOL, tries);
         // all clocks off?
         res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, 0xff);
-        V0_flush();
+        V1_flush();
     }
 
     V1_print(F("vfo_turn_on done trying to init the I2C0 pins in loop" EOL));
@@ -1204,7 +1220,7 @@ void vfo_turn_off(void) {
 
 //**********************************
 // calculate the actual tx frequency for a symbol,
-// given the base XMIT_FREQ for the u4b channel config'ed
+// given the base xmit freq for the u4b channel config'ed
 // THIS MUST NOT BE USED FOR SI5351A work..just for printing!
 double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print) {
     if (symbol > 3) {
@@ -1453,21 +1469,19 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     uint32_t freq_x128;
 
     // should already be set for band, channel? (XMIT_FREQUENCY)
-    // uint32_t XMIT_FREQ = init_rf_freq(_Band, _lane);
-    uint32_t XMIT_FREQ = XMIT_FREQUENCY;
+    uint32_t xmit_freq = XMIT_FREQUENCY;
     if (print) {
-        V0_printf("_Band %s XMIT_FREQ  %lu" EOL, _Band, XMIT_FREQ);
+        V0_printf("band %s channel %s xmit_freq %lu" EOL, _Band, _U4B_chan, xmit_freq); 
     }
 
     // compute the actual shifts too, which are the more important thing
     // as opposed to actual freq (since tcxo causes fixed error too (assume no drift thru the tx)
     // this is floats, because it's for printing only (accuracy)
-    double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0, false);  // no print
-    double symbol1desired = calcSymbolFreq(XMIT_FREQ, 1, false);  // no print
-    double symbol2desired = calcSymbolFreq(XMIT_FREQ, 2, false);  // no print
-    double symbol3desired = calcSymbolFreq(XMIT_FREQ, 3, false);  // no print
-  // no print
-    // this will give the freq you should see on wsjt-tx if hf_freq is the XMIT_FREQ for a channel
+    double symbol0desired = calcSymbolFreq(xmit_freq, 0, false);  // no print
+    double symbol1desired = calcSymbolFreq(xmit_freq, 1, false);  // no print
+    double symbol2desired = calcSymbolFreq(xmit_freq, 2, false);  // no print
+    double symbol3desired = calcSymbolFreq(xmit_freq, 3, false);  // no print
+    // will give the freq you should see on wsjt-tx if hf_freq is the xmit_freq for a channel
     // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin
     // (assume freq calibration errors of that much, then symbol the 200hz passband?
 
@@ -1476,13 +1490,17 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     if (print) {
         V1_print(F(EOL));
         // + 0 Hz
-        V1_printf("channel %s desired symbol 0 freq %.4f" EOL, _U4B_chan, symbol0desired);
+        V1_printf("band %s channel %s desired symbol 0 freq %.4f" EOL, 
+            _Band, _U4B_chan, symbol0desired);
         // +1*(12000/8196) Hz [1.464 Hz]
-        V1_printf("channel %s desired symbol 1 freq %.4f" EOL, _U4B_chan, symbol1desired);
+        V1_printf("band %s channel %s desired symbol 1 freq %.4f" EOL, 
+            _Band, _U4B_chan, symbol1desired);
         // +2*(12000/8196) Hz [2.928 Hz]
-        V1_printf("channel %s desired symbol 2 freq %.4f" EOL, _U4B_chan, symbol2desired);
+        V1_printf("band %s channel %s desired symbol 2 freq %.4f" EOL, 
+            _Band, _U4B_chan, symbol2desired);
         // +3*(12000/8196) Hz [4.392 Hz]
-        V1_printf("channel %s desired symbol 3 freq %.4f" EOL, _U4B_chan, symbol3desired);
+        V1_printf("band %s channel %s desired symbol 3 freq %.4f" EOL, 
+            _Band, _U4B_chan, symbol3desired);
         V1_print(F(EOL));
     }
 
@@ -1495,7 +1513,7 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     double symbol2actual;
     double symbol3actual;
     for (uint8_t symbol = 0; symbol <= 3; symbol++) {
-        freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, symbol);
+        freq_x128 = calcSymbolFreq_x128(xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor, freq_x128);
@@ -1558,11 +1576,10 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
 void si5351a_calc_sweep(void) {
     V1_print("si5351a_calc_sweep() START" EOL);
 
-    // should already be set for band, channel? (XMIT_FREQUENCY)
-    // uint32_t XMIT_FREQ = init_rf_freq(_Band, _lane);
-    uint32_t XMIT_FREQ = XMIT_FREQUENCY;
-    V0_printf("_Band %s XMIT_FREQ  %lu" EOL, _Band, XMIT_FREQ);
-    double symbol0desired = calcSymbolFreq(XMIT_FREQ, 0, true); // print
+    // global XMIT_FREQUENCY should already be set for band, channel?
+    uint32_t xmit_freq = XMIT_FREQUENCY;
+    V0_printf("band %s channel %s xmit_freq %lu" EOL, _Band, _U4B_chan, xmit_freq);
+    double symbol0desired = calcSymbolFreq(xmit_freq, 0, true); // print
 
     V1_printf("Now: sweep calc 5351a programming starting at %.4f" EOL, symbol0desired);
     V1_print(F(EOL "partial sweep at 0.25hz increment" EOL));
@@ -1691,15 +1708,15 @@ void si5351a_calc_sweep_band() {
         lane[0] = '1'; // first freq bin
 
         set_PLL_DENOM_OPTIMIZE(band);
-        uint32_t XMIT_FREQ = init_rf_freq(band, lane);
-        freq_x128 = calcSymbolFreq_x128(XMIT_FREQ, symbol);
+        uint32_t xmit_freq = init_rf_freq(band, lane);
+        freq_x128 = calcSymbolFreq_x128(xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor, freq_x128);
 
         V1_print(F(EOL));
-        V1_printf("sweep band %s XMIT_FREQ %lu PLL_FREQ_TARGET %lu r_divisor %lu" EOL, 
-            band, XMIT_FREQ, PLL_FREQ_TARGET, r_divisor);
+        V1_printf("sweep band %s xmit_freq %lu PLL_FREQ_TARGET %lu r_divisor %lu" EOL, 
+            band, xmit_freq, PLL_FREQ_TARGET, r_divisor);
         V1_printf("sweep band %s lane %s symbol %u pll_mult %lu ms_div %lu actual_pll_freq %.4f" EOL,
             band, lane, symbol, pll_mult, ms_div, actual_pll_freq);
         V1_printf("sweep band %s lane %s symbol %u pll_num %lu pll_denom %lu actual %.4f" EOL, 
@@ -1712,7 +1729,7 @@ void si5351a_calc_sweep_band() {
 
 //*********************************************************************************
 void set_PLL_DENOM_OPTIMIZE(char *band) {
-    V1_println(F(EOL "set_PLL_DENOM_OPTIMIZE START"));
+    V1_println(F("set_PLL_DENOM_OPTIMIZE START"));
     // FIX! hack! we should have fixed values per band? do they vary by freq bin?
     uint32_t PLL_DENOM_MAX = 1048575;
     V1_print("WARN: leave PLL_DENOM_OPTIMIZE with optimal values so far" EOL);
@@ -1766,5 +1783,5 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
                 default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
             }
     }
-    V1_println(F("set_PLL_DENOM_OPTIMIZE END" EOL));
+    V1_println(F("set_PLL_DENOM_OPTIMIZE END"));
 }

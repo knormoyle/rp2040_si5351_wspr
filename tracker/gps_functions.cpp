@@ -128,11 +128,12 @@ extern bool BALLOON_MODE;
 //************************************************
 // false and true work here
 // sort power on for gps cold reset only
-bool PWM_COLD_GPS_POWER_ON_MODE = true;
-bool ALLOW_UPDATE_GPS_FLASH_MODE = true;
+bool PWM_COLD_GPS_POWER_ON_MODE = false;
+bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 
 // why isn't this true 12/15/24..true now. works (18Mhz)
-bool ALLOW_USB_DISABLE_MODE = true;
+// bool ALLOW_USB_DISABLE_MODE = true;
+bool ALLOW_USB_DISABLE_MODE = false;
 // try true 12/15/24
 bool ALLOW_KAZU_12MHZ_MODE = false;  // true not working with Serial2?
 
@@ -259,7 +260,6 @@ void gpsSleepForMillis(int n, bool enableEarlyOut) {
         // but BALLOON_MODE/VERBY don't protect us ..just don't print here
     }
     int milliDiv = n / 10;
-
     // sleep approx. n millisecs
     for (int i = 0; i < milliDiv ; i++) {
         if (enableEarlyOut) {
@@ -272,7 +272,6 @@ void gpsSleepForMillis(int n, bool enableEarlyOut) {
             updateStatusLED();
             Watchdog.reset();
         }
-
         // faster recovery with delay?
         delay(10);
     }
@@ -304,7 +303,6 @@ void drainInitialGpsOutput(void) {
         Serial2.read();
     }
     V1_println(F("now look for some Serial2 bytes"));
-
     int i;
     char incomingChar = { 0 };
     // we drain during the GpsINIT now, oh. we should leave gps on so we get chars
@@ -331,7 +329,6 @@ void drainInitialGpsOutput(void) {
 
 void setGpsBalloonMode(void) {
     V1_println(F("setGpsBalloonMode START"));
-
     //************************
     // Interesting! what kind of extra debuglog output?
     // SIM65M
@@ -1069,7 +1066,6 @@ void GpsINIT(void) {
     V1_printf("set GPS_ON_PIN %d LOW" EOL, GPS_ON_PIN);
 
     //****************
-
     V1_printf("GPS_UART1_RX_PIN %d" EOL, GPS_UART1_RX_PIN);
     V1_printf("GPS_UART1_TX_PIN %d" EOL, GPS_UART1_TX_PIN);
     V1_printf("GpsPwr %d" EOL, GpsPwr);
@@ -1083,7 +1079,7 @@ void GpsINIT(void) {
     //****************
     Serial2.setPollingMode(true);
     // tried making bigger...seems like 32 is the reality though?
-    Serial2.setFIFOSize(SERIAL2_FIFO_SIZE);
+    // Serial2.setFIFOSize(SERIAL2_FIFO_SIZE);
     Serial2.flush();
     Serial2.end();
 
@@ -1161,6 +1157,9 @@ void pwmGpsPwrOn() {
 
 //************************************************
 void GpsFullColdReset(void) {
+    //*************************************
+    // HACK didn't get here
+    //*************************************
     // BUG: can't seem to reset the baud rate to 9600 when
     // the GPS chip has a non-working baud rate?
 
@@ -1253,8 +1252,8 @@ void GpsFullColdReset(void) {
     gpsSleepForMillis(500, false);
     digitalWrite(GPS_NRESET_PIN, HIGH);  // deassert
     gpsSleepForMillis(1000, false);
-
     Watchdog.reset();
+
     // IDEA! since we KNOW the power demand will be high for 1 minute after poweron
     // just go into light sleep to reduce rp2040 power demand for 1 minute
     // i.e. guarantee that cold reset, takes 1 minute?
@@ -1280,7 +1279,9 @@ void GpsFullColdReset(void) {
     // Worst case to recover: unplug power and plug in again
 
     Watchdog.reset();
-    measureMyFreqs();
+    // don't bother in balloon mode
+    if (!BALLOON_MODE) measureMyFreqs();
+
     V1_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
     V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz (no we don't) then long sleep" EOL,
         PLL_SYS_MHZ);
@@ -1306,6 +1307,10 @@ void GpsFullColdReset(void) {
         Serial.end();
         busy_wait_ms(500);
     }
+
+    //*************************************
+    // HACK didn't get here
+    //*************************************
 
     // includes deinit of the usb pll now?
     kazuClocksSlow();
@@ -1390,14 +1395,15 @@ void GpsFullColdReset(void) {
     V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
     // V1_print(F("Restored core voltage back to 1.1v" EOL));
     V0_flush();
-    measureMyFreqs();
+    // don't bother if ?
+    if (!BALLOON_MODE) measureMyFreqs();
     IGNORE_KEYBOARD_CHARS = false;
 
     //******************
     Watchdog.reset();
 
     if (false && !USE_SIM65M) {
-        // TOTAL HACK experiment
+        // HACK experiment
         // since vbat seems to preserve the baud rate, even with NRESET assertion
         // try sending the full cold reset command at all reasonable baud rates
         // whatever baud rate the GPS was at, it should get one?
@@ -1813,7 +1819,10 @@ void updateGpsDataAndTime(int ms) {
         current_millis);
 
     // clear the StampPrintf buffer, in case it had anything.
-    DoLogPrint();
+    if (VERBY[1]) DoLogPrint();
+    //*************************************
+    // HACK didn't get here
+    //*************************************
 
     // FIX! we could leave here after we get N sentences?
     // we could keep track of how many sentences we get?
@@ -2349,11 +2358,7 @@ void kazuClocksRestore() {
         busy_wait_ms(500);
     }
 
-
     // FIX! we need usb at 48 mhz ?
-    // pll_init(pll_sys);
-    // ../rp2040/4.2.0//pico-sdk/src/rp2_common/hardware_pll/include/hardware/pll.h:62
-
     if (!BALLOON_MODE) {
         // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
         // pll pll_sys or pll_usb
@@ -2363,7 +2368,7 @@ void kazuClocksRestore() {
         // post_div2 Post Divider 2 - range 1-7
         pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
         // FIX! we don't need pll_sys for the Serial2 ? (gps) or do we?
-        busy_wait_ms(1000);
+        busy_wait_ms(1500);
         // High-level Adafruit TinyUSB init code,
         // does many things to get USB back online
         tusb_init();

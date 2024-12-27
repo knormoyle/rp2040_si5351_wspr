@@ -4,6 +4,7 @@
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 #include <Arduino.h>
 #include "led_functions.h"
+#include <Adafruit_SleepyDog.h> 
 
 const int LED_BLINK_ON_PERIOD_USEC = 50000;
 const int LED_BLINK_OFF_PERIOD_USEC = 300000;
@@ -81,13 +82,23 @@ void turnOnLED(bool turn_on) {
     digitalWrite(STATUS_LED_PIN, (turn_on) ? HIGH : LOW);
 }
 
-//********************
 bool isLEDOn(void) {
     return (digitalRead(STATUS_LED_PIN) ? true : false);
 }
 
 void flipLED(void) {
     turnOnLED(!isLEDOn());
+}
+
+//********************
+void blockingLongBlinkLED(uint8_t count) {
+    for (int i = 0; i < count ; i++ ) {
+        Watchdog.reset();
+        turnOnLED(true);
+        sleep_ms(1000);
+        turnOnLED(false);
+        sleep_ms(1000);
+    }
 }
 
 // other non-blocking examples to look at

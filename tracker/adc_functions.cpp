@@ -8,11 +8,12 @@
 
 #include "print_functions.h"
 #include "adc_functions.h"
+#include "led_functions.h"
 
 #include "hardware/adc.h"
 #include "hardware/gpio.h"
-
 #include "pico/stdlib.h"
+#include <Adafruit_SleepyDog.h> 
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/common/pico_stdlib_headers/include/pico/stdlib.h
 // aggregates
 // hardware_divider

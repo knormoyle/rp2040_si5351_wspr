@@ -24,7 +24,6 @@ void yPrintln(const char* pformat, ...);
 // ascii 10
 #define LF "\n"
 
-
 //***********************************************
 // this is another compile option
 #define USE_SPECIAL_ASCII 0
@@ -61,13 +60,11 @@ void yPrintln(const char* pformat, ...);
 #define BOLD_OFF ""
 #endif
 
-
 #define V0_println if (VERBY[0]) Serial.println
 #define V0_printf if (VERBY[0]) Serial.printf
 #define V0_print if (VERBY[0]) Serial.print
 #define V0_flush if (VERBY[0]) Serial.flush
 #define V0_chars_available VERBY[0] && Serial.available
-
 
 #define V1_println if (VERBY[1]) Serial.println
 #define V1_printf if (VERBY[1]) Serial.printf
@@ -90,4 +87,3 @@ void yPrintln(const char* pformat, ...);
 #define V4_flush if (VERBY[4]) Serial.flush
 
 #endif
-

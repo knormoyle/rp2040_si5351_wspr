@@ -25,6 +25,7 @@ void updateStatusLED(void);
 void turnOnLED(bool turn_on);
 bool isLEDOn(void);
 void flipLED(void);
+void blockingLongBlinkLED(uint8_t count);
 
 #endif
 
