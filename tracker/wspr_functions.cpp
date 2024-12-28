@@ -100,6 +100,7 @@ void wsprSleepForMillis(int n) {
             }
 
             // faster recovery with delay?
+            // could we get some variation that affects our symbol to symbol time?
             sleep_ms(10);
         }
     }

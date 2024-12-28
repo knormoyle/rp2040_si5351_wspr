@@ -1941,34 +1941,16 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // Each additional "symbol time" delay is 0.682666... seconds
     // (symbol time: is duration for 1 wspr symbol tx 8192/12000 or equivalently 256/375)
 
-    // summary
-
-    // old numbers
-    // 0 extra delay, DT = -0.3
-    // 1 extra symbol delay to start, DT = 0.4 or 0.5
-    // (increase of 0.7 or 0.8..matches symbol delay I added)
-    // 2 extra symbol delay to start, DT = still 0.4 or 0.5
-    // 3 extra symbol delay to start, DT = 1.8 ?
-    // from those results, seems like I want just 300 ms delay
-    // to get perfectly aligned for DT=0
-
+    //******************
     // static int EXTRA_DELAY_AFTER_PROCEED = 300; // milliseconds
+    // hmm..no benefit?
     static int EXTRA_DELAY_AFTER_PROCEED = 0;
     if (EXTRA_DELAY_AFTER_PROCEED<0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
             EXTRA_DELAY_AFTER_PROCEED);
         EXTRA_DELAY_AFTER_PROCEED = 0;
     }
-
-    //*******************************
-    // this should still work?
-    // hmm. at PLL_SYS_MHZ=60, we get DT=0.7 if we wait for a PROCEEDS_TO_SYNC=1
-    // skip it at slower clocks?
-    // yes that was good
-
     uint8_t PROCEEDS_TO_SYNC = 0;
-    // no, still getting DT=0.7 at 133Mhz. try keeping it with no extra PROCEED beforehand
-    // if (PLL_SYS_MHZ >= 125) PROCEEDS_TO_SYNC = 1;
 
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time,
@@ -1990,6 +1972,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // hmm. not updating led during this
     // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
     delay(EXTRA_DELAY_AFTER_PROCEED);
+    //******************
     Watchdog.reset();
 
     uint8_t symbol_count = WSPR_SYMBOL_COUNT;
@@ -2039,8 +2022,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
 
         PROCEED = false;
-        // FIX! ideally we sleep during the symbol time. (a little less than symbol time)
-        // hardwired 650 based on tweaking and seeing what SDR DT is reported by WSJT-X
+        // Ideally we sleep during the symbol time. (a little less than symbol time)
+        // hardwired 645 based on tweaking and seeing what SDR DT is reported by WSJT-X
         // we only use 10ms granularity in this routine, so need that slop subtracted
         // here..plus a little more?
         // basically this is a 'coarse', then 'very fine' alignment strategy.
