@@ -694,7 +694,7 @@ void si5351a_reset_PLLB(void) {
     int res;
 
     // FIX! is this mucking up anything
-    if (false) {
+    if (true) {
         // clear the status, then read it
         reg = SI5351A_DEVICE_STATUS;
         i2cWrite(reg, 0);
@@ -742,7 +742,7 @@ void si5351a_reset_PLLA(void) {
     int res;
 
     // FIX! is this mucking up anything?
-    if (false) {
+    if (true) {
         //******************
         // clear the status, then read it
         reg = SI5351A_DEVICE_STATUS;
@@ -1267,8 +1267,11 @@ void vfo_turn_on(uint8_t clk_num) {
     // (OEB/SSEN pins don't exist on si5351a 3 output)
     // i2cWrite(9, 0xFF);
 
+    // 12/28/24 new writes below here are good
+
     // new: pll input source is XTAL for PLLA and PLLB
     i2cWrite(15, 0x00);
+
 
     // Power Down, Integer Mode. PLLB source to MultiSynth. Not inverted. Src Multisynth.
     // hmm. why Integer Mode. means we have to switch to fractional mode?
@@ -1277,10 +1280,10 @@ void vfo_turn_on(uint8_t clk_num) {
     // 2mA drive
     // changed from PLLA source
     // starts at 16?
-    //    i2cWrite(reg, 0xAC);
+    // orig:   i2cWrite(reg, 0xAC);
 
     for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) {
-        i2cWrite(reg, 0xCC);
+        i2cWrite(reg, 0xAC);
     }
     // was:   i2cWrite(reg, 0xCC);
 
@@ -1301,9 +1304,10 @@ void vfo_turn_on(uint8_t clk_num) {
     }
 
     // new 12/27/24: have clock 0:3 disabled state be high impedance
-    // i2cWrite(24, 0b10101010);
+    i2cWrite(24, 0b10101010);
     // clk 4-7 ? shouldn't hurt..doesn't exist on si5351a 3 output
-    // i2cWrite(24, 0b10101010);
+    i2cWrite(24, 0b10101010);
+
 
     // FIX! are these just initial values?
     // set PLLA-B for div_16 mode (minimum even integer division)
@@ -1336,9 +1340,9 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // leave phase offsets = default (0)
     // new 2/28/24 now we're going to write 0's to clk0/1/2 offsets, just in case
-    // i2cWrite(165, 0x00);
-    // i2cWrite(166, 0x00);
-    // i2cWrite(167, 0x00);
+    i2cWrite(165, 0x00);
+    i2cWrite(166, 0x00);
+    i2cWrite(167, 0x00);
 
     // leave 183 crystal load capacitance at default 11 10pF
     // FIX! we're using default 10pf load capacitance?
@@ -1359,7 +1363,7 @@ void vfo_turn_on(uint8_t clk_num) {
     // 10: Internal CL = 8 pF.
     // 11: Internal CL = 10 pF (default).
     // new 12/28/24
-    // i2cWrite(183, 0xC0);
+    i2cWrite(183, 0xC0);
 
     // FIX! is 187 this a reserved address?
     // in AN1234 register map, this is shown as CLKIN_FANOUT_EN and XO_FANOUT_EN
@@ -1708,8 +1712,9 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     double symbol1desired = calcSymbolFreq(xmit_freq, 1, false);  // no print
     double symbol2desired = calcSymbolFreq(xmit_freq, 2, false);  // no print
     double symbol3desired = calcSymbolFreq(xmit_freq, 3, false);  // no print
-    // will give the freq you should see on wsjt-tx if hf_freq is the xmit_freq for a channel
-    // symbol can be 0 to 3. Can subtract 20 hz to get the low end of the bin
+    // will give the freq you should see on wsjt-tx if hf_freq is the xmit_freq 
+    // for a channel. symbol can be 0 to 3. 
+    // Can subtract 20 hz to get the low end of the bin
     // (assume freq calibration errors of that much, then symbol the 200hz passband?
 
     // in calcSymbolFreq(), could compare these offsets from the symbol0desired to expected?
@@ -1871,9 +1876,9 @@ void si5351a_calc_sweep(void) {
     V1_print(F(EOL));
     V1_print("si5351a_calc_sweep() END" EOL);
 }
-//*********************************************************************************
-// does this work? no. Hans method on 144Mhz is to fix the numerator and step the denominator
-// causes non-uniform symbol shift
+//****************************************************************************
+// does this work? no. Hans method on 144Mhz is to fix the numerator and 
+// step the denominator causes non-uniform symbol shift
 // alternate way to get steps of 1 on 144Mhz
 // with 26Mhz
 // c = 26e6 / 1.4648 in a + b/c equation
@@ -1893,7 +1898,7 @@ void si5351a_calc_sweep(void) {
 // the output frequency changing by the desired step,
 // and then I have manipulated b directly to send the WSPR signals.
 
-//*********************************************************************************
+//****************************************************************************
 // In your case if you divide 25mhz by 6 and then by 6.66666667
 // you get the somewhat magic value (rounded) of 625000.
 
