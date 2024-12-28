@@ -3,7 +3,7 @@
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
-// REMEMBER: no references to Serial.* in BALLOON_MODE! (no usb)
+// REMEMBER: no references to Serial.* or usb in BALLOON_MODE!
 
 // which gps chip is used?
 // ATGM336N if false
@@ -16,7 +16,6 @@ extern bool USE_SIM65M;
 // https://simcom.ee/documents/?dir=SIM28M
 // SIM28ML
 // https://simcom.ee/documents/?dir=SIM28ML
-
 // https://forum.arduino.cc/t/configuration-of-chinese-atgm336-gnss/1265640
 
 //*******************************************
@@ -128,7 +127,7 @@ extern bool BALLOON_MODE;
 //************************************************
 // false and true work here
 // sort power on for gps cold reset only
-bool PWM_COLD_GPS_POWER_ON_MODE = false;
+bool PWM_COLD_GPS_POWER_ON_MODE = true;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 
 // why isn't this true 12/15/24..true now. works (18Mhz)
@@ -254,7 +253,7 @@ void gpsSleepForMillis(int n, bool enableEarlyOut) {
     // FIX! should we do this here or where?
     Watchdog.reset();
     if (n < 0 || n > 120000) {
-        // V1_printf("ERROR: gpsSleepForMillis() n %d too big (120000 max). Using 1000" EOL, n);
+        // V1_printf("ERROR: gpsSleepForMillis() n %d too big (120000 max)" EOL, n);
         // n = 1000;
         // UPDATE: this is used while USB is disabled,
         // but BALLOON_MODE/VERBY don't protect us ..just don't print here
@@ -385,8 +384,9 @@ void setGnssOn_SIM65M(void) {
 
     // Packet Type:003 PAIR_GNSS_SUBSYS_POWER_OFF
     // Power off GNSS system. Include DSP/RF/Clock and other GNSS modules.
-    // CM4 also can receive commands (Include the AT command / the race Command / the part of PAIR
-    // command which is not dependent on DSP.) after sending this command
+    // CM4 also can receive commands after sending this command
+    // (Include the AT command / the race Command / the part of PAIR
+    // command which is not dependent on DSP.)
     // $PAIR003*39
 
     // Packet Type:020 PAIR_GET_VERSION
@@ -544,7 +544,8 @@ void setGpsBroadcast(void) {
 
         // no 0 or 1 fields?
 
-        // 2  GGA output frequency, statement output frequency is based on positioning update rate
+        // 2  GGA output frequency,
+        // statement output frequency is based on positioning update rate
         // n (0~9) means output once every n positioning times, 0 means no output
         // If this statement is left blank, the original configuration will be retained.
 
@@ -657,9 +658,11 @@ void disableGpsBroadcast(void) {
 // $GPTXT,01,01,02,MA=CASIC*27
 // Indicates the manufacturer's name (CASIC)
 // $GPTXT,01,01,02,IC=ATGB03+ATGR201*71
-// Indicates the model of the chip or chipset (baseband chip model ATGB03, RF chip model ATGR201)
+// Indicates the model of the chip or chipset
+// (baseband chip model ATGB03, RF chip model ATGR201)
 // $GPTXT,01,01,02,SW=URANUS2,V2.2.1.0*1D
-// Indicates the software name and version number (software name URANUS2, version number V2.2.1.0)
+// Indicates the software name and version number
+// (software name URANUS2, version number V2.2.1.0)
 // $GPTXT,01,01,02,TB=2013-06-20,13:02:49*43
 // Indicates the code compilation time (June 20, 2013, 13:02:49)
 // $GPTXT,01,01,02,MO=GB*77
@@ -672,9 +675,9 @@ void disableGpsBroadcast(void) {
 // re: GSV nmea sentences from SIM65M
 // Depending on the number of satellites tracked,
 // multiple messages of GSV data may be required.
-// In some software versions, maximum number of satellites reported as visible is limited to 12,
-// even though more may be visible
-// Hmm: is this fully compatible with max number expected by TinyGPS++ parsing? investigate.
+// In some software versions, maximum number of satellites reported as visible
+// is limited to 12, even though more may be visible
+// Hmm: is this fully compatible with max number expected by TinyGPS++ parsing?
 
 //************************************************
 // re: SIM65M comments on the *RMC nmea sentences
@@ -693,7 +696,7 @@ void disableGpsBroadcast(void) {
 // This protocol is used to configure the GNSS module’s parameters,
 // to set/get aiding information,
 // and to receive notifications from the GNSS module.
-// To process data conveniently, the PAIR commands is aligned with the NMEA sentence format.
+// To process data conveniently, the PAIR commands matches with the NMEA sentence format.
 
 void setGpsConstellations(int desiredConstellations) {
     // FIX! we'll have to figure this out for SIM65M
@@ -743,8 +746,9 @@ void setupSIM65M(int desiredBaud) {
 
     // Packet Type:003 PAIR_GNSS_SUBSYS_POWER_OFF
     // Power off GNSS system. Include DSP/RF/Clock and other GNSS modules.
-    // CM4 also can receive commands (Include the AT command / the race Command / the part of PAIR
-    // command which is not dependent on DSP.) after sending this command
+    // CM4 also can receive commands after sending this command
+    // (Include the AT command / the race Command / the part of PAIR
+    // command which is not dependent on DSP.)
     // The location service is not available after this command is executed.
     // The system can still receive configuration PAIR commands.
     // The application is running if necessary.
@@ -785,7 +789,8 @@ void setupSIM65M(int desiredBaud) {
     // $PAIR022*3A
 
     // Packet Type:023 PAIR_SYSTEM_REBOOT
-    // Reboot GNSS whole chip, including the GNSS submodule and other all CM4 modules.
+    // Reboot GNSS whole chip,
+    // including the GNSS submodule and other all CM4 modules.
     // $PAIR023*3B
 
     // 2.3.32 Packet Type:062
@@ -894,8 +899,8 @@ void setGpsBaud(int desiredBaud) {
     // BAUD
     if (USE_SIM65M) {
         switch (usedBaud) {
-            // $PAIR860,0,0,37,9600,0*23\r\n ==> Open UART0 to NMEA output without flow control.
-            // Baudrate is 9600.
+            // $PAIR860,0,0,37,9600,0*23 means:
+            // Open UART0 to NMEA output without flow control.  Baudrate is 9600.
             case 9600:
                 // alternate baudrate only but says min is 115200?
                 // yes! 9600 works after boot with 115200!. no buffer overflow
@@ -980,10 +985,11 @@ void setGpsBaud(int desiredBaud) {
     // allowing the RX and TX pins to be used for general input and output.
     // To re-enable serial communication, call Serial2.begin().
 
-    // FIX! we could try RP2040 using different bauds and see what baud rate it's at, then send
-    // the command to change baud rate. But really, how come we can't cold reset it to 9600?
-    // when it's in a not-9600 state? it's like vbat keeps the old baud rate on reset and/or
-    // power cycle?? makes it dangerous to use anything other than 9600 baud.
+    // FIX! we could try RP2040 using different bauds and see what baud rate it's at,
+    // then send the command to change baud rate.
+    // But really, how come we can't cold reset it to 9600?
+    // when it's in a not-9600 state? it's like vbat keeps the old baud rate on reset
+    // and/or power cycle?? makes it dangerous to use anything other than 9600 baud.
     Serial2.end();
     Serial2.begin(usedBaud);
     V1_printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
@@ -1146,7 +1152,6 @@ void pwmGpsPwrOn() {
             if (false && ((duty_cycle % 100) == 0)) {
                 V1_printf("pwmGpsPwrOn() duty_cycle (pct) %" PRIu64 EOL, duty_cycle);
             }
-
             on_usecs += 20;
             off_usecs -= 20;
         }
@@ -1171,7 +1176,7 @@ void GpsFullColdReset(void) {
     updateStatusLED();
 
     // turn it off first. may be off or on currently
-    V1_println(F("Turn off the serial2..float at the gps then? no UART stuff at poweron?"));
+    V1_println(F("Turn off the serial2..float at gps? no UART stuff at poweron?"));
     V1_flush();
     Serial2.end();
 
@@ -1204,7 +1209,8 @@ void GpsFullColdReset(void) {
     // or according to CASIC_ProtocolSpecification_english.pdf
 
     // does this force the reset right away? no power transition?
-    // some say it's just a boot mode configuration? (i.e. send before power cycle?)
+    // some say it's just a boot mode configuration?
+    // i.e. send before power cycle?
 
     // factory start. clear all data, reset rcvr.
     // Serial2.print("$PCAS10,3*1F\r\n");
@@ -1255,7 +1261,8 @@ void GpsFullColdReset(void) {
     // just go into light sleep to reduce rp2040 power demand for 1 minute
     // i.e. guarantee that cold reset, takes 1 minute?
     // hmm. we're stalling things now. maybe only sleep for 15 secs
-    // FIX! this apparently makes the Serial2 dysfunctional so the gps chip can't send output
+    // FIX! this apparently makes the Serial2 dysfunctional
+    // so the gps chip can't send output
     // it backs up on the initial TXT broadcast (revisions) and then hits a power peak
     // right after we fix the clock back to normal (50Mhz min tried)
     // so: is that worth it? dunno.
@@ -1275,7 +1282,6 @@ void GpsFullColdReset(void) {
     // it should always be re-enabled after 15 secs.
     // Worst case to recover: unplug power and plug in again
 
-    // HACK: made it to here (3)
     Watchdog.reset();
     // don't bother in balloon mode
     if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
@@ -1316,8 +1322,8 @@ void GpsFullColdReset(void) {
 
 
     // Release/uninitialise specified PLL.This will turn off the power to the specified PLL.
-    // pll_deinit(pll_usb) does not check if the PLL is in use before powering it off. (use care)
-    // this seems to cause a reboot
+    // pll_deinit(pll_usb) does not check if the PLL is in use before powering it off.
+    // use care.
 
     // examples: https://sourcevu.sysprogs.com/rp2040/picosdk/symbols/pll_deinit
     // sidenote: pi pico sdk has set_sys_clock_48mhz() function
@@ -1399,26 +1405,26 @@ void GpsFullColdReset(void) {
         // since vbat seems to preserve the baud rate, even with NRESET assertion
         // try sending the full cold reset command at all reasonable baud rates
         // whatever baud rate the GPS was at, it should get one?
-        V1_println(F("In case reset isn't everything: try full cold reset NMEA cmd at 9600 baud"));
+        V1_println(F("try full cold reset NMEA cmd at 9600 baud"));
         Serial2.begin(9600);
         Serial2.print("$PMTK104*37" CR LF);
         Serial2.flush();
         gpsSleepForMillis(1000, false);
 
-        V1_println(F("In case reset isn't everything, try full cold reset NMEA cmd at 19200 baud"));
+        V1_println(F("try full cold reset NMEA cmd at 19200 baud"));
         Serial2.begin(19200);
         Serial2.print("$PMTK104*37" CR LF);
         Serial2.flush();
         gpsSleepForMillis(1000, false);
 
-        V1_println(F("In case reset isn't everything, try full cold reset NMEA cmd at 38400 baud"));
+        V1_println(F("try full cold reset NMEA cmd at 38400 baud"));
         Serial2.begin(38400);
         Serial2.print("$PMTK104*37" CR LF);
         Serial2.flush();
         gpsSleepForMillis(1000, false);
 
-        // We know we would have never told GPS a higher baud rate because we get data rx overruns
-
+        // We know we would have never told GPS a higher baud rate
+        // because we get data rx overruns
         // FIX! do we have to toggle power off/on to get the cold reset?..i.e. the
         // nmea request just says what happens on the next power off/on?
         // vbat is kept on when we toggle vcc
@@ -1428,8 +1434,9 @@ void GpsFullColdReset(void) {
         gpsSleepForMillis(1000, false);
     }
 
-    // hmm. we get a power surge here then? Is it because the Serial2 data was backed up
-    // in the gps chip and busy waiting? Drain it? (usually it's the TXT stuff (versions)
+    // hmm. we get a power surge here then? Is it because the Serial2 data
+    // was backed up in the gps chip and busy waiting?
+    // Drain it? (usually it's the TXT stuff (versions)
     // at power on. Don't care.
 
     // we should be able to start talking to it
@@ -1444,19 +1451,22 @@ void GpsFullColdReset(void) {
     else BAUD_RATE = ATGM336H_BAUD_RATE;
     int desiredBaud = checkGpsBaudRate(BAUD_RATE);
 
-    // FIX! does SIM65M sometimes come up in 115200 and sometimes in the last BAUD_RATE set?
+    // FIX! does SIM65M sometimes come up in 115200 and
+    // sometimes in the last BAUD_RATE set?
     // do both?
     if (USE_SIM65M) {
         // it either comes up in desiredBaud from some memory, or comes up in 115200?
         Serial2.begin(115200);
         setGpsBaud(desiredBaud);
-        // since Serial2 was reset by setGpsBaud()..could try it again. might aid recovery
+        // since Serial2 was reset by setGpsBaud()..
+        // could try it again. might aid recovery
         // setGpsBaud(desiredBaud);
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         Serial2.begin(9600);
         setGpsBaud(desiredBaud);
-        // since Serial2 was reset by setGpsBaud()..could try it again. might aid recovery
+        // since Serial2 was reset by setGpsBaud()..could try it again.
+        // might aid recovery
         // setGpsBaud(desiredBaud);
     }
 
@@ -1470,11 +1480,13 @@ void GpsFullColdReset(void) {
     setGpsBalloonMode();
 
     // from the CASIC_ProtocolSpecification_english.pdf page 24
-    // Could be dangerous, since it's writing a baud rate to the power off/on reset config state?
+    // Could be dangerous,
+    // Since it's writing a baud rate to the power off/on reset config state?
     // could change it from 9600 and we'd lose track of what it is?
     // As long as we stick with 9600 we should be safe
     // CAS00. Description Save the current configuration information to FLASH.
-    // Even if the receiver is completely powered off, the information in FLASH will not be lost.
+    // Even if the receiver is completely powered off,
+    // the information in FLASH will not be lost.
     // Format $PCAS00*CS<CR><LF>
     // Example $PCAS00*01<CR><LF>
 
@@ -1533,7 +1545,6 @@ void GpsWarmReset(void) {
     Serial2.end();
 
     // don't assert reset during power off
-
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
     V1_println(F("Doing Gps WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
     // NOTE: should we start with NRESET_PIN low also until powered (latchup?)?
@@ -1614,8 +1625,9 @@ void writeGpsConfigNoBroadcastToFlash() {
 
     // Packet Type:003 PAIR_GNSS_SUBSYS_POWER_OFF
     // Power off GNSS system. Include DSP/RF/Clock and other GNSS modules.
-    // CM4 also can receive commands (Include the AT command / the race Command / the part of PAIR
-    // command which is not dependent on DSP.) after sending this command
+    // CM4 also can receive commands after sending this command
+    // (Include the AT command / the race Command / the part of PAIR
+    // command which is not dependent on DSP.)
     // The location service is not available after this command is executed.
     // The system can still receive configuration PAIR commands.
     // $PAIR003*39
@@ -1639,7 +1651,8 @@ void writeGpsConfigNoBroadcastToFlash() {
         // Packet Type:513 PAIR_NVRAM_SAVE_SETTING
         // Save the current configuration from RTC RAM to flash.
         // $PAIR513*3D
-        // In multi-Hz, this command can only be set when the GNSS system is powered off,
+        // In multi-Hz, this command can only be set when
+        // the GNSS system is powered off,
         // while 1Hz does not have this limitation.
         // <what does that mean? we do have GNSS off, so I guess okay?>
 
@@ -1647,7 +1660,8 @@ void writeGpsConfigNoBroadcastToFlash() {
         // Packet Type:514 PAIR_NVRAM_RESTORE_DEFAULT_SETTING
         // Clear the current configuration and restore the default settings.
         // This function does not support run time restore when GNSS is power on.
-        // Please send PAIR_GNSS_SUBSYS_POWER_OFF to power off GNSS before use this command
+        // Please send PAIR_GNSS_SUBSYS_POWER_OFF to power off GNSS
+        // before use this command
         // $PAIR514*3A
         strncpy(nmeaBaudSentence, "$PAIR513*3D" CR LF, 64);
     } else {
@@ -1671,11 +1685,13 @@ void writeGpsConfigNoBroadcastToFlash() {
 
 //************************************************
 void GpsON(bool GpsColdReset) {
-    // no print if no cold reset request. So I can grep on GpsColdReset as a special case only
+    // no print if no cold reset request.
+    // So I can grep on GpsColdReset as a special case only
     if (!GpsColdReset) {
         V1_printf("GpsON START GpsIsOn_state %u" EOL, GpsIsOn_state);
     } else {
-        V1_printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
+        V1_printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL,
+            GpsIsOn_state, GpsColdReset);
     }
 
     // could be off or on already
@@ -1690,7 +1706,8 @@ void GpsON(bool GpsColdReset) {
     if (!GpsColdReset) {
         V1_printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
     } else {
-        V1_printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL, GpsIsOn_state, GpsColdReset);
+        V1_printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL,
+            GpsIsOn_state, GpsColdReset);
     }
 
     V1_flush();
@@ -1699,7 +1716,8 @@ void GpsON(bool GpsColdReset) {
 //************************************************
 /*
 This used to be in the LightAPRS version of TinyGPSPlus-0.95
-instead updated TinyGPSPlus (latest) in libraries to make them public, not private
+instead updated TinyGPSPlus (latest) in libraries to make them public,
+not private
 < #if defined(ARDUINO_ARCH_RP2040)
 < void TinyGPSDate::clear()
 < {
@@ -1716,8 +1734,8 @@ void invalidateTinyGpsState(void) {
     // are these declared private?
     // FIX! how can we clear these? Do we change the library to make them public?
 
-    /* from TinyGPS++.h in libraries..modify it and move to public? (in struct TinyGPSDate
-    what about location etc? they have valid and updated
+    /* from TinyGPS++.h in libraries..modify it and move to public?
+    (in struct TinyGPSDate what about location etc? they have valid and updated
 
     private:
        bool valid, updated;
@@ -1826,7 +1844,8 @@ void updateGpsDataAndTime(int ms) {
     // inc on '*' (comes before the checksum)
     static int sentenceEndCnt = 0;
 
-    // unload each char to TinyGps++ object as it arrives and print it (actually into nmeaBuffer)
+    // unload each char to TinyGps++ object as it arrives and print it
+    // (actually into nmeaBuffer)
     // so we can see NMEA sentences for a period of time.
     // assume 1 sec broadcast rate
     // https://arduino.stackexchange.com/questions/13452/tinygps-plus-library
@@ -1875,11 +1894,13 @@ void updateGpsDataAndTime(int ms) {
         while (charsAvailable > 0) {
             // start the duration timing when we get the first char
             if (start_millis == 0) start_millis = current_millis;
-            if (charsAvailable > 25) {  // 25/32 now, because with initial drain, shouldn't hit?
-                // This is the case where we started this function with something in the buffer
-                // Unload each in less than 1ms..so we catch up pretty quick if necessary.
-                // Would think this case shouldn't happen in this loop now that we silently drain
-                // above to sentence start?
+            if (charsAvailable > 25) {
+                // 25/32 now, because with initial drain, shouldn't hit?
+                // This is the case where started with something in the buffer
+                // Unload each in less than 1ms..
+                // so we catch up pretty quick if necessary.
+                // Would think this case shouldn't happen in this loop now that
+                // we silently drain above to sentence start?
                 if (VERBY[1])
                     StampPrintf("WARN: was NMEA almost full. uart rx was %d)" EOL,
                         (int) charsAvailable);
@@ -1936,7 +1957,8 @@ void updateGpsDataAndTime(int ms) {
             // this should eliminate duplicate CR LF sequences and just put one in the stream
 
             // FIX! might be odd if a stop is spread over two different calls here?
-            // always start printing again on inital call to this function (see inital state)
+            // always start printing again on inital call to this function
+            // (see inital state)
 
             // note we're detecting the 1->0 transition on stopPrint here, to add \r\n for eol
             // before we print the current char
@@ -2080,7 +2102,7 @@ void updateGpsDataAndTime(int ms) {
             // new way. more accurate syncing?
             uint16_t gps_year;
             // not used
-            // uint8_t gps_month, gps_day, 
+            // uint8_t gps_month, gps_day,
             uint8_t gps_hour, gps_minute, gps_second, gps_hundredths;
             uint32_t fix_age;
             //  Use gps.time.age()?
@@ -2098,10 +2120,10 @@ void updateGpsDataAndTime(int ms) {
             bool gps_date_valid = gps_year >= 2024 && gps_year <= 2034;
 
             // function doesn't exist anymore?
-            // gps.crack_datetime(&gps_year, &gps_month, &gps_day, &gps_hour, 
+            // gps.crack_datetime(&gps_year, &gps_month, &gps_day, &gps_hour,
             //     &gps_minute, &gps_second, &gps_hundredths, &fix_age);
 
-            // NOTE: looks like grep of fix_age in putty.log can be frequently 
+            // NOTE: looks like grep of fix_age in putty.log can be frequently
             // just 125 to 143 millisecs
             // so how about we only update when fix_age is < 300 millisecs??
             if (!gpsTimeWasUpdated || (
@@ -2109,31 +2131,32 @@ void updateGpsDataAndTime(int ms) {
                     hour() != gps_hour ||
                     minute() != gps_minute ||
                     second() != gps_second) )) {
-                // use hundredths from the gps, to busy_wait_usecs until we're more likely 
-                // aligned to the second exactly. 
+                // use hundredths from the gps, to busy_wait_usecs until we're more likely
+                // aligned to the second exactly.
                 if (gps_hundredths > 99) {
-                    V1_printf("ERROR: TinyGPS gps_hundredths %u shouldn't be > 99. using 100" 
+                    V1_printf("ERROR: TinyGPS gps_hundredths %u shouldn't be > 99. using 100"
                         EOL, gps_hundredths);
                     gps_hundredths = 0;
                 }
-                // we've actually got some total code delay beyond the gps hundredths but assume 0.
+                // Got some total code delay beyond the gps hundredths but assume 0.
                 // that will be our fixed error. (positive relative to gps). should be < 1.0 sec
-                // since we're polling gps NMEA every sec? Hmm, we should only use it if fix_age is small
-                // fix_age is millisecs. So to keep error below 1 sec, lets only update if fix_millisecs < 1000
+                // since we're polling gps NMEA every sec? Hmm, we should only use it if fix_age
+                // is small. fix_age is millisecs.
+                // So to keep error below 1 sec, lets only update if fix_millisecs < 1000
                 // or if we never updated.
                 uint32_t usecsToAlign = 1000000 - (gps_hundredths * 10000);
                 busy_wait_us(usecsToAlign);
-                // now we're one more second past the gps time we got from TinyGPS. 
+                // now we're one more second past the gps time we got from TinyGPS.
                 // adjust the second before we use it.
                 gps_second += 1;
                 // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
-                // year can be given as full four digit year or two digts (2010 or 10 for 2010);  
+                // year can be given as full four digit year or two digts (2010 or 10 for 2010);
                 // it is converted to years since 1970
-                // we don't compare day/month/year on time anywhere, except when looking 
+                // we don't compare day/month/year on time anywhere, except when looking
                 // for bad time from TinyGPS state (tracker.ino)
                 setTime(gps_hour, gps_minute, gps_second, 0, 0, 0);
                 gpsTimeWasUpdated = true;
-                V1_printf("TinyGPS state caused setTime(%02u, %02u, %02u, 0, 0, 0)"     
+                V1_printf("TinyGPS state caused setTime(%02u, %02u, %02u, 0, 0, 0)"
                     EOL, gps_hour, gps_minute, gps_second);
             }
         }
@@ -2181,7 +2204,7 @@ void gpsDebug() {
         printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
 
         printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
-        printDateTime(gps.date, gps.time); // gps.time.age() exists?
+        printDateTime(gps.date, gps.time);  // gps.time.age() exists?
         printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);
@@ -2243,7 +2266,7 @@ void gpsDebug() {
 // After that, the only thing that cools down the LNA is turning 3V3 off again.
 // Disabling the ON_OFF pin does nothing.
 
-// sounds like a classic example of latch up caused by an input voltage exceeding a power rail.
+// A classic example of latch up caused by an input voltage exceeding a power rail?
 // https://en.wikipedia.org/wiki/Latch-up
 
 // https://forum.arduino.cc/t/gps-power-management-reset-loop/529253/5
@@ -2398,8 +2421,8 @@ void kazuClocksRestore() {
 
     // I guess printing should work now? (if not BALLOON_MODE)
     V1_println(F("kazuClocksRestore END" EOL));
-    // The Raspberry Pi Pico's Serial communication uses the same system clock as everything else.
-    // The baud rate of the serial communication is derived from this main clock frequency.
+    // Serial communication uses the same system clock as everything else.
+    // Baud rate of the serial communication is derived from this main clock frequency.
     // What does it mean for Serial2 when we're running at 12Mhz?
 }
 

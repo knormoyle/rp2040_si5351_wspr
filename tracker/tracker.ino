@@ -309,6 +309,33 @@ extern const int PLL_CALC_SHIFT = 7;
 // uint32_t PLL_FREQ_TARGET = 700000000;
 uint32_t PLL_FREQ_TARGET = 600000000;
 
+// 15 (min multiplier) * 26Mhz = 390 Mhz
+// the other (not used PLL) will run at this freq in default config? 
+// so what about targetting that? (will it error on the multiplier?)
+// check that code (set to min 15 if too small in si5351_functions.cpp
+// so we should be able
+
+//***************************
+// 390Mhz pll test: 
+// here's results from the magic spreadsheet showing denom values for 10/12/15/17/20M 
+// with mult/divisor selected to get pll in the 390Mhz region. 
+// 10M doesn't have a good value (uses the max value, which means there was no perfect value)
+//  
+// It shows that I can't get optimal denominator on 10M  
+// ..so the target pll freq is too low. But there were numerator-step-1 values that worked for 12/15/17/20M
+// I don't show actual pll freq in spreadsheet, because I generate the numerator elsewhere (in tracker code)
+//  
+// no green cells on 10M (and the 12M value is small)
+// so I won't use 390Mhz target because I want the perfect symbol shift on 10M too
+//***************************
+// uint32_t PLL_FREQ_TARGET = 390000000;
+
+// 16 * 26 = 416.. so maybe that will work
+// no
+// uint32_t PLL_FREQ_TARGET = 416000000;
+
+// why didn't see anything
+// uint32_t PLL_FREQ_TARGET = 500000000;
 
 // anything else will use PLL_DENOM_MAX
 // double check the values if the algo for div/mul in si5351_functios.cpp changes relative
@@ -408,7 +435,7 @@ volatile char _U4B_chan[4] = { 0 };
 // FIX! why is this a compiler problem if volatile? parameter to function fails
 // error: invalid convesion fro 'volatile char*' to 'char*'
 char _Band[3] = { 0 };  // string with 10, 12, 15, 17, 20 legal. null at end
-volatile char _tx_high[2] = { 0 };  // 0 is 2mA si5351. 1 is 8mA si5351
+volatile char _tx_high[2] = { 0 };  // 0 is 4mA si5351. 1 is 8mA si5351
 volatile char _testmode[2] = { 0 };
 volatile char _correction[7] = { 0 };
 volatile char _go_when_rdy[2] = { 0 };
@@ -583,7 +610,6 @@ void setup() {
         // Watchdog.disable();
         // just make it very long?
         Watchdog.enable(60000);
-
         // Watchdog.reset();
         // Serial on core1 is only used for printing (no keyboard input)
         // so okay to manage that with VERBY
@@ -669,8 +695,8 @@ bool core1_idled = false;
 void loop() {
     if (BALLOON_MODE) {
         // just sleep. hmm do we have any interrupts to deal with
-        // shouldn't sleep for a long time? try 5 secs
-        sleep_ms(5000);
+        // 100 secs
+        sleep_ms(100000);
         // hmm could just return, loop will be called again
         // return;
     }
@@ -775,8 +801,10 @@ void setup1() {
     Watchdog.enable(30000);
     Watchdog.reset();
 
-    adc_INIT();
     V0_flush();
+    blockingLongBlinkLED(8);
+
+    adc_INIT();
     Watchdog.reset();
 
     // was 12/26/24
@@ -819,7 +847,6 @@ void setup1() {
     // does a full gps cold reset now?
 
 
-    blockingLongBlinkLED(8);
     // 12/7/24. the GpsINIT covers GpsON() now?
     GpsINIT();
     GpsFixMillis = 0;
@@ -1070,7 +1097,6 @@ void setup1() {
     // the other core won't be messing with led's at this time
     // unless it goes to user config?
     Watchdog.reset();
-    // so we can tell we're here?
     blockingLongBlinkLED(4);
     // back to non-blocking blinking
     initStatusLED();

@@ -71,7 +71,6 @@ extern bool VERBY[10];
 int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
 
-
 void snapForTelemetry(void) {
     V1_println(F("snapForTelemetry START"));
     if (TESTMODE) {

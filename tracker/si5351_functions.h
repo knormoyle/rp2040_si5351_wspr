@@ -5,6 +5,8 @@
 #define SI5351_FUNCTIONS_H
 #include <stdint.h>
 
+const int SI5351A_DEVICE_STATUS =           1;
+const int SI5351A_INTERRUPT_STATUS_STICKY = 2;
 const int SI5351A_OUTPUT_ENABLE_CONTROL =   3;
 const int SI5351A_CLK0_CONTROL =            16;
 const int SI5351A_CLK1_CONTROL =            17;
@@ -39,11 +41,12 @@ const int SI5351A_CLK1_IDRV_4MA =           (1 << 0);
 const int SI5351A_CLK1_IDRV_2MA =           (0 << 0);
 
 const int SI5351A_PLL_RESET_PLLB_RST =      (1 << 7);
+const int SI5351A_PLL_RESET_PLLA_RST =      (1 << 5);
 
 // FIX! why were these static?
 // static would mean you can only call it from within this translation unit
 bool reserved_reg(uint8_t reg);
-int i2cWrite(uint8_t reg, uint8_t val);     // write reg via i2c
+int i2cWrite(uint8_t reg, uint8_t val);   // write reg via i2c
 int i2cWrRead(uint8_t reg, uint8_t val);  // read reg via i2c
 
 void vfo_init(void);  // removed static

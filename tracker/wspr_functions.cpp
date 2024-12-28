@@ -28,7 +28,8 @@
 // It turns out that much of the APIs for the micro-second alarm and timer functions
 // are conditional on PICO_TIME_DEFAULT_ALARM_POOL_DISABLED not being set.
 // But for the current build this is set (I don’t know why – I haven’t looked into it further) –
-// so not only is there no “default alarm pool” to which you can attach repeating timers and alarms,
+// so not only is there no “default alarm pool” to which you can attach 
+// repeating timers and alarms,
 // but even the functions to handle such things are “compiled out”.
 
 // 3) Raspberry Pi Pico Alarm System
@@ -39,7 +40,8 @@
 // in the official Arduino mbed based RP2040 core.
 
 // 4) Pico Low-level Timer Hardware API
-// Pico SDK’s “low level hardware API” directly (see chapter 4.1.22 in the Pico C/C++ SDK datasheet,
+// Pico SDK’s “low level hardware API” directly 
+// (see chapter 4.1.22 in the Pico C/C++ SDK datasheet,
 // and chapter 4.6 in the RP2040 datasheet).
 
 // The RP2040 has the concept of alarms which can be triggered on the main system timer,
@@ -58,7 +60,6 @@
 // The next triggering of the alarm will be equal to the requested period plus whatever time
 // it has taken to run the code in the interrupt service routine up to the point of
 // you re-arming the alarm.
-
 
 //*******************************************************************************
 // So: it appears using the PWM based interrupt mechanism avoids all these issues! (kevin)

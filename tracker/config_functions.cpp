@@ -87,7 +87,18 @@ extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];  // 1 to 3 digits?
 extern char _Band[3];      // string with 10, 12, 15, 17, 20 legal. null at end
-extern char _tx_high[2];   // 0 is 2mA si5351. 1 is 8mA si5351
+// https://rfzero.net/documentation/rf/
+// The table below shows the typical output power vs. current in the output stages 
+// running in push-pull with a T1 transformer
+// Current [mA] 
+// 137 kHz    1 MHz     10 MHz    30 MHz    50 MHz    200 MHz
+// 8 9,5 dBm  14,2 dBm  14,5 dBm  15,0 dBm  14,5 dBm  13,3 dBm
+// 6 9,2 dBm  12,8 dBm  13,3 dBm  13,7 dBm  13,0 dBm  11,8 dBm
+// 4 8,3 dBm  10,3 dBm  10,7 dBm  11,0 dBm  10,5 dBm   9,7 dBm
+// 2 5,2 dBm   4,7 dBm   5,0 dBm   5,5 dBm   5,0 dBm   4,5 dBm
+
+// Note running at 4ma output is just 4 dBm reduction. so maybe that should be our low power?
+extern char _tx_high[2];   // 0 is 4mA si5351. 1 is 8mA si5351
 extern char _testmode[2];  // currently: sweep telemetry
 
 // don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
