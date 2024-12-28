@@ -319,11 +319,13 @@ extern const int PLL_CALC_SHIFT = 7;
 // 390Mhz pll test: 
 // here's results from the magic spreadsheet showing denom values for 10/12/15/17/20M 
 // with mult/divisor selected to get pll in the 390Mhz region. 
-// 10M doesn't have a good value (uses the max value, which means there was no perfect value)
+// 10M doesn't have a good value (uses max value: means there was no perfect value)
 //  
 // It shows that I can't get optimal denominator on 10M  
-// ..so the target pll freq is too low. But there were numerator-step-1 values that worked for 12/15/17/20M
-// I don't show actual pll freq in spreadsheet, because I generate the numerator elsewhere (in tracker code)
+// ..so the target pll freq is too low. 
+// But there were numerator-step-1 values that worked for 12/15/17/20M
+// I don't show actual pll freq in spreadsheet, 
+// because I generate the numerator elsewhere (in tracker code)
 //  
 // no green cells on 10M (and the 12M value is small)
 // so I won't use 390Mhz target because I want the perfect symbol shift on 10M too
@@ -331,11 +333,16 @@ extern const int PLL_CALC_SHIFT = 7;
 // uint32_t PLL_FREQ_TARGET = 390000000;
 
 // 16 * 26 = 416.. so maybe that will work
-// no
+// not good
 // uint32_t PLL_FREQ_TARGET = 416000000;
-
-// why didn't see anything
+// this is good
 uint32_t PLL_FREQ_TARGET = 500000000;
+
+// why am I getting it shift to 10hz wide audio signal on sdruno?
+// oh, that's the symbol shifting at 1.46 secs or so
+// uint32_t PLL_FREQ_TARGET = 600000000;
+// try 900
+// uint32_t PLL_FREQ_TARGET = 900000000;
 
 // anything else will use PLL_DENOM_MAX
 // double check the values if the algo for div/mul in si5351_functios.cpp changes relative
