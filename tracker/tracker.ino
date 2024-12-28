@@ -27,7 +27,7 @@ bool FORCE_BALLOON_MODE = false;
 
 // A complete copy of the Raspberry Pi Pico SDK is included with the arduino-pico core,
 // and all functions in the core are available inside the standard link libraries.
-// When you call SDK functions, the core and libraries are not aware of any changes
+// When you use SDK functions, the core and libraries are not aware of any changes
 // to the Pico you perform.
 
 // Be wary of multicore and use of libraries. arduino-pico is not thread-safe.
@@ -307,7 +307,7 @@ extern const int PLL_CALC_SHIFT = 7;
 // the implied mul/div for 5 bands is covered by denom choices from spreadsheet for 700000000
 // uint64_t PLL_FREQ_TARGET = 900000000;
 // uint32_t PLL_FREQ_TARGET = 700000000;
-uint32_t PLL_FREQ_TARGET = 600000000;
+// uint32_t PLL_FREQ_TARGET = 600000000;
 
 // 15 (min multiplier) * 26Mhz = 390 Mhz
 // the other (not used PLL) will run at this freq in default config? 
@@ -335,7 +335,7 @@ uint32_t PLL_FREQ_TARGET = 600000000;
 // uint32_t PLL_FREQ_TARGET = 416000000;
 
 // why didn't see anything
-// uint32_t PLL_FREQ_TARGET = 500000000;
+uint32_t PLL_FREQ_TARGET = 500000000;
 
 // anything else will use PLL_DENOM_MAX
 // double check the values if the algo for div/mul in si5351_functios.cpp changes relative

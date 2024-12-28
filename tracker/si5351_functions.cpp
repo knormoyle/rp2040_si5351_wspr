@@ -2015,6 +2015,16 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
                 default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
             }
             break;
+        case 500000000:
+            switch (b) {
+                case 10: PLL_DENOM_OPTIMIZE = 986074; break;
+                case 12: PLL_DENOM_OPTIMIZE = 887467; break;
+                case 15: PLL_DENOM_OPTIMIZE = 739556; break;
+                case 17: PLL_DENOM_OPTIMIZE = 633905; break;
+                case 20: PLL_DENOM_OPTIMIZE = 986074; break;
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+            }
+            break;
         default:
             switch (b) {
                 case 10: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
