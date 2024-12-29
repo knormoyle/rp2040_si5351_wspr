@@ -90,7 +90,8 @@ last_absolute_error = 1e9
 # don't bother with < 1000 ?
 # for i in range(1000, j + 1, posstep):
 
-for k in range(10000000):
+# for k in range(10000000):
+while True:
     j = random.randint(10000, denomMax) # inclusive
     for l in range(1000):
         i = random.randint(2500, j) # inclusive
@@ -116,19 +117,21 @@ for k in range(10000000):
                 "output_freq", "%.4f" % output_freq, "absoluteError", "%.4f" % absoluteError);
         
         
+        shiftErrMax = 5e-2
         # look for the shift being wsprShift to 4 decimal places
         shift1Error = abs(wsprShift - shift)
         # this will be the max absolute error
         last_absolute_error = 2.5
+
         # if absoluteError <= last_absolute_error: 
-        if False and (shift1Error < 1e-2) and (absoluteError <= 5):
+        if False and (shift1Error < shiftErrMax) and (absoluteError <= 5):
             print("GOOD absoluteError. shiftError", "%.4f" % shift1Error, 
                 "(1 * shift)", "%.4f" % (1 * shift), "%d" % i, "%d" % j, 
                 "output_freq", "%.4f" % output_freq, "absoluteError", "%.4f" % absoluteError);
             sys.stdout.flush()
             # last_absolute_error = absoluteError
         
-        if shift1Error < 1e-2 and absoluteError < last_absolute_error:
+        if (shift1Error < shiftErrMax) and absoluteError < last_absolute_error:
             print("GOOD 1 shift found. shiftError", "%.4f" % shift1Error, 
                 "(1 * shift)", "%.4f" % (1 * shift), "%d" % i, "%d" % j, 
                 "output_freq", "%.4f" % output_freq, "absoluteError", "%.4f" % absoluteError);
@@ -136,7 +139,7 @@ for k in range(10000000):
             # last_absolute_error = absoluteError
         # can shift more than 1 denom?
         shift2Error = abs(wsprShift - (2 * shift))
-        if shift2Error < 1e-2 and absoluteError < last_absolute_error:
+        if (shift2Error < shiftErrMax) and absoluteError < last_absolute_error:
             print("GOOD 2 shift found. shiftError", "%.4f" % shift2Error, 
                 "(2 * shift)", "%.4f" % (2 * shift), "%d" % i, "%d" % j, 
                 "output_freq", "%.4f" % output_freq, "absoluteError", "%.4f" % absoluteError);
@@ -144,7 +147,7 @@ for k in range(10000000):
             # last_absolute_error = absoluteError
 
         shift3Error = abs(wsprShift - (3 * shift))
-        if shift3Error < 1e-2 and absoluteError < last_absolute_error:
+        if (shift3Error < shiftErrMax) and absoluteError < last_absolute_error:
             print("GOOD 3 shift found. shiftError", "%.4f" % shift3Error, 
                 "(3 * shift)", "%.4f" % (3 * shift), "%d" % i, "%d" % j, 
                 "output_freq", "%.4f" % output_freq, "absoluteError", "%.4f" % absoluteError);
