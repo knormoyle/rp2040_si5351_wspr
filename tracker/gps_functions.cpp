@@ -344,21 +344,29 @@ void setGpsBalloonMode(void) {
 
     //************************
     // SIM65M
+    // wow! just noticed the default mode is fitness mode
+    // FIX! should change it to general purpose
     // Packet Type:080 PAIR_COMMON_SET_NAVIGATION_MODE
     // Set navigation mode
     // $PAIR080,<CmdType>*<checksum>
     // '0' Normal mode: For general purpose
-    // '1' [Default Value] Fitness mode:
-    // For running and walking activities so that the low-speed (< 5 m/s)
-    // movement will have more of an effect on the position calculation.
+    // '1' [Default Value] Fitness mode: For running and walking activities 
+    //     so that the low-speed (< 5 m/s) movement will have more of an effect 
+    //     on the position calculation.
     // '2' Reserved
     // '3' Reserved
     // '4' Stationary mode: For stationary applications where a zero dynamic assumed.
     // '5' Reserved
     // '6' Reserved
-    // '7' Swimming mode: For swimming purpose so that it
-    // smooths the trajectory and improves the accuracy of distance calculation.
+    // '7' Swimming mode: For swimming purpose so that it smooths the trajectory and 
+    //     improves the accuracy of distance calculation.
     //************************
+
+    if (USE_SIM65M) {
+        Serial2.print("$PAIR080,0*2E" CR LF);  // Normal mode: For general purpose
+        Serial2.flush();
+        sleep_ms(2000);
+    }
 
     // FIX! should we not worry about setting balloon mode (3) for ATGM336?
     // doesn't seem like ATGM336 has a balloon mode. no PCAS10 cmd in
