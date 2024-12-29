@@ -19,7 +19,7 @@
 // issued under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License:
 // https://creativecommons.org/licenses/by-nc-nd/4.0/
 
-#include "SolarPosition.h"
+#include "solar_functions.h"
 
 //***********************************************************************
 // pointer to external sync function
@@ -184,7 +184,7 @@ SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Lo
 
         JD_frac = (
             (timeCandidate.Hour + (timeCandidate.Minute / 60.0) + (timeCandidate.Second / 3600.0)) /
-            (24.0 - 0.5);
+            (24.0 - 0.5)
         );
 
         elapsedT = JD_whole - Y2K_JULIAN_DAY;
@@ -229,14 +229,15 @@ SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Lo
         hourAngle = (DEG_TO_RAD * GreenwichHourAngle) + Longitude - rightAscension;
 
         // results:
-        result.distance = 1.000001018 *
-            (1 - earthOrbitEccentricity * earthOrbitEccentricity) /
-            (1 + earthOrbitEccentricity * cos(solarTrueAnomaly);
+        result.distance = 1.000001018 * (
+            ( 1 - (earthOrbitEccentricity * earthOrbitEccentricity) ) /
+            ( 1 + (earthOrbitEccentricity * cos(solarTrueAnomaly))  )
+        );
 
         // elevation from the horizon
         result.elevation = asin(
-            (sin(Latitude) * sin(Declination)) +
-            (cos(Latitude) * (cos(Declination) * cos(hourAngle))
+            ( sin(Latitude) * sin(Declination) ) +
+            ( cos(Latitude) * cos(Declination) * cos(hourAngle) )
         );
 
         // Azimuth measured eastward from north.
