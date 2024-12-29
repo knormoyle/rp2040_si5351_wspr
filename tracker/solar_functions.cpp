@@ -16,7 +16,7 @@
 // 2019 Ken Willmott
 // Arduino library based on the program "Arduino Uno and Solar Position Calculations"
 // (c) David R. Brooks, which can be found at http://www.instesre.org/ArduinoDocuments.htm
-// issued under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License:
+// Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
 // https://creativecommons.org/licenses/by-nc-nd/4.0/
 
 #include "solar_functions.h"
@@ -133,13 +133,12 @@ uint64_t JulianDate(uint32_t year, uint32_t month, uint32_t day) {
         year--;
         month += 12;
     }
-
     A = year / 100;
     B = 2 - A + (A / 4);
     JD_whole =
-        (uint64_t) ( 365.25  * (year + 4716) ) +
-        (uint32_t)  ( 30.6001 * (month + 1) ) +
-        ( day + B - 1524) ;
+        (uint64_t)( 365.25  * (year + 4716) ) +
+        (uint32_t)( 30.6001 * (month + 1) ) +
+        (day + B - 1524);
 
     return JD_whole;
 }
@@ -179,13 +178,11 @@ SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Lo
         JD_whole = JulianDate(
             tmYearToCalendar(timeCandidate.Year),
             timeCandidate.Month,
-            timeCandidate.Day
-        );
+            timeCandidate.Day);
 
         JD_frac = (
             (timeCandidate.Hour + (timeCandidate.Minute / 60.0) + (timeCandidate.Second / 3600.0)) /
-            (24.0 - 0.5)
-        );
+            (24.0 - 0.5));
 
         elapsedT = JD_whole - Y2K_JULIAN_DAY;
         elapsedT = (elapsedT + JD_frac) / DAYS_PER_JULIAN_CENTURY;
@@ -194,10 +191,9 @@ SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Lo
 
         earthOrbitEccentricity = 0.016708617 - (0.000042037 * elapsedT);
         sunCenter = DEG_TO_RAD * (
-            ( (1.9146   - (0.004847 * elapsedT)) * sin(    solarMeanAnomaly) ) +
-            ( (0.019993 - (0.000101 * elapsedT)) * sin(2 * solarMeanAnomaly) ) +
-            ( 0.00029                            * sin(3 * solarMeanAnomaly) )
-        );
+            ((1.9146   - (0.004847 * elapsedT)) * sin(1 * solarMeanAnomaly)) +
+            ((0.019993 - (0.000101 * elapsedT)) * sin(2 * solarMeanAnomaly)) +
+            (0.00029                            * sin(3 * solarMeanAnomaly)) );
 
         solarTrueAnomaly = solarMeanAnomaly + sunCenter;
 
@@ -208,44 +204,38 @@ SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Lo
             23 +
             (26 / 60.0) +
             (21.448 / 3600.0) -
-            ((46.815 / 3600) * elapsedT)
-        );
+            ((46.815 / 3600) * elapsedT) );
 
         JDx = JD_whole - Y2K_JULIAN_DAY;
         GreenwichHourAngle = 280.46061837 + (
             ((360 * JDx) % 360) +
             (0.98564736629 * JDx) +
-            (360.98564736629 * JD_frac)
-        );
+            (360.98564736629 * JD_frac));
+
         GreenwichHourAngle = fmod(GreenwichHourAngle, 360.0);
         solarTrueLongitude = fmod(sunCenter + solarLongitude, TWO_PI);
 
         rightAscension = atan2(
             sin(solarTrueLongitude) * cos(equatorObliquity),
-            cos(solarTrueLongitude)
-        );
+            cos(solarTrueLongitude));
 
         Declination = asin(sin(equatorObliquity) * sin(solarTrueLongitude));
         hourAngle = (DEG_TO_RAD * GreenwichHourAngle) + Longitude - rightAscension;
 
         // results:
         result.distance = 1.000001018 * (
-            ( 1 - (earthOrbitEccentricity * earthOrbitEccentricity) ) /
-            ( 1 + (earthOrbitEccentricity * cos(solarTrueAnomaly))  )
-        );
+            (1 - (earthOrbitEccentricity * earthOrbitEccentricity)) /
+            (1 + (earthOrbitEccentricity * cos(solarTrueAnomaly)) ) );
 
         // elevation from the horizon
         result.elevation = asin(
-            ( sin(Latitude) * sin(Declination) ) +
-            ( cos(Latitude) * cos(Declination) * cos(hourAngle) )
-        );
+            (sin(Latitude) * sin(Declination)) +
+            (cos(Latitude) * cos(Declination) * cos(hourAngle)));
 
         // Azimuth measured eastward from north.
         result.azimuth = PI +
-            atan2(
-                sin(hourAngle),
-                (cos(hourAngle) * sin(Latitude)) - (tan(Declination) * cos(Latitude))
-            );
+            atan2(sin(hourAngle),
+                (cos(hourAngle) * sin(Latitude)) - (tan(Declination) * cos(Latitude)));
 
         // copy the time
         result.time = tParam;

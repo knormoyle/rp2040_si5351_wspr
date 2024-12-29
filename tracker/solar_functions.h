@@ -13,7 +13,7 @@
 
 // Arduino library based on the program "Arduino Uno and Solar Position Calculations"
 // (c) David R. Brooks, which can be found at http://www.instesre.org/ArduinoDocuments.htm
-// and issued under the Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License:
+// Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
 // https://creativecommons.org/licenses/by-nc-nd/4.0/
 
 #include <Arduino.h>
