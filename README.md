@@ -8,6 +8,8 @@ The pcb used for this firmware is currently at [AD6Z tracker](https://github.com
 (v0.4_kbn dir). There are multiple BOM and CPL files for jlcpcb.com there. Contact me by email to find out which you should use if interested in building some at jlcpcb.com.
 Schematic and board png from jlcpcb are there also. The schematic has a buck/boost converter that's not used, some supercaps that are not used, an the LPFs on the si5351a clk0/clk1 have been changed in the bom/cpl files. But the schematic is pretty usable for understanding what's going on.. There are some datasheets for parts there also. Alternatives and other things being investigated.
 
+I think the power consumption, at 3.6V, doesn't exceed 40mA during gps or rf or idle times. Gps is left on except when rf'ing, so theoretically a battery powered tracker could be more agressive at saving energy by using gps less. I try to slow turn-on stuff to minimize the effect of gps chip surge currents during cold gps reset (start of day). (not an issue I think with gps warm reset, the normal gps off->on transition with VBAT power)
+
 ## Costs
 I could post invoices from some recent orders from jlcpcb.com. Cheaper with jlcpcb.com discounts and larger quantities. But even quantity 5 (the minimum) is cheap. Shouldn't be more than $10-$12 a board. (no bmp280, atgm336n gps). Shipping costs are $20 if you want fast shipping, but only $1.52 !! if you are willing to wait a bit for Global Standard Direct Line shipping.
 No extra pico board needed. RP2040 is integrated. You only have solder gps antenna and hf antenna and power connections. Debug done with usb cable for power/data, and gps antenna and short HF antenna stubs.
@@ -254,15 +256,31 @@ I couldn't think of a good way for deciding when to ignore the usb serial fully 
 
 
 ## Interesting current info
-I think I'm seeing 45ma on usb power when sending RF now. GPS cold reset current still is the peak current though, I think.
+I think I'm seeing 40mA a on usb power when sending RF now. GPS cold reset current still is the peak current though, I think? (have to get better power measuring device).
 
-The 45ma, I think that's 8ma si5351a output drive. Been testing on all bands: 20/17/15/12/10m.
+The 4mA output drive on si5351 seems like it's only 3db down from the configurable higher power 8mA choice.  So the default is low power drive which is 4mA output drive.
+For reference, on estimated power. This is singled ended drive. 
 
-that's at 5v but I think it's the same at 3.6v
+The si5351a(ms5351m) is doing double-ended drive: clk0/clk1 with clk1 180 degrees out of phase.  So the power should be twice these numbers, ideally?
 
-the thing seems to run at 3.3v, there's a voltage reset monitor that keeps things off if the voltage is too low.
+````
+https://rfzero.net/documentation/rf/
+The table below shows the typical output power vs. current in the output stages
+running in push-pull with a T1 transformer
+Current [mA] 
+    137 kHz  1 MHz     10 MHz    30 MHz    50 MHz    200 MHz
+8   9,5 dBm  14,2 dBm  14,5 dBm  15,0 dBm  14,5 dBm  13,3 dBm
+6   9,2 dBm  12,8 dBm  13,3 dBm  13,7 dBm  13,0 dBm  11,8 dBm
+4   8,3 dBm  10,3 dBm  10,7 dBm  11,0 dBm  10,5 dBm   9,7 dBm
+2   5,2 dBm   4,7 dBm   5,0 dBm   5,5 dBm   5,0 dBm   4,5 dBm
+````
 
-but I think the target with the ldo is around 3.6v voltage for normal balloon operation.
+The 40ma, I think that's 4ma si5351a output drive. Been testing on all bands: 20/17/15/12/10m.
+That's at 5v but I think it's the same at 3.6v
+
+The thing seems to run at 3.3v, there's a voltage reset monitor that keeps things off if the voltage is too low.
+
+But I think the target with the ldo is around 3.6v voltage for normal balloon operation.
 
 I went hog wild playing with clock speeds and turning usb pll off and sys pll off.
 I settled on running at 18 mhz (you can change the freq in the config up to 250mhz..default is 18mhz now)
@@ -271,9 +289,13 @@ I did have it running at 12mhz on the crystal oscillator like kazu suggested but
 
 I do some funky stuff on the first gps cold reset to try to get min power.
 
-since it messes with usb pll, there's some timing to get firmware compiled and uploaded
+Since it messes with usb pll, there's some timing to get firmware compiled and uploaded
 I found once I started with the code messing with usb, i had to unplug/replug in the usb to get the sequence right
 I ordered a usb plug that has a on/off switch that I'm going to use so I don't wear out my usb on my pc
+
+exciting update: I've updated constants and the symbol freq algo, to use optimal denominators for the symbol freq generation, so that the symbol shifts are exactly = the desired wspr shifts of 12000/8196 = ~1.4648 Hz,
+Basically get microHertz level accuracy on the symbol shifts, and absolute errors of < 1Hz.
+Different denominators targeted for different bands, using the spreadsheet data for deciding optimal denominator (per band). Same denominator used for all 4 u4b frequency bins on a band. By getting exact symbol shifts, I think the DT and SNR and frequency report from my WSJT-X sdr testing, has improved (more energy into the ffts being done by WSJT-X)
 
 ## Questions?
 I (Kevin Normoyle) will try to answer all questions or email.
