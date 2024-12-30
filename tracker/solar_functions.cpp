@@ -270,7 +270,7 @@ SolarPosition_t savedPosition;
 
 //***********************************************************************
 void calcSolarElevation(int *solarElevation, int *solarAzimuth, int *solarDistance) {
-    V1_print(F("calcSolarElevation START"));
+    V1_print(F("calcSolarElevation START" EOL));
 
     // we check before setting rtc. assuming these are all valid ranges
     // no double-check!
@@ -345,6 +345,9 @@ void calcSolarElevation(int *solarElevation, int *solarAzimuth, int *solarDistan
 
     // should be able to handle it from an 'unsigned long' for time_t ?
     uint64_t epochTime = getEpochTime();
+    V1_printf("calculateSolarPosition epochTime %" PRIu64 " lat %.f lon %.f" EOL,
+        epochTime, lat, lon);
+
     savedPosition = calculateSolarPosition(epochTime, 
         lat * DEG_TO_RAD, lon * DEG_TO_RAD);
 
@@ -366,20 +369,31 @@ void calcSolarElevation(int *solarElevation, int *solarAzimuth, int *solarDistan
     *solarAzimuth   = (int)solarAzimuth_here;
     *solarDistance  = (int)solarDistance_here;
 
-    V1_print(F("calcSolarElevation END"));
+    V1_print(F("calcSolarElevation END" EOL));
 }
 
 //***********************************************************************
 // Function that gets current epoch time
 time_t getEpochTime() {
-    // this is a unsigned long?
-    time_t get_now = now();
     // from PaulStoffregen Timelib.h
     // https://github.com/PaulStoffregen/Time
     // now()  returns the current time as seconds since Jan 1 1970
 
     // now() will be wrong if we didn't set time correctly from gps
-    return get_now;
+    int rtc_year = year();
+    int rtc_month = month();
+    int rtc_day = day();
+    int rtc_hour = hour();
+    int rtc_minute = minute();
+    int rtc_second = second();
+
+    // this is a unsigned long?
+    time_t epoch_now = now();
+    V1_print("getEpochTime (utc)"); 
+    V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
+        rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);
+
+    return epoch_now;
 }
 //***********************************************************************
 

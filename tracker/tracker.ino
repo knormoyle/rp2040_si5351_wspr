@@ -1282,12 +1282,12 @@ void loop1() {
     GpsON(false);  // no full cold reset
 
     //******************
-    float solar_voltage;
-    solar_voltage = readVoltage();
-    if ( solar_voltage <= BattMin || solar_voltage <= GpsMinVolt ) {
+    float solarVoltage;
+    solarVoltage = readVoltage();
+    if ( solarVoltage <= BattMin || solarVoltage <= GpsMinVolt ) {
         sleepSeconds(BATT_WAIT);
     } else {
-        V1_println(F("loop1() solar_voltage good"));
+        V1_printf("loop1() good solarVoltage %.f" EOL, solarVoltage);
         //*********************
         // FIX! this can set time and unload NMEA sentences?
         // unload for 2 secs to make sure we get 1 sec broadcasts?
@@ -1795,7 +1795,7 @@ void sleepSeconds(int secs) {
     uint64_t start_millis = millis();
     uint64_t current_millis = start_millis;
     uint64_t duration_millis = (uint64_t) secs * 1000;
-    float solar_voltage;
+    float solarVoltage;
     do {
         Watchdog.reset();
         // can power off gps depending on voltage
@@ -1803,8 +1803,10 @@ void sleepSeconds(int secs) {
         // uint32_t usec = time_us_32();
         GpsON(false);
 
-        solar_voltage = readVoltage();
-        if (solar_voltage < BattMin || solar_voltage < GpsMinVolt)
+        solarVoltage = readVoltage();
+        if (solarVoltage < BattMin || solarVoltage < GpsMinVolt)
+            V1_printf("sleepSeconds() bad solarVoltage %.f ..(1) turn gps off" EOL, 
+                solarVoltage);
             GpsOFF(false);  // don't keep TinyGPS state
         // FIX! should we unload/use GPS data during this?
         // gps could be on or off, so no?
@@ -1831,7 +1833,9 @@ void sleepSeconds(int secs) {
     // hmm. maybe we just toggle the current state
     // if it's off, we turn it on. If it's on, we turn it off
     // that should be good for power
-    if (solar_voltage < BattMin || solar_voltage < GpsMinVolt) {
+    if (solarVoltage < BattMin || solarVoltage < GpsMinVolt) {
+        V1_printf("sleepSeconds() bad solarVoltage %.f ..(2) turn gps off" EOL, 
+            solarVoltage);
         GpsOFF(false);  // don't keep TinyGPS state
     } else {
         // I suppose we really want to know how long it's been off
