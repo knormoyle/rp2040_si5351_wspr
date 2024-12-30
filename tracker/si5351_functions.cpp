@@ -534,33 +534,37 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     PLLB_regs[6] = (uint8_t)(p2 >> 8);
     PLLB_regs[7] = (uint8_t)p2;
 
-    // start and end are looked at below, if s_ms_div_prev = 0
+    // Hans says registers are double-buffered, and the last-of-8 triggers an update of all the changes
+    // 'Always include in your block of register writes, the final one of the block of 8. 
+    // So by all means chop some unnecessary writes off the start of the block, but never the end!'
+    // https://groups.io/g/picoballoon/message/19155
+    // Maybe this works, because p2 is affected by both numerator and denominator
+    // I'm doing numerator-change-only for symbol shift now, so p2 should always change
+    // unless the symbol doesn't change!
+
+    // start and end are looked at below, if s_ms_div_prev != 0 which 
+    // says we can look at last saved state (s_PLLB_regs_prev)
     // so these are out of the for loops
     uint8_t start = 0;
     uint8_t end = 7;
 
-    // is this just looking for a range of bits that changed?
-    // the i2cWriten writes as burst below..maybe that's why?
-    // we could keep a static copy of what was written , and only write
-    // when values change.
-    if (s_ms_div_prev != 0) {  // global. basically it implies s_PLLB_regs_prev has data
+    // Looking for a range of bits that changed?
+    // the i2cWriten writes as burst below.
+    if (s_ms_div_prev != 0) {  // global. basically a 'valid' bit: implies s_PLLB_regs_prev has data
         for (; start < 8; start++) {
             if (PLLB_regs[start] != s_PLLB_regs_prev[start]) break;
         }
-        // FIX! is this detecting a non-change?
+        // detect no change of anything?
         if (start == 8) return;
 
         for (; end > start; end--) {
-            // is this so we just write the start to end that has changed?
+            // so so we just write the start to end that has changed?
             if (PLLB_regs[end] != s_PLLB_regs_prev[end]) break;
         }
     }
 
     uint8_t reg = SI5351A_PLLB_BASE + start;
     uint8_t len = end - start + 1;
-
-    // FIX! does this really need to be &PLLB_regs[start]
-    // to get the pointer, not the value? I guess?
     i2cWriten(reg, &PLLB_regs[start], len);
 
     // this can't be swap..so how could it have worked?

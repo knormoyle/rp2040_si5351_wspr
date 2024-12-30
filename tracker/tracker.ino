@@ -1310,6 +1310,7 @@ void loop1() {
         // this doesn't need qualification on whether we got a good date/time
         // since we check that first, before we do any looking for a 3d fix
         bool fix_valid_all = !GpsInvalidAll &&
+            (gps.date.year() >= 2024 && gps.date.year() <= 2034) && // new: 12/30/24
             gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
             gps.hdop.isValid() &&
             gps.altitude.isValid() &&
@@ -1333,6 +1334,10 @@ void loop1() {
             // if gps time is valid, we constantly (each NMEA burst grab)
             // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime()
             // so don't here. Only update LED state here, though
+            // it is common for gps chips to send out 1/1/2080 dates when invalid
+            // I see 01/07/2080 in SIM65M. 00/00/2000 in ATGM336H.
+            // although time sees okay? (utc time)
+            // this is a check for validity
             if (gps.date.year() >= 2024 && gps.date.year() <= 2034)
                 setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
             else
@@ -1804,10 +1809,11 @@ void sleepSeconds(int secs) {
         GpsON(false);
 
         solarVoltage = readVoltage();
-        if (solarVoltage < BattMin || solarVoltage < GpsMinVolt)
+        if (solarVoltage < BattMin || solarVoltage < GpsMinVolt) {
             V1_printf("sleepSeconds() bad solarVoltage %.f ..(1) turn gps off" EOL, 
                 solarVoltage);
             GpsOFF(false);  // don't keep TinyGPS state
+        }
         // FIX! should we unload/use GPS data during this?
         // gps could be on or off, so no?
         // whenever we have spin loops we need to updateStatusLED()

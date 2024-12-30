@@ -406,7 +406,7 @@ void setGnssOn_SIM65M(void) {
     // such as the firmware release information, DCB values, HW interface,
     // ULP enable and NVRAM auto saving.
 
-    if (false) {
+    if (true) {
         V1_println(F("setGnsOn_SIM65M START"));
         // PAIR_GET_VERSION
         Serial2.print("$PAIR020*38" CR LF);
@@ -444,8 +444,11 @@ void setGnssOn_SIM65M(void) {
     // (when writing to flash)
 
     // PAIR_GNSS_SUBSYS_POWER_ON
-    Serial2.print("$PAIR002*38" CR LF);
-    Serial2.flush();
+    if (false) {
+        Serial2.print("$PAIR002*38" CR LF);
+        Serial2.flush();
+    }
+
     sleep_ms(2000);
     V1_println(F("setGnsOn_SIM65M END"));
 }
@@ -715,28 +718,73 @@ void setGpsConstellations(int desiredConstellations) {
     // FIX! should we ignore desiredConstellations and force 3 (BDS + GPS
     int usedConstellations = desiredConstellations;
     char nmeaSentence[62] = { 0 };
-
-    switch (usedConstellations) {
-        // case 0 isn't defined in the CASIC_ProtocolSpecification.pdf?
-        case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 62); break;  // GPS
-        case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 62); break;  // BDS
-        case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 62); break;  // GPS+BDS
-        case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 62); break;  // GLONASS
-        case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 62); break;  // GPS+GLONASS
-        case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 62); break;  // BDS+GLONASS
-        case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break;  // GPS+BDS+GLONASS
-        default:
-            usedConstellations = 3;
-            strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62);  // GPS+BDS
+    if (USE_SIM65M) {
+        switch (usedConstellations) {
+            // we don't have a code for including GALILEO?
+            case 1: strncpy(nmeaSentence, "$PAIR066,1,0,0,0,0,0,*3B" CR LF, 62); break;  // GPS
+            case 2: strncpy(nmeaSentence, "$PAIR066,0,0,0,1,0,0,*3B" CR LF, 62); break;  // BDS
+            case 3: strncpy(nmeaSentence, "$PAIR066,1,0,0,1,0,0,*3A" CR LF, 62); break;  // GPS+BDS
+            case 4: strncpy(nmeaSentence, "$PAIR066,0,1,0,0,0,0,*3B" CR LF, 62); break;  // GLONASS
+            case 5: strncpy(nmeaSentence, "$PAIR066,1,1,0,0,0,0,*3A" CR LF, 62); break;  // GPS+GLONASS
+            case 6: strncpy(nmeaSentence, "$PAIR066,0,1,0,1,0,0,*3A" CR LF, 62); break;  // BDS+GLONASS
+            case 7: strncpy(nmeaSentence, "$PAIR066,1,1,0,1,0,0,*3B" CR LF, 62); break;  // GPS+BDS+GLONASS
+            default:
+                usedConstellations = 3;
+                strncpy(nmeaSentence, "$PAIR066,1,0,0,1,0,0,*3A" CR LF, 62); break;  // GPS+BDS
+        }
+    } else {
+        switch (usedConstellations) {
+            // case 0 isn't defined in the CASIC_ProtocolSpecification.pdf?
+            case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 62); break;  // GPS
+            case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 62); break;  // BDS
+            case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 62); break;  // GPS+BDS
+            case 4: strncpy(nmeaSentence, "$PCAS04,4*1D" CR LF, 62); break;  // GLONASS
+            case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 62); break;  // GPS+GLONASS
+            case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 62); break;  // BDS+GLONASS
+            case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break;  // GPS+BDS+GLONASS
+            default:
+                usedConstellations = 3;
+                strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62);  // GPS+BDS
+        }
     }
+    // SIM65M 
+    // huh. this is like causing another GPS reset? (will be warm reset?)
+    // Packet Type:066
+    // PAIR_COMMON_SET_GNSS_SEARCH_MODE
+    // Configure the receiver to start searching for satellites. 
+    // The setting is available when the NVRAM data is valid.
+    // The device restarts when it receives this command.
+    // Abbreviation: (GPS: "G", GLONASS: "R", Galileo: "E", BeiDou: "B", NavIC, "I")
 
-    // FIX! does the above not do anything? is this the only way?
-    if (false) {
-        // alternative experiment
-        // what about this rumored PMTK353 sentence?
-        // $PMTK353,1,1,1,0,1*2B : Search GPS BEIDOU GLONASS and GALILEO satellites
-        strncpy(nmeaSentence, "$PMTK353,1,1,1,0,1*2B" CR LF, 62);
-    }
+    // GPS_Enabled 
+    // "0", disable (DO NOT search GPS satellites).
+    // "1", search GPS satellites
+    // GLONASS_Enabled 
+    // "0", disable (DO NOT search GLONASS satellites).
+    // "1", search GLONASS satellites.
+    // Galileo_Enabled 
+    // "0", disable (DO NOT search Galileo satellites).
+    // "1", search Galileo satellites
+    // BeiDou_Enabled 
+    // "0", disable (DO NOT search BeiDou satellites).
+    // "1", search BeiDou satellites
+    // QZSS_Enabled 
+    // "0", disable (DO NOT search QZSS satellites).
+    // "1", search QZSS satellites
+    // NavIC_Enabled 
+    // "0", disable (DO NOT search Nav
+    // "1", search NavIC satellites
+
+    // For SIM65M:
+    // L1 single frequency, supports 5 modes G/ GR/ GE/ GB/ GREB as follows:
+    // PAIR066,1,0,0,0,0,0 GPS only
+    // PAIR066,1,1,0,0,0,0 GPS+GLONASS
+    // PAIR066,1,0,1,0,0,0 GPS+GALILEO
+    // PAIR066,1,0,0,1,0,0 GPS+ BEIDOU
+    // PAIR066,1,1,1,1,0,0 GPS+GLONASS+GALILEO+BEIDOU
+    // PAIR066,1,1,0,1,0,0 GPS+GLONASS+BEIDOU
+    // QZSS is always switchable.
+    
 
     Serial2.print(nmeaSentence);
     Serial2.flush();
@@ -747,7 +795,10 @@ void setGpsConstellations(int desiredConstellations) {
     V1_printf("setGpsConstellations END %d" EOL, desiredConstellations);
 }
 
+//************************************************
 void setupSIM65M(int desiredBaud) {
+    // Currently nothing?
+
     // Packet Type:002 PAIR_GNSS_SUBSYS_POWER_ON
     // Power on the GNSS system. Include DSP/RF/Clock and other GNSS modules.
     // Please send this command before using any location service.
@@ -1499,14 +1550,6 @@ void GpsFullColdReset(void) {
     // Format $PCAS00*CS<CR><LF>
     // Example $PCAS00*01<CR><LF>
 
-    if (USE_SIM65M) {
-        V1_print(F("SIM65M: Write GPS current config (no broadcast, GNSS service disabled"));
-        V1_print(F("SIM65M: still default constellations? (4) GPS/BDS/GLONASS/GALILEO"));
-        V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
-    } else {
-        V1_print(F("ATGM336H: Write GPS current config (no broadcast, just GPS constellations"));
-        V1_println(F(" to GPS Flash (for use in next GPS cold reset?)"));
-    }
 
     // will this help us to boot in a better config so
     // we don't get the power demand peaks we see (on subsequent boots)
@@ -1515,6 +1558,14 @@ void GpsFullColdReset(void) {
     // we only do gps cold reset at start of day.
     // Don't do it in BALLOON_MODE. that should fix the issue
     if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
+        if (USE_SIM65M) {
+            V1_print(F("SIM65M: Write GPS current config (no broadcast, GNSS service disabled" EOL));
+            V1_print(F("SIM65M: (NO) still default constellations? (4) GPS/BDS/GLONASS/GALILEO" EOL));
+            V1_print(F(" to GPS Flash (for use in next GPS cold reset?)" EOL));
+        } else {
+            V1_print(F(" to GPS Flash (for use in next GPS cold reset?)" EOL));
+            V1_print(F("ATGM336H: Write GPS current config (no broadcast, just GPS constellations" EOL));
+        }
         // this will init to just GPS for the right then restore as below
         writeGpsConfigNoBroadcastToFlash();
         // restores to desired constellations and broadcast
@@ -2165,7 +2216,6 @@ void updateGpsDataAndTime(int ms) {
                 // adjust the second before we use it.
                 gps_second += 1;
 
-
                 //******************************
                 // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
                 // year can be given as full four digit year or two digts (2010 or 10 for 2010);
@@ -2203,7 +2253,7 @@ void updateGpsDataAndTime(int ms) {
                     }
                 }
                 if (gpsTimeBad) {
-                    V1_print("ERROR: gps time is bad.");
+                    V1_print("ERROR: gps time is bad. Maybe no received gps time yet.");
                     V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
                         gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                 } else {
