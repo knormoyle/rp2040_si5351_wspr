@@ -64,6 +64,7 @@ extern bool USE_SIM65M;
 #include "debug_functions.h"
 #include "led_functions.h"
 #include "print_functions.h"
+#include "solar_functions.h"
 // enums for voltage at:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
 #include "hardware/vreg.h"
@@ -2109,22 +2110,28 @@ void updateGpsDataAndTime(int ms) {
         } else {
             // new way. more accurate syncing?
             uint16_t gps_year;
-            // not used
-            // uint8_t gps_month, gps_day,
+            // use now for setting rtc, so we have a better solar elevation 
+            // calc if the time is old 
+            // lat/lon will still be old. we don't use altitude for that calc?
+
+            uint8_t gps_month, gps_day;
             uint8_t gps_hour, gps_minute, gps_second, gps_hundredths;
             uint32_t fix_age;
-            //  Use gps.time.age()?
+            // Use gps.time.age()?
             // also duplicate this check to say it's a valid date in TinyGPS
             fix_age = gps.time.age();
             gps_year = gps.date.year();
-            // gps_month = gps.date.month();
-            // gps_day = gps.date.day();
+            gps_month = gps.date.month();
+            gps_day = gps.date.day();
             gps_hour = gps.time.hour();
             gps_minute = gps.time.minute();
             gps_second = gps.time.second();
             // FIX! hmm. we don't get hundredths any more?
             // so we could be off by +- 0.5 sec + code delay? (300 millisecs + ?)
             gps_hundredths = 0;
+            // FIX! we could also look at TimeLib timeStatus() to help qualify?
+            // https://github.com/PaulStoffregen/Time?tab=readme-ov-file
+            // enum is timeNotSet or timeSet
             bool gps_date_valid = gps_year >= 2024 && gps_year <= 2034;
 
             // function doesn't exist anymore?
@@ -2157,15 +2164,56 @@ void updateGpsDataAndTime(int ms) {
                 // now we're one more second past the gps time we got from TinyGPS.
                 // adjust the second before we use it.
                 gps_second += 1;
+
+
+                //******************************
                 // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
                 // year can be given as full four digit year or two digts (2010 or 10 for 2010);
                 // it is converted to years since 1970
                 // we don't compare day/month/year on time anywhere, except when looking
                 // for bad time from TinyGPS state (tracker.ino)
-                setTime(gps_hour, gps_minute, gps_second, 0, 0, 0);
-                gpsTimeWasUpdated = true;
-                V1_printf("TinyGPS state caused setTime(%02u, %02u, %02u, 0, 0, 0)"
-                    EOL, gps_hour, gps_minute, gps_second);
+                // FIX! should I work about setting day month year? why not
+                // then we can get all that info from the rtc, so if the gps data is 
+                // stail for time, we get a better solar elevation calculation..accurate time?
+
+                // JUST IN CASE: let's validate the ranges and not update if invalid!!
+                bool gpsTimeBad = false;
+                // all uint8_t so don't have to check negatives
+                if (gps_hour > 23) gpsTimeBad = true;
+                if (gps_minute > 59) gpsTimeBad = true;
+                if (gps_second > 59) gpsTimeBad = true;
+                // should we validate by the month? forget about that. unlikely to glitch that way?
+                if (gps_day > 31) gpsTimeBad = true;
+                if (gps_month > 12) gpsTimeBad = true;
+                if (gps_month < 1) gpsTimeBad = true;
+                // should already have validated year range? but do it here too
+                // will have to remember to update this in 10 years (and above too!)
+                if (gps_year < 2024 && gps_year > 2034) gpsTimeBad = true;
+
+                // what the heck, check the days in a month is write. (subtract one from month)
+                /// if we have a valid month for this array!
+                static const uint8_t monthDays[] = {31,28,31,30,31,30,31,31,30,31,30,31}; 
+                if (!gpsTimeBad) {
+                    // we know will be 0 to 11, from above check of gps_month
+                    uint8_t validDays = monthDays[gps_month - 1];
+                    if (gps_day > validDays) {
+                        V1_printf("ERROR: gps time is bad. day %u too big. max %u for the month" EOL,
+                            gps_day, validDays);
+                        gpsTimeBad = true;
+                    }
+                }
+                if (gpsTimeBad) {
+                    V1_print("ERROR: gps time is bad.");
+                    V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
+                        gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+                } else {
+                    setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+                    gpsTimeWasUpdated = true;
+                    V1_print("GOOD: rtc setTime() with"); 
+                    V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
+                        gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+                }
+                //******************************
             }
         }
     }

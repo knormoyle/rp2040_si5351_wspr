@@ -38,6 +38,10 @@
 // includes such APIs as “add_alarm_in_us”.
 // But as with the repeated timer system this appears not to be available (at present)
 // in the official Arduino mbed based RP2040 core.
+// But maybe alarms work fine now?
+// https://github.com/khoih-prog/RP2040_RTC/blob/main/README.md
+// https://github.com/raspberrypi/pico-sdk/blob/master/src/common/pico_time/include/pico/time.h
+
 
 // 4) Pico Low-level Timer Hardware API
 // Pico SDK’s “low level hardware API” directly 

@@ -38,7 +38,7 @@ SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Lo
 // class interface
 class SolarPosition {
   private:
-    // shared pointer to external sync function
+    // shared pointer to external sync function (Not used?)
     static getExternalTime getExtTimePtr;  
     // current values:
     double Latitude;
@@ -59,5 +59,9 @@ class SolarPosition {
     double getSolarDistance();
     double getSolarDistance(time_t t);
 };
+
+// returns 3 values, using rp2040 rtc and TinyGPS gps state (lat/lon)
+void calcSolarElevation(int *solarElevation, int *solarAzimuth, int *solarDistance);
+time_t getEpochTime();
 
 #endif  // SOLAR_FUNCTIONS_H

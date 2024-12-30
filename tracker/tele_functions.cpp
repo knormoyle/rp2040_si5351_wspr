@@ -12,8 +12,13 @@
 #include "mh_functions.h"
 #include "adc_functions.h"
 #include "tele_functions.h"
+// to calc solar elevations
+#include "solar_functions.h"
+
+bool SPEED_IS_SOLAR_ELEVATION_MODE = true;
 
 #include <TinyGPS++.h>  // https://github.com/mikalhart/TinyGPSPlus
+
 
 extern uint64_t GpsTimeToLastFix;  // milliseconds
 
@@ -67,10 +72,11 @@ extern int tx_cnt_0;
 extern bool VERBY[10];
 
 //****************************************************
-
 int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
 
+
+//****************************************************
 void snapForTelemetry(void) {
     V1_println(F("snapForTelemetry START"));
     if (TESTMODE) {
@@ -92,7 +98,25 @@ void snapForTelemetry(void) {
     if (course > 360) course = 360;
     snprintf(t_course, sizeof(t_course), "%3d", course);
 
-    int speed = gps.speed.isValid() ? gps.speed.knots() : 0;
+    //****************************************************
+    // returns degrees, not radians
+    int solarElevation; // can this be negative?. decimal, integer accuracy
+    int solarAzimuth; // can this be negative?. decimal, integer accuracy
+    int solarDistance; // can this be negative? maybe error case. kilometers.
+    // always call, so we get prints we can use for debug, even if not used.
+    calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
+    // will be all 0's if not valid
+    V1_printf("snapForTelemetry() solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+        solarElevation, solarAzimuth, solarDistance);
+
+    int speed;
+    if (SPEED_IS_SOLAR_ELEVATION_MODE) 
+        speed = solarElevation; // 0 if bad?
+    else 
+        speed = gps.speed.isValid() ? gps.speed.knots() : 0;
+
+    //****************************************************
+
     if (speed < 0)   speed = 0;
     if (speed > 999) speed = 999;
     snprintf(t_speed, sizeof(t_speed), "%3d", speed);
@@ -198,14 +222,14 @@ void snapForTelemetry(void) {
     snprintf(t_sat_count, sizeof(t_sat_count), "%2d", sat_count);
 
     double lat = gps.location.lat();
-    // FIX is both 90 and -90 legal for maidenhead translate?
+    // FIX! is both 90 and -90 legal for maidenhead translate?
     if (lat < -90) lat = -90;
     if (lat > 90) lat = 90;
     // 12 bytes max with - and . counted
     snprintf(t_lat, sizeof(t_lat), "%.7f", lat);
 
     double lon = gps.location.lng();
-    // FIX is both 180 and -180 legal for maidenhead translate?
+    // FIX! is both 180 and -180 legal for maidenhead translate?
     if (lon < -180) lon = -180;
     if (lon > 180) lon = 180;
     snprintf(t_lon, sizeof(t_lon), "%.7f", lon);
