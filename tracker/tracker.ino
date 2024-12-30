@@ -421,6 +421,10 @@ char t_callsign[7] = { 0 };
 char t_grid6[7] = { 0 };       // 6 bytes
 char t_power[3] = { 0 };       // 2 bytes
 char t_hdop[4] = { 0 };        // 3 bytes;
+char t_solarElevation[4] = { 0 }; // 3 bytes -90 to 90? 
+char t_solarAzimuth[5] = { 0 };   // 4 bytes -180 to 180?
+char t_solarDistance[4] = { 0 };  // 3 bytes 145 to 150 km ?
+
 int t_snap_cnt = 0;
 
 //***********************************************************

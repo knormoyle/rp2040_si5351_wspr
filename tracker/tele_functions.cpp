@@ -34,6 +34,10 @@ extern char t_voltage[6];     // 5 bytes
 extern char t_sat_count[3];   // 2 bytes
 extern char t_hdop[4];        // 3 bytes
 
+extern char t_solarElevation[4];  // 3 bytes -90 to 90? 
+extern char t_solarAzimuth[5];    // 4 bytes -180 to 180?
+extern char t_solarDistance[4];   // 3 bytes 145 to 150 km ?
+
 extern int t_TELEN1_val1;
 extern int t_TELEN1_val2;
 extern int t_TELEN2_val1;
@@ -96,10 +100,10 @@ void snapForTelemetry(void) {
     int course = gps.course.isValid() ? gps.course.deg() : 0;
     if (course < 0)   course = 0;
     if (course > 360) course = 360;
-    snprintf(t_course, sizeof(t_course), "%3d", course);
+    snprintf(t_course, sizeof(t_course), "%d", course);
 
     //****************************************************
-    // returns degrees, not radians
+    // returns degrees, not radians. I guess it's decimal integer here
     int solarElevation; // can this be negative?. decimal, integer accuracy
     int solarAzimuth; // can this be negative?. decimal, integer accuracy
     int solarDistance; // can this be negative? maybe error case. kilometers.
@@ -108,6 +112,14 @@ void snapForTelemetry(void) {
     // will be all 0's if not valid
     V1_printf("snapForTelemetry() solarElevation %d solarAzimuth %d solarDistance %d" EOL,
         solarElevation, solarAzimuth, solarDistance);
+
+    // keep this all decimal?
+    // -90 to 90?
+    snprintf(t_solarElevation, sizeof(t_solarElevation), "%d", solarElevation); 
+    // -180 to 180
+    snprintf(t_solarAzimuth, sizeof(t_solarAzimuth), "%d", solarAzimuth);
+    // 145 to 150 (km) ?
+    snprintf(t_solarDistance, sizeof(t_solarDistance), "%d", solarDistance); 
 
     int speed;
     if (SPEED_IS_SOLAR_ELEVATION_MODE) 
@@ -125,7 +137,7 @@ void snapForTelemetry(void) {
     int altitude = (int) gps.altitude.meters();
     if (altitude < 0) altitude = 0;
     if (altitude > 999999) altitude = 999999;
-    snprintf(t_altitude, sizeof(t_altitude), "%6d", altitude);
+    snprintf(t_altitude, sizeof(t_altitude), "%d", altitude);
 
     //*********************************
     // FIX! remove. this result is bogus. does it not work for temp? does temp have a /3 divider
@@ -179,7 +191,7 @@ void snapForTelemetry(void) {
 
     if (tempC < -999.9) tempC = -999.9;
     if (tempC > 999.9) tempC = 999.9;
-    snprintf(t_temp, sizeof(t_temp), "%6.1f", tempC);
+    snprintf(t_temp, sizeof(t_temp), "%.1f", tempC);
 
     //*********************************
     // examples
@@ -192,22 +204,22 @@ void snapForTelemetry(void) {
     float pressure = bmp_read_pressure();
     if (pressure < 0) pressure = 0;
     if (pressure > 999.99) pressure = 999.99;
-    snprintf(t_pressure, sizeof(t_pressure), "%7.2f", pressure);
+    snprintf(t_pressure, sizeof(t_pressure), "%.2f", pressure);
 
     float temp_ext = bmp_read_temperature();
     if (temp_ext < 0) temp_ext = 0;
     if (temp_ext > 999.99) temp_ext = 999.99;
-    snprintf(t_temp_ext, sizeof(t_temp_ext), "%7.2f", temp_ext);
+    snprintf(t_temp_ext, sizeof(t_temp_ext), "%.2f", temp_ext);
 
     float humidity = bmp_read_humidity();
     if (humidity < 0) humidity = 0;
     if (humidity > 999.99) humidity = 999.99;
-    snprintf(t_humidity, sizeof(t_humidity), "%7.2f", humidity);
+    snprintf(t_humidity, sizeof(t_humidity), "%.2f", humidity);
 
     float voltage = readVoltage();
     if (voltage < 0) voltage = 0;
     if (voltage > 99.99) voltage = 99.99;
-    snprintf(t_voltage, sizeof(t_voltage), "%5.2f", voltage);
+    snprintf(t_voltage, sizeof(t_voltage), "%.2f", voltage);
 
     // FIX! could use this for some TELEN telemetry?
     int hdop = gps.hdop.isValid() ? (int) gps.hdop.value() : 0;
@@ -219,7 +231,7 @@ void snapForTelemetry(void) {
     int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
     if (sat_count < 0) sat_count = 0;
     if (sat_count > 99) sat_count = 99;
-    snprintf(t_sat_count, sizeof(t_sat_count), "%2d", sat_count);
+    snprintf(t_sat_count, sizeof(t_sat_count), "%d", sat_count);
 
     double lat = gps.location.lat();
     // FIX! is both 90 and -90 legal for maidenhead translate?
@@ -262,7 +274,7 @@ void snapForTelemetry(void) {
         // can't use sizeof(grid6) here because it's a pointer
         snprintf(grid6, 7, "%6s", "AA00AA");
 
-    snprintf(t_grid6, sizeof(t_grid6), "%6s", grid6);
+    snprintf(t_grid6, sizeof(t_grid6), "%s", grid6);
 
     //*********************************
     // snap callsign just for consistency with everything else
@@ -290,7 +302,7 @@ void snapForTelemetry(void) {
         }
     }
     if (!found) power_int = 0;
-    snprintf(t_power, sizeof(t_power), "%2d", power_int);
+    snprintf(t_power, sizeof(t_power), "%d", power_int);
 
     //*********************************
     int tx_cnt_0_val = tx_cnt_0;
@@ -298,7 +310,7 @@ void snapForTelemetry(void) {
     // do we need to count more than 99 in a day?
     if (tx_cnt_0 > 99) tx_cnt_0_val = 99;
     // we have room for 999
-    snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%3d", tx_cnt_0_val);
+    snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%d", tx_cnt_0_val);
 
     //*********************************
     // snap for consistency with everything else (all at one instant in time)
