@@ -1,3 +1,5 @@
+
+// forked from:
 /*
  * solarfunctions: precise solar calculations
  * Copyright (c) 2024 Christian Menne
@@ -131,20 +133,6 @@ double calculateCorrectedObliquity(double obliquity, double omega) {
 // Longitude of the ascending lunar node.
 double calculateOmega(double julianCenturyNumber) {
     return normalizeDegrees360(OMEGA_BASE_VALUE + OMEGA_RATE * julianCenturyNumber);
-}
-
-// Nutation in longitude for orbital corrections.
-double calculateNutation(double julianCenturyNumber) {
-    double omega = calculateOmega(julianCenturyNumber);
-    double L_moon = OMEGA_BASE_VALUE + OMEGA_RATE * julianCenturyNumber;
-    L_moon = normalizeDegrees360(L_moon);
-    double L_sun = calculateSunMeanLongitude(julianCenturyNumber);
-    // apply nutation formula
-    double deltaPsi = -17.20 * sin(degToRad(omega))
-        - 1.32 * sin(2 * degToRad(L_sun))
-        + 0.23 * sin(2 * degToRad(L_moon))
-        + 0.21 * sin(2 * degToRad(omega));
-    return deltaPsi / 3600.0;    // Convert arcseconds to degrees.
 }
 
 // The Sun's mean anomaly.

@@ -27,7 +27,6 @@ double calculateObliquity(double julianCenturyNumber);
 double calculateCorrectedObliquity(double julianCenturyNumber);
 double calculateCorrectedObliquity(double obliquity, double omega);
 double calculateOmega(double julianCenturyNumber);
-double calculateNutation(double julianCenturyNumber);
 double calculateSolarEquationOfCenter(double julianCenturyNumber, double meanAnomaly);
 double calculateSunMeanLongitude(double julianCenturyNumber);
 double calculateDeclination(double julianCenturyNumber);
