@@ -160,8 +160,9 @@ void calcSolarElevation4(double *solarElevation, double *solarAzimuth, double *s
     // It is the complement to the solar altitude or solar elevation, 
     // which is the altitude angle or elevation angle between the sun's rays and a horizontal plane.
     double elevation = 90 - sza;
-    double altitude = saa;
-    V1_printf("solarZenithAndAzimuthAngle4 elevation %.3f azimuth %.3f" EOL, elevation, altitude);
+    double azimuth = saa;
+    // FIX! printing before badSolar forces to 0?
+    V1_printf("solarZenithAndAzimuthAngle4 elevation %.3f azimuth %.3f" EOL, elevation, azimuth);
 
     // returns degrees, not radians
     // solarElevation: can this be negative?.

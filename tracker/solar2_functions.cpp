@@ -29,12 +29,12 @@
 // or the SAA (mean-average error).
 
 // don't rely on math.h?
-#define PI 3.1415926535897932384626433832795
+// #define PI 3.1415926535897932384626433832795
 // #define HALF_PI 1.5707963267948966192313216916398
-#define TWO_PI 6.283185307179586476925286766559
+// #define TWO_PI 6.283185307179586476925286766559
 
-#define DEG_TO_RAD 0.017453292519943295769236907684886
-#define RAD_TO_DEG 57.295779513082320876798154814105
+// #define DEG_TO_RAD 0.017453292519943295769236907684886
+// #define RAD_TO_DEG 57.295779513082320876798154814105
 
 extern bool VERBY[10];
 extern TinyGPSPlus gps;
@@ -59,8 +59,8 @@ inline double rad2deg(double valInDegrees) {
 // return SZA, SAA
 void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, double latitude, time_t timeStamp) {
     // timeStamp is epoch time?
-    // The C library gmtime() function of type struct uses the value pointed by timer to fill 
-    // a structure(tm) with the values that represent the corresponding time, 
+    // The C library gmtime() function of type struct uses the value pointed by timer to fill
+    // a structure(tm) with the values that represent the corresponding time,
     // expressed in coordinated universal time (UTC) or GMT timezone.
     auto timeConv =gmtime(&timeStamp);
 
@@ -68,9 +68,9 @@ void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, dou
     double year = timeConv->tm_year + 1900.0;
     double month = timeConv->tm_mon + 1.0;
     double day = timeConv->tm_mday;
-    double dayHours = 
-        double(timeConv->tm_hour) + 
-        double(timeConv->tm_min) / 60.0 + 
+    double dayHours =
+        double(timeConv->tm_hour) +
+        double(timeConv->tm_min) / 60.0 +
         double(timeConv->tm_sec) / 3600.0;
 
     // Time transformation:
@@ -78,7 +78,7 @@ void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, dou
     double monthVal = floor(30.6001 * (month + 1.0));
     double yearValPc = floor(0.01 * year);
 
-    double timeVec = yearVal + monthVal - yearValPc + day + 
+    double timeVec = yearVal + monthVal - yearValPc + day +
         (0.0416667 * dayHours) - 21958.0;
 
     // Transform latitude/longitude to radians
@@ -94,10 +94,10 @@ void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, dou
     double te = timeVec + 1.1574e-5 * dT;
     double wte = 0.0172019715 * te;
 
-    double lambdaDecl = 
-        -1.388803 + 
-        (1.720279216e-2 * te) + 
-        (3.3366e-2 * sin(wte - 0.06172)) + 
+    double lambdaDecl =
+        -1.388803 +
+        (1.720279216e-2 * te) +
+        (3.3366e-2 * sin(wte - 0.06172)) +
         (3.53e-4 * sin((2.0 * wte) - 0.1163));
 
     double epsilon = 4.089567e-1 - (6.19e-9 * te);
@@ -115,7 +115,7 @@ void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, dou
     }
 
     double hAng = fmod(
-        (1.7528311 + (6.300388099 * timeVec) + lonRad - rAsc + M_PI), 
+        (1.7528311 + (6.300388099 * timeVec) + lonRad - rAsc + M_PI),
         (2.0 * M_PI)) - M_PI;
 
     // Get rid of negative values in hAng
@@ -135,11 +135,11 @@ void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, dou
 
     double dE = (0.08422 * pressure) / ((273.0 + temperature) * tan(ep + 0.003138 / (ep + 0.08919)));
 
-    double sza_here = rad2deg(M_PI_2 - ep - dE);
-    double saa_here = rad2deg(M_PI + atan2(sH, (cH * sp) - (sd * cp / cd)));
+    double elevation = rad2deg(M_PI_2 - ep - dE);
+    double azimuth = rad2deg(M_PI + atan2(sH, (cH * sp) - (sd * cp / cd)));
 
-    *sza = sza_here;
-    *saa = saa_here;
+    *sza = 90 - elevation;
+    *saa = azimuth;
 }
 //***********************************************************************
 
@@ -230,15 +230,16 @@ void calcSolarElevation2(double *solarElevation, double *solarAzimuth, double *s
     // epochTime is the number of seconds since the Unix epoch (January 1, 1970, 00:00:00 UTC).
     // FIX! this actually gives us elevation?
     solarZenithAndAzimuthAngle2(&sza, &saa, lon, lat, epochTime);
-    // The solar zenith angle is the zenith angle of the sun, 
-    // i.e., the angle between the sun's rays and the vertical direction. 
-    // It is the complement to the solar altitude or solar elevation, 
+    // The solar zenith angle is the zenith angle of the sun,
+    // i.e., the angle between the sun's rays and the vertical direction.
+    // It is the complement to the solar altitude or solar elevation,
     // which is the altitude angle or elevation angle between the sun's rays and a horizontal plane.
     // FIX! this actually gives us elevation?
-    // double elevation = 90 - sza;
-    double elevation = sza;
-    double altitude = saa;
-    V1_printf("solarZenithAndAzimuthAngle2 elevation %.3f azimuth %.3f" EOL, elevation, altitude);
+    double elevation = 90 - sza;
+    // double elevation = sza;
+    double azimuth = saa;
+    // FIX! printing before badSolar forces to 0?
+    V1_printf("solarZenithAndAzimuthAngle2 elevation %.3f azimuth %.3f" EOL, elevation, azimuth);
 
     // returns degrees, not radians
     // solarElevation: can this be negative?. double

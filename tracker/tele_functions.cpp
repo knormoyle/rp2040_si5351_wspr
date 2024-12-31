@@ -124,6 +124,10 @@ void snapForTelemetry(void) {
         V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
             solarElevation, solarAzimuth, solarDistance);
     } else {
+        // first one I did 
+        calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
+        V1_printf("snapForTelemetry() calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+            solarElevation, solarAzimuth, solarDistance);
         // fast algo
         calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
         V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
@@ -135,10 +139,10 @@ void snapForTelemetry(void) {
     }
 
 
-    // keep this all decimal?
-    // -90 to 90?
+    // 
+    // -90.0 to 90.0?
     snprintf(t_solarElevation, sizeof(t_solarElevation), "%.1f", solarElevation); 
-    // -180 to 180
+    // -180.0 to 180.0
     snprintf(t_solarAzimuth, sizeof(t_solarAzimuth), "%.1f", solarAzimuth);
     // 145 to 150 (km) ?
     snprintf(t_solarDistance, sizeof(t_solarDistance), "%.0f", solarDistance); 

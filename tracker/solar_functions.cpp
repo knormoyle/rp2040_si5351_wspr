@@ -351,16 +351,25 @@ void calcSolarElevation(double *solarElevation, double *solarAzimuth, double *so
     V1_printf("calculateSolarPosition epochTime %" PRIu64 " lat %.7f lon %.7f" EOL,
         epochTime, lat, lon);
 
-    savedPosition = calculateSolarPosition(epochTime, 
-        lat * DEG_TO_RAD, lon * DEG_TO_RAD);
+    savedPosition = calculateSolarPosition(epochTime, lat * DEG_TO_RAD, lon * DEG_TO_RAD);
 
     // returns degrees, not radians
     // solarElevation: can this be negative?. decimal, integer accuracy
     // solarAzimuth:   can this be negative?. decimal, integer accuracy
     // solarDistance:  can this be negative? maybe error case. kilometers.
-    double solarElevation_here = (int)(savedPosition.elevation * RAD_TO_DEG);
-    double solarAzimuth_here   = (int)(savedPosition.azimuth * RAD_TO_DEG);
-    double solarDistance_here  = (int)(savedPosition.distance * KM_PER_AU);
+    double solarElevation_here = (savedPosition.elevation * RAD_TO_DEG);
+    double solarAzimuth_here   = (savedPosition.azimuth * RAD_TO_DEG);
+    double solarDistance_here  = (savedPosition.distance * KM_PER_AU);
+
+    // The solar zenith angle is the zenith angle of the sun,
+    // i.e., the angle between the sun's rays and the vertical direction.
+    // It is the complement to the solar altitude or solar elevation,
+    // which is the altitude angle or elevation angle between the sun's rays and a horizontal plane.
+    // FIX! this actually gives us elevation?
+    double elevation = solarElevation_here;
+    double azimuth = solarAzimuth_here;
+    // FIX! printing before badSolar forces to 0?
+    V1_printf("solarZenithAndAzimuthAngle2 elevation %.3f azimuth %.3f" EOL, elevation, azimuth);
 
     if (badSolar) {
         solarElevation_here = 0.0;
@@ -368,9 +377,9 @@ void calcSolarElevation(double *solarElevation, double *solarAzimuth, double *so
         solarDistance_here  = 0.0;
     }
 
-    *solarElevation = (int)solarElevation_here;
-    *solarAzimuth   = (int)solarAzimuth_here;
-    *solarDistance  = (int)solarDistance_here;
+    *solarElevation = solarElevation_here;
+    *solarAzimuth   = solarAzimuth_here;
+    *solarDistance  = solarDistance_here;
 
     V1_print(F("calcSolarElevation END" EOL));
 }
