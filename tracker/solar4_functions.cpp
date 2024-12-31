@@ -71,7 +71,7 @@ void solarZenithAndAzimuthAngle4(double *sza, double *saa, double longitude, dou
 
 // we don't have distance for this fast algo
 void calcSolarElevation4(double *solarElevation, double *solarAzimuth, double *solarDistance) {
-    V1_print(F("calcSolarElevation3 START" EOL));
+    V1_print(F("calcSolarElevation4 START" EOL));
 
     // we check before setting rtc. assuming these are all valid ranges
     // no double-check!
@@ -168,7 +168,7 @@ void calcSolarElevation4(double *solarElevation, double *solarAzimuth, double *s
     // solarElevation: can this be negative?.
     // solarAzimuth:   can this be negative?.
     // solarDistance:  can this be negative?
-    double solarElevation_here = sza;
+    double solarElevation_here = elevation;
     double solarAzimuth_here   = saa;
     double solarDistance_here  = 0;
 
@@ -182,7 +182,7 @@ void calcSolarElevation4(double *solarElevation, double *solarAzimuth, double *s
     *solarAzimuth   = solarAzimuth_here;
     *solarDistance  = solarDistance_here;
 
-    V1_print(F("calcSolarElevation3 END" EOL));
+    V1_print(F("calcSolarElevation4 END" EOL));
 }
 
 //***********************************************************************
