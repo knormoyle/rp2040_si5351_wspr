@@ -272,7 +272,7 @@ SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Lo
 SolarPosition_t savedPosition;
 
 //***********************************************************************
-void calcSolarElevation(int *solarElevation, int *solarAzimuth, int *solarDistance) {
+void calcSolarElevation(double *solarElevation, double *solarAzimuth, double *solarDistance) {
     V1_print(F("calcSolarElevation START" EOL));
 
     // we check before setting rtc. assuming these are all valid ranges

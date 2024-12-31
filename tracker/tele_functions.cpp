@@ -38,9 +38,9 @@ extern char t_voltage[6];     // 5 bytes
 extern char t_sat_count[3];   // 2 bytes
 extern char t_hdop[4];        // 3 bytes
 
-extern char t_solarElevation[4];  // 3 bytes -90 to 90? 
-extern char t_solarAzimuth[5];    // 4 bytes -180 to 180?
-extern char t_solarDistance[4];   // 3 bytes 145 to 150 km ?
+extern char t_solarElevation[5];  // 3 bytes -90.0 to 90.0? 
+extern char t_solarAzimuth[7];    // 4 bytes -180.0 to 180.0?
+extern char t_solarDistance[8];   // 3 bytes 145000 to 150000 km ? (negative error?)
 
 extern int t_TELEN1_val1;
 extern int t_TELEN1_val2;
@@ -108,40 +108,40 @@ void snapForTelemetry(void) {
 
     //****************************************************
     // returns degrees, not radians. I guess it's decimal integer here
-    int solarElevation; // can this be negative?. decimal, integer accuracy
-    int solarAzimuth; // can this be negative?. decimal, integer accuracy
-    int solarDistance; // can this be negative? maybe error case. kilometers.
+    double solarElevation; // can this be negative?. decimal, integer accuracy
+    double solarAzimuth; // can this be negative?. decimal, integer accuracy
+    double solarDistance; // can this be negative? maybe error case. kilometers.
     // always call, so we get prints we can use for debug, even if not used.
     if (false) {
         calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
         // will be all 0's if not valid
-        V1_printf("snapForTelemetry() calcSolarElevation solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+        V1_printf("snapForTelemetry() calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
             solarElevation, solarAzimuth, solarDistance);
     } else if (false) {
         // fast algo
         calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
         // will be all 0's if not valid
-        V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+        V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
             solarElevation, solarAzimuth, solarDistance);
     } else {
         // fast algo
         calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
-        V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+        V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
             solarElevation, solarAzimuth, solarDistance);
         // accurate algo
         calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
-        V1_printf("snapForTelemetry() calcSolarElevation4 solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+        V1_printf("snapForTelemetry() calcSolarElevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
             solarElevation, solarAzimuth, solarDistance);
     }
 
 
     // keep this all decimal?
     // -90 to 90?
-    snprintf(t_solarElevation, sizeof(t_solarElevation), "%d", solarElevation); 
+    snprintf(t_solarElevation, sizeof(t_solarElevation), "%.1f", solarElevation); 
     // -180 to 180
-    snprintf(t_solarAzimuth, sizeof(t_solarAzimuth), "%d", solarAzimuth);
+    snprintf(t_solarAzimuth, sizeof(t_solarAzimuth), "%.1f", solarAzimuth);
     // 145 to 150 (km) ?
-    snprintf(t_solarDistance, sizeof(t_solarDistance), "%d", solarDistance); 
+    snprintf(t_solarDistance, sizeof(t_solarDistance), "%.0f", solarDistance); 
 
     int speed;
     if (SPEED_IS_SOLAR_ELEVATION_MODE) 

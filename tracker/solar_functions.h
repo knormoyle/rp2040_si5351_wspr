@@ -61,7 +61,7 @@ class SolarPosition {
 };
 
 // returns 3 values, using rp2040 rtc and TinyGPS gps state (lat/lon)
-void calcSolarElevation(int *solarElevation, int *solarAzimuth, int *solarDistance);
+void calcSolarElevation(double *solarElevation, double *solarAzimuth, double *solarDistance);
 time_t getEpochTime();
 
 #endif  // SOLAR_FUNCTIONS_H

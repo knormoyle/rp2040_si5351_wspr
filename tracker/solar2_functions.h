@@ -21,7 +21,7 @@
 // or the SAA (mean-average error).
 
 void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, double latitude, time_t timeStamp);
-void calcSolarElevation2(int *solarElevation, int *solarAzimuth, int *solarDistance);
+void calcSolarElevation2(double *solarElevation, double *solarAzimuth, double *solarDistance);
 
 time_t getEpochTime2();
 

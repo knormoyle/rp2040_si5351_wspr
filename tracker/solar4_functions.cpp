@@ -70,7 +70,7 @@ void solarZenithAndAzimuthAngle4(double *sza, double *saa, double longitude, dou
 //***********************************************************************
 
 // we don't have distance for this fast algo
-void calcSolarElevation4(int *solarElevation, int *solarAzimuth, int *solarDistance) {
+void calcSolarElevation4(double *solarElevation, double *solarAzimuth, double *solarDistance) {
     V1_print(F("calcSolarElevation3 START" EOL));
 
     // we check before setting rtc. assuming these are all valid ranges
@@ -164,12 +164,12 @@ void calcSolarElevation4(int *solarElevation, int *solarAzimuth, int *solarDista
     V1_printf("solarZenithAndAzimuthAngle4 elevation %.3f azimuth %.3f" EOL, elevation, altitude);
 
     // returns degrees, not radians
-    // solarElevation: can this be negative?. decimal, integer accuracy
-    // solarAzimuth:   can this be negative?. decimal, integer accuracy
-    // solarDistance:  can this be negative? maybe error case. kilometers.
-    double solarElevation_here = (int)(sza);
-    double solarAzimuth_here   = (int)(saa);
-    double solarDistance_here  = (int)(0);
+    // solarElevation: can this be negative?.
+    // solarAzimuth:   can this be negative?.
+    // solarDistance:  can this be negative?
+    double solarElevation_here = sza;
+    double solarAzimuth_here   = saa;
+    double solarDistance_here  = 0;
 
     if (badSolar) {
         solarElevation_here = 0.0;
@@ -177,9 +177,9 @@ void calcSolarElevation4(int *solarElevation, int *solarAzimuth, int *solarDista
         solarDistance_here  = 0.0;
     }
 
-    *solarElevation = (int)solarElevation_here;
-    *solarAzimuth   = (int)solarAzimuth_here;
-    *solarDistance  = (int)solarDistance_here;
+    *solarElevation = solarElevation_here;
+    *solarAzimuth   = solarAzimuth_here;
+    *solarDistance  = solarDistance_here;
 
     V1_print(F("calcSolarElevation3 END" EOL));
 }
