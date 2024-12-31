@@ -161,8 +161,7 @@ void calcSolarElevation4(int *solarElevation, int *solarAzimuth, int *solarDista
     // which is the altitude angle or elevation angle between the sun's rays and a horizontal plane.
     double elevation = 90 - sza;
     double altitude = saa;
-    V1_printf("solarZenithAndAzimuthAngle4 elevation %.3f azimuth %.3f elevation %.3f" EOL,
-        elevation, altitude);
+    V1_printf("solarZenithAndAzimuthAngle4 elevation %.3f azimuth %.3f" EOL, elevation, altitude);
 
     // returns degrees, not radians
     // solarElevation: can this be negative?. decimal, integer accuracy

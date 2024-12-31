@@ -112,18 +112,18 @@ void snapForTelemetry(void) {
     int solarAzimuth; // can this be negative?. decimal, integer accuracy
     int solarDistance; // can this be negative? maybe error case. kilometers.
     // always call, so we get prints we can use for debug, even if not used.
-    if (false) 
+    if (false) {
         calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
         // will be all 0's if not valid
         V1_printf("snapForTelemetry() calcSolarElevation solarElevation %d solarAzimuth %d solarDistance %d" EOL,
             solarElevation, solarAzimuth, solarDistance);
-    else if (false)
+    } else if (false) {
         // fast algo
         calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
         // will be all 0's if not valid
         V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %d solarAzimuth %d solarDistance %d" EOL,
             solarElevation, solarAzimuth, solarDistance);
-    else {
+    } else {
         // fast algo
         calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
         V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %d solarAzimuth %d solarDistance %d" EOL,
