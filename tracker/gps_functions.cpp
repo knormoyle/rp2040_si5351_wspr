@@ -64,7 +64,6 @@ extern bool USE_SIM65M;
 #include "debug_functions.h"
 #include "led_functions.h"
 #include "print_functions.h"
-#include "solar_functions.h"
 // enums for voltage at:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
 #include "hardware/vreg.h"

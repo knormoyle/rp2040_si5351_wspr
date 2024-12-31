@@ -13,7 +13,7 @@
 #include "adc_functions.h"
 #include "tele_functions.h"
 // to calc solar elevations
-#include "solar_functions.h"
+// #include "solar_functions.h"
 // fast algo
 #include "solar2_functions.h"
 // most accurate algo
@@ -112,32 +112,21 @@ void snapForTelemetry(void) {
     double solarAzimuth; // can this be negative?. decimal, integer accuracy
     double solarDistance; // can this be negative? maybe error case. kilometers.
     // always call, so we get prints we can use for debug, even if not used.
-    if (false) {
-        calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
-        // will be all 0's if not valid
-        V1_printf("snapForTelemetry() calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-            solarElevation, solarAzimuth, solarDistance);
-    } else if (false) {
-        // fast algo
-        calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
-        // will be all 0's if not valid
-        V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-            solarElevation, solarAzimuth, solarDistance);
-    } else {
-        // first one I did 
-        calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
-        V1_printf("snapForTelemetry() calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-            solarElevation, solarAzimuth, solarDistance);
-        // fast algo
-        calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
-        V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-            solarElevation, solarAzimuth, solarDistance);
-        // accurate algo
-        calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
-        V1_printf("snapForTelemetry() calcSolarElevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-            solarElevation, solarAzimuth, solarDistance);
-    }
 
+    // first one I did 
+    // calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
+    // will be all 0's if not valid
+    // V1_printf("snapForTelemetry() calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+    //     solarElevation, solarAzimuth, solarDistance);
+
+    // fast algo
+    calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
+    V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+        solarElevation, solarAzimuth, solarDistance);
+    // accurate algo
+    calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
+    V1_printf("snapForTelemetry() calcSolarElevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+        solarElevation, solarAzimuth, solarDistance);
 
     // 
     // -90.0 to 90.0?
