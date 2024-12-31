@@ -606,8 +606,6 @@ void si5351a_setup_multisynth01(uint32_t div) {
 
     uint8_t s_regs[8] = { 0 };
     uint32_t p1 = 128 * div - 512;
-    s_regs[0] = 0;
-    s_regs[1] = 1;
     // R_DIVISOR_SHIFT is hardwired constant  (/4 => shift 2)
 
     uint8_t R_OUTPUT_DIVIDER_ENCODE;
@@ -631,8 +629,19 @@ void si5351a_setup_multisynth01(uint32_t div) {
     // 100b: Divide by 16
     
     // was: s_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
-    // 11/22/24 force divide by 4 and propagate to all other calc
+    // But what are the magic groups of eight?  where updates only
+    // happen when you write the last of the group?
+    // https://groups.io/g/picoballoon/message/19164
+
+    // Just these 4 groups of 8? (starting at these base addresses)
+    // SI5351A_PLLA_BASE =               26; // 8 regs
+    // SI5351A_PLLB_BASE =               34; // 8 regs
+    // SI5351A_MULTISYNTH0_BASE =        42; // 8 regs
+    // SI5351A_MULTISYNTH1_BASE =        50; // 8 regs    
+
     // R_OUTPUT_DIVIDER_ENCODE is bits 6:4
+    s_regs[0] = 0;
+    s_regs[1] = 1;
     s_regs[2] = (R_OUTPUT_DIVIDER_ENCODE << 4) | ((uint8_t)(p1 >> 16) & 0x03);
     s_regs[3] = (uint8_t)(p1 >> 8);
     s_regs[4] = (uint8_t)p1;

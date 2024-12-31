@@ -21,13 +21,16 @@
 // 2019 Ken Willmott
 // Arduino library based on the program "Arduino Uno and Solar Position Calculations"
 // (c) David R. Brooks, which can be found at http://www.instesre.org/ArduinoDocuments.htm
+// paper describing:
+// https://instesre.org/ArduinoUnoSolarCalculations.pdf
+
 // Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 International License
 // https://creativecommons.org/licenses/by-nc-nd/4.0/
 
 // don't rely on math.h?
 #define PI 3.1415926535897932384626433832795
 // #define HALF_PI 1.5707963267948966192313216916398
-// #define TWO_PI 6.283185307179586476925286766559
+#define TWO_PI 6.283185307179586476925286766559
 
 #define DEG_TO_RAD 0.017453292519943295769236907684886
 #define RAD_TO_DEG 57.295779513082320876798154814105
@@ -303,23 +306,23 @@ void calcSolarElevation(int *solarElevation, int *solarAzimuth, int *solarDistan
     // range check lat and lon?
     double lat = gps.location.lat();
     // FIX! is both 90 and -90 legal?. clamp to max ..and set bad
-    if (lat < -90) {
-        lat = -90;
+    if (lat < -90.0) {
+        lat = -90.0;
         badSolar = true;
     }
-    if (lat > 90) {
-        lat = 90;
+    if (lat > 90.0) {
+        lat = 90.0;
         badSolar = true;
     }
 
     double lon = gps.location.lng();
     // FIX! is both 180 and -180 legal. clamp to max ..and set bad
-    if (lon < -180) {
-        lon = -180;
+    if (lon < -180.0) {
+        lon = -180.0;
         badSolar = true;
     }
-    if (lon > 180) {
-        lon = 180;
+    if (lon > 180.0) {
+        lon = 180.0;
         badSolar = true;
     }
 
@@ -345,7 +348,7 @@ void calcSolarElevation(int *solarElevation, int *solarAzimuth, int *solarDistan
 
     // should be able to handle it from an 'unsigned long' for time_t ?
     uint64_t epochTime = getEpochTime();
-    V1_printf("calculateSolarPosition epochTime %" PRIu64 " lat %.f lon %.f" EOL,
+    V1_printf("calculateSolarPosition epochTime %" PRIu64 " lat %.7f lon %.7f" EOL,
         epochTime, lat, lon);
 
     savedPosition = calculateSolarPosition(epochTime, 

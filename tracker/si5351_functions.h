@@ -12,13 +12,12 @@ const int SI5351A_INTERRUPT_STATUS_STICKY = 1;
 const int SI5351A_OUTPUT_ENABLE_CONTROL =   3;
 const int SI5351A_CLK0_CONTROL =            16;
 const int SI5351A_CLK1_CONTROL =            17;
+const int SI5351A_CLK7_CONTROL =            23; 
 
-// FIX! is there a clk2? does CLK7 drive it?
-const int SI5351A_CLK7_CONTROL =            23;
-const int SI5351A_PLLB_BASE =               34;
-const int SI5351A_MULTISYNTH0_BASE =        42;
-// FIX! how do we turn off multisynth 1?
-const int SI5351A_MULTISYNTH1_BASE =        50;
+const int SI5351A_PLLA_BASE =               24; // 8 regs
+const int SI5351A_PLLB_BASE =               34; // 8 regs
+const int SI5351A_MULTISYNTH0_BASE =        42; // 8 regs
+const int SI5351A_MULTISYNTH1_BASE =        50; // 8 regs
 const int SI5351A_PLL_RESET =               177;
 
 const int SI5351A_CLK0_MS0_INT =            (1 << 6);

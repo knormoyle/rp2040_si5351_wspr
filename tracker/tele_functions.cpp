@@ -14,6 +14,10 @@
 #include "tele_functions.h"
 // to calc solar elevations
 #include "solar_functions.h"
+// fast algo
+#include "solar2_functions.h"
+// most accurate algo
+#include "solar4_functions.h"
 
 bool SPEED_IS_SOLAR_ELEVATION_MODE = true;
 
@@ -108,10 +112,28 @@ void snapForTelemetry(void) {
     int solarAzimuth; // can this be negative?. decimal, integer accuracy
     int solarDistance; // can this be negative? maybe error case. kilometers.
     // always call, so we get prints we can use for debug, even if not used.
-    calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
-    // will be all 0's if not valid
-    V1_printf("snapForTelemetry() solarElevation %d solarAzimuth %d solarDistance %d" EOL,
-        solarElevation, solarAzimuth, solarDistance);
+    if (false) 
+        calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
+        // will be all 0's if not valid
+        V1_printf("snapForTelemetry() calcSolarElevation solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+            solarElevation, solarAzimuth, solarDistance);
+    else if (false)
+        // fast algo
+        calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
+        // will be all 0's if not valid
+        V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+            solarElevation, solarAzimuth, solarDistance);
+    else {
+        // fast algo
+        calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
+        V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+            solarElevation, solarAzimuth, solarDistance);
+        // accurate algo
+        calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
+        V1_printf("snapForTelemetry() calcSolarElevation4 solarElevation %d solarAzimuth %d solarDistance %d" EOL,
+            solarElevation, solarAzimuth, solarDistance);
+    }
+
 
     // keep this all decimal?
     // -90 to 90?
