@@ -228,15 +228,17 @@ void calcSolarElevation2(double *solarElevation, double *solarAzimuth, double *s
 
     // lat lon are double. epochTime is time_t (uint64_t)
     // epochTime is the number of seconds since the Unix epoch (January 1, 1970, 00:00:00 UTC).
+    // FIX! this actually gives us elevation?
     solarZenithAndAzimuthAngle2(&sza, &saa, lon, lat, epochTime);
     // The solar zenith angle is the zenith angle of the sun, 
     // i.e., the angle between the sun's rays and the vertical direction. 
     // It is the complement to the solar altitude or solar elevation, 
     // which is the altitude angle or elevation angle between the sun's rays and a horizontal plane.
-    double elevation = 90 - sza;
+    // FIX! this actually gives us elevation?
+    // double elevation = 90 - sza;
+    double elevation = sza;
     double altitude = saa;
-    V1_printf("solarZenithAndAzimuthAngle2 elevation %.3f azimuth %.3f elevation %.3f" EOL,
-        elevation, altitude);
+    V1_printf("solarZenithAndAzimuthAngle2 elevation %.3f azimuth %.3f" EOL, elevation, altitude);
 
     // returns degrees, not radians
     // solarElevation: can this be negative?. double
