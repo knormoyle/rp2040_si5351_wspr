@@ -7,8 +7,10 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include "pico/stdio.h"
-#include"pico/stdlib.h"
-#include"hardware/flash.h"
+#include "pico/stdlib.h"
+#include "hardware/flash.h"
+// for the reboot to bootloader mode
+#include "pico/bootrom.h"
 
 // for isprint()
 #include <ctype.h>
@@ -447,7 +449,16 @@ void user_interface(void) {
                 V0_print(F("after reboot: drag/drop a uf2 the normal way to the drive that shows" EOL));
                 V0_print(F("You should be able to leave usb connected. If not, disconnect/connect%" EOL));
                 V0_print(F("Goodbye ..rebooting after '/' command" EOL));
+
                 V0_print(F(CLEAR_SCREEN EOL));
+                // #include "pico/bootrom.h"
+                // doug: for 1.5 ide
+                // doug: reset_usb_boot(0, 0); // sets pin 0 for led to be asserted?
+                // doug: Looks like in the new SDK (2.1) it's now rom_reset_usb_boot()
+                // I'm using arduino ide version 2.3.4
+                reset_usb_boot(0, 0);
+                // rom_reset_usb_boot();
+                // just in case it returns here
                 Watchdog.enable(2000);  // milliseconds
                 while (true) tight_loop_contents();
 
