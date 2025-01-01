@@ -2319,9 +2319,9 @@ void freeMem() {
     // https://forum.arduino.cc/t/trying-to-make-sense-of-ram-usage/622666
     // char __stack = 0;
      
-    // V1_print("__brkval=");
+    // V1_print(F("__brkval="));
     // V1_println((unsigned int)__brkval);
-    // V1_print("__malloc_heap_start=");
+    // V1_print(F("__malloc_heap_start="));
     // V1_println((unsigned int)__malloc_heap_start);
     // V1_print("__flp=");
     // V1_println((unsigned int)__flp);

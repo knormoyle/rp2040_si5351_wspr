@@ -129,6 +129,7 @@ extern bool BALLOON_MODE;
 // sort power on for gps cold reset only
 bool PWM_COLD_GPS_POWER_ON_MODE = true;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
+bool ALLOW_LOWER_CORE_VOLTAGE_MODE = true;
 
 // why isn't this true 12/15/24..true now. works (18Mhz)
 // occassionally having problems...Not needed?
@@ -1350,8 +1351,10 @@ void GpsFullColdReset(void) {
     V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz (no we don't) then long sleep" EOL,
         PLL_SYS_MHZ);
     V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
-    // V1_print(F("Also lowering core voltage to 0.95v" EOL));
-    V0_flush();
+    if (ALLOW_LOWER_CORE_VOLTAGE_MODE) {
+        V1_print(F("Also lowering core voltage to 0.95v" EOL));
+    }
+    V1_flush();
 
     // hmm core0 has to know to drain garbage chars if we assert this? then deassert?
     IGNORE_KEYBOARD_CHARS = true;
@@ -1397,7 +1400,7 @@ void GpsFullColdReset(void) {
     // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
 
     // FIX! we never restore from this core voltage. assuming we stay at 18 Mhz
-    if (false && PLL_SYS_MHZ == 18) {
+    if (ALLOW_LOWER_CORE_VOLTAGE_MODE && PLL_SYS_MHZ == 18) {
         vreg_set_voltage(VREG_VOLTAGE_0_95);  // 0_85 crashes for him. 0.90 worked for him
     }
 
@@ -1452,7 +1455,7 @@ void GpsFullColdReset(void) {
 
     V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
     // V1_print(F("Restored core voltage back to 1.1v" EOL));
-    V0_flush();
+    V1_flush();
     // don't bother if ?
     if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
     IGNORE_KEYBOARD_CHARS = false;
@@ -2394,7 +2397,7 @@ void gpsDebug() {
 //************************************************
 void kazuClocksSlow() {
     V1_println(F("kazuClocksSlow START" EOL));
-    V0_flush();
+    V1_flush();
     // Change clk_sys and clk_peri to be 12MHz, and disable pll_sys and pll_usb
     // the external crystal is 12mhz
     clock_configure(clk_sys,
@@ -2470,7 +2473,7 @@ void kazuClocksRestore() {
 
     // was VERBY cleared while USB was off. no. so don't print here
     // V1_println(F("kazuClocksRestore START" EOL));
-    // V0_flush();
+    // V1_flush();
 
     // Change clk_sys and clk_peri to be 12MHz, and restore usb to 48 mhz ?
     // the external crystal is 12mhz
