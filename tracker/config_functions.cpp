@@ -456,6 +456,10 @@ void user_interface(void) {
                 // doug: reset_usb_boot(0, 0); // sets pin 0 for led to be asserted?
                 // doug: Looks like in the new SDK (2.1) it's now rom_reset_usb_boot()
                 // I'm using arduino ide version 2.3.4
+                // what about:
+                // https://arduino-pico.readthedocs.io/en/latest/rp2040.html
+                // rp2040.rebootToBootloader() 
+                // Will reboot the RP2040 into USB UF2 upload mode.
                 reset_usb_boot(0, 0);
                 // rom_reset_usb_boot();
                 // just in case it returns here
@@ -610,7 +614,7 @@ void makeSureClockIsGood(void) {
     // can use vcocalc.py to calculate parameters with set_sys_clock_pll()
     // static bool set_sys_clock_khz ( uint32_t freq_khz, bool required
     if (!good) {
-        V0_print("makeSureClockIsGood():");
+        V0_print(F("makeSureClockIsGood():"));
         V0_printf(" ERROR: RP2040 can't change clock to %lu Mhz.", PLL_SYS_MHZ);
         V0_printf(" Using %lu instead" EOL, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
@@ -642,7 +646,7 @@ void makeSureClockIsGood(void) {
 #define FLASH_BYTES_USED 30
 int read_FLASH(void) {
     Watchdog.reset();
-    V1_print("read_FLASH START" EOL);
+    V1_print(F("read_FLASH START" EOL));
     // there is no internal eeprom on rp2040
     // Therefore, do not frequently update the EEPROM or you may prematurely wear out the flash.
     // https://arduino-pico.readthedocs.io/en/latest/eeprom.html
@@ -739,14 +743,14 @@ int read_FLASH(void) {
 
     decodeVERBY();
 
-    V1_print("read_FLASH END" EOL);
+    V1_print(F("read_FLASH END" EOL));
     return result;
 }
 
 //**************************************
 void decodeVERBY(void) {
     // don't do any printing in here, in case BALLOON_MODE/VERBY not correct yet
-    // V1_print("decodeVERBY START" EOL);
+    // V1_print(F("decodeVERBY START" EOL));
     // can't use Serial at all, if BALLOON_MODE
     // VERBY[0] guarantees that, even for config
     // Currently VERBY[1] covers everything else
@@ -782,7 +786,7 @@ void decodeVERBY(void) {
         }
     }
 
-    // V1_print("decodeVERBY END" EOL);
+    // V1_print(F("decodeVERBY END" EOL));
 }
 
 //**************************************
@@ -808,7 +812,7 @@ static void call_flash_range_program(void *param) {
 // Write the user entered data into FLASH
 void write_FLASH(void) {
     Watchdog.reset();
-    V1_print("write_FLASH START" EOL);
+    V1_print(F("write_FLASH START" EOL));
     // Flash is initially all zeroes
     char data_chunk[FLASH_BYTES_USED] = { 0 };  // enough to cover what we use here
     uint8_t udata_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
@@ -839,7 +843,7 @@ void write_FLASH(void) {
     // FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE, FLASH_PAGE_SIZE = 040000x, 4096, 256
     // you could theoretically write 16 pages at once (a whole sector).
 
-    V0_print("Erasing FLASH target region" EOL);
+    V0_print(F("Erasing FLASH target region" EOL));
     uint32_t ints;
     int rc;
     if (false) {
@@ -855,7 +859,7 @@ void write_FLASH(void) {
         // writes 256 bytes (one "page") (16 pages per sector)
     }
 
-    V0_print("Writing FLASH target region" EOL);
+    V0_print(F("Writing FLASH target region" EOL));
     if (false) {
         uintptr_t params[] = {FLASH_TARGET_OFFSET, (uintptr_t) udata_chunk};
         // uintptr_t params[] = {FLASH_TARGET_OFFSET, (uint8_t) udata_chunk};
@@ -868,7 +872,7 @@ void write_FLASH(void) {
         flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
         restore_interrupts(ints);
     }
-    V1_print("write_FLASH END" EOL);
+    V1_print(F("write_FLASH END" EOL));
 }
 
 

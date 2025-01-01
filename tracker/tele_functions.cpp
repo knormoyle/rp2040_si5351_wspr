@@ -22,7 +22,7 @@
 bool SPEED_IS_SOLAR_ELEVATION_MODE = true;
 
 #include <TinyGPS++.h>  // https://github.com/mikalhart/TinyGPSPlus
-
+#include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 extern uint64_t GpsTimeToLastFix;  // milliseconds
 
@@ -87,6 +87,7 @@ int legalPowerSize = 19;
 //****************************************************
 void snapForTelemetry(void) {
     V1_println(F("snapForTelemetry START"));
+    Watchdog.reset();
     if (TESTMODE) {
         V1_println(F("snapForTelemetry TESTMODE detected"));
         telemetrySweepAllForTest();

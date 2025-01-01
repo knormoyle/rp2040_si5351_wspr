@@ -76,8 +76,8 @@
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
-#include <SPI.h>
-#include <Wire.h>
+// #include <SPI.h>
+// #include <Wire.h>
 
 // this is the target PLL freq when making muliplier/divider initial calculations
 // set in tracker.ino
@@ -379,8 +379,8 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
 //     Wire.write(myRegister);
 //     Wire.write(myValue);
 //     error = Wire.endTransmission();
-//     if (error == 0) V1_print("I2C device found at address 0x");
-//     if (error == 4) V1_print("Unknown error at address 0x");
+//     if (error == 0) V1_print(F("I2C device found at address 0x"));
+//     if (error == 4) V1_print(F("Unknown error at address 0x"));
 // }
 //
 // byte readRegister(uint8_t myRegister) {
@@ -390,8 +390,8 @@ int i2cWrite(uint8_t reg, uint8_t val) {  // write reg via i2c
 //     Wire.beginTransmission(_address);
 //     Wire.write(myRegister);
 //     error = Wire.endTransmission();
-//     if (error == 0) V1_print("I2C device found at address 0x");
-//     if (error == 4) V1_print("Unknown error at address 0x");
+//     if (error == 0) V1_print(F("I2C device found at address 0x"));
+//     if (error == 4) V1_print(F("Unknown error at address 0x"));
 //
 //     Wire.requestFrom(_address, 1, true);
 //     // blocking
@@ -869,7 +869,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     if (ms_div_here < 4 || ms_div_here > 900) {
         V1_printf("ERROR: ms_div %" PRIu64 " is out of range 4 to 900" EOL, ms_div_here);
         // FIX! how should we recalc
-        V1_print("ERROR: no recalc done. Should never happen! rf output is wrong" EOL);
+        V1_print(F("ERROR: no recalc done. Should never happen! rf output is wrong" EOL));
     }
 
     // R_DIVISOR_SHIFT: possible *4 for the R0 and R1 output divider.
@@ -900,7 +900,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     if (pll_mult_here < 15 || pll_mult_here > 90) {
         V1_printf("ERROR: pll_mult %" PRIu64 " is out of range 15 to 90." EOL,
             pll_mult_here);
-        V1_print("ERROR: Need to pick a high target pll freq" EOL);
+        V1_print(F("ERROR: Need to pick a high target pll freq" EOL));
         V1_printf("integer pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL,
             pll_freq_here, tcxo_freq);
         // doesn't work to try to force it in terms of understanding calcs
@@ -924,11 +924,11 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
         // make sure it is even number
         ms_div_here &= 0xfffffffe;
-        V1_print("ERROR: pll_freq implied by new min or max pll_mult" EOL);
-        V1_print("ms_div implied by that pll_freq" EOL);
+        V1_print(F("ERROR: pll_freq implied by new min or max pll_mult" EOL));
+        V1_print(F("ms_div implied by that pll_freq" EOL));
         if (ms_div_here < 4 || ms_div_here > 900) {
             V1_printf("ERROR: ms_div %" PRIu64 " is out of range 4 to 900" EOL, ms_div_here);
-            V1_print("ERROR: no recalc. Should never happen! rf output is wrong" EOL);
+            V1_print(F("ERROR: no recalc. Should never happen! rf output is wrong" EOL));
         }
         V1_printf("ERROR: Now integer pll_freq_here %" PRIu64 " integer tcxo_freq %" PRIu64 EOL,
             pll_freq_here, tcxo_freq);
@@ -1696,7 +1696,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
 //**********************************
 void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     uint32_t *pll_num, bool print) {
-    V1_print("si5351a_calc_optimize() START" EOL);
+    V1_print(F("si5351a_calc_optimize() START" EOL));
     // just to see what we get, calculate the si5351 stuff for
     // all the 0.25 Hz variations for possible tx in a band.
     // all assuming u4b channel 0 freq bin.
@@ -1813,13 +1813,13 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
         V1_printf("sumAbsoluteError (just symbol 1): %.4f" EOL, sumAbsoluteError_here);
         V1_printf("sumShiftError (just symbol 1): %.4f" EOL, sumShiftError_here);
         V1_print(F(EOL));
-        V1_print("si5351a_calc_optimize() END" EOL);
+        V1_print(F("si5351a_calc_optimize() END" EOL));
     }
 }
 
 //**********************************
 void si5351a_calc_sweep(void) {
-    V1_print("si5351a_calc_sweep() START" EOL);
+    V1_print(F("si5351a_calc_sweep() START" EOL));
 
     // global XMIT_FREQUENCY should already be set for band, channel?
     uint32_t xmit_freq = XMIT_FREQUENCY;
@@ -1887,7 +1887,7 @@ void si5351a_calc_sweep(void) {
         pll_num_last = pll_num;
     }
     V1_print(F(EOL));
-    V1_print("si5351a_calc_sweep() END" EOL);
+    V1_print(F("si5351a_calc_sweep() END" EOL));
 }
 //****************************************************************************
 // does this work? no. Hans method on 144Mhz is to fix the numerator and 
@@ -1935,7 +1935,7 @@ void si5351a_calc_sweep(void) {
 // sweep the bands for the current PLL_FREQ_TARGET to get the mult/div 
 // for the spreadsheet to compute optimum denom for the PLL_FREQ_TARGET
 void si5351a_calc_sweep_band() {
-    V1_print("si5351a_calc_sweep_band() START" EOL);
+    V1_print(F("si5351a_calc_sweep_band() START" EOL));
     double actual;
     double actual_pll_freq;
     uint32_t ms_div;
@@ -1979,7 +1979,7 @@ void si5351a_calc_sweep_band() {
         V1_print(F(EOL));
     }
 
-    V1_print("si5351a_calc_sweep_band() END" EOL);
+    V1_print(F("si5351a_calc_sweep_band() END" EOL));
 }
 
 //*********************************************************************************
@@ -1987,7 +1987,7 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
     V1_println(F("set_PLL_DENOM_OPTIMIZE START"));
     // FIX! hack! we should have fixed values per band? do they vary by freq bin?
     uint32_t PLL_DENOM_MAX = 1048575;
-    V1_print("WARN: leave PLL_DENOM_OPTIMIZE with optimal values so far" EOL);
+    V1_print(F("WARN: leave PLL_DENOM_OPTIMIZE with optimal values so far" EOL));
     // this is the target PLL freq when making muliplier/divider initial 
     // calculations set in tracker.ino
     // from 900 history

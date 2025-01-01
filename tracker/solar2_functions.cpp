@@ -180,7 +180,7 @@ time_t getEpochTime2() {
 
     // this is a unsigned long?
     time_t epoch_now = now();
-    V1_print("getEpochTime2 (utc)");
+    V1_print(F("getEpochTime2 (utc)"));
     if (false) {
         V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
             rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);

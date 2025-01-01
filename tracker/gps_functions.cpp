@@ -131,8 +131,9 @@ bool PWM_COLD_GPS_POWER_ON_MODE = true;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 
 // why isn't this true 12/15/24..true now. works (18Mhz)
-bool ALLOW_USB_DISABLE_MODE = true;
-// bool ALLOW_USB_DISABLE_MODE = false;
+// occassionally having problems...Not needed?
+// bool ALLOW_USB_DISABLE_MODE = true;
+bool ALLOW_USB_DISABLE_MODE = false;
 // try true 12/15/24
 bool ALLOW_KAZU_12MHZ_MODE = false;  // true not working with Serial2?
 
@@ -1349,7 +1350,7 @@ void GpsFullColdReset(void) {
     V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz (no we don't) then long sleep" EOL,
         PLL_SYS_MHZ);
     V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
-    // V1_print("Also lowering core voltage to 0.95v" EOL);
+    // V1_print(F("Also lowering core voltage to 0.95v" EOL));
     V0_flush();
 
     // hmm core0 has to know to drain garbage chars if we assert this? then deassert?
@@ -2103,7 +2104,7 @@ void updateGpsDataAndTime(int ms) {
         // should stay steady
         int diff = sentenceStartCnt - sentenceEndCnt;
         // these 3 form a oneliner
-        V1_print("updateGpsDataAndTime:");
+        V1_print(F("updateGpsDataAndTime:"));
         V1_printf(" start_millis %" PRIu64 " current_millis %" PRIu64,
             start_millis, current_millis);
         V1_printf(" sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
@@ -2171,7 +2172,7 @@ void updateGpsDataAndTime(int ms) {
                 setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                 // should be UTC time zone?
                 adjustTime(0);
-                V1_print("GOOD: rtc setTime() with");
+                V1_print(F("GOOD: rtc setTime() with"));
                 V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
                     gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
             }
@@ -2254,7 +2255,7 @@ void updateGpsDataAndTime(int ms) {
                     }
                 }
                 if (gpsTimeBad) {
-                    V1_print("ERROR: gps time is bad. Maybe no received gps time yet.");
+                    V1_print(F("ERROR: gps time is bad. Maybe no received gps time yet."));
                     V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
                         gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                 } else {
@@ -2262,7 +2263,7 @@ void updateGpsDataAndTime(int ms) {
                     // should be UTC time zone?
                     adjustTime(0);
                     gpsTimeWasUpdated = true;
-                    V1_print("GOOD: rtc setTime() with");
+                    V1_print(F("GOOD: rtc setTime() with"));
                     V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
                         gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                 }

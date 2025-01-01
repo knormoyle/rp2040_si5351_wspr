@@ -103,9 +103,9 @@ void printFloat(float val, bool valid, int len, int prec) {
 
     if (!valid) {
     while (len-- > 1) V1_print('*');
-        V1_print(' ');
+        V1_print(F(' '));
         // add 1 more space? (to cover too many digits?)
-        V1_print(' ');
+        V1_print(F(' '));
     } else {
         V1_print(val, prec);
         int vi = abs((int)val);
@@ -113,10 +113,10 @@ void printFloat(float val, bool valid, int len, int prec) {
         flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
 
         // FIX! should this be <= ? (kevin)
-        for (int i = flen; i < len; ++i) V1_print(' ');
+        for (int i = flen; i < len; ++i) V1_print(F(' '));
     }
     // kevin add 1 more space? we somehow did too many digits above?
-    V1_print(' ');
+    V1_print(F(' '));
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }
@@ -134,7 +134,12 @@ void printFloat(float val, bool valid, int len, int prec) {
 // was this too big and running out of memory?
 // #define LOG_BUFFER_SIZE 8192
 
+// Individual message can be up to the full buffer size?
+// wasteful to be that big. at most maybe 150 bytes?
+#define MESSAGE_BUFFER_SIZE 150
+
 static char logBuffer[LOG_BUFFER_SIZE] = { 0 };
+char message[MESSAGE_BUFFER_SIZE] = { 0 };
 
 // Buffers the log information to the log buffer
 // it is much faster than direct UART output
@@ -174,7 +179,7 @@ void StampPrintf(const char* pformat, ...) {
     va_list argptr;
     va_start(argptr, pformat);
     // message can be up to the full buffer size?
-    char message[LOG_BUFFER_SIZE];
+    // wasteful to be that big. at most maybe 150 bytes?
     // vsnprintf https://cplusplus.com/reference/cstdio/vsnprintf/
     // format the message
     vsnprintf(message, sizeof(message), pformat, argptr);

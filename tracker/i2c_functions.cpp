@@ -309,16 +309,16 @@ void i2c_scan_with_Wire(void) {
         Wire.beginTransmission(address);
         error = Wire.endTransmission();
         if (error == 0) {
-            V1_print("I2C device found at address 0x");
+            V1_print(F("I2C device found at address 0x"));
             if (address < 16) {
-                V1_print("0");
+                V1_print(F("0"));
             }
             V1_println(address, HEX);
             nDevices++;
         } else if (error == 4) {
-            V1_print("Unknown error at address 0x");
+            V1_print(F("Unknown error at address 0x"));
             if (address < 16) {
-                V1_print("0");
+                V1_print(F("0"));
             }
             V1_println(address, HEX);
         }
@@ -391,11 +391,11 @@ void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire) {
     Wire.setSCL(SCL);
     Wire.begin();
 
-    V1_print("Wire");
+    V1_print(F("Wire"));
     V1_print(wireN % 2);
-    V1_print(" SDA: ");
+    V1_print(F(" SDA: "));
     V1_print(SDA);
-    V1_print(" SCL: ");
+    V1_print(F(" SCL: "));
     V1_println(SCL);
 
     nDevices = 0;
@@ -408,22 +408,22 @@ void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire) {
         error = Wire.endTransmission();
 
         if (error == 0) {
-            V1_print("I2C device found at address 0x");
-            if (address < 16) V1_print("0");
+            V1_print(F("I2C device found at address 0x"));
+            if (address < 16) V1_print(F("0"));
             V1_println(address, HEX);
             nDevices++;
         } else if (error == 4) {
-            V1_print("Unknown error at address 0x");
+            V1_print(F("Unknown error at address 0x"));
             if (address < 16) {
-                V1_print("0");
+                V1_print(F("0"));
             }
             V1_println(address, HEX);
         }
     }
     if (nDevices == 0) {
-        V1_println("No I2C devices found" EOL);
+        V1_print(F("No I2C devices found" EOL));
     } else {
-        V1_println("Scan Complete" EOL);
+        V1_print(F("Scan Complete" EOL));
     }
     Wire.end();
     wireN++;
@@ -454,7 +454,7 @@ int I2cWriteTest(uint8_t reg, uint8_t val) {  // write reg via i2c
         // no device present.
         V1_printf("I2cWriteTest doing i2c_write_blocking() reg %02x val %02x" EOL, reg, val);
         res = i2c_write_blocking(VFO_I2C_INSTANCE, SI5351A_I2C_ADDR, i2c_buf, 2, false);
-        V1_print(EOL);
+        V1_print(F(EOL));
     }
 
     if (res == 127) {
@@ -469,7 +469,8 @@ int I2cWriteTest(uint8_t reg, uint8_t val) {  // write reg via i2c
         V1_printf("UNEXPECTED: i2cWRite() got unexpected res %d reg %02x val %02x" EOL,
             res, reg, val);
     }
-    V1_print(EOL);
+    V1_print(F(EOL));
+
 
     V1_printf("I2cWriteTest END reg %02x val %02x" EOL, reg, val);
     return res;
@@ -569,7 +570,7 @@ int i2cWrReadTest(uint8_t reg, uint8_t *val) {
         V1_printf("UNEXPECTED: i2cWrReadTest() got unexpected res %d reg %02x val %02x" EOL,
             res, reg, *val);
     }
-    V1_print(EOL);
+    V1_print(F(EOL));
 
     // FIX! no expected data compare.
     // I just eyeball the sequential write/read in the serial monitor

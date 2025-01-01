@@ -22,10 +22,10 @@ bool FORCE_BALLOON_MODE = false;
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
-#include <SPI.h>
-#include <Wire.h>
+// #include <SPI.h>
+// #include <Wire.h>
 
-// A complete copy of the Raspberry Pi Pico SDK is included with the arduino-pico core,
+// THe Raspberry Pi Pico SDK is included with the arduino-pico core,
 // and all functions in the core are available inside the standard link libraries.
 // When you use SDK functions, the core and libraries are not aware of any changes
 // to the Pico you perform.
@@ -59,6 +59,9 @@ bool FORCE_BALLOON_MODE = false;
 // may be longer than optimal for quick keyboard response.
 // changes to the config state may have atomicity issues, but the ballon code will
 // always be rebooted when done, as if to start from scratch after config changes
+
+// some stuff on deep sleep (I don't do)
+// https://github.com/matthias-bs/arduino-pico-sleep
 
 //**************************
 // flash config
@@ -653,7 +656,10 @@ void setup() {
     // FIX! shouldn't do Watchdog.reset() from here on in, unless core1 is stopped?
     // from here on, if this code hangs, we just don't get keyboard input
     // but that's not an issue if BALLOON_MODE
-    // freeMem();
+    if (VERBY[1]) {
+        V1_print(F("setup() freeMem()"));
+        freeMem();
+    }
     V1_print(F(EOL "LEAVING SETUP() (2)" EOL EOL));
     V0_print(F(EOL "Hit <enter> to go to config mode. otherwise it's running (2)" EOL EOL));
 }
@@ -706,7 +712,9 @@ bool core1_idled = false;
 void loop() {
     if (BALLOON_MODE) {
         // just sleep. hmm do we have any interrupts to deal with
-        // 100 secs
+        // hmm can we lose usb printing if we delay too long here?
+        // sleep_ms(100000); // 100 secs
+        // try just 30 secs
         sleep_ms(100000);
         // hmm could just return, loop will be called again
         // return;
@@ -731,7 +739,7 @@ void loop() {
         // don't use watchog reset..not thread safe?
         if (core1_idled) {
             // hmm..don't do any fetch from nvram with F()
-            V1_print(EOL "loop() LOOPING WITH core1_idled()" EOL EOL);
+            V1_print(F(EOL "loop() LOOPING WITH core1_idled()" EOL EOL));
             sleep_ms(1000);
         } else {
             // Serial.print(F(EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
@@ -838,11 +846,9 @@ void setup1() {
     // Wire.setSCL(pin_size_t VFO_I2C0_SCL_PIN);
     // per May 2022 forum post
 
-    if (false) {
-        Wire.setSDA(VFO_I2C0_SDA_PIN);  // 12
-        Wire.setSCL(VFO_I2C0_SCL_PIN);  // 13
-        Wire.begin();
-    }
+    //    Wire.setSDA(VFO_I2C0_SDA_PIN);  // 12
+    //    Wire.setSCL(VFO_I2C0_SCL_PIN);  // 13
+    //    Wire.begin();
 
     // default pins for Wire  are SDA=4   SCL=5
     // default pins for Wire1 are SDA=26  SCL=27
@@ -1112,6 +1118,10 @@ void setup1() {
     // back to non-blocking blinking
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+    if (VERBY[1]) {
+        V1_print(F("setup1() freeMem()"));
+        freeMem();
+    }
 }
 
 //*************************************************************************
@@ -1420,6 +1430,7 @@ void loop1() {
         V1_printf("fix_updated %u" EOL, fix_updated);
         V1_print(F(EOL));
 
+        Watchdog.reset();
         if ( !(fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX)) ) {
             if (fix_valid_all) {
                 V1_printf("%" PRIu64 " WARN: GPS fix issue: valid but fix_age %lu millisecs" EOL,
@@ -1492,9 +1503,6 @@ void loop1() {
                 "%" PRIu64 " After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
                 loopCnt, timeStatus(), minute(), second());
 
-            // FIX! does this cause a reboot?
-            // freeMem();
-
             // FIX! it should depend on the channel starting minute - 1 (modulo 10)
             // preparations for HF starts one minute before TX time
             // at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
@@ -1556,7 +1564,7 @@ void loop1() {
                         V1_printf("%" PRIu64 " wspr: 30 secs until starting minute",
                             loopCnt);
                         // oneliner
-                        V1_print(" wspr: vfo turn on for warmup");
+                        V1_print(F(" wspr: vfo turn on for warmup"));
                         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
                         uint32_t hf_freq = XMIT_FREQUENCY;
@@ -1622,6 +1630,13 @@ void loop1() {
 
     // next start is this end
     loop_us_start = loop_us_end;
+
+    // FIX! does this cause a reboot?
+    if (VERBY[1]) {
+        V1_print(F("loop1() freeMem()"));
+        freeMem();
+    }
+
     // whenever we have spin loops we need to updateStatusLED()
     V1_printf("%" PRIu64 " loop1() END" EOL, loopCnt);
 }
@@ -1633,12 +1648,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // (calculated delay above?)
     // at most wait up to a minute if called the minute before start time)
     if (!alignMinute(-1)) {
-        V1_print("FAIL: alignAndDoAllSequentialTX END early out: alignment wrong!");
+        V1_print(F("FAIL: alignAndDoAllSequentialTX END early out: alignment wrong!"));
         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
         return -1;
     }
 
-    V1_printf("alignAndDoAllSequentialTX START");
+    V1_print(F("alignAndDoAllSequentialTX START"));
     V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
     while (second() < 30)  {
         Watchdog.reset();
@@ -1647,8 +1662,6 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         updateStatusLED();
     }
 
-    V1_print("alignAndDoAllSequentialTX START");
-    V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
     // don't want gps power and tx power together
     GpsOFF(true);  // keep TinyGPS state
 
@@ -1688,12 +1701,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
     // will sync up to the right minute and second == 0
     int txNum = 0;
-    V1_print(EOL);
+    V1_print(F(EOL));
     V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
     V1_printf("hf_callsign %-6s" EOL, hf_callsign);
     V1_printf("hf_grid4 %s" EOL, hf_grid4);
     V1_printf("hf_power %s" EOL, hf_power);
-    V1_print(EOL);
+    V1_print(F(EOL));
     V1_flush();
     // init to all zeroes just so we know what the encode is doing, when
     // if we get bad symbols when we send the symbols
@@ -1716,12 +1729,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
     u4b_encode_std(hf_callsign, hf_grid4, hf_power,
         t_grid6, t_altitude, t_temp, t_voltage, t_speed, _id13);
-    V1_print(EOL);
+    V1_print(F(EOL));
     V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
     V1_printf("hf_callsign %-6s" EOL, hf_callsign);
     V1_printf("hf_grid4 %s" EOL, hf_grid4);
     V1_printf("hf_power %s" EOL, hf_power);
-    V1_print(EOL);
+    V1_print(F(EOL));
     V1_flush();
 
     syncAndSendWspr(hf_freq, 1, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
@@ -1743,12 +1756,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
         u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, true, _id13);
 
-        V1_print(EOL);
+        V1_print(F(EOL));
         V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
         V1_printf("hf_callsign %-6s" EOL, hf_callsign);
         V1_printf("hf_grid4 %s" EOL, hf_grid4);
         V1_printf("hf_power %s" EOL, hf_power);
-        V1_print(EOL);
+        V1_print(F(EOL));
         V1_flush();
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
         tx_cnt_2 += 1;
@@ -1766,12 +1779,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("WSPR txNum %d Preparing with u4b_encode_telen().." EOL, txNum);
         V1_flush();
         u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false, _id13);
-        V1_print(EOL);
+        V1_print(F(EOL));
         V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
         V1_printf("hf_callsign %-6s" EOL, hf_callsign);
         V1_printf("hf_grid4 %s" EOL, hf_grid4);
         V1_printf("hf_power %s" EOL, hf_power);
-        V1_print(EOL);
+        V1_print(F(EOL));
         V1_flush();
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, true);
         tx_cnt_3 += 1;
@@ -1919,7 +1932,8 @@ bool alignMinute(int offset) {
 // txNum can be 0, 1, 2, 3
 
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhenDone) {
-    // Instead of delaying in for 1 sec: we wait for PROCEED here.
+    // currently don't do this, but good strategy?
+    // Instead of delaying in for 1 sec: we can wait for PROCEED here.
     // If we wait for 2 PROCEEDs, it's okay if the first is short
     // because of unknown PWM counter initial state?
 
@@ -1932,8 +1946,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // 0.68266666... per symbol
     // so 2x -> 1.3653333..maybe a little shorter due to code delays
     // should we do one PROCEED plus a fixed delay?
-
     Watchdog.reset();
+
     //*******************************
     // Note we print this after the extra PROCEED delay(s). (or any additional fixed delay)
     V1_printf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
@@ -1964,14 +1978,12 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             EXTRA_DELAY_AFTER_PROCEED);
         EXTRA_DELAY_AFTER_PROCEED = 0;
     }
-    uint8_t PROCEEDS_TO_SYNC = 0;
 
+    uint8_t PROCEEDS_TO_SYNC = 0;
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time,
         // after a PROCEED false -> true transition
-
         // intersymbol sleep: go as big as we can go safely and not be too big. save power!
-
         // we need to wake up at intervals though to do the led
         // otherwise we get wrong timing and 3-4 short look like 3-4 long!
         // the 3-4 long are for config/error cases!
@@ -1986,9 +1998,9 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // hmm. not updating led during this
     // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
     delay(EXTRA_DELAY_AFTER_PROCEED);
+
     //******************
     Watchdog.reset();
-
     uint8_t symbol_count = WSPR_SYMBOL_COUNT;
     uint8_t i;
     absolute_time_t wsprStartTime = get_absolute_time();  // usecs
@@ -2068,6 +2080,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // we know we're done coarse/very-fine split here. so maybe just 15-20 ms spin
         // leds won't blink right during tx?
         // updateStatusLED();
+        Watchdog.reset();
         while (!PROCEED) tight_loop_contents();
 
         // hmm. not updating led during this
@@ -2091,7 +2104,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     float wsprDurationSecs = (float) wsprDuration / 1000000UL;
 
     if (wsprDurationSecs < 110.0 || wsprDurationSecs > 111.0) {
-        V1_print(EOL "ERROR: 100.592 secs goal:");
+        V1_print(F(EOL "ERROR: 100.592 secs goal:"));
         V1_printf(EOL "wsprDurationSecs %.5f seems too big or small" EOL, wsprDurationSecs);
         V1_printf("ERROR: wsprDuration %" PRIu64 " usecs" EOL EOL, wsprDuration);
     }
@@ -2210,7 +2223,6 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
 
     //******************
     // no checks on power uint8_t
-
     //******************
     l = strlen(hf_grid4);
     V1_printf("length check: hf_grid4 %s before jtencode was strlen %d" EOL,
@@ -2291,6 +2303,35 @@ void freeMem() {
     V1_print(F("Free RAM: "));
     V1_print(freeMemory(), DEC);
     V1_println(F(" byte"));
+
+    V1_print(F("Free Heap: "));
+    V1_print(rp2040.getFreeHeap(), DEC);
+    V1_println(F(" byte"));
+
+    V1_print(F("Used Heap: "));
+    V1_print(rp2040.getUsedHeap(), DEC);
+    V1_println(F(" byte"));
+
+    V1_print(F("Total Heap: "));
+    V1_print(rp2040.getTotalHeap(), DEC);
+    V1_println(F(" byte"));
+
+    // https://forum.arduino.cc/t/trying-to-make-sense-of-ram-usage/622666
+    // char __stack = 0;
+     
+    // V1_print("__brkval=");
+    // V1_println((unsigned int)__brkval);
+    // V1_print("__malloc_heap_start=");
+    // V1_println((unsigned int)__malloc_heap_start);
+    // V1_print("__flp=");
+    // V1_println((unsigned int)__flp);
+    // V1_print("__stack=");
+    // V1_println((unsigned int)&__stack);
+    // V1_print("stack size=");
+    // V1_println(RAM_end - (unsigned int)&__stack);
+    // V1_print("Heap size=");
+    // V1_println((unsigned int)__brkval - RAM_start);
+
     V1_println(F("freeMem() END"));
 }
 
