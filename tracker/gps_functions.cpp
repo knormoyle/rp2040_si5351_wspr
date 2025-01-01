@@ -350,15 +350,15 @@ void setGpsBalloonMode(void) {
     // Set navigation mode
     // $PAIR080,<CmdType>*<checksum>
     // '0' Normal mode: For general purpose
-    // '1' [Default Value] Fitness mode: For running and walking activities 
-    //     so that the low-speed (< 5 m/s) movement will have more of an effect 
+    // '1' [Default Value] Fitness mode: For running and walking activities
+    //     so that the low-speed (< 5 m/s) movement will have more of an effect
     //     on the position calculation.
     // '2' Reserved
     // '3' Reserved
     // '4' Stationary mode: For stationary applications where a zero dynamic assumed.
     // '5' Reserved
     // '6' Reserved
-    // '7' Swimming mode: For swimming purpose so that it smooths the trajectory and 
+    // '7' Swimming mode: For swimming purpose so that it smooths the trajectory and
     //     improves the accuracy of distance calculation.
     //************************
 
@@ -746,31 +746,31 @@ void setGpsConstellations(int desiredConstellations) {
                 strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62);  // GPS+BDS
         }
     }
-    // SIM65M 
+    // SIM65M
     // huh. this is like causing another GPS reset? (will be warm reset?)
     // Packet Type:066
     // PAIR_COMMON_SET_GNSS_SEARCH_MODE
-    // Configure the receiver to start searching for satellites. 
+    // Configure the receiver to start searching for satellites.
     // The setting is available when the NVRAM data is valid.
     // The device restarts when it receives this command.
     // Abbreviation: (GPS: "G", GLONASS: "R", Galileo: "E", BeiDou: "B", NavIC, "I")
 
-    // GPS_Enabled 
+    // GPS_Enabled
     // "0", disable (DO NOT search GPS satellites).
     // "1", search GPS satellites
-    // GLONASS_Enabled 
+    // GLONASS_Enabled
     // "0", disable (DO NOT search GLONASS satellites).
     // "1", search GLONASS satellites.
-    // Galileo_Enabled 
+    // Galileo_Enabled
     // "0", disable (DO NOT search Galileo satellites).
     // "1", search Galileo satellites
-    // BeiDou_Enabled 
+    // BeiDou_Enabled
     // "0", disable (DO NOT search BeiDou satellites).
     // "1", search BeiDou satellites
-    // QZSS_Enabled 
+    // QZSS_Enabled
     // "0", disable (DO NOT search QZSS satellites).
     // "1", search QZSS satellites
-    // NavIC_Enabled 
+    // NavIC_Enabled
     // "0", disable (DO NOT search Nav
     // "1", search NavIC satellites
 
@@ -783,7 +783,7 @@ void setGpsConstellations(int desiredConstellations) {
     // PAIR066,1,1,1,1,0,0 GPS+GLONASS+GALILEO+BEIDOU
     // PAIR066,1,1,0,1,0,0 GPS+GLONASS+BEIDOU
     // QZSS is always switchable.
-    
+
 
     Serial2.print(nmeaSentence);
     Serial2.flush();
@@ -2147,42 +2147,44 @@ void updateGpsDataAndTime(int ms) {
         // uint8_t for gps data
         // the Time things are int
         // see example https://arduiniana.org/libraries/TinyGPS/
+        uint16_t gps_year;
+        // use now for setting rtc, so we have a better solar elevation
+        // calc if the time is old
+        // lat/lon will still be old. we don't use altitude for that calc?
+        uint8_t gps_month, gps_day, gps_hour, gps_minute, gps_second;
+        uint32_t fix_age;
+        // Use gps.time.age()?
+        // also duplicate this check to say it's a valid date in TinyGPS
+        fix_age = gps.time.age();
+        gps_year = gps.date.year();
+        gps_month = gps.date.month();
+        gps_day = gps.date.day();
+        gps_hour = gps.time.hour();
+        gps_minute = gps.time.minute();
+        gps_second = gps.time.second();
 
         if (false) {
             // old way
-            if (hour() != gps.time.hour() ||
-                minute() != gps.time.minute() ||
-                second() != gps.time.second()) {
-                setTime(gps.time.hour(), gps.time.minute(), gps.time.second(), 0, 0, 0);
-                V1_printf("setTime(%02u:%02u:%02u)" EOL,
-                    gps.time.hour(), gps.time.minute(), gps.time.second());
+            if (hour() != gps_hour ||
+                minute() != gps_minute ||
+                second() != gps_second) {
+                setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+                // should be UTC time zone?
+                adjustTime(0);
+                V1_print("GOOD: rtc setTime() with");
+                V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
+                    gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
             }
         } else {
             // new way. more accurate syncing?
-            uint16_t gps_year;
-            // use now for setting rtc, so we have a better solar elevation 
-            // calc if the time is old 
-            // lat/lon will still be old. we don't use altitude for that calc?
-
-            uint8_t gps_month, gps_day;
-            uint8_t gps_hour, gps_minute, gps_second, gps_hundredths;
-            uint32_t fix_age;
-            // Use gps.time.age()?
-            // also duplicate this check to say it's a valid date in TinyGPS
-            fix_age = gps.time.age();
-            gps_year = gps.date.year();
-            gps_month = gps.date.month();
-            gps_day = gps.date.day();
-            gps_hour = gps.time.hour();
-            gps_minute = gps.time.minute();
-            gps_second = gps.time.second();
             // FIX! hmm. we don't get hundredths any more?
             // so we could be off by +- 0.5 sec + code delay? (300 millisecs + ?)
+            uint8_t gps_hundredths;
             gps_hundredths = 0;
             // FIX! we could also look at TimeLib timeStatus() to help qualify?
             // https://github.com/PaulStoffregen/Time?tab=readme-ov-file
             // enum is timeNotSet or timeSet
-            bool gps_date_valid = gps_year >= 2024 && gps_year <= 2034;
+            bool gps_date_valid = gps_year >= 2025 && gps_year <= 2034;
 
             // function doesn't exist anymore?
             // gps.crack_datetime(&gps_year, &gps_month, &gps_day, &gps_hour,
@@ -2222,7 +2224,7 @@ void updateGpsDataAndTime(int ms) {
                 // we don't compare day/month/year on time anywhere, except when looking
                 // for bad time from TinyGPS state (tracker.ino)
                 // FIX! should I work about setting day month year? why not
-                // then we can get all that info from the rtc, so if the gps data is 
+                // then we can get all that info from the rtc, so if the gps data is
                 // stail for time, we get a better solar elevation calculation..accurate time?
 
                 // JUST IN CASE: let's validate the ranges and not update if invalid!!
@@ -2237,11 +2239,11 @@ void updateGpsDataAndTime(int ms) {
                 if (gps_month < 1) gpsTimeBad = true;
                 // should already have validated year range? but do it here too
                 // will have to remember to update this in 10 years (and above too!)
-                if (gps_year < 2024 && gps_year > 2034) gpsTimeBad = true;
+                if (gps_year < 2025 && gps_year > 2034) gpsTimeBad = true;
 
                 // what the heck, check the days in a month is write. (subtract one from month)
                 /// if we have a valid month for this array!
-                static const uint8_t monthDays[] = {31,28,31,30,31,30,31,31,30,31,30,31}; 
+                static const uint8_t monthDays[] = {31,28,31,30,31,30,31,31,30,31,30,31};
                 if (!gpsTimeBad) {
                     // we know will be 0 to 11, from above check of gps_month
                     uint8_t validDays = monthDays[gps_month - 1];
@@ -2257,8 +2259,10 @@ void updateGpsDataAndTime(int ms) {
                         gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                 } else {
                     setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+                    // should be UTC time zone?
+                    adjustTime(0);
                     gpsTimeWasUpdated = true;
-                    V1_print("GOOD: rtc setTime() with"); 
+                    V1_print("GOOD: rtc setTime() with");
                     V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
                         gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                 }
@@ -2305,11 +2309,12 @@ void gpsDebug() {
     if (VERBY[1]) {
         printInt(gps.satellites.value(), gps.satellites.isValid() && !GpsInvalidAll, 5);
         printInt(gps.hdop.value(), gps.hdop.isValid() && !GpsInvalidAll, 5);
-        printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
-        printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
+        // was 12, 6 01/01/25
+        printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 11, 6);
+        printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 11, 6);
 
         printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
-        printDateTime(gps.date, gps.time);  // gps.time.age() exists?
+        printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
         printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
         printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);

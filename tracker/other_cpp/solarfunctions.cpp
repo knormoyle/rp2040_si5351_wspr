@@ -15,6 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// convert to javascript with:
+// https://app.codeconvert.ai/code-converter?inputLang=C%2B%2B&outputLang=JavaScript
  
 #include "Arduino.h"
 #include "solarfunctions.h"

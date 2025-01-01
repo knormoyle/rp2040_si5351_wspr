@@ -137,7 +137,7 @@ void calcSolarElevation2(double *solarElevation, double *solarAzimuth, double *s
     // It is the complement to the solar altitude or solar elevation,
     // which is the altitude angle or elevation angle between the sun's rays and a horizontal plane.
     // FIX! this actually gives us elevation?
-    double elevation = sza;
+    double elevation = 90 - sza;
     double azimuth = saa;
     // FIX! printing before badSolar forces to 0?
     V1_printf("solarZenithAndAzimuthAngle2 elevation %.3f azimuth %.3f" EOL, elevation, azimuth);
@@ -146,8 +146,8 @@ void calcSolarElevation2(double *solarElevation, double *solarAzimuth, double *s
     // solarElevation: can this be negative?. double
     // solarAzimuth:   can this be negative?. double
     // solarDistance:  can this be negative? double
-    double solarElevation_here = sza;
-    double solarAzimuth_here   = saa;
+    double solarElevation_here = elevation;
+    double solarAzimuth_here   = azimuth;
     double solarDistance_here  = 0;
 
     if (badSolar) {
@@ -181,8 +181,15 @@ time_t getEpochTime2() {
     // this is a unsigned long?
     time_t epoch_now = now();
     V1_print("getEpochTime2 (utc)");
-    V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
-        rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);
+    if (false) {
+        V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
+            rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);
+    } else {
+        V1_printf(" %04d-%02d-%02d", rtc_year, rtc_month, rtc_day);
+        V1_printf(" %02d:%02d:%02d", rtc_hour, rtc_minute, rtc_second);
+        V1_printf(" epoch_now %" PRIu64 EOL, epoch_now);
+    }
+
 
     return epoch_now;
 }

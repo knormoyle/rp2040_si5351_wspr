@@ -9,7 +9,7 @@
 
 #include <TinyGPS++.h>
 // no buffering
-void printDateTime(TinyGPSDate &d, TinyGPSTime &t);
+void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t);
 void printStr(const char *str, int len);
 void printFloat(float val, bool valid, int len, int prec);
 void printInt(uint64_t val, bool valid, int len);

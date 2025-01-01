@@ -65,13 +65,13 @@ void printInt(uint64_t val, bool valid, int len) {
 
 // why was this static
 // with arduino, can't we just use printf to stdout rather than V1_print() ?
-void printDateTime(TinyGPSDate &d, TinyGPSTime &t) {
+void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t) {
     if (!VERBY[1]) return;
     char sz[32];
     if (!d.isValid()) {
         V1_print(F("********** "));
     } else {
-        snprintf(sz, sizeof(sz), "%02d/%02d/%02d ", d.month(), d.day(), d.year());
+        snprintf(sz, sizeof(sz), "%04d-%02d-%02d ", d.year(), d.month(), d.day());
         V1_print(sz);
     }
 

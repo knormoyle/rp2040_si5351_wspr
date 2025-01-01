@@ -11,13 +11,17 @@
 // The precision of the algorithm is 0.3 degrees for the SZA and 0.5 degrees f
 // or the SAA (mean-average error).
 
+// convert to javascript with:
+// https://app.codeconvert.ai/code-converter?inputLang=C%2B%2B&outputLang=JavaScript
+
+
 //****************************************
 inline double deg2rad(double valInDegrees) {
     return M_PI * valInDegrees / 180.0;
 }
 
-inline double rad2deg(double valInDegrees) {
-    return 180.0 * valInDegrees / M_PI;
+inline double rad2deg(double valInRadians) {
+    return 180.0 * valInRadians / M_PI;
 }
 //****************************************
 // Solar zenith and azimuth angle (SZA, SAA) computation
@@ -30,7 +34,7 @@ void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, dou
     // The C library gmtime() function of type struct uses the value pointed by timer to fill 
     // a structure(tm) with the values that represent the corresponding time, 
     // expressed in coordinated universal time (UTC) or GMT timezone.
-    auto timeConv =gmtime(&timeStamp);
+    auto timeConv = gmtime(&timeStamp);
 
     // Time vectors:
     double year = timeConv->tm_year + 1900.0;
@@ -98,7 +102,7 @@ void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, dou
     double sH = sin(hAng);
     double cH = cos(hAng);
 
-    double se0 = sp * sd + cp * cd * cH;
+    double se0 = (sp * sd) + (cp * cd * cH);
     double ep = asin(se0) - (4.26e-5 * sqrt(1.0 - (se0 * se0)));
 
     double dE = (0.08422 * pressure) / ((273.0 + temperature) * tan(ep + 0.003138 / (ep + 0.08919)));

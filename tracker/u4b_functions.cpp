@@ -320,6 +320,10 @@ void u4b_encode_std(char *hf_callsign, char *hf_grid4, char *hf_power,
     // t_speed is integer
     // max t_speed could be 999 ?
     int speed = atoi(t_speed);
+    // if we're sending solar elevation here, we forced it to be >=0
+    // so we'll be sending half the solar elevation? 
+    // will be able to get up to 82 deg angle reported?
+    // with the 0-41 range?  (integer)
     int speedKnotsNum = speed / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)

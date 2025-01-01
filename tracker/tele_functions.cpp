@@ -144,9 +144,12 @@ void snapForTelemetry(void) {
 
     //****************************************************
 
+    // FIX! I guess if SPEED_IS_SOLAR_ELEVATION_MODE
+    // this means any negative solar elevation angles will clamp at 0
+    // only an issue if someone is doing vertical solar arrays?
     if (speed < 0)   speed = 0;
     if (speed > 999) speed = 999;
-    snprintf(t_speed, sizeof(t_speed), "%3d", speed);
+    snprintf(t_speed, sizeof(t_speed), "%d", speed);
 
     // fixing negative altitude values
     int altitude = (int) gps.altitude.meters();

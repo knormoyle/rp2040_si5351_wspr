@@ -5,6 +5,32 @@
 // https://doi.org/10.1016/j.solener.2012.01.024.
 // The precision of the algorithm is 0.3 degrees for the SZA and 0.5 degrees for the SAA (mean-average error).
 
+//****************************************************
+// gen'ed with
+// https://app.codeconvert.ai/code-converter?inputLang=C%2B%2B&outputLang=JavaScript
+// Notes
+// 
+// Major changes made in the translation:
+// 
+// Changed the function to return an object with sza and saa properties instead of using pointer parameters
+// Replaced C++ time_t and gmtime with JavaScript Date object
+// Converted C++ math constants and functions to JavaScript equivalents:
+// M_PI → Math.PI
+// M_PI_2 → Math.PI / 2
+// Mathematical functions like sin, cos, etc. are now using Math. prefix
+// Changed floor() to Math.floor()
+// Changed modulo operation fmod() to JavaScript's % operator
+// Used const instead of double for variable declarations where values don't change
+// Replaced pointer dereferencing with object property access
+// Converted C++ time struct members to JavaScript Date methods (getUTCHours, getUTCMinutes, etc.)
+// Important note about timestamp:
+// 
+// The function expects the timestamp in Unix epoch seconds
+// JavaScript Date constructor expects milliseconds, so we multiply the input by 1000
+// The algorithm's mathematical logic remains exactly the same, 
+// only the implementation details have been adapted to JavaScript conventions and capabilities.
+//****************************************************
+
 function deg2rad(valInDegrees) {
     return Math.PI * valInDegrees / 180.0;
 }
