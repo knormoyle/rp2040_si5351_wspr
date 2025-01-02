@@ -36,8 +36,7 @@ extern bool VERBY[10];
 // is this used for signed or unsigned?
 void printInt(uint64_t val, bool valid, int len) {
     if (!VERBY[1]) return;
-    char sz[32] = "*****************";
-
+    char sz[32];
     // FIX! should this really be %ld? why not %d
     // int64_t should use
     // printf("%" PRId64 "\n", t);
@@ -49,15 +48,12 @@ void printInt(uint64_t val, bool valid, int len) {
     // https://stackoverflow.com/questions/9225567/how-to-portably-print-a-int64-t-type-in-c
     // complete list of types and formats
     // https://en.cppreference.com/w/cpp/types/integer
-
-
-    if (valid) snprintf(sz, sizeof(sz), "%" PRIu64, val);
-    sz[len] = 0;
-    // puts blanks after the null char for the rest of the buffer?
-    for (int i = strlen(sz); i < len; ++i) sz[i] = ' ';
-    if (len > 0) sz[len - 1] = ' ';
-    V1_print(sz);
-
+    if (valid) {
+        snprintf(sz, len, "%" PRIu64, val);
+    } else {
+        snprintf(sz, len, "%s" "*****************");
+    }
+    Serial.print(sz);
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }
@@ -67,32 +63,36 @@ void printInt(uint64_t val, bool valid, int len) {
 void printStr(const char *str, int len) {
     if (!VERBY[1]) return;
     int slen = strlen(str);
-    for (int i = 0; i < len; ++i) V1_print(i < slen ? str[i] : ' ');
+    for (int i = 0; i < len; ++i) {
+        Serial.print(i < slen ? str[i] : ' ');
+    }
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }
 
 
-// why was this static?
 void printFloat(float val, bool valid, int len, int prec) {
     if (!VERBY[1]) return;
-
     if (!valid) {
-    while (len-- > 1) V1_print('*');
-        V1_print(F(' '));
+        while (len-- > 1) {
+            Serial.print('*');
+        }
+        Serial.print(F(' '));
         // add 1 more space? (to cover too many digits?)
-        V1_print(F(' '));
+        Serial.print(F(' '));
     } else {
-        V1_print(val, prec);
+        Serial.print(val, prec);
         int vi = abs((int)val);
         int flen = prec + (val < 0.0 ? 2 : 1);  // . and -
         flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
 
         // FIX! should this be <= ? (kevin)
-        for (int i = flen; i < len; ++i) V1_print(F(' '));
+        for (int i = flen; i < len; ++i) {
+            Serial.print(F(' '));
+        }
     }
     // kevin add 1 more space? we somehow did too many digits above?
-    V1_print(F(' '));
+    Serial.print(F(' '));
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }

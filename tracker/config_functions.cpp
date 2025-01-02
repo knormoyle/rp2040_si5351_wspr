@@ -555,7 +555,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'M':
-                get_user_input("Send morse also? 0 or 1: " EOL, _morse_also, sizeof(_verbose));
+                get_user_input("Send morse also? 0 or 1: " EOL, _morse_also, sizeof(_morse_also));
                 write_FLASH();
                 break;
             case 13:  break;
