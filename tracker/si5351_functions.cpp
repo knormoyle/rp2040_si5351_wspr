@@ -154,9 +154,6 @@ static uint32_t s_PLLA_ms_div_prev = 0;
 // https://github.com/lkoepsel/I2C/blob/main/Arduino/Pico/I2C_Scanner/I2C_Scanner.ino
 //****************************************************
 void vfo_init(void) {
-    //*************************************
-    // HACK didn't get here
-    //*************************************
     V1_println(F("vfo_init START"));
     Watchdog.reset();
 
@@ -210,6 +207,7 @@ void vfo_set_power_on(bool turn_on) {
     // this works even if s_is_on is wrong relative to current on state
     // doesn't turn off/on first
     V1_printf("vfo_set_power_on START %u" EOL, turn_on);
+    Watchdog.reset();
     V1_flush();
 
     // don't make it dependent on s_is_on state
@@ -534,6 +532,7 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
 
 //****************************************************
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
+    Watchdog.reset();
     // V1_printf("si5351a_setup_PLLB START mult %u num %lu denom %lu" EOL, mult, num, denom);
     uint8_t PLLB_regs[8] = { 0 };
 
@@ -596,6 +595,7 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
 
 //****************************************************
 void si5351a_setup_PLLA(uint8_t mult, uint32_t num, uint32_t denom) {
+    Watchdog.reset();
     // straight copy of *_setup_PLLB. 
     // has the global s_PLLA_regs_prev to compare to
     // V1_printf("si5351a_setup_PLLA START mult %u num %lu denom %lu" EOL, mult, num, denom);
@@ -666,6 +666,7 @@ const uint8_t R_DIVISOR_SHIFT = 0;
 // div must be even number
 void si5351a_setup_multisynth01(uint32_t div) {
     V1_printf("si5351a_setup_multisynth01 START div %lu" EOL, div);
+    Watchdog.reset();
     if ((div % 2) != 0) {
         V1_printf("ERROR: si5351a_setup_multisynth01 div %lu isn't even" EOL, div);
     }
@@ -862,6 +863,7 @@ void si5351a_reset_PLLA(void) {
 void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
     uint32_t *r_divisor, uint32_t freq_x128) {
+    Watchdog.reset();
 
     // interesting they had relatively low pll freq (620Mhz) for 15M case
     // https://rfzero.net/documentation/tools/si5351a-frequency-tool/
@@ -1084,6 +1086,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
+    Watchdog.reset();
     uint32_t ms_div;
     uint32_t pll_mult;
     uint32_t pll_num;
@@ -1141,6 +1144,7 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
 // FIX! hans says we need pll reset whenever we turn clocks off/on
 // to retain 180 degree phase relationship (CLK0/CLK1)
 void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
+    Watchdog.reset();
     if (print) {
         V1_printf("vfo_turn_on_clk_out START clk_num %u" EOL, clk_num);
     }
@@ -1149,20 +1153,23 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
             EOL, clk_num);
     }
     // enable clock 0 and 1. 0 is enabled
-    uint8_t enable_bit = 1 << clk_num;
+    uint8_t disable_bits = 1 << clk_num;
     // clk0 implies clk1 also. so do a 3!
     if (clk_num == 0) {
-        enable_bit |= 1 << 1;
-        si5351bx_clken &= ~enable_bit;
-        i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+        disable_bits |= 1 << 1;
+        // don't do anything if no bits change
+        if ((si5351bx_clken & !disable_bits) != si5351bx_clken) { // 0 is enabled
+            si5351bx_clken &= !disable_bits;
+            i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+        }
     } else {
         V1_printf("ERROR: vfo_turn_on_clk_out illegal clk_num %u" EOL, clk_num);
-        V1_flush();
     }
 
     // FIX! this should always have a pll reset after it?
     if (print) {
         V1_println(F("vfo_turn_on_clk_out END"));
+        V1_flush();
     }
 }
 
@@ -1174,22 +1181,23 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
 
 // Hmm. this is never used now?
 void vfo_turn_off_clk_out(uint8_t clk_num, bool print) {
+    Watchdog.reset();
     // are these enable bits inverted? Yes, 1 is disable
     if (print) {
-        V1_printf(EOL "vfo_turn_off_clk_out STARTclk_num %u" EOL, clk_num);
+        V1_printf(EOL "vfo_turn_off_clk_out START clk_num %u" EOL, clk_num);
     }
-    V1_flush();
-    uint8_t enable_bit = 1 << clk_num;
+    uint8_t disable_bits = 1 << clk_num;
 
     // clk0 implies clk1 also
     if (clk_num == 0) {
-        enable_bit |= 1 << 1;
-        si5351bx_clken |= enable_bit;
-        // if si5351a power is off we'll get ERROR: res -1 after i2cWrite 3
-        i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+        disable_bits |= 1 << 1;
+        if ((si5351bx_clken | disable_bits) != si5351bx_clken) { // 0 is enabled
+            si5351bx_clken |= disable_bits; // 1 is disable
+            // if si5351a power is off we'll get ERROR: res -1 after i2cWrite 3
+            i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
+        }
     } else {
         V1_printf("ERROR: vfo_turn_off_clk_out illegal clk_num %u" EOL, clk_num);
-        V1_flush();
     }
     
     if (print) {
@@ -1199,6 +1207,7 @@ void vfo_turn_off_clk_out(uint8_t clk_num, bool print) {
 }
 //****************************************************
 void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
+    Watchdog.reset();
     V1_printf("vfo_set_drive_strength START clk_num %u" EOL, clk_num);
 
     // only called during the initial vfo_turn_on()
@@ -1277,6 +1286,7 @@ bool vfo_is_off(void) {
 
 //****************************************************
 void vfo_write_clock_en_with_retry(uint8_t val) {
+    Watchdog.reset();
     V1_print(F("vfo_write_clock_en_with_retry START"));
     // This can power the vfo off/on on failure! and we'll lose state
     V1_flush();
@@ -1333,6 +1343,7 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
 
         // all clocks off?
         // FIX! what about timeout?
+        Watchdog.reset();
         res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, val);
         V1_flush();
     }
@@ -1343,6 +1354,7 @@ void vfo_turn_on(uint8_t clk_num) {
     // FIX! what if clk_num is not zero?
     // turn on of 0 turns on 0 and 1 now    clk_num = 0;
     V1_printf("vfo_turn_on START clk_num %u" EOL, clk_num);
+    Watchdog.reset();
 
     // already on successfully?
     // FIX! ..always turn it on now? for debug
@@ -1389,6 +1401,7 @@ void vfo_turn_on(uint8_t clk_num) {
 
     uint8_t reg;
     for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) {
+        Watchdog.reset();
         i2cWrite(reg, 0xAC);
     }
     // was:   i2cWrite(reg, 0xCC);
@@ -1421,6 +1434,7 @@ void vfo_turn_on(uint8_t clk_num) {
     const uint8_t s_pllb_values[] = { 0, 0, 0, 0x05, 0x00, 0, 0, 0 };
     // write 8 regs
     // set PLLA for div_16 mode (minimum even integer division)
+    Watchdog.reset();
     i2cWriten(26, (uint8_t *)s_plla_values, 8);
     // we use pllb only? (write 8 regs)
     // set PLLB for div_16 mode (minimum even integer division)
@@ -1431,6 +1445,7 @@ void vfo_turn_on(uint8_t clk_num) {
     const uint8_t s_ms_2_values[]  = { 0, 1, 0x0C, 0, 0, 0, 0, 0 };
     // write 8 regs
     // set MS0 for div_4 mode (min. division)
+    Watchdog.reset();
     i2cWriten(42, (uint8_t *)s_ms_01_values, 8);
     // set MS1 for div_4 mode (min. division)
     i2cWriten(50, (uint8_t *)s_ms_01_values, 8);
@@ -1446,6 +1461,7 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // leave phase offsets = default (0)
     // new 2/28/24 now we're going to write 0's to clk0/1/2 offsets, just in case
+    Watchdog.reset();
     i2cWrite(165, 0x00);
     i2cWrite(166, 0x00);
     i2cWrite(167, 0x00);
@@ -1488,7 +1504,7 @@ void vfo_turn_on(uint8_t clk_num) {
     // new 11/24/24 ..maybe clear all this old state
     memset(s_PLLB_regs_prev, 0, 8);
     memset(s_PLLA_regs_prev, 0, 8);
-    si5351bx_clken = 0xff;
+    si5351bx_clken = 0xff; // all disabled
 
     uint32_t freq = XMIT_FREQUENCY;
 
@@ -1496,12 +1512,12 @@ void vfo_turn_on(uint8_t clk_num) {
     V1_printf("initial freq for vfo_set_freq_x128() is %lu" EOL, freq);
     uint32_t freq_x128 = freq << PLL_CALC_SHIFT;
 
+    Watchdog.reset();
     // FIX! should we get rid of pll reset here and rely on the turn_on_clk
     // to do it?
     vfo_set_freq_x128(clk_num, freq_x128, false);
 
     // The final state is clk0/clk1 running and clk outputs on?
-    si5351bx_clken = 0xff;
     // this doesn't cause a reset_PLLB
     vfo_turn_on_clk_out(clk_num, true); // print
 

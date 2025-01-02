@@ -130,7 +130,7 @@ extern bool BALLOON_MODE;
 // sort power on for gps cold reset only
 bool PWM_COLD_GPS_POWER_ON_MODE = true;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
-bool ALLOW_LOWER_CORE_VOLTAGE_MODE = true;
+bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false; // causing intermittent fails if true?
 
 // why isn't this true 12/15/24..true now. works (18Mhz)
 // occassionally having problems...Not needed?
@@ -2287,8 +2287,8 @@ void gpsDebug() {
         printInt(gps.satellites.value(), gps.satellites.isValid() && !GpsInvalidAll, 5);
         printInt(gps.hdop.value(), gps.hdop.isValid() && !GpsInvalidAll, 5);
         // was 12, 6 01/01/25
-        printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 11, 6);
-        printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 11, 6);
+        printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
+        printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
 
         printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
         printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?

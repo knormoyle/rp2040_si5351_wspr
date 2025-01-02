@@ -1964,6 +1964,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // remember, it's usec running time, it's not aligned to the gps time.
         StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
     }
+    vfo_turn_on_clk_out(WSPR_TX_CLK_NUM, false);
     //*******************************
     // earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
     // i.e. code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
@@ -2125,7 +2126,10 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     // or always turn off?
     if (vfoOffWhenDone) {
         vfo_turn_off();
+    } else {
+        vfo_turn_off_clk_out(WSPR_TX_CLK_NUM, true);
     }
+    
     Watchdog.reset();
     V1_println(F("sendWspr() END"));
 }

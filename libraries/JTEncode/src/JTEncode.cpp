@@ -44,7 +44,7 @@
 // Define an upper bound on the number of glyphs.  Defining it this
 // way allows adding characters without having to update a hard-coded
 // upper bound.
-#define NGLYPHS         (sizeof(fsq_code_table)/sizeof(fsq_code_table[0]))
+// #define NGLYPHS         (sizeof(fsq_code_table)/sizeof(fsq_code_table[0]))
 
 /* Public Class Members */
 

@@ -16,19 +16,20 @@ extern bool VERBY[10];
 void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t) {
     if (!VERBY[1]) return;
     char sz[32];
-    if (!d.isValid()) {
-        V1_print(F("********** "));
-    } else {
+    if (d.isValid()) {
         snprintf(sz, sizeof(sz), "%04d-%02d-%02d ", d.year(), d.month(), d.day());
         V1_print(sz);
+    } else {
+        V1_print(F("********** "));
     }
 
-    if (!t.isValid()) {
-        V1_print(F("******** "));
-    } else {
+    if (t.isValid()) {
         snprintf(sz, sizeof(sz), "%02d:%02d:%02d ", t.hour(), t.minute(), t.second());
         V1_print(sz);
+    } else {
+        V1_print(F("******** "));
     }
+
     printInt(d.age(), d.isValid(), 5);
     // whenever something might have taken a long time like printing
     updateStatusLED();
