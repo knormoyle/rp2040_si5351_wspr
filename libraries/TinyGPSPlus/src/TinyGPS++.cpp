@@ -69,12 +69,13 @@ bool TinyGPSPlus::encode(char c)
   ++encodedCharCount;
   switch(c)
   {
-  case ',': // term terminators
-    parity ^= (uint8_t)c;
+  case ',': 
   case '\r':
   case '\n':
   case '*':
     {
+      // kbn: to avoid compiler warnings on fallthrough
+      if (c == ',') parity ^= (uint8_t)c;
       bool isValidSentence = false;
       if (curTermOffset < sizeof(term))
       {

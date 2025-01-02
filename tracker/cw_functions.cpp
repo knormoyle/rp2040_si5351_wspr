@@ -7,7 +7,7 @@
 // Nano_Beacon 29 Nov 2021 by Paul VK3HN.
 
 // Nano_Beacon -- a basic CW beacon
-// See READ.ME at url above for further background and code mod help. 
+// See READ.ME at url above for further background and code mod help.
 // https://vk3hn.wordpress.com/
 
 // reverse beacon network 10M
@@ -22,11 +22,12 @@
 #include "led_functions.h"
 #include "gps_functions.h"
 
-#define CW_CLK_NUM         0    // we get the differential clk0/clk1 with this
-#define CW_DASH_LEN        3    // length of dash (in dots)
+#define CW_CLK_NUM WSPR_TX_CLK_0_NUM // we get the full differential clk0/clk1 with this
+#define CW_DASH_LEN 3  // length of dash (in dots)
 #define CW_LETTER_SPACE_LEN 4
-#define CW_WORD_SPACE_LEN   7
-#define SERIAL_LINE_WIDTH  80   // number of morse chars on Serial after which we newline 
+#define CW_WORD_SPACE_LEN 7
+// number of morse chars on Serial after which we newline
+#define SERIAL_LINE_WIDTH 80
 
 //********************************
 extern uint32_t XMIT_FREQUENCY;
@@ -46,29 +47,29 @@ extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
 uint32_t get_cw_freq(char *band) {
     uint32_t cw_freq;
     switch(atoi(band)) {
-        case 10: cw_freq = 28050100; break; 
-        case 12: cw_freq = 24935100; break; 
-        case 15: cw_freq = 21050100; break; 
-        case 17: cw_freq = 18150100; break; 
-        case 20: cw_freq = 14050100; break; 
-        default: cw_freq = 28050100; break; 
+        case 10: cw_freq = 28050100; break;
+        case 12: cw_freq = 24935100; break;
+        case 15: cw_freq = 21050100; break;
+        case 17: cw_freq = 18150100; break;
+        case 20: cw_freq = 14050100; break;
+        default: cw_freq = 28050100; break;
     }
     V1_printf("get_cw_freq band %s will use cw_freq %lu" EOL, band, cw_freq);
     return cw_freq;
 }
 
 //********************************
-// state of the txcvr 
+// state of the txcvr
 enum tx_state_e {
-    E_STATE_RX, 
+    E_STATE_RX,
     E_STATE_TX
 };
 
-// state of the key line 
+// state of the key line
 enum key_state_e {
-    E_KEY_UP, 
+    E_KEY_UP,
     E_KEY_DOWN
-}; 
+};
 
 
 // init to 10 wpm
@@ -77,7 +78,7 @@ uint32_t cw_ch_counter = 0;
 
 // morse reference table
 struct morse_char_t {
-    char ch[7]; 
+    char ch[7];
 };
 
 morse_char_t MorseCode[] = {
@@ -134,7 +135,7 @@ int morse_lookup(char c) {
     for(uint32_t i = 0; i < sizeof(MorseCode); i++) {
         if (c == MorseCode[i].ch[0]) return i;
     }
-    return -1; 
+    return -1;
 }
 
 //**************************************
@@ -168,19 +169,19 @@ void cw_key_state(key_state_e k) {
             vfo_turn_off_clk_out(CW_CLK_NUM, false);  // don't print
         }
         break;
-    }    
+    }
 }
 
 //**************************************
 tx_state_e tx_state = E_STATE_RX;
 void cw_tx_state(tx_state_e s) {
-    // if necessary, activate the receiver or the transmitter 
+    // if necessary, activate the receiver or the transmitter
     // changes global 'cw_state' {E_STATE_RX, E_STATE_TX}
     switch (s) {
         case E_STATE_RX: if (tx_state != E_STATE_RX) {
             V1_print(F(EOL "cw_tx_state E_STATE_RX" EOL));
             vfo_turn_off();
-            // turn gps back on! 
+            // turn gps back on!
             // cw should be at the end of wspr (during the extended telemetry time slot)
             GpsON(false); // no full cold reset
             tx_state = E_STATE_RX;
@@ -201,7 +202,7 @@ void cw_tx_state(tx_state_e s) {
             // does pll reset too
             uint32_t hf_freq = get_cw_freq(_Band);
             XMIT_FREQUENCY = hf_freq;
-            // uses XMIT_FREQUENCY 
+            // uses XMIT_FREQUENCY
             vfo_turn_on(CW_CLK_NUM);
             Watchdog.reset();
             V1_flush();
@@ -214,16 +215,16 @@ void cw_tx_state(tx_state_e s) {
             V1_flush();
         }
         break;
-    }    
+    }
 }
 
 //**************************************
 void cw_send_dot() {
     busy_wait_ms(dot_length_ms);  // wait for one dot period (space)
-    // if(cw_ch_counter % SERIAL_LINE_WIDTH == 0) V1_println(); 
+    // if(cw_ch_counter % SERIAL_LINE_WIDTH == 0) V1_println();
     cw_key_state(E_KEY_DOWN);
     busy_wait_ms(dot_length_ms);  // key down for one dot period
-    cw_key_state(E_KEY_UP); 
+    cw_key_state(E_KEY_UP);
     // how much delay does this cause?
     V1_print(".");
     cw_ch_counter++;
@@ -232,10 +233,10 @@ void cw_send_dot() {
 //**************************************
 void cw_send_dash() {
     busy_wait_ms(dot_length_ms);  // wait for one dot period (space)
-    cw_key_state(E_KEY_DOWN); 
-    // if(cw_ch_counter % SERIAL_LINE_WIDTH == 0) V1_println(); 
+    cw_key_state(E_KEY_DOWN);
+    // if(cw_ch_counter % SERIAL_LINE_WIDTH == 0) V1_println();
     busy_wait_ms(dot_length_ms * CW_DASH_LEN);  // key down for CW_DASH_LEN dot periods
-    cw_key_state(E_KEY_UP); 
+    cw_key_state(E_KEY_UP);
     // how much delay does this cause?
     V1_print("-");
     cw_ch_counter++;
@@ -258,7 +259,7 @@ void cw_send_word_space() {
 
 //**************************************
 void cw_send_morse_char(char c) {
-    // 'c' is a '.' or '-' char, so send it 
+    // 'c' is a '.' or '-' char, so send it
     if (c == '.') cw_send_dot();
     else if (c == '-') cw_send_dash();
     // ignore anything else, including 0s
@@ -269,7 +270,7 @@ void cw_send(char *m) {
     V1_print(F("cw_send START" EOL));
     Watchdog.reset();
     // sends the message in string 'm' as CW, with inter letter and word spacing
-    // s is the speed to play at; if s == 0, use the current speed    
+    // s is the speed to play at; if s == 0, use the current speed
     int i, j, n;
     int m_len = strlen(m);
     if (m_len == 0 || m_len > MORSE_CHARS_MAX) {
@@ -281,7 +282,7 @@ void cw_send(char *m) {
     for (i=0; i < m_len; i++) {
         Watchdog.reset();
         if(m[i] == ' ') {
-            cw_send_word_space(); 
+            cw_send_word_space();
         } else {
             n = morse_lookup(m[i]);
             if (n == -1) {
@@ -321,21 +322,42 @@ void cw_init() {
     */
 }
 //**************************************
-void cw_send_message() {    
+void cw_high_drive_strength() {
+    V1_print("cw_high_drive_strength START");
+    // change the si5351a drive strength back to 8ma
+    // it modifies s_vfo_drive_strength (in si5351a_functions.cpp)
+    // which isn't used until a frequency is set. the s*ms_div_prev are cleared
+    // so it will trigger a pll reset when you set a frequency
+    // void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength);
+    vfo_set_drive_strength(CW_CLK_NUM, SI5351A_CLK01_IDRV_8MA);
+    V1_print("cw_high_drive_strength END");
+}
+
+void cw_restore_drive_strength() {
+    // change the si5351a drive strength back to configured value
+    // I suppose we always set it on the next wspr, so okay if we do nothing here?
+}
+
+//**************************************
+void cw_send_message() {
     V1_print(F("cw_send_message START" EOL));
     Watchdog.reset();
     uint8_t wpm = 12;
     dot_length_ms = cw_keyer_speed(wpm);
     // up to 80 chars
     // has to be uppercase letters
-    snprintf(morse_msg, sizeof(morse_msg), "CQ CQ DE %s %s BALLOON %s %s %s %sK", 
+    snprintf(morse_msg, sizeof(morse_msg), "CQ CQ DE %s %s BALLOON %s %s %s %s K",
         t_callsign, t_callsign, t_grid6, t_grid6, t_altitude, t_altitude);
 
-    cw_tx_state(E_STATE_TX); 
+    // More power scotty! best chance of someone spotting!
+    cw_high_drive_strength();
+    cw_tx_state(E_STATE_TX);
     cw_send(morse_msg);
-    // turns gps bank on!
-    cw_tx_state(E_STATE_RX); 
-    
+
+    // turns gps back on!
+    cw_tx_state(E_STATE_RX);
+    cw_restore_drive_strength();
+
     Watchdog.reset();
     V1_print(F("cw_send_message END" EOL));
 }

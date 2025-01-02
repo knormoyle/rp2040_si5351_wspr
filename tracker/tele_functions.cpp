@@ -12,12 +12,15 @@
 #include "mh_functions.h"
 #include "adc_functions.h"
 #include "tele_functions.h"
+
 // to calc solar elevations
 // #include "solar_functions.h"
 // fast algo
 #include "solar2_functions.h"
 // most accurate algo
 #include "solar4_functions.h"
+// suncal
+#include "solar5_functions.h"
 
 bool SPEED_IS_SOLAR_ELEVATION_MODE = true;
 

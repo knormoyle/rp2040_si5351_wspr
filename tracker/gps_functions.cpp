@@ -1362,7 +1362,7 @@ void GpsFullColdReset(void) {
     }
     //**************************************
     if (ALLOW_TEMP_12MHZ_MODE) {
-        V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz then long sleep" EOL);
+        V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz then long sleep" EOL, PLL_SYS_MHZ);
     } else {
         V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to pll 18Mhz then long sleep" EOL, PLL_SYS_MHZ);
     }
@@ -2267,7 +2267,12 @@ void updateGpsDataAndTime(int ms) {
 //************************************************
 void gpsDebug() {
     if (!VERBY[1]) return;
+    // am I getting problems with constant strings in ram??
+    char debugMsg0[] = "Before any gpsDebug prints";
+    realPrintFlush(debugMsg0);
+
     V1_println(F("GpsDebug START"));
+
     bool validA = gps.satellites.isValid() && !GpsInvalidAll;
     bool validB = gps.hdop.isValid() && !GpsInvalidAll;
     bool validC = gps.location.isValid() && !GpsInvalidAll;
@@ -2277,10 +2282,15 @@ void gpsDebug() {
     V1_printf("gps valids: %u %u %u %u %u %u %u" EOL,
         GpsInvalidAll, validA, validB, validC, validD, validE, validF);
 
-    V1_print(F(EOL EOL));
+    V1_print(F(EOL));
+    V1_print(F(EOL));
     V1_println(F("Sats HDOP Latitude      Longitude   Fix    Date       Time     Date Alt     Course Speed Card    Chars FixSents  Checksum"));
     V1_println(F("          (deg)         (deg)       Age                        Age  (m)     --- from GPS ----    RX    RX        Fail"));
     V1_println(F("------------------------------------------------------------------------------------------------------------------------"));
+
+    // am I getting problems with constant strings in ram??
+    char debugMsg1[] = "Before printInt/Float/String gpsDebug prints";
+    realPrintFlush(debugMsg1);
 
     // https://github.com/StuartsProjects/GPSTutorial
     if (VERBY[1]) {
@@ -2303,8 +2313,12 @@ void gpsDebug() {
             printInt(gps.failedChecksum(), true, 9);
         }
     }
+    V1_print(F(EOL));
+    V1_print(F(EOL));
+    // am I getting problems with constant strings in ram??
+    char debugMsg2[] = "After all gpsDebug prints";
+    realPrintFlush(debugMsg2);
 
-    V1_print(F(EOL EOL));
     V1_println(F("GpsDebug END"));
 }
 
@@ -2383,15 +2397,19 @@ void kazuClocksSlow() {
             CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
             12 * MHZ,
             12 * MHZ);
+
+        // now can turn off pll sys to save power
+        pll_deinit(pll_sys);
     }
 
-    // Turn off pll sys and pll usb to save power
-    pll_deinit(pll_sys);
+    // turn off pll usb to save power
     if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
         // this will stop the ability to print
         // in BALLOON_MODE, this causes a reboot cause no usb
         pll_deinit(pll_usb);
     }
+
+    // so we can visually ID we were here
     blockingLongBlinkLED(3);
 
     // don't do this. because we actually restore to a pll sys value
@@ -2458,26 +2476,6 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
     // V1_println(F("kazuClocksRestore START" EOL));
     // V1_flush();
 
-    // FIX! we need usb at 48 mhz ?
-    // we're restoring usb while we're still at 12 Mhz?
-    // haven't switch to the normal pll with 18Mhz yet
-    if (!BALLOON_MODE) {
-        // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
-        // pll pll_sys or pll_usb
-        // ref_div Input clock divider.
-        // vco_freq Requested output from the VCO (voltage controlled oscillator)
-        // post_div1 Post Divider 1 - range 1-7. Must be >= post_div2
-        // post_div2 Post Divider 2 - range 1-7
-        pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
-        // FIX! we don't need pll_sys for the Serial2 ? (gps) or do we?
-        busy_wait_ms(1500);
-        // High-level Adafruit TinyUSB init code,
-        // does many things to get USB back online
-        tusb_init();
-        Serial.begin(115200);
-        busy_wait_ms(1000);
-    }
-
     // clk_per, clk_rtc and clk_adc is the same as it was due to kazuClocksSlow()?
     // don't change. because we actually restore to a pll sys value
     // so we should not change these..assume go back just the same as it was
@@ -2493,9 +2491,19 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
         PLL_SYS_MHZ = freq_khz / 1000UL;
     }
     busy_wait_ms(500);
+
+    // FIX! we need usb at 48 mhz ?
     if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
+        // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
+        // pll pll_sys or pll_usb
+        // ref_div Input clock divider.
+        // vco_freq Requested output from the VCO (voltage controlled oscillator)
+        // post_div1 Post Divider 1 - range 1-7. Must be >= post_div2
+        // post_div2 Post Divider 2 - range 1-7
         pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
-        busy_wait_ms(500);
+        busy_wait_ms(1500);
+        // High-level Adafruit TinyUSB init code,
+        // does many things to get USB back online
         tusb_init();
         Serial.begin(115200);
         busy_wait_ms(500);
@@ -2592,33 +2600,8 @@ void printStr(const char *str, int len) {
     updateStatusLED();
 }
 
-// https://docs.arduino.cc/language-reference/en/functions/communication/serial/availableForWrite/
-// Serial.availableForWrite()
-// Get the number of bytes (characters) available for writing in the serial buffer
-// without blocking the write operation
-void printFlush() {
-    if (!VERBY[1] return;
-    uint32_t avail = Serial.availableForWrite();
-    Serial.printf("printFlush avail %lu" EOL, avail);
-    int iter = 0
-    while (avail == 0) {
-        iter++;
-        sleep_ms(1000);
-        avail = Serial.availableForWrite();
-        Serial.printf("printFlush avail %lu" EOL, avail);
-        // wait at most 4 secs
-        if (iter > 4) break;
-    }
-    Serial.flush()
-    Serial.printf("printFlush after Serial.flush(): avail %lu" EOL, avail);
-    Serial.printf("printFlush avail %lu" EOL, avail);
-}
-
-
 void printFloat(double val, bool valid, int len, int prec) {
     if (!VERBY[1]) return;
-    // am I getting problems with constant strings in ram??
-    printFlush();
 
     if (!valid) {
         while (len-- > 1) {

@@ -292,16 +292,6 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // extern const int ATGM336H_BAUD_RATE = 115200;
 
 //*********************************
-extern const int WSPR_TX_CLK_1_NUM = 1;
-// this is the other differential clock for wspr? (was aprs)
-extern const int WSPR_TX_CLK_0_NUM = 0;
-extern const int WSPR_TX_CLK_NUM = 0;
-
-extern const int SI5351A_CLK_IDRV_8MA = (3 << 0);
-extern const int SI5351A_CLK_IDRV_6MA = (2 << 0);
-extern const int SI5351A_CLK_IDRV_4MA = (1 << 0);
-extern const int SI5351A_CLK_IDRV_2MA = (0 << 0);
-
 // was 4, but not getting enough precision. see si5351_functions.cpp
 // 7 will give 1/128ths precision after the decimal (for symbol frequency),
 // as opposed to 1/16ths
@@ -1654,7 +1644,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     sleep_ms(2000);
     // FIX! does this include a full init at the rp2040?
     // vfo_turn_on() doesn't turn on the clk outputs!
-    vfo_turn_on(WSPR_TX_CLK_NUM);
+    vfo_turn_on(WSPR_TX_CLK_0_NUM);  // clk0/1 both affected
     startSymbolFreq(hf_freq, 0, false);  // symbol 0, change more than just pll_num
     // will print programming if false, since we have time
 
@@ -1944,7 +1934,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // remember, it's usec running time, it's not aligned to the gps time.
         StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
     }
-    vfo_turn_on_clk_out(WSPR_TX_CLK_NUM, false);
+    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false); // no print. clk0/1 both affected
     //*******************************
     // earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
     // i.e. code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
@@ -2107,7 +2097,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     if (vfoOffWhenDone) {
         vfo_turn_off();
     } else {
-        vfo_turn_off_clk_out(WSPR_TX_CLK_NUM, true);
+        vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true); // print. clk0/1 both affected
     }
     
     Watchdog.reset();

@@ -112,16 +112,6 @@ extern const int Si5351Pwr;
 extern const int VFO_I2C0_SDA_PIN;
 extern const int VFO_I2C0_SCL_PIN;
 
-// when we set both?
-extern const int WSPR_TX_CLK_NUM;
-extern const int WSPR_TX_CLK_0_NUM;
-extern const int WSPR_TX_CLK_1_NUM;
-
-extern const int SI5351A_CLK_IDRV_8MA;
-extern const int SI5351A_CLK_IDRV_6MA;
-extern const int SI5351A_CLK_IDRV_4MA;
-extern const int SI5351A_CLK_IDRV_2MA;
-
 extern const int PLL_CALC_SHIFT;
 
 static bool vfo_turn_on_completed = false;
@@ -1413,13 +1403,13 @@ void vfo_turn_on(uint8_t clk_num) {
         // this also clears the "prev" state, so we know we'll reload all state in the si5351
         // i.e. no optimization based on knowing what we had sent before!
         // 4 dBM reduction?
-        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_4MA);
-        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_4MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK01_IDRV_4MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK01_IDRV_4MA);
     } else {
         // FIX! make sure this is default in config
         // 15 dBm?
-        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK_IDRV_8MA);
-        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK_IDRV_8MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK01_IDRV_8MA);
+        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK01_IDRV_8MA);
     }
 
     // new 12/27/24: have clock 0:3 disabled state be high impedance
@@ -1649,7 +1639,8 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
     uint32_t freq_x128_with_symbol = calcSymbolFreq_x128(hf_freq, symbol);
     // FIX! does this change the state of the clock output enable?
     // no..
-    vfo_set_freq_x128(WSPR_TX_CLK_NUM, freq_x128_with_symbol, only_pll_num);
+    // changes both clk0 and clk1
+    vfo_set_freq_x128(WSPR_TX_CLK_0_NUM, freq_x128_with_symbol, only_pll_num);
 
     // Note: Remember to do setup with the base frequency and symbol == 0,
     // so the i2c writes have seeded the si5351

@@ -7,6 +7,9 @@
 #define SI5351_FUNCTIONS_H
 #include <stdint.h>
 
+const int WSPR_TX_CLK_0_NUM =               0; 
+const int WSPR_TX_CLK_1_NUM =               1; 
+
 const int SI5351A_DEVICE_STATUS =           0;
 const int SI5351A_INTERRUPT_STATUS_STICKY = 1;
 const int SI5351A_OUTPUT_ENABLE_CONTROL =   3;
@@ -31,15 +34,10 @@ const int SI5351A_CLK0_CLK0_INV =           (1 << 4);
 const int SI5351A_CLK1_SRC_MULTISYNTH_1 =   (3 << 2);
 const int SI5351A_CLK1_CLK1_INV =           (1 << 4);
 
-const int SI5351A_CLK0_IDRV_8MA =           (3 << 0);
-const int SI5351A_CLK0_IDRV_6MA =           (2 << 0);
-const int SI5351A_CLK0_IDRV_4MA =           (1 << 0);
-const int SI5351A_CLK0_IDRV_2MA =           (0 << 0);
-
-const int SI5351A_CLK1_IDRV_8MA =           (3 << 0);
-const int SI5351A_CLK1_IDRV_6MA =           (2 << 0);
-const int SI5351A_CLK1_IDRV_4MA =           (1 << 0);
-const int SI5351A_CLK1_IDRV_2MA =           (0 << 0);
+const int SI5351A_CLK01_IDRV_8MA =           (3 << 0);
+const int SI5351A_CLK01_IDRV_6MA =           (2 << 0);
+const int SI5351A_CLK01_IDRV_4MA =           (1 << 0);
+const int SI5351A_CLK01_IDRV_2MA =           (0 << 0);
 
 const int SI5351A_PLL_RESET_PLLB_RST =      (1 << 7);
 const int SI5351A_PLL_RESET_PLLA_RST =      (1 << 5);

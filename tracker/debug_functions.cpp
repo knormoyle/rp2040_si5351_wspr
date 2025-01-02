@@ -215,3 +215,34 @@ void measureMyFreqs(void) {
     busy_wait_ms(1000);
 }
 
+
+//***********************************
+// https://docs.arduino.cc/language-reference/en/functions/communication/serial/availableForWrite/
+// Serial.availableForWrite()
+// Get the number of bytes (characters) available for writing in the serial buffer
+// without blocking the write operation
+void realPrintFlush(char *debugMsg) {
+    if (!VERBY[1]) return;
+    uint32_t avail = Serial.availableForWrite();
+    Serial.printf("%s" EOL, debugMsg);
+    Serial.printf("realPrintFlush avail %lu" EOL, avail);
+    uint32_t iter = 0;
+    // FIX! does it ever get bigger than 256?
+    while (avail < 256) {
+        sleep_ms(100);
+        avail = Serial.availableForWrite();
+        // once a sec
+        if ((iter % 10) == 0)
+            Serial.printf("realPrintFlush avail %lu iter %lu" EOL, avail, iter);
+        updateStatusLED();
+        // wait at most 10 secs
+        iter++;
+        if (iter > (10 * 10)) break;
+    }
+    Serial.flush();
+    avail = Serial.availableForWrite();
+    Serial.printf("realPrintFlush after final Serial.flush(): avail %lu iter %lu" EOL, avail, iter);
+}
+
+
+
