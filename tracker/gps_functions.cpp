@@ -136,8 +136,8 @@ bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false; // causing intermittent fails if tru
 // occassionally having problems...Not needed?
 // bool ALLOW_USB_DISABLE_MODE = true;
 bool ALLOW_USB_DISABLE_MODE = false;
-// try true 12/15/24
 bool ALLOW_KAZU_12MHZ_MODE = false;  // true not working with Serial2?
+bool ALLOW_TEMP_12MHZ_MODE = false;  // is true getting intermittent fails on usbserial (after restore)
 
 //************************************************
 static bool GpsIsOn_state = false;
@@ -1349,12 +1349,22 @@ void GpsFullColdReset(void) {
     // don't bother in balloon mode
     if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
 
-    V1_print(F("GPS power demand high during cold reset ..sleep for 15 secs" EOL));
-    V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz (no we don't) then long sleep" EOL,
-        PLL_SYS_MHZ);
-    V1_print("No keyboard interrupts will work because disabling USB PLL too" EOL);
+    V1_print(F("GPS power demand high during cold reset..try to minimize rp2040 power" EOL));
+    //**************************************
     if (ALLOW_LOWER_CORE_VOLTAGE_MODE) {
         V1_print(F("Also lowering core voltage to 0.95v" EOL));
+    }
+    if (ALLOW_USB_DISABLE_MODE) {
+        V1_print(F("No keyboard interrupts will work because will disable USB PLL too" EOL));
+    }
+    if (ALLOW_KAZU_12MHZ_MODE) {
+        V1_print(F("Will stay in 12Mhz (using xosc, not pll, for sys clk, after things are restored" EOL));
+    }
+    //**************************************
+    if (ALLOW_TEMP_12MHZ_MODE) {
+        V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz then long sleep" EOL);
+    } else {
+        V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to pll 18Mhz then long sleep" EOL, PLL_SYS_MHZ);
     }
     V1_flush();
 
@@ -2254,72 +2264,43 @@ void updateGpsDataAndTime(int ms) {
     V1_printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL, total_millis);
 }
 
-//******************************************************
-// Enabling output:
-// Checksums:
-// ; Odd number of "ones": 03
-// ; Even number of "ones": 02
-
-// $PCAS03,1,0,0,0,1,1,0,0*03
-// $PCAS03,1,1,1,1,1,1,0,0*02
-//         | | | | | | | |
-//         '-|-|-|-|-|-|-|--> GGA
-//           '-|-|-|-|-|-|--> GLL
-//             '-|-|-|-|-|--> GSA
-//               '-|-|-|-|--> GSV
-//                 '-|-|-|--> RMC
-//                   '-|-|--> VTG
-//                     '-|--> ZDA
-//                       '--> TXT
-
 //************************************************
 void gpsDebug() {
     if (!VERBY[1]) return;
     V1_println(F("GpsDebug START"));
+    bool validA = gps.satellites.isValid() && !GpsInvalidAll;
+    bool validB = gps.hdop.isValid() && !GpsInvalidAll;
+    bool validC = gps.location.isValid() && !GpsInvalidAll;
+    bool validD = gps.altitude.isValid() && !GpsInvalidAll;
+    bool validE = gps.course.isValid() && !GpsInvalidAll;
+    bool validF = gps.speed.isValid() && !GpsInvalidAll;
+    V1_printf("gps valids: %u %u %u %u %u %u %u" EOL,
+        GpsInvalidAll, validA, validB, validC, validD, validE, validF);
 
     V1_print(F(EOL EOL));
     V1_println(F("Sats HDOP Latitude      Longitude   Fix    Date       Time     Date Alt     Course Speed Card    Chars FixSents  Checksum"));
-    V1_flush();
     V1_println(F("          (deg)         (deg)       Age                        Age  (m)     --- from GPS ----    RX    RX        Fail"));
-    V1_flush();
     V1_println(F("------------------------------------------------------------------------------------------------------------------------"));
 
-    V1_flush();
-    busy_wait_ms(4000);
     // https://github.com/StuartsProjects/GPSTutorial
     if (VERBY[1]) {
-        printInt(gps.satellites.value(), gps.satellites.isValid() && !GpsInvalidAll, 5);
-        busy_wait_ms(500);
-        printInt(gps.hdop.value(), gps.hdop.isValid() && !GpsInvalidAll, 5);
-        busy_wait_ms(500);
-        printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
-        busy_wait_ms(500);
+        printInt(gps.satellites.value(), validA, 5);
+        printInt(gps.hdop.value(), validB, 5);
         // was 12, 6 01/01/25
-        if (false) {
-            printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
-            busy_wait_ms(500);
-
-            printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
-            busy_wait_ms(500);
+        if (true) {
+            printFloat(gps.location.lat(), validC, 12, 6);
+            printFloat(gps.location.lng(), validC, 12, 6);
+            printInt(gps.location.age(), validC, 7);
             printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
-            busy_wait_ms(500);
-            printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
-            busy_wait_ms(500);
-            printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
-            busy_wait_ms(500);
-            printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);
-            busy_wait_ms(500);
-            printStr((gps.course.isValid() && !GpsInvalidAll) ?
-                TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
-            busy_wait_ms(500);
+            printFloat(gps.altitude.meters(), validD, 7, 2);
+            printFloat(gps.course.deg(), validE, 7, 2);
+            printFloat(gps.speed.kmph(), validF, 6, 2);
+            printStr(validE ? TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
             // FIX! does this just wrap wround if it's more than 6 digits?
             printInt(gps.charsProcessed(), true, 6);
-            busy_wait_ms(500);
             // FIX! does this just wrap wround if it's more than 10 digits?
             printInt(gps.sentencesWithFix(), true, 10);
-            busy_wait_ms(500);
             printInt(gps.failedChecksum(), true, 9);
-            busy_wait_ms(500);
         }
     }
 
@@ -2391,16 +2372,18 @@ void kazuClocksSlow() {
     V1_println(F("kazuClocksSlow START" EOL));
     V1_flush();
 
-    // We go down to 12 mhz for lowest power no matter what. We just don't 
-    // stay at 12 unless ALLOW_KAZU_12MHZ_MODE
-    // maybe on restore, we have to go to 18 before we restore usb?
-    // Change clk_sys to be 12MHz
-    // the external crystal is 12mhz
-    clock_configure(clk_sys,
-        CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
-        CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        12 * MHZ);
+    if (ALLOW_TEMP_12MHZ_MODE) {
+        // We go down to 12 mhz for lowest power no matter what. We just don't
+        // stay at 12 unless ALLOW_KAZU_12MHZ_MODE
+        // maybe on restore, we have to go to 18 before we restore usb?
+        // Change clk_sys to be 12MHz
+        // the external crystal is 12mhz
+        clock_configure(clk_sys,
+            CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
+            CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
+            12 * MHZ,
+            12 * MHZ);
+    }
 
     // Turn off pll sys and pll usb to save power
     pll_deinit(pll_sys);
@@ -2476,7 +2459,7 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
     // V1_flush();
 
     // FIX! we need usb at 48 mhz ?
-    // we're restoring usb while we're still at 12 Mhz? 
+    // we're restoring usb while we're still at 12 Mhz?
     // haven't switch to the normal pll with 18Mhz yet
     if (!BALLOON_MODE) {
         // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
@@ -2495,7 +2478,7 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
         busy_wait_ms(1000);
     }
 
-    // I suppose clk_per, clk_rtc and clk_adc is the same as it was due to kazuClocksSlow()
+    // clk_per, clk_rtc and clk_adc is the same as it was due to kazuClocksSlow()?
     // don't change. because we actually restore to a pll sys value
     // so we should not change these..assume go back just the same as it was
 
@@ -2519,11 +2502,9 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
     }
 
     if (ALLOW_KAZU_12MHZ_MODE) {
-        V1_printf("After long sleep, left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL,
-            PLL_SYS_MHZ);
+        V1_printf("After long sleep, left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL, PLL_SYS_MHZ);
     } else {
-        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
-            PLL_SYS_MHZ);
+        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
     }
 
     V1_print(F("Restored USB pll to 48Mhz, and did Serial.begin()" EOL));
@@ -2565,3 +2546,101 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
 //                   \-- clk_rtc 1:1024 @ 46,875 Hz
 //                             |
 //                             \-- RTC 1:46875 @ 1Hz
+
+//***********************************
+// is this used for signed or unsigned?
+void printInt(uint64_t val, bool valid, int len) {
+    if (!VERBY[1]) return;
+    // FIX! should this really be %ld? why not %d
+    // int64_t should use
+    // printf("%" PRId64 "\n", t);
+    // uint64_t should use
+    // printf("%" PRIu64 "\n", t);
+    // to print in hexadecimal
+    // printf("%" PRIx64 "\n", t);
+
+    // https://stackoverflow.com/questions/9225567/how-to-portably-print-a-int64-t-type-in-c
+    // complete list of types and formats
+    // https://en.cppreference.com/w/cpp/types/integer
+    char sz[32] = "*****************";
+
+    if (valid) sprintf(sz, "%" PRIu64, val);
+    sz[len] = 0;
+
+    for (int i = strlen(sz); i < len; ++i)
+        sz[i] = ' ';
+
+    if (len > 0)
+        sz[len - 1] = ' ';
+
+    Serial.print(sz);
+
+    // whenever something might have taken a long time like printing
+    updateStatusLED();
+}
+
+// why was this static
+// with arduino, can't we just use printf to stdout rather than V1_print() ?
+void printStr(const char *str, int len) {
+    if (!VERBY[1]) return;
+    int slen = strlen(str);
+    for (int i = 0; i < len; ++i) {
+        Serial.print(i < slen ? str[i] : ' ');
+    }
+    // whenever something might have taken a long time like printing
+    Serial.flush();
+    updateStatusLED();
+}
+
+// https://docs.arduino.cc/language-reference/en/functions/communication/serial/availableForWrite/
+// Serial.availableForWrite()
+// Get the number of bytes (characters) available for writing in the serial buffer
+// without blocking the write operation
+void printFlush() {
+    if (!VERBY[1] return;
+    uint32_t avail = Serial.availableForWrite();
+    Serial.printf("printFlush avail %lu" EOL, avail);
+    int iter = 0
+    while (avail == 0) {
+        iter++;
+        sleep_ms(1000);
+        avail = Serial.availableForWrite();
+        Serial.printf("printFlush avail %lu" EOL, avail);
+        // wait at most 4 secs
+        if (iter > 4) break;
+    }
+    Serial.flush()
+    Serial.printf("printFlush after Serial.flush(): avail %lu" EOL, avail);
+    Serial.printf("printFlush avail %lu" EOL, avail);
+}
+
+
+void printFloat(double val, bool valid, int len, int prec) {
+    if (!VERBY[1]) return;
+    // am I getting problems with constant strings in ram??
+    printFlush();
+
+    if (!valid) {
+        while (len-- > 1) {
+            Serial.print(F("*"));
+        }
+        Serial.print(F(" "));
+        // add 1 more space? (to cover too many digits?)
+        Serial.print(F(" "));
+    } else {
+        Serial.print(val, prec);
+        int vi = abs((int)val);
+        int flen = prec + (val < 0.0 ? 2 : 1);  // . and -
+        flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
+
+        // FIX! should this be <= ? (kevin)
+        for (int i = flen; i < len; ++i) {
+            Serial.print(F(" "));
+        }
+    }
+    // kevin add 1 more space? we somehow did too many digits above?
+    Serial.print(F(" "));
+    // whenever something might have taken a long time like printing
+    Serial.flush();
+    updateStatusLED();
+}

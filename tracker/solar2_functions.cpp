@@ -41,8 +41,6 @@
 extern bool VERBY[10];
 extern TinyGPSPlus gps;
 
-#include "solar2_functions.h"
-
 #include "other_cpp/t.cpp"
 
 //***********************************************************************

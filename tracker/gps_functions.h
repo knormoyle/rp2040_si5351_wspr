@@ -35,4 +35,9 @@ void setGpsBaud(int desiredBaud);
 void kazuClocksSlow(void);
 void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore);
 
+void printStr(const char *str, int len);
+void printFloat(double val, bool valid, int len, int prec);
+void printInt(uint64_t val, bool valid, int len);
+
+
 #endif

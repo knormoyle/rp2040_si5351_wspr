@@ -26,6 +26,7 @@
 #include "wspr_functions.h"
 #include "i2c_functions.h"
 #include "config_functions.h"
+#include "cw_functions.h"
 
 //*****************************************************
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
@@ -345,6 +346,10 @@ void show_TELEN_msg() {
 void do_i2c_tests(void) {
     // quick and dirty way to execute some different tests
     if (true) {
+        // picks a good HF freq for the config'ed _Band. uses t_callsign a and t_grid6 in the message
+        // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
+        cw_send_message();
+    } else if (true) {
         i2c_scan_both();
     } else {
         V0_println(F(EOL "Can we read and write these?"));

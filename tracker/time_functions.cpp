@@ -6,6 +6,7 @@
 #include "time_functions.h"
 #include "print_functions.h"
 #include "debug_functions.h"
+#include "gps_functions.h"
 #include "led_functions.h"
 
 // decode of _verbose 0-9

@@ -8,10 +8,6 @@
 #include <stdint.h>
 
 #include <TinyGPS++.h>
-// no buffering
-void printStr(const char *str, int len);
-void printFloat(float val, bool valid, int len, int prec);
-void printInt(uint64_t val, bool valid, int len);
 
 // buffering that emptys with DoLogPrint()
 void StampPrintf(const char* pformat, ...);

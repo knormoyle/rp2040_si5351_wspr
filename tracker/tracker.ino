@@ -497,8 +497,6 @@ bool USE_SIM65M = false;
 // using 3 or 7 in normal callsign tx 3 for low power, 7 for high power
 //*********************************
 absolute_time_t GpsStartTime = 0;
-uint64_t GpsFixMillis = 0;
-uint64_t GpsStartMillis = 0;
 uint64_t loopCnt = 0;
 
 // the global IGNORE_KEYBOARD_CHARS is used to guarantee no interrupting of core1
@@ -869,8 +867,6 @@ void setup1() {
 
     // 12/7/24. the GpsINIT covers GpsON() now?
     GpsINIT();
-    GpsFixMillis = 0;
-    GpsStartMillis = millis();
 
     // usb power means vbat is always on. so a hot reset!
     // we already did a cold reset in the GpsINIT() ..don't do it again!
@@ -1282,32 +1278,25 @@ void loop1() {
     // FIX! why are we turning off. Is this just a double-check in case of bugs?
     vfo_turn_off();
 
-    //******************
-    // Gps may already be on, this loads the voltage, so when we read the voltage
-    // to decide if we want to tx, that's a good thing for deciding
-    // "is our solar/battery good?"
+    // Gps may already be on
     if (!GpsIsOn()) {
-        GpsFixMillis = 0;
         GpsTimeToLastFix = 0;
-        GpsStartMillis = millis();
     }
-
     GpsON(false);  // no full cold reset
 
-    //******************
+    // is our solar/battery good?
     float solarVoltage;
     solarVoltage = readVoltage();
     if ( solarVoltage <= BattMin || solarVoltage <= GpsMinVolt ) {
         sleepSeconds(BATT_WAIT);
     } else {
         V1_printf("loop1() good solarVoltage %.f" EOL, solarVoltage);
-        //*********************
         // FIX! this can set time and unload NMEA sentences?
         // unload for 2 secs to make sure we get 1 sec broadcasts?
         // actually just need a little over 1 sec.
 
         // Also: what about corruption if buffer overrun?)
-        // does CRC check cover that? so okay if we have overrun?
+        // NMEA checksum will handle that? okay if we have overrun?
         updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
         gpsDebug();
 
@@ -1331,7 +1320,7 @@ void loop1() {
             gps.speed.isValid() &&
             gps.course.isValid();
 
-        // note fix_valid_all includes sat cnt >= 3 now.
+        // fix_valid_all includes sat cnt >= 3 now.
         // so we won't update time until we get a valid 3d fix?
         // no..should we keep it looser for time?
         // to update time
@@ -1486,18 +1475,8 @@ void loop1() {
                     absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
             }
 
-            // FIX! just need one or the other of these first fix numbers.
-            // FIX! odd case. Did the GPS get turned off, but TinyGPS++ says it still has valid fix?
-            // until I figure out why, set GpsStartMillis() would be 0 for this case
-            if (GpsStartMillis == 0) {
-                GpsFixMillis = 0;
-            } else {
-                GpsFixMillis = millis() - GpsStartMillis;
-            }
-
             V1_printf("%" PRIu64 " first Gps Fix, after off->on! "
-                "GpsFixMillis %" PRIu64 " GpsTimeToLastFix %" PRIu64 EOL,
-                loopCnt, GpsFixMillis, GpsTimeToLastFix);
+                PRIu64 " GpsTimeToLastFix %" PRIu64 EOL, loopCnt, GpsTimeToLastFix);
 
             // sets all the t_* strings above
             // voltage is captured when we write the buff? So it's before GPS is turned off?
