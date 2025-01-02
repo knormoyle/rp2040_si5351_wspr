@@ -717,7 +717,8 @@ void loop() {
         // hmm can we lose usb printing if we delay too long here?
         // sleep_ms(100000); // 100 secs
         // try just 30 secs
-        sleep_ms(100000);
+        // sleep_ms(100000);
+        sleep_ms(30000);
         // hmm could just return, loop will be called again
         // return;
     }

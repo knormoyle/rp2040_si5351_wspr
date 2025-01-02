@@ -1411,7 +1411,7 @@ void GpsFullColdReset(void) {
 
     // Not worth doing if USB is disabled? (no print)
     // but if we can't disable deinit USB (see above), we can?
-    if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
+    if (false && !BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
 
     // FIX! still getting intermittent cases where we don't come back (running 60Mhz)
     // this should have no printing either?
@@ -2279,31 +2279,47 @@ void gpsDebug() {
 
     V1_print(F(EOL EOL));
     V1_println(F("Sats HDOP Latitude      Longitude   Fix    Date       Time     Date Alt     Course Speed Card    Chars FixSents  Checksum"));
+    V1_flush();
     V1_println(F("          (deg)         (deg)       Age                        Age  (m)     --- from GPS ----    RX    RX        Fail"));
+    V1_flush();
     V1_println(F("------------------------------------------------------------------------------------------------------------------------"));
 
+    V1_flush();
+    busy_wait_ms(4000);
     // https://github.com/StuartsProjects/GPSTutorial
     if (VERBY[1]) {
         printInt(gps.satellites.value(), gps.satellites.isValid() && !GpsInvalidAll, 5);
-
+        busy_wait_ms(500);
+        printInt(gps.hdop.value(), gps.hdop.isValid() && !GpsInvalidAll, 5);
+        busy_wait_ms(500);
+        printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
+        busy_wait_ms(500);
+        // was 12, 6 01/01/25
         if (false) {
-            printInt(gps.hdop.value(), gps.hdop.isValid() && !GpsInvalidAll, 5);
-            // was 12, 6 01/01/25
-            printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
             printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
+            busy_wait_ms(500);
 
             printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
+            busy_wait_ms(500);
             printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
+            busy_wait_ms(500);
             printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
+            busy_wait_ms(500);
             printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
+            busy_wait_ms(500);
             printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);
+            busy_wait_ms(500);
             printStr((gps.course.isValid() && !GpsInvalidAll) ?
                 TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
+            busy_wait_ms(500);
             // FIX! does this just wrap wround if it's more than 6 digits?
             printInt(gps.charsProcessed(), true, 6);
+            busy_wait_ms(500);
             // FIX! does this just wrap wround if it's more than 10 digits?
             printInt(gps.sentencesWithFix(), true, 10);
+            busy_wait_ms(500);
             printInt(gps.failedChecksum(), true, 9);
+            busy_wait_ms(500);
         }
     }
 

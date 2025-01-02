@@ -32,11 +32,10 @@
 extern bool VERBY[10];
 
 //***********************************
-// why was this static?
 // is this used for signed or unsigned?
 void printInt(uint64_t val, bool valid, int len) {
     if (!VERBY[1]) return;
-    char sz[32];
+    char sz[32] = { 0 };
     // FIX! should this really be %ld? why not %d
     // int64_t should use
     // printf("%" PRId64 "\n", t);
@@ -49,11 +48,12 @@ void printInt(uint64_t val, bool valid, int len) {
     // complete list of types and formats
     // https://en.cppreference.com/w/cpp/types/integer
     if (valid) {
-        snprintf(sz, len, "%" PRIu64, val);
+        snprintf(sz, len +1, "%" PRIu64, val);
     } else {
-        snprintf(sz, len, "%s" "*****************");
+        snprintf(sz, len + 1, "%s", "*****************");
     }
     Serial.print(sz);
+    Serial.flush();
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }
@@ -67,9 +67,9 @@ void printStr(const char *str, int len) {
         Serial.print(i < slen ? str[i] : ' ');
     }
     // whenever something might have taken a long time like printing
+    Serial.flush();
     updateStatusLED();
 }
-
 
 void printFloat(float val, bool valid, int len, int prec) {
     if (!VERBY[1]) return;
@@ -94,6 +94,7 @@ void printFloat(float val, bool valid, int len, int prec) {
     // kevin add 1 more space? we somehow did too many digits above?
     Serial.print(F(' '));
     // whenever something might have taken a long time like printing
+    Serial.flush();
     updateStatusLED();
 }
 
