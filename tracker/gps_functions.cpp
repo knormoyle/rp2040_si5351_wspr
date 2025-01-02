@@ -2285,23 +2285,26 @@ void gpsDebug() {
     // https://github.com/StuartsProjects/GPSTutorial
     if (VERBY[1]) {
         printInt(gps.satellites.value(), gps.satellites.isValid() && !GpsInvalidAll, 5);
-        printInt(gps.hdop.value(), gps.hdop.isValid() && !GpsInvalidAll, 5);
-        // was 12, 6 01/01/25
-        printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
-        printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
 
-        printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
-        printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
-        printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
-        printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
-        printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);
-        printStr((gps.course.isValid() && !GpsInvalidAll) ?
-            TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
-        // FIX! does this just wrap wround if it's more than 6 digits?
-        printInt(gps.charsProcessed(), true, 6);
-        // FIX! does this just wrap wround if it's more than 10 digits?
-        printInt(gps.sentencesWithFix(), true, 10);
-        printInt(gps.failedChecksum(), true, 9);
+        if (false) {
+            printInt(gps.hdop.value(), gps.hdop.isValid() && !GpsInvalidAll, 5);
+            // was 12, 6 01/01/25
+            printFloat(gps.location.lat(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
+            printFloat(gps.location.lng(), gps.location.isValid() && !GpsInvalidAll, 12, 6);
+
+            printInt(gps.location.age(), gps.location.isValid() && !GpsInvalidAll, 7);
+            printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
+            printFloat(gps.altitude.meters(), gps.altitude.isValid() && !GpsInvalidAll, 7, 2);
+            printFloat(gps.course.deg(), gps.course.isValid() && !GpsInvalidAll, 7, 2);
+            printFloat(gps.speed.kmph(), gps.speed.isValid() && !GpsInvalidAll, 6, 2);
+            printStr((gps.course.isValid() && !GpsInvalidAll) ?
+                TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
+            // FIX! does this just wrap wround if it's more than 6 digits?
+            printInt(gps.charsProcessed(), true, 6);
+            // FIX! does this just wrap wround if it's more than 10 digits?
+            printInt(gps.sentencesWithFix(), true, 10);
+            printInt(gps.failedChecksum(), true, 9);
+        }
     }
 
     V1_print(F(EOL EOL));
