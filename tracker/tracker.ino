@@ -173,6 +173,7 @@ TinyGPSPlus gps;
 #include "led_functions.h"
 #include "keyboard_functions.h"
 #include "gps_functions.h"
+#include "cw_functions.h"
 
 //*********************************
 // extern so it links okay
@@ -438,23 +439,24 @@ int t_snap_cnt = 0;
 // init with all null
 
 // hmmm. can't declare these arrays 'volatile'
-volatile char _callsign[7] = { 0 };
-volatile char _suffix[2] = { 0 };
-volatile char _verbose[2] = { 0 };
-volatile char _TELEN_config[5] = { 0 };
+char _callsign[7] = { 0 };
+char _suffix[2] = { 0 };
+char _verbose[2] = { 0 };
+char _TELEN_config[5] = { 0 };
 // FIX! why is this a compiler problem if volatile? an snprintf() fails
 // https://forum.arduino.cc/t/invalid-conversion-from-volatile-char-to-const-char-fpermissive/949522
 char _clock_speed[4] = { 0 };
-volatile char _U4B_chan[4] = { 0 };
+char _U4B_chan[4] = { 0 };
 // FIX! why is this a compiler problem if volatile? parameter to function fails
 // error: invalid convesion fro 'volatile char*' to 'char*'
 char _Band[3] = { 0 };  // string with 10, 12, 15, 17, 20 legal. null at end
-volatile char _tx_high[2] = { 0 };  // 0 is 4mA si5351. 1 is 8mA si5351
-volatile char _testmode[2] = { 0 };
-volatile char _correction[7] = { 0 };
-volatile char _go_when_rdy[2] = { 0 };
-volatile char _factory_reset_done[2] = { 0 };
-volatile char _use_sim65m[2] = { 0 };
+char _tx_high[2] = { 0 };  // 0 is 4mA si5351. 1 is 8mA si5351
+char _testmode[2] = { 0 };
+char _correction[7] = { 0 };
+char _go_when_rdy[2] = { 0 };
+char _factory_reset_done[2] = { 0 };
+char _use_sim65m[2] = { 0 };
+char _morse_also[2] = { 0 };
 
 // decoded stuff from config strings: all can be extern'ed by a function
 // decodes from _Band _U4B_chan
@@ -1794,6 +1796,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
             DoLogPrint();
         }
     }
+
+    if (_morse_also[0] == '1')
+        // picks a good HF freq for the config'ed _Band. uses t_callsign a and t_grid6 in the message
+        // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
+        cw_send_message();
+    ;
 
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     // Now: don't turn GPS back on until beginning of loop

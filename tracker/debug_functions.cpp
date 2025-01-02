@@ -27,7 +27,6 @@
 
 // for TinyGPSDate definition
 #include <TinyGPS++.h>
-#include <Wire.h>
 
 // decode of _verbose 0-9
 extern bool VERBY[10];
@@ -59,29 +58,6 @@ void printInt(uint64_t val, bool valid, int len) {
     if (len > 0) sz[len - 1] = ' ';
     V1_print(sz);
 
-    // whenever something might have taken a long time like printing
-    updateStatusLED();
-}
-
-// why was this static
-// with arduino, can't we just use printf to stdout rather than V1_print() ?
-void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t) {
-    if (!VERBY[1]) return;
-    char sz[32];
-    if (!d.isValid()) {
-        V1_print(F("********** "));
-    } else {
-        snprintf(sz, sizeof(sz), "%04d-%02d-%02d ", d.year(), d.month(), d.day());
-        V1_print(sz);
-    }
-
-    if (!t.isValid()) {
-        V1_print(F("******** "));
-    } else {
-        snprintf(sz, sizeof(sz), "%02d:%02d:%02d ", t.hour(), t.minute(), t.second());
-        V1_print(sz);
-    }
-    printInt(d.age(), d.isValid(), 5);
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }

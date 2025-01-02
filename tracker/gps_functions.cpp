@@ -64,6 +64,7 @@ extern bool USE_SIM65M;
 #include "debug_functions.h"
 #include "led_functions.h"
 #include "print_functions.h"
+#include "time_functions.h"
 // enums for voltage at:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
 #include "hardware/vreg.h"
@@ -1337,7 +1338,8 @@ void GpsFullColdReset(void) {
 
     //******************
     // so we can undo the temporary lower clock setting
-    uint32_t freq_khz = PLL_SYS_MHZ * 1000UL;
+    uint32_t PLL_SYS_MHZ_restore = PLL_SYS_MHZ;
+
     // the global IGNORE_KEYBOARD_CHARS is used to guarantee no interrupting of core1
     // while we've messed with clocks during the gps agressive power on control
     // it should always be re-enabled after 15 secs.
@@ -1424,36 +1426,8 @@ void GpsFullColdReset(void) {
     // and we need PLL_SYS_MHZ correct for PWM div/wrap calcs
     // can we just change PLL_SYS_MHZ here?
     // NOTE: doesn't include the usb pll?
-    kazuClocksRestore();
+    kazuClocksRestore(PLL_SYS_MHZ_restore);
 
-    // hmm we're not getting Serial2 when we use the Kazu 12 Mhz past here
-    // just reinit the sys pll to PLL_SYS_MHZ?
-    // PLL_SYS_MHZ = 12;
-    // could reference for sdk api stuff for clocks
-    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__clocks.html#gae78816cc6112538a12adcc604be4b344
-    if (!ALLOW_KAZU_12MHZ_MODE) {
-        busy_wait_ms(500);
-        set_sys_clock_khz(freq_khz, true);
-        PLL_SYS_MHZ = freq_khz / 1000UL;
-    }
-    busy_wait_ms(500);
-    if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
-        pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
-        busy_wait_ms(500);
-        tusb_init();
-        Serial.begin(115200);
-        busy_wait_ms(500);
-    }
-
-    if (ALLOW_KAZU_12MHZ_MODE) {
-        V1_printf("After long sleep, left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL,
-            PLL_SYS_MHZ);
-    } else {
-        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
-            PLL_SYS_MHZ);
-    }
-
-    V1_print(F("Restored USB pll to 48Mhz, and Serial.begin()" EOL));
     // V1_print(F("Restored core voltage back to 1.1v" EOL));
     V1_flush();
     // don't bother if ?
@@ -1552,7 +1526,6 @@ void GpsFullColdReset(void) {
     // the information in FLASH will not be lost.
     // Format $PCAS00*CS<CR><LF>
     // Example $PCAS00*01<CR><LF>
-
 
     // will this help us to boot in a better config so
     // we don't get the power demand peaks we see (on subsequent boots)
@@ -2398,7 +2371,11 @@ void gpsDebug() {
 void kazuClocksSlow() {
     V1_println(F("kazuClocksSlow START" EOL));
     V1_flush();
-    // Change clk_sys and clk_peri to be 12MHz, and disable pll_sys and pll_usb
+
+    // We go down to 12 mhz for lowest power no matter what. We just don't 
+    // stay at 12 unless ALLOW_KAZU_12MHZ_MODE
+    // maybe on restore, we have to go to 18 before we restore usb?
+    // Change clk_sys to be 12MHz
     // the external crystal is 12mhz
     clock_configure(clk_sys,
         CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
@@ -2418,6 +2395,9 @@ void kazuClocksSlow() {
     // don't do this. because we actually restore to a pll sys value
     // so we should not change these..assume go back just the same as it was
     if (ALLOW_KAZU_12MHZ_MODE) {
+        // Change clk_peri to be 12MHz, and disable pll_sys and pll_usb
+        // the external crystal is 12mhz
+
         // CLK peri is clocked from clk_sys so need to change clk_peri's freq
         // 12/15/24 hmm maybe clk_peri needs to be 48 Mhz ?
         // nope 48 doesn't help Serial2
@@ -2467,7 +2447,8 @@ void kazuClocksSlow() {
 }
 
 //************************************************
-void kazuClocksRestore() {
+void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
+    uint32_t freq_khz = PLL_SYS_MHZ_restore * 1000UL;
     // if kazuClocksRestore() is only used after kazuClocksSlow() why do we need it?
     // it's not changing anything anything except restoring usb if not balloon mode
 
@@ -2475,20 +2456,9 @@ void kazuClocksRestore() {
     // V1_println(F("kazuClocksRestore START" EOL));
     // V1_flush();
 
-    // Change clk_sys and clk_peri to be 12MHz, and restore usb to 48 mhz ?
-    // the external crystal is 12mhz
-    // I suppose this is the same as it was due to kazuClocksSlow()
-    if (false) {
-        clock_configure(clk_sys,
-            CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
-            CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-            12 * MHZ,
-            12 * MHZ);
-        PLL_SYS_MHZ = 12;
-        busy_wait_ms(500);
-    }
-
     // FIX! we need usb at 48 mhz ?
+    // we're restoring usb while we're still at 12 Mhz? 
+    // haven't switch to the normal pll with 18Mhz yet
     if (!BALLOON_MODE) {
         // void pll_init(PLL pll, uint ref_div, uint vco_freq, uint post_div1, uint post_div2);
         // pll pll_sys or pll_usb
@@ -2506,32 +2476,38 @@ void kazuClocksRestore() {
         busy_wait_ms(1000);
     }
 
-    // I suppose this stuff is the same as it was due to kazuClocksSlow()
-    // don't do this. because we actually restore to a pll sys value
+    // I suppose clk_per, clk_rtc and clk_adc is the same as it was due to kazuClocksSlow()
+    // don't change. because we actually restore to a pll sys value
     // so we should not change these..assume go back just the same as it was
-    if (false && ALLOW_KAZU_12MHZ_MODE) {
-        // CLK peri is clocked from clk_sys so need to change clk_peri's freq
-        // 12/15/24 hmm maybe clk_peri needs to be 48 Mhz ?
-        clock_configure(clk_peri,
-            0,
-            CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
-            12 * MHZ,
-            12 * MHZ);
 
-        // CLK RTC = XOSC 12MHz / 256 = 46875Hz
-        clock_configure(clk_rtc,
-            0,  // No GLMUX
-            CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-            12 * MHZ,
-            46875);
-
-        // CLK ADC = XO (12MHZ) / 1 = 12MHz
-        clock_configure(clk_adc,
-            0,  // No GLMUX
-            CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-            12 * MHZ,
-            12 * MHZ);
+    // hmm we're not getting Serial2 when we use the Kazu 12 Mhz past here
+    // just reinit the sys pll to PLL_SYS_MHZ?
+    // PLL_SYS_MHZ = 12;
+    // could reference for sdk api stuff for clocks
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__clocks.html#gae78816cc6112538a12adcc604be4b344
+    if (!ALLOW_KAZU_12MHZ_MODE) {
+        busy_wait_ms(500);
+        set_sys_clock_khz(freq_khz, true);
+        PLL_SYS_MHZ = freq_khz / 1000UL;
     }
+    busy_wait_ms(500);
+    if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
+        pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
+        busy_wait_ms(500);
+        tusb_init();
+        Serial.begin(115200);
+        busy_wait_ms(500);
+    }
+
+    if (ALLOW_KAZU_12MHZ_MODE) {
+        V1_printf("After long sleep, left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL,
+            PLL_SYS_MHZ);
+    } else {
+        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL,
+            PLL_SYS_MHZ);
+    }
+
+    V1_print(F("Restored USB pll to 48Mhz, and did Serial.begin()" EOL));
 
     // I guess printing should work now? (if not BALLOON_MODE)
     V1_println(F("kazuClocksRestore END" EOL));

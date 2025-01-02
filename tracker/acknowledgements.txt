@@ -16,13 +16,15 @@
 // Incorporates work by: PaulStoffregen. Thank you.
 // https://github.com/PaulStoffregen/FreqCount
 
+// Incorporates work by: Paul Taylor VK3HN. Thank you.
+// https://github.com/prt459/Nano_Beacon/tree/main
+
 // Incorporates work by: Mustafa Tan TA2MUN . Thank you.
 // Incorporates work by: Hakkı CAN TA2WX (old call signs TA2NHP, TA9OHC)
 // https://github.com/lightaprs/LightAPRS-1.0
 // https://github.com/lightaprs/LightAPRS-W-2.0
 // https://github.com/lightaprs/LightAPRS-W-2.0/tree/main/LightAPRS-W-2-pico-balloon (2023)
 // https://www.hakkican.com/ (turkish but google translate works well)
-
 
 //*******************************************
 // Arduino IDE created by many

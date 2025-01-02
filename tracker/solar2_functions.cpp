@@ -8,6 +8,8 @@
 #include "led_functions.h"
 #include "print_functions.h"
 #include "solar2_functions.h"
+#include "time_functions.h"
+
 // for time_t things..used to get epoch time from rtc
 
 // will this give me epoch time from rtc?
@@ -121,7 +123,7 @@ void calcSolarElevation2(double *solarElevation, double *solarAzimuth, double *s
     // SECS_YR_2000,
 
     // should be able to handle it from an 'unsigned long' for time_t ?
-    uint64_t epochTime = getEpochTime2();
+    uint64_t epochTime = getEpochTime();
     V1_printf("calculateSolarPosition2 epochTime %" PRIu64 " lat %.7f lon %.7f" EOL,
         epochTime, lat, lon);
 
@@ -161,37 +163,6 @@ void calcSolarElevation2(double *solarElevation, double *solarAzimuth, double *s
     *solarDistance  = solarDistance_here;
 
     V1_print(F("calcSolarElevation2 END" EOL));
-}
-
-//***********************************************************************
-// Function that gets current epoch time
-time_t getEpochTime2() {
-    // from PaulStoffregen Timelib.h
-    // https://github.com/PaulStoffregen/Time
-    // now()  returns the current time as seconds since Jan 1 1970
-
-    // now() will be wrong if we didn't set time correctly from gps
-    int rtc_year = year();
-    int rtc_month = month();
-    int rtc_day = day();
-    int rtc_hour = hour();
-    int rtc_minute = minute();
-    int rtc_second = second();
-
-    // this is a unsigned long?
-    time_t epoch_now = now();
-    V1_print(F("getEpochTime2 (utc)"));
-    if (false) {
-        V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
-            rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);
-    } else {
-        V1_printf(" %04d-%02d-%02d", rtc_year, rtc_month, rtc_day);
-        V1_printf(" %02d:%02d:%02d", rtc_hour, rtc_minute, rtc_second);
-        V1_printf(" epoch_now %" PRIu64 EOL, epoch_now);
-    }
-
-
-    return epoch_now;
 }
 
 

@@ -11,7 +11,6 @@
 
 void solarZenithAndAzimuthAngle4(double *sza, double *saa, double longitude, double latitude, time_t timeStamp);
 void calcSolarElevation4(double *solarElevation, double *solarAzimuth, double *solarDistance);
-time_t getEpochTime4();
 
 // from solarfunctions.cpp originally
 double degToRad(double degrees);

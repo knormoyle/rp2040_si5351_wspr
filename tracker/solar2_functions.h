@@ -23,6 +23,4 @@
 void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, double latitude, time_t timeStamp);
 void calcSolarElevation2(double *solarElevation, double *solarAzimuth, double *solarDistance);
 
-time_t getEpochTime2();
-
 #endif  // SOLAR2_FUNCTIONS_H

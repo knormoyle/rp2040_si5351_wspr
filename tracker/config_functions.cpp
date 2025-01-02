@@ -26,11 +26,6 @@
 #include "wspr_functions.h"
 #include "i2c_functions.h"
 #include "config_functions.h"
-//*****************************************************
-// include the SI5351Arduino library and Wire for it (for testing?)
-// #include "si5351.h"
-// #include <Wire.h>
-#include <Adafruit_I2CDevice.h>
 
 //*****************************************************
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
@@ -85,6 +80,7 @@
 //**************************************
 extern char _callsign[7];
 extern char _verbose[2];   // 0 is used to disable all. 1 is all printing for now. 2:9 same
+extern char _morse_also[2];   // 1: send morse cw message in the first TELEN slot
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];  // 1 to 3 digits?
@@ -113,14 +109,15 @@ extern char _correction[7];  // parts per billion -30000 to 30000. default 0
 extern char _go_when_rdy[2];
 extern char _factory_reset_done[2];
 extern char _use_sim65m[2];
+extern char _morse_also[2];
 
-//**************************************
-// decodes from _Band _U4B_chan
-extern uint32_t XMIT_FREQUENCY;
 extern char _id13[3];
 extern char _start_minute[2];
 extern char _lane[2];
 
+//**************************************
+// decodes from _Band _U4B_chan
+extern uint32_t XMIT_FREQUENCY;
 extern const uint32_t DEFAULT_PLL_SYS_MHZ;
 extern uint32_t PLL_SYS_MHZ;  // decode of _clock_speed
 
@@ -395,7 +392,7 @@ void user_interface(void) {
         V0_print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
         // no comma to concat strings
         // F() to keep string in flash, not ram
-        V0_println(F("Enter single char command: Z, *, @, /, X, C, U, V, T, K, A, P, D, R, G, S"));
+        V0_println(F("Enter single char command: Z, *, @, /, X, C, U, V, T, K, A, P, D, R, G, S, M"));
         V0_print(F(UNDERLINE_OFF NORMAL));
 
         Watchdog.reset();
@@ -557,6 +554,10 @@ void user_interface(void) {
                     _use_sim65m, sizeof(_use_sim65m));
                 write_FLASH();
                 break;
+            case 'M':
+                get_user_input("Send morse also? 0 or 1: " EOL, _morse_also, sizeof(_verbose));
+                write_FLASH();
+                break;
             case 13:  break;
             case 10:  break;
             default:
@@ -643,7 +644,7 @@ void makeSureClockIsGood(void) {
 // https://github.com/MakerMatrix/RP2040_flash_programming/blob/main/RP2040_flash/RP2040_flash.ino
 
 // update whever you add a bit or more to flash used (the offsets used below)
-#define FLASH_BYTES_USED 30
+#define FLASH_BYTES_USED 31
 int read_FLASH(void) {
     Watchdog.reset();
     V1_print(F("read_FLASH START" EOL));
@@ -714,6 +715,7 @@ int read_FLASH(void) {
     strncpy(_go_when_rdy,  flash_target_contents + 27, 1); _go_when_rdy[1] = 0;
     strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
     strncpy(_use_sim65m,   flash_target_contents + 29, 1); _use_sim65m[1] = 0;
+    strncpy(_morse_also,   flash_target_contents + 30,  1); _morse_also[1] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
     // recalc
@@ -830,6 +832,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 27, _go_when_rdy, 1);
     strncpy(data_chunk + 28, _factory_reset_done, 1);
     strncpy(data_chunk + 29, _use_sim65m, 1);
+    strncpy(data_chunk + 30, _morse_also, 1);
 
     // alternative for casting the array to uint8_t
     // https://stackoverflow.com/questions/40579902/how-to-turn-a-character-array-into-uint8-t
@@ -1100,6 +1103,13 @@ int check_data_validity_and_set_defaults(void) {
         V0_printf(EOL "_factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, _factory_reset_done);
         doFactoryReset();  // no return, reboots
     }
+    //*****************
+    if (_morse_also[0] != '0' && _morse_also[0] != '1') {
+        V0_printf(EOL "_morse_also %s is not supported/legal, initting to 0" EOL, _morse_also);
+        snprintf(_morse_also, sizeof(_morse_also), "0");
+        write_FLASH();
+        result = -1;
+    }
     return result;
 }
 
@@ -1128,6 +1138,7 @@ void show_values(void) {
     V0_printf("R: correction: %s (Mhz)" EOL, _correction);
     V0_printf("G: go_when_rdy: %s" EOL, _go_when_rdy);
     V0_printf("S: use_sim65m: %s" EOL, _use_sim65m);
+    V0_printf("M: morse_also: %s" EOL, _morse_also);
     V0_printf("*: factory_reset_done: %s" EOL, _factory_reset_done);
     V0_printf("XMIT_FREQUENCY: %lu (symbol 0)" EOL, XMIT_FREQUENCY);
     V0_print(F(EOL "SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
@@ -1161,6 +1172,7 @@ void show_commands(void) {
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("G: go_when_rdy (callsign tx starts at any modulo 2 starting minute (default: 0)"));
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
+    V0_println(F("M: morse_also: 1 tx cw msg after all wspr(default: 0)"));
 
     V0_print(F("show_commands() END" EOL));
 }
@@ -1182,6 +1194,7 @@ void doFactoryReset() {
     // or if user command is '*'
     snprintf(_factory_reset_done, sizeof(_go_when_rdy), "1");
     snprintf(_use_sim65m, sizeof(_use_sim65m), "0");
+    snprintf(_morse_also, sizeof(_morse_also), "0");
 
     // What about the side decodes? Don't worry, just reboot
     write_FLASH();

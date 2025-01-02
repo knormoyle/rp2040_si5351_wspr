@@ -222,9 +222,9 @@ uint32_t nhash_( const void *key, int *length0, uint32_t *initval0)
   u.ptr = key;
   if (HASH_LITTLE_ENDIAN && ((u.i & 0x3) == 0)) {
     const uint32_t *k = (const uint32_t *)key;         /* read 32-bit chunks */
-    const uint8_t  *k8;
-
-    k8=0;                                     //Silence compiler warning
+    // kbn 1/1/25
+    // const uint8_t  *k8;
+    // k8 = 0; // Silence compiler warning
     /*------ all but last block: aligned reads and affect 32 bits of (a,b,c) */
     while (length > 12)
     {

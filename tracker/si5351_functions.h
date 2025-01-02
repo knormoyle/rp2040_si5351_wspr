@@ -57,6 +57,7 @@ bool vfo_is_on(void);
 void vfo_turn_on(uint8_t clk_number);
 void vfo_turn_off(void);
 
+void si5351a_setup_PLLA(uint8_t mult, uint32_t num, uint32_t denom);
 void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom);
 void si5351a_setup_multisynth1(uint32_t div);  // removed static
 void si5351a_setup_multisynth0(uint32_t div);
@@ -75,8 +76,8 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num);
 void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t *r_divisor, uint32_t freq_x128);
 
 void vfo_set_freq_x128(uint8_t clk_number, uint32_t freq, bool only_pll_num);
-void vfo_turn_on_clk_out(uint8_t clk_number);
-void vfo_turn_off_clk_out(uint8_t clk_number);
+void vfo_turn_on_clk_out(uint8_t clk_number, bool print);
+void vfo_turn_off_clk_out(uint8_t clk_number, bool print);
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength);
 uint32_t doCorrection(uint32_t freq);
 
