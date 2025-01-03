@@ -88,6 +88,7 @@
 //********************************
 extern uint32_t XMIT_FREQUENCY;
 extern bool VERBY[10];
+extern uint32_t PLL_SYS_MHZ;
 
 extern char t_altitude[7];
 extern char t_grid6[7];
@@ -206,11 +207,20 @@ void cw_keyer_speed(uint8_t wpm) {
     // duration (millis) actual 19039 expected 15000
     // wpm actual 9.524 expected 12
 
+    // set to false if creating a DOT_MS_MULTIPLIER with PARIS 3x test
     bool DO_WPM_CORRECTION = true;
     if (DO_WPM_CORRECTION) {
         // now shorten the dot_ms based on real behavior with the code? 
         // Reason for inaccuracy is unknown
-        dot_ms = (uint32_t)((9.524/12.0) * (float) dot_ms);
+        // FIX! this adjustment was done at 18Mhz
+        // could be different at different PLL_SYS_MHZ
+        if (PLL_SYS_MHZ != 18) {
+            V1_printf("ERROR: cw timing adjust from tested PLL_SYS_MHZ 18 Mhz, actual PLL_SYS_MHZ %lu", EOL,
+                PLL_SYS_MHZ);
+        }
+        // this was tested with default 18Mhz sys clk
+        const float DOT_MS_MULTIPLIER = 9.524 / 12.0; // actual wpm / target wpm for an unadjusted PARIS 3x test
+        dot_ms = (uint32_t)(DOT_MS_MULTIPLIER * (float) dot_ms);
     }
 
     V1_printf(EOL "cw_keyer_speed target_wpm %u dot_ms %lu" EOL, 
@@ -470,6 +480,9 @@ void cw_send_message() {
     } else if (SEND_PARIS3X) {
         snprintf(morse_msg, sizeof(morse_msg), "PARIS PARIS PARIS ");
     } else {
+        // if we didn't get a gps snapForTelemetry() the t_* will be blank
+        if (t_callsign[0] == 0 || t_grid6[0] == 0 || t_altitude[0] == 0) {
+            V1_print(F("Didn't get a gps snapForTelemetry() before test? the t_* is blank" EOL));
         snprintf(morse_msg, sizeof(morse_msg), "CQ CQ DE %s %s BALLOON %s %s %s %s K",
             t_callsign, t_callsign, t_grid6, t_grid6, t_altitude, t_altitude);
     }

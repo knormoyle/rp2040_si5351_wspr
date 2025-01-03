@@ -352,7 +352,9 @@ void do_i2c_tests(void) {
         while (true)  {
             V1_print(F(EOL "cw_send_message() with current _Band/_callsign/grid6/altitude" EOL));
             cw_send_message();
-            V1_print(F(EOL "<enter> to get back to context menu, and X to reboot" EOL));
+            V1_print(F(EOL "<enter> within 2 secs to abort cw test loop, otherwise repeats" EOL));
+            char c_char = getOneChar(2000);  // 2 secs
+            if (c_char != 0) break;
         }
     } else if (true) {
         i2c_scan_both();
