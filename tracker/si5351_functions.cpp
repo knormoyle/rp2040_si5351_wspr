@@ -124,6 +124,13 @@ static bool s_is_on = false;
 // 0:2mA, 1:4mA, 2:6mA, 3:8mA
 static uint8_t s_vfo_drive_strength[3] = { 0 };
 
+// so we can just remember the state of the CLK control, and flip the PDN
+// power down bit..because the clock enable doesn't seem to work
+// on the ms5351m ..always on. Have to PLL reset if we flip PDN
+// to maintain 180 phase relationship..see hans
+static uint8_t s_CLK0_control_prev = { 0 };
+static uint8_t s_CLK1_control_prev = { 0 };
+static uint8_t s_CLK2_control_prev = { 0 };
 
 static uint8_t s_PLLB_regs_prev[8] = { 0 };
 static uint32_t s_PLLB_ms_div_prev = 0;
@@ -182,7 +189,8 @@ void vfo_init(void) {
     gpio_put(Si5351Pwr, 0);
 
     // init I2C0 for VFO
-    i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+    uint32_t actualRate = i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+    V1_printf("vfo_init i2c actual rate: %lu" EOL, actualRate);
     // let it float if we don't drive the i2c?
     gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
     gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
@@ -653,12 +661,13 @@ void si5351a_setup_PLLA(uint8_t mult, uint32_t num, uint32_t denom) {
 // divide-by-1
 const uint8_t R_DIVISOR_SHIFT = 0;
 
+//****************************************************
 // div must be even number
-void si5351a_setup_multisynth01(uint32_t div) {
-    V1_printf("si5351a_setup_multisynth01 START div %lu" EOL, div);
+void si5351a_setup_multisynth012(uint32_t div) {
+    V1_printf("si5351a_setup_multisynth012 START div %lu" EOL, div);
     Watchdog.reset();
     if ((div % 2) != 0) {
-        V1_printf("ERROR: si5351a_setup_multisynth01 div %lu isn't even" EOL, div);
+        V1_printf("ERROR: si5351a_setup_multisynth012 div %lu isn't even" EOL, div);
     }
 
     uint8_t s_regs[8] = { 0 };
@@ -707,24 +716,89 @@ void si5351a_setup_multisynth01(uint32_t div) {
     s_regs[7] = 0;
 
     i2cWriten(SI5351A_MULTISYNTH0_BASE, s_regs, 8);
-    i2cWrite(SI5351A_CLK0_CONTROL,
+    uint8_t CLK0_control_data =
         SI5351A_CLK0_MS0_INT |
         SI5351A_CLK0_MS0_SRC_PLLB |
         SI5351A_CLK0_SRC_MULTISYNTH_0 |
-        s_vfo_drive_strength[0]);  // should just be 2 bits 0,1,2,3 = 2,4,6,8mA
+        s_vfo_drive_strength[0];  // should just be 2 bits 0,1,2,3 = 2,4,6,8mA
+    i2cWrite(SI5351A_CLK0_CONTROL, CLK0_control_data);
+    s_CLK0_control_prev = CLK0_control_data;
 
     // this is used for antiphase (differential tx: clk0/clk1)
+    // the output enable doesn't seem to disable..whether or not we use INV!!
+    // both always enabled?
     i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
-    i2cWrite(SI5351A_CLK1_CONTROL,
+    uint8_t CLK1_control_data =
         SI5351A_CLK1_MS1_INT |
         SI5351A_CLK1_MS1_SRC_PLLB |
         SI5351A_CLK1_SRC_MULTISYNTH_1 |
-        SI5351A_CLK1_CLK1_INV |
-        s_vfo_drive_strength[1]);  // should just be 2 bits 0,1,2,3 = 2,4,6,8mA
+        SI5351A_CLK1_INV |
+        s_vfo_drive_strength[1];  // should just be 2 bits 0,1,2,3 = 2,4,6,8mA
+    i2cWrite(SI5351A_CLK1_CONTROL, CLK1_control_data);
+    s_CLK1_control_prev = CLK1_control_data;
+
+    // power down the CLK2. just make it 2MA drive 
+    // right now: we don't use it for freq calibration (to rp2040 on pcb)
+    i2cWriten(SI5351A_MULTISYNTH2_BASE, s_regs, 8);
+    uint8_t CLK2_control_data =
+        SI5351A_CLK2_MS2_INT |
+        SI5351A_CLK2_MS2_SRC_PLLB |
+        SI5351A_CLK2_SRC_MULTISYNTH_2 |
+        SI5351A_CLK2_PDN |
+        SI5351A_CLK2_IDRV_2MA; // always just 2MA for clk2, if ever used
+    i2cWrite(SI5351A_CLK2_CONTROL, CLK2_control_data);
+    s_CLK2_control_prev = CLK2_control_data;
 
     V1_printf("VFO_DRIVE_STRENGTH CLK0: %d" EOL, (int)s_vfo_drive_strength[0]);
     V1_printf("VFO_DRIVE_STRENGTH CLK1: %d" EOL, (int)s_vfo_drive_strength[1]);
-    V1_printf("si5351a_setup_multisynth01 END div %lu" EOL, div);
+    V1_printf("si5351a_setup_multisynth012 END div %lu" EOL, div);
+}
+
+//****************************************************
+void si5351a_power_up_clk01() {
+    // Only used for keying cw since the clk output enable doesn't seem
+    // to turn off clk on ms5351m??
+    // uses the previously set s_CLKn_control_prev
+    // V1_print(F("si5351a_power_up_clk01 START" EOL));
+    // Watchdog.reset();
+
+    uint8_t CLK0_control_data = s_CLK0_control_prev | SI5351A_CLK0_PDN;
+    i2cWrite(SI5351A_CLK0_CONTROL, CLK0_control_data);
+    s_CLK0_control_prev = CLK0_control_data;
+
+    uint8_t CLK1_control_data = s_CLK1_control_prev | SI5351A_CLK1_PDN;
+    i2cWrite(SI5351A_CLK1_CONTROL, CLK1_control_data);
+    s_CLK1_control_prev = CLK1_control_data;
+
+    // always need to reset after change of CLKn_PDN to maintain phase relationship (Hans)
+    i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
+    // V1_print(F("si5351a_power_up_clk01 END" EOL));
+    // hans picture says 1.46ms for effect?
+    // don't add delay here though. will change wpm timing
+}
+//****************************************************
+void si5351a_power_down_clk01() {
+    // Only used for keying cw since the clk output enable doesn't seem
+    // to turn off clk on ms5351m??
+    // uses the previously set s_CLKn_control_prev
+    // V1_print(F("si5351a_power_down_clk01 START" EOL));
+    // Watchdog.reset();
+
+    // boolean inversion. only clear PDN
+    uint8_t CLK0_control_data = s_CLK0_control_prev & ~SI5351A_CLK0_PDN;
+    i2cWrite(SI5351A_CLK0_CONTROL, CLK0_control_data);
+    s_CLK0_control_prev = CLK0_control_data;
+
+    uint8_t CLK1_control_data = s_CLK1_control_prev & ~SI5351A_CLK1_PDN;
+    i2cWrite(SI5351A_CLK1_CONTROL, CLK1_control_data);
+    s_CLK1_control_prev = CLK1_control_data;
+
+    // always need to reset after change of CLKn_PDN to maintain phase relationship (Hans)
+    i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
+    // hans picture says 1.46ms for effect?
+    // don't add delay here though. will change wpm timing
+    // sleep_ms(2);
+    // V1_print(F("si5351a_power_down_clk01 END" EOL));
 }
 
 // FIX! compare to https://github.com/etherkit/Si5351Arduino
@@ -750,102 +824,111 @@ void si5351a_setup_multisynth01(uint32_t div) {
 
 // FIX! will the i2cwrite timeout if we're in the middle of a pll reset/system init event?
 // how long does a pll reset take? (B or default A?)
-void si5351a_reset_PLLB(void) {
-    Watchdog.reset();
-    V1_println(F(EOL "si5351a_reset_PLLB START"));
-    V1_flush();
+void si5351a_reset_PLLB(bool print) {
+    if (print) {
+        V1_println(F(EOL "si5351a_reset_PLLB START"));
+        V1_flush();
+    }
     // why does example say to write reg 177 = 0xAC for 'soft' reset of PLLA and PLLB?
     // that's more bits then I woudl expect?
     i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
-    // wait for the pll reset?
-    sleep_ms(2000);
 
-    uint8_t reg;
-    uint8_t val;
-    int res;
+    if (print) {
+        Watchdog.reset();
+        // only wait for the pll reset if we say to print?
+        sleep_ms(2000);
+        uint8_t reg;
+        uint8_t val;
+        int res;
+        // FIX! is this mucking up anything
+        // clear the status, then read it
+        reg = SI5351A_DEVICE_STATUS;
+        i2cWrite(reg, 0);
+        sleep_ms(500);
 
-    // FIX! is this mucking up anything
-    // clear the status, then read it
-    reg = SI5351A_DEVICE_STATUS;
-    i2cWrite(reg, 0);
-    sleep_ms(500);
+        val = 0xff; // initial value for the read to overwrite
+        res = i2cWrRead(reg, &val);
+        V1_printf("after PLLB reset (1): SI5351A_DEVICE_STATUS reg %02x val %02x res %d" EOL,
+            reg, val, res);
+        V1_flush();
+        sleep_ms(4000);
+        Watchdog.reset();
 
-    val = 0xff; // initial value for the read to overwrite
-    res = i2cWrRead(reg, &val);
-    V1_printf("after PLLB reset (1): SI5351A_DEVICE_STATUS reg %02x val %02x res %d" EOL,
-        reg, val, res);
-    V1_flush();
-    sleep_ms(4000);
-    Watchdog.reset();
+        val = 0xff;
+        res = i2cWrRead(reg, &val);
+        V1_printf("after PLLB reset(2): SI5351A_DEVICE_STATUS reg %02x val %02x res %d" EOL,
+            reg, val, res);
 
-    val = 0xff;
-    res = i2cWrRead(reg, &val);
-    V1_printf("after PLLB reset(2): SI5351A_DEVICE_STATUS reg %02x val %02x res %d" EOL,
-        reg, val, res);
+        // clear the status, then read it
+        reg = SI5351A_INTERRUPT_STATUS_STICKY;
+        i2cWrite(reg, 0);
+        sleep_ms(500);
 
-    // clear the status, then read it
-    reg = SI5351A_INTERRUPT_STATUS_STICKY;
-    i2cWrite(reg, 0);
-    sleep_ms(500);
+        val = 0xff; // initial value for the read to overwrite
+        res = i2cWrRead(reg, &val);
+        V1_printf("after PLLB reset (1): SI5351A_INTERRUPT_STATUS_STICKY reg %02x val %02x res %d" EOL,
+            reg, val, res);
+        V1_flush();
 
-    val = 0xff; // initial value for the read to overwrite
-    res = i2cWrRead(reg, &val);
-    V1_printf("after PLLB reset (1): SI5351A_INTERRUPT_STATUS_STICKY reg %02x val %02x res %d" EOL,
-        reg, val, res);
-    V1_flush();
-
-    V1_println(F("si5351a_reset_PLLB END" EOL));
+        V1_println(F("si5351a_reset_PLLB END" EOL));
+    }
 }
 
 //****************************************************
 // FIX! will the i2cwrite timeout if we're in the middle of a pll reset/system init event?
 // so maybe we shouldn't do reset_PLLA, then reset_PLLB ?
-void si5351a_reset_PLLA(void) {
-    Watchdog.reset();
-    V1_println(F(EOL "si5351a_reset_PLLA START"));
+void si5351a_reset_PLLA(bool print) {
+    if (print) {
+        V1_println(F(EOL "si5351a_reset_PLLA START"));
+        V1_flush();
+    }
+
     i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLA_RST);
-    // wait for the pll reset?
-    sleep_ms(2000);
 
-    uint8_t reg;
-    uint8_t val;
-    int res;
+    if (print) {
+        Watchdog.reset();
+        // only wait for the pll reset if we say to print?
+        sleep_ms(2000);
+        uint8_t reg;
+        uint8_t val;
+        int res;
 
-    // FIX! is this mucking up anything?
-    //******************
-    // clear the status, then read it
-    reg = SI5351A_DEVICE_STATUS;
-    i2cWrite(reg, 0);
-    sleep_ms(500);
+        // FIX! is this mucking up anything?
+        //******************
+        // clear the status, then read it
+        reg = SI5351A_DEVICE_STATUS;
+        i2cWrite(reg, 0);
+        sleep_ms(500);
 
-    val = 0xff;
-    res = i2cWrRead(reg, &val);
-    // was seeing A0 here after 0.5 secs. halve to wait longer?
-    V1_printf("after PLLA reset(1): SI5351A_DEVICE_STATUS reg %02x val %02x res %d" EOL,
-        reg, val, res);
-    V1_flush();
+        val = 0xff;
+        res = i2cWrRead(reg, &val);
+        // was seeing A0 here after 0.5 secs. halve to wait longer?
+        V1_printf("after PLLA reset(1): SI5351A_DEVICE_STATUS reg %02x val %02x res %d" EOL,
+            reg, val, res);
+        V1_flush();
 
-    sleep_ms(4000);
-    Watchdog.reset();
+        sleep_ms(4000);
+        Watchdog.reset();
 
-    val = 0xff;
-    res = i2cWrRead(reg, &val);
-    V1_printf("after PLLA reset(2): SI5351A_DEVICE_STATUS reg %02x val %02x res %d" EOL,
-        reg, val, res);
+        val = 0xff;
+        res = i2cWrRead(reg, &val);
+        V1_printf("after PLLA reset(2): SI5351A_DEVICE_STATUS reg %02x val %02x res %d" EOL,
+            reg, val, res);
 
-    //******************
-    // clear the status, then read it
-    reg = SI5351A_INTERRUPT_STATUS_STICKY;
-    i2cWrite(reg, 0);
-    sleep_ms(500);
+        //******************
+        // clear the status, then read it
+        reg = SI5351A_INTERRUPT_STATUS_STICKY;
+        i2cWrite(reg, 0);
+        sleep_ms(500);
 
-    val = 0xff;
-    res = i2cWrRead(reg, &val);
-    V1_printf("after PLLA reset (1): SI5351A_INTERRUPT_STATUS_STICKY reg %02x val %02x res %d" EOL,
-        reg, val, res);
-    V1_flush();
+        val = 0xff;
+        res = i2cWrRead(reg, &val);
+        V1_printf("after PLLA reset (1): SI5351A_INTERRUPT_STATUS_STICKY reg %02x val %02x res %d" EOL,
+            reg, val, res);
+        V1_flush();
 
-    V1_println(F("si5351a_reset_PLLA END" EOL));
+        V1_println(F("si5351a_reset_PLLA END" EOL));
+    }
 }
 
 //****************************************************
@@ -1112,13 +1195,13 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
                 ms_div, s_PLLB_ms_div_prev);
             V1_print(F("ERROR: will cause si5351a_reset_PLLB()" EOL));
         }
-        // setting up multisynth0 and multisynth1
-        si5351a_setup_multisynth01(ms_div);
+        // setting up multisynth0/1/2
+        si5351a_setup_multisynth012(ms_div);
         // FIX! should we rely on the clock turn on to reset pll?
         // normally we should only change ms_div while the clock outputs are off?
         // so there will be a turn on after this?
 
-        // si5351a_reset_PLLB();
+        // si5351a_reset_PLLB(true);
 
         // static global? for comparison next time
         s_PLLB_ms_div_prev = ms_div;
@@ -1150,7 +1233,10 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
         // note the use of bitwise inversion ~
         if ((si5351bx_clken & ~disable_bits) != si5351bx_clken) {  // 0 is enabled
             si5351bx_clken &= ~disable_bits;
-            V1_printf("vfo_turn_on_clk_out si5351bx_clken %04x" EOL, si5351bx_clken);
+            if (print) {
+                V1_printf("vfo_turn_on_clk_out si5351bx_clken %02x" EOL, 
+                    si5351bx_clken);
+            }
             i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
         }
     }
@@ -1186,7 +1272,10 @@ void vfo_turn_off_clk_out(uint8_t clk_num, bool print) {
         if ((si5351bx_clken | disable_bits) != si5351bx_clken) { // 0 is enabled
             si5351bx_clken |= disable_bits; // 1 is disable
             // if si5351a power is off we'll get ERROR: res -1 after i2cWrite 3
-            V1_printf("vfo_turn_off_clk_out si5351bx_clken %04x" EOL, si5351bx_clken);
+            if (print) {
+                V1_printf("vfo_turn_off_clk_out si5351bx_clken %02x" EOL, 
+                    si5351bx_clken);
+            }
             i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
         }
     }
@@ -1206,7 +1295,7 @@ void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
 
     //**********************
     // reset the s_PLLB_ms_div_prev to force vfo_set_freq_x128()
-    // to call si5351a_setup_multisynth1() next time
+    // to call si5351a_setup_multisynth012() next time
     s_PLLB_ms_div_prev = 0;
     s_PLLA_ms_div_prev = 0;
 
@@ -1285,6 +1374,7 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
     // any error?
     // FIX! what about timeout?
     int res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, val);
+
     V1_printf("vfo_turn_on first res %d of i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL" EOL , res);
     while (res != 2) {
         if (tries > 5) {
@@ -1378,7 +1468,6 @@ void vfo_turn_on(uint8_t clk_num) {
     i2cWrite(9, 0xFF);
 
     // 12/28/24 new writes below here are good
-
     // new: pll input source is XTAL for PLLA and PLLB
     i2cWrite(15, 0x00);
 
@@ -1417,7 +1506,7 @@ void vfo_turn_on(uint8_t clk_num) {
     // new 12/27/24: have clock 0:3 disabled state be high impedance
     i2cWrite(24, 0b10101010);
     // clk 4-7 ? shouldn't hurt..doesn't exist on si5351a 3 output
-    i2cWrite(24, 0b10101010);
+    i2cWrite(25, 0b10101010);
 
 
     // FIX! are these just initial values?
@@ -1518,8 +1607,8 @@ void vfo_turn_on(uint8_t clk_num) {
     // could there be two that overlap ?
 
     // does PLLA matter? these print the lock status by doing i2c reads
-    // si5351a_reset_PLLA();
-    si5351a_reset_PLLB();
+    // si5351a_reset_PLLA(true);
+    si5351a_reset_PLLB(true);
     vfo_turn_on_completed = true;
     V1_printf("vfo_turn_on END clk_num %u" EOL, clk_num);
 }

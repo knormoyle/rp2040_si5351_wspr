@@ -356,17 +356,20 @@ extern const int VFO_I2C0_SCL_PIN = 13;
 
 // extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 // maybe go lower frequency?
+
+// FIX! is this wrong with lower frequency sys clk??
 extern const int VFO_I2C0_SCL_HZ = (100 * 1000);
+extern const int BMP_I2C1_SCL_HZ = (100 * 1000);
+// FIX! used in i2c_functions for test of both i2c0 and i2c1
+// pullup resistors are different on each i2c bus on the pcb
+extern const int PICO_I2C_CLK_HZ = (100 * 1000);
+
 extern const int BMP_I2C1_SDA_PIN = 2;
 extern const int BMP_I2C1_SCL_PIN = 3;
 
 // FIX! are the pcb pullups less aggressive on BMP i2c?
 // maybe have to stay slower on speed?
-extern const int BMP_I2C1_SCL_HZ = (100 * 1000);
 
-// FIX! used in i2c_functions for test of both i2c0 and i2c1
-// pullup resistors are different on each i2c bus on the pcb
-extern const int PICO_I2C_CLK_HZ = (100 * 1000);
 
 // The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR, which is 0x60
 extern const int SI5351A_I2C_ADDR = 0x60;
@@ -654,7 +657,7 @@ void setup() {
     // from here on, if this code hangs, we just don't get keyboard input
     // but that's not an issue if BALLOON_MODE
     if (VERBY[1]) {
-        V1_print(F("setup() freeMem()"));
+        V1_print(F("setup() freeMem()" EOL));
         freeMem();
     }
     V1_print(F(EOL "LEAVING SETUP() (2)" EOL EOL));
@@ -1115,7 +1118,7 @@ void setup1() {
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     if (VERBY[1]) {
-        V1_print(F("setup1() freeMem()"));
+        V1_print(F("setup1() freeMem()" EOL));
         freeMem();
     }
 }
@@ -1613,7 +1616,7 @@ void loop1() {
 
     // FIX! does this cause a reboot?
     if (VERBY[1]) {
-        V1_print(F("loop1() freeMem()"));
+        V1_print(F("loop1() freeMem()" EOL));
         freeMem();
     }
 
@@ -2284,7 +2287,7 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
 
 //**********************************
 void freeMem() {
-    V1_println(F("freeMem() START"));
+    V1_print(F("freeMem() START" EOL));
     if (!VERBY[1]) return;
     // Nice to use F() for strings that are constant
     // compiled string stays in flash.
@@ -2322,7 +2325,7 @@ void freeMem() {
     // V1_print("Heap size=");
     // V1_println((unsigned int)__brkval - RAM_start);
 
-    V1_println(F("freeMem() END"));
+    V1_print(F("freeMem() END" EOL));
 }
 
 

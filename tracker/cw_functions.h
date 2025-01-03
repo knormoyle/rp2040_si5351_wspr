@@ -8,7 +8,27 @@
 #define CW_FUNCTIONS_H
 #include <stdint.h>
 
-void cw_init(void);
-void cw_send_message(void);
+// state of the tx (si5351a)
+enum tx_state_e {
+    E_STATE_RX,
+    E_STATE_TX
+};      
+        
+// state of the key line
+enum key_state_e {
+    E_KEY_UP,
+    E_KEY_DOWN
+};
+
+void cw_keyer_speed(uint8_t wpm);
+void cw_key_state(key_state_e k);
+void cw_tx_state(tx_state_e s);
+void cw_init();
+void cw_high_drive_strength();
+void cw_restore_drive_strength();
+
+void cw_send(char *m);
+void cw_send_message();
+
 
 #endif  // CW_FUNCTIONS_H
