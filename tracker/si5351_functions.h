@@ -13,6 +13,7 @@ const int WSPR_TX_CLK_1_NUM =               1;
 const int SI5351A_DEVICE_STATUS =           0;
 const int SI5351A_INTERRUPT_STATUS_STICKY = 1;
 const int SI5351A_OUTPUT_ENABLE_CONTROL =   3;
+
 const int SI5351A_CLK0_CONTROL =            16;
 const int SI5351A_CLK1_CONTROL =            17;
 const int SI5351A_CLK2_CONTROL =            18;
@@ -51,13 +52,13 @@ const int SI5351A_CLK01_IDRV_6MA =           (2 << 0);
 const int SI5351A_CLK01_IDRV_4MA =           (1 << 0);
 const int SI5351A_CLK01_IDRV_2MA =           (0 << 0);
 
-const int SI5351A_CLK2_IDRV_8MA =           (3 << 0);
-const int SI5351A_CLK2_IDRV_6MA =           (2 << 0);
-const int SI5351A_CLK2_IDRV_4MA =           (1 << 0);
-const int SI5351A_CLK2_IDRV_2MA =           (0 << 0);
+const int SI5351A_CLK2_IDRV_8MA =            (3 << 0);
+const int SI5351A_CLK2_IDRV_6MA =            (2 << 0);
+const int SI5351A_CLK2_IDRV_4MA =            (1 << 0);
+const int SI5351A_CLK2_IDRV_2MA =            (0 << 0);
 
-const int SI5351A_PLL_RESET_PLLB_RST =      (1 << 7);
-const int SI5351A_PLL_RESET_PLLA_RST =      (1 << 5);
+const int SI5351A_PLL_RESET_PLLB_RST =       (1 << 7);
+const int SI5351A_PLL_RESET_PLLA_RST =       (1 << 5);
 
 // FIX! why were these static?
 // static would mean you can only call it from within this translation unit

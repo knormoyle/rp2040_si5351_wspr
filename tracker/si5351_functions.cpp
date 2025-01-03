@@ -762,11 +762,12 @@ void si5351a_power_up_clk01() {
     // V1_print(F("si5351a_power_up_clk01 START" EOL));
     // Watchdog.reset();
 
-    uint8_t CLK0_control_data = s_CLK0_control_prev | SI5351A_CLK0_PDN;
+    // boolean inversion. Clear PDN
+    uint8_t CLK0_control_data = s_CLK0_control_prev & ~SI5351A_CLK0_PDN;
     i2cWrite(SI5351A_CLK0_CONTROL, CLK0_control_data);
     s_CLK0_control_prev = CLK0_control_data;
 
-    uint8_t CLK1_control_data = s_CLK1_control_prev | SI5351A_CLK1_PDN;
+    uint8_t CLK1_control_data = s_CLK1_control_prev & ~SI5351A_CLK1_PDN;
     i2cWrite(SI5351A_CLK1_CONTROL, CLK1_control_data);
     s_CLK1_control_prev = CLK1_control_data;
 
@@ -784,16 +785,18 @@ void si5351a_power_down_clk01() {
     // V1_print(F("si5351a_power_down_clk01 START" EOL));
     // Watchdog.reset();
 
-    // boolean inversion. only clear PDN
-    uint8_t CLK0_control_data = s_CLK0_control_prev & ~SI5351A_CLK0_PDN;
+    // set PDN
+    uint8_t CLK0_control_data = s_CLK0_control_prev | SI5351A_CLK0_PDN;
     i2cWrite(SI5351A_CLK0_CONTROL, CLK0_control_data);
     s_CLK0_control_prev = CLK0_control_data;
 
-    uint8_t CLK1_control_data = s_CLK1_control_prev & ~SI5351A_CLK1_PDN;
+    uint8_t CLK1_control_data = s_CLK1_control_prev | SI5351A_CLK1_PDN;
     i2cWrite(SI5351A_CLK1_CONTROL, CLK1_control_data);
     s_CLK1_control_prev = CLK1_control_data;
 
     // always need to reset after change of CLKn_PDN to maintain phase relationship (Hans)
+    // HACK: wait one millisecond before doing the pll reset?
+    busy_wait_ms(1);
     i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
     // hans picture says 1.46ms for effect?
     // don't add delay here though. will change wpm timing

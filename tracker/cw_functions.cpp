@@ -17,25 +17,29 @@
 
 // https://groups.io/g/picoballoon/message/19326
 
+//******************************************
+// from hans
+// https://groups.io/g/picoballoon/message/19324
 // Yet ANOTHER way to do this (CW) is possible, and works without the PLL Reset. 
 // Register 3 Output Enable Control contains a set of bits, when set to 1, 
 // it disables the corresponding output. 
 
-// So I have discovered that I can key CW by setting these bits to 1 for key-up (no output) 
-// or 0 for key-down (has output). 
+// So I have discovered that I can key CW by setting these bits to 
+// 1 for key-up (no output) or 0 for key-down (has output). 
 // When the output is disabled, it still preserves the proper phase relationship. 
-// So you can key the CW transmitter WITHOUT those few milliseconds of mess at key-down where 
-// you have a millisecond or two of the outputs not being both on and not being both 
-// on the correct phase relationship, 
+// So you can key the CW transmitter WITHOUT those few milliseconds of mess at key-down 
+// where you have a millisecond or two of the outputs not being both on and 
+// not being both on the correct phase relationship, 
 // then 1.46 milliseconds of delay while the PLL Reset does its stuff 
-// (note: who knows, if that PLL reset duration may vary, 
-// based on what other '5351 configuration parameters). 
+// note: who knows, if that PLL reset duration may vary, based on what other 
+// '5351 configuration parameters exist.
 
-// there are TWO ways to key a clock output on/off:
+// There are TWO ways to key a clock output on/off:
 // Use the "power down" bit in the CLK0 Control and/or CLK1 Control registers (16 and 17 respectively). 
 // This does NOT preserve the inverted (180-degree) phase relationship 
 // when you re-enable by setting the power down bit to 0; 
 // hence a PLL Reset is required, 
+
 // If you want differential antenna drive (U4B High Power mode). 
 // Use the Register 3 "Output Enable Control" documented in AN619 at page 17 
 // see https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/application-notes/AN619.pdf. 
@@ -43,9 +47,10 @@
 // when using differential drive. 
 
 // OK, official. 
-// You DO need the PLL Reset, on switching on an output, 
+// You DO need the PLL Reset, on switching on an output (using the PDN powerdown bit)
 // to get the correct 180-degree phase difference, 
 // even when just using the inverted bit. 
+
 // Tested using a little U4B BASIC program, and two-channel oscilloscope probes 
 // attached to each of Clk0 and Clk1 outputs. 
 // HP set to 1 to cause the inverted drive (high power) mode:
@@ -54,14 +59,15 @@
 // via their respective CLK0 Control and CLK1 Control registers (registers 16 and 17). 
 // Clk0 and Clk1 have the proper 180-degree phase relationship. 
 
-// WithoutPLLReset.png: After commenting out that line of code with the PLL reset, 
+// After commenting out that line of code with the PLL reset, 
 // I see a random phase relationship between Clk0 and Clk1 on each keydown. 
-// Snapshot here demonstrates one such example. 
+//******************************************
 
 #include <Arduino.h>
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 #include "si5351_functions.h"
 #include "print_functions.h"
+#include "debug_functions.h"
 #include "led_functions.h"
 #include "gps_functions.h"
 #include "cw_functions.h"
@@ -176,6 +182,7 @@ int morse_lookup(char c) {
 }
 
 //**************************************
+// always integers
 uint8_t target_wpm = 12; // 12 wpm default
 uint32_t dot_ms = 1000 * 60/(50 * 12); // 12 wpm default
 // https://morsecode.world/international/timing.html
@@ -193,8 +200,21 @@ void cw_keyer_speed(uint8_t wpm) {
 
     // globals
     dot_ms = 1000 * 60/(50 * wpm);
+    // always integers
     target_wpm = 1000 * 60/(50 * dot_ms);
-    V1_printf(EOL "cw_keyer_speed target_wpm %u dot_ms %lu" EOL, target_wpm, dot_ms);
+    // from paris test with uncorrected 12wpm
+    // duration (millis) actual 19039 expected 15000
+    // wpm actual 9.524 expected 12
+
+    bool DO_WPM_CORRECTION = true;
+    if (DO_WPM_CORRECTION) {
+        // now shorten the dot_ms based on real behavior with the code? 
+        // Reason for inaccuracy is unknown
+        dot_ms = (uint32_t)((9.524/12.0) * (float) dot_ms);
+    }
+
+    V1_printf(EOL "cw_keyer_speed target_wpm %u dot_ms %lu" EOL, 
+        target_wpm, dot_ms);
 }
 
 //**************************************
@@ -202,11 +222,11 @@ key_state_e key_state = E_KEY_UP;
 void cw_key_state(key_state_e k) {
     // 'cw_key_state' {E_KEY_DOWN, E_KEY_UP}
     // hm. not checking current state?
+    // can't optimize with no-change to current state
+    // affects timing?
     switch (k) {
-        case E_KEY_DOWN: if (key_state != E_KEY_DOWN)  {
+        case E_KEY_DOWN:
             // this has to be fast
-            // V1_print(F("cw_key_state E_KEY_DOWN"));
-            key_state = E_KEY_DOWN;
             if (USE_CLK_POWERDOWN_MODE) {
                 si5351a_power_up_clk01(); // this does a pllb reset too
             } else {
@@ -214,13 +234,12 @@ void cw_key_state(key_state_e k) {
                 // vfo_turn_on_clk_out(CW_CLK_NUM, false);  // don't print
                 // si5351a_reset_PLLB(false);  // don't print
             }
-        }
-        break;
+            // V1_print(F("cw_key_state E_KEY_DOWN"));
+            key_state = E_KEY_DOWN;
+            break;
 
-        case E_KEY_UP: if (key_state != E_KEY_UP)  {
+        case E_KEY_UP:
             // this has to be fast
-            // V1_print(F("cw_key_state E_KEY_UP"));
-            key_state = E_KEY_UP;
             if (USE_CLK_POWERDOWN_MODE) {
                 si5351a_power_down_clk01(); // this does a pllb reset too
             } else {
@@ -228,8 +247,9 @@ void cw_key_state(key_state_e k) {
                 // vfo_turn_off_clk_out(CW_CLK_NUM, false);  // don't print
                 // si5351a_reset_PLLB(false);  // don't print
             }
-        }
-        break;
+            // V1_print(F("cw_key_state E_KEY_UP"));
+            key_state = E_KEY_UP;
+            break;
     }
 }
 
@@ -244,7 +264,9 @@ void cw_tx_state(tx_state_e s) {
             vfo_turn_off();
             // turn gps back on!
             // cw should be at the end of wspr (during the extended telemetry time slot)
-            GpsON(false); // no full cold reset
+            // UPDATE: tracker.ino should turn gps on ??
+            // don't do it here..to avoid while testing
+            // GpsON(false); // no full cold reset
             tx_state = E_STATE_RX;
             V1_print(F(EOL ">Rx" EOL));
             V1_flush();
@@ -254,6 +276,7 @@ void cw_tx_state(tx_state_e s) {
         // should we check if already in the state?
         case E_STATE_TX: if (tx_state != E_STATE_TX) {
             V1_print(F(EOL "cw_tx_state E_STATE_TX" EOL));
+            // make sure it GPS is off.
             GpsOFF(true); // keep TinyGPS state
             updateStatusLED();
             // start with the vfo off
@@ -268,10 +291,11 @@ void cw_tx_state(tx_state_e s) {
             // does pll reset too
             vfo_turn_on(CW_CLK_NUM);
             V1_print(EOL "Should have been hearing sdr CW tone..RF should be on" EOL);
-            V1_flush();
+            char debugMsg[] = "";
+            realPrintFlush(debugMsg, true);
 
-            V1_print(EOL "Should not hear sdr CW tone now for 5 secs..RF should be off" EOL);
-            V1_flush();
+            V1_print(EOL "After this, should not hear sdr CW tone now for 5 secs..RF should be off" EOL);
+            realPrintFlush(debugMsg, true);
             if (USE_CLK_POWERDOWN_MODE) {
                 si5351a_power_down_clk01(); // this does a pllb reset too
             } else {
@@ -301,7 +325,7 @@ void cw_send_dot() {
     cw_key_state(E_KEY_UP);
     KEYING_DELAY(dot_ms);  // wait for one dot period (space)
     // how much delay does this cause?
-    // V1_print(".");
+    V1_print(".");
     cw_ch_counter++;
 }
 
@@ -313,7 +337,7 @@ void cw_send_dash() {
     cw_key_state(E_KEY_UP);
     KEYING_DELAY(dot_ms);  // wait for one dot period (space)
     // how much delay does this cause?
-    // V1_print("-");
+    V1_print("-");
     cw_ch_counter++;
 }
 
@@ -321,14 +345,14 @@ void cw_send_dash() {
 void cw_send_letter_space() {
     KEYING_DELAY(dot_ms * CW_LETTER_SPACE_LEN);  // wait for 4 dot periods
     // how much delay does this cause?
-    // V1_print(" ");
+    V1_print(" ");
 }
 
 //**************************************
 void cw_send_word_space() {
     KEYING_DELAY(dot_ms * CW_WORD_SPACE_LEN);  // wait for 7 dot periods
     // how much delay does this cause?
-    // V1_print("  ");
+    V1_print("  ");
 }
 
 //**************************************
@@ -421,8 +445,29 @@ void cw_send_message() {
     // up to 80 chars
     // has to be uppercase letters
 
-    bool MEASURE_WPM = true;
-    if (MEASURE_WPM) {
+    bool SEND_DOT = false;
+    bool SEND_DOT5 = false;
+    bool SEND_DASH = false;
+    bool SEND_DASH5 = false;
+    bool SEND_DOTDASH = false;
+    bool SEND_DASHDOT = false;
+    bool SEND_DASHDOT4 = false;
+    bool SEND_PARIS3X = false;
+    if (SEND_DOT) {
+        snprintf(morse_msg, sizeof(morse_msg), "EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE");
+    } else if (SEND_DOT5) {
+        snprintf(morse_msg, sizeof(morse_msg), "55555555555555555555555555555555555555555555555555555");
+    } else if (SEND_DASH) {
+        snprintf(morse_msg, sizeof(morse_msg), "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT");
+    } else if (SEND_DASH5) {
+        snprintf(morse_msg, sizeof(morse_msg), "00000000000000000000000000000000000000000000000000000");
+    } else if (SEND_DOTDASH) {
+        snprintf(morse_msg, sizeof(morse_msg), "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA");
+    } else if (SEND_DASHDOT) {
+        snprintf(morse_msg, sizeof(morse_msg), "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN");
+    } else if (SEND_DASHDOT4) {
+        snprintf(morse_msg, sizeof(morse_msg), "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC");
+    } else if (SEND_PARIS3X) {
         snprintf(morse_msg, sizeof(morse_msg), "PARIS PARIS PARIS ");
     } else {
         snprintf(morse_msg, sizeof(morse_msg), "CQ CQ DE %s %s BALLOON %s %s %s %s K",
@@ -441,21 +486,16 @@ void cw_send_message() {
     // 1 word space: 7 units.
     // A grand total of 50 units.
 
-    if (MEASURE_WPM) {
-        uint64_t start_millis = millis();
-        // we send 'PARIS ' 3x above
-        V1_print(EOL "Should start to hear CW now..RF should be toggling" EOL);
-        cw_send(morse_msg);
-        uint64_t actual = millis() - start_millis;
-        uint64_t expected = 3 * 50 * dot_ms;
-        V1_printf("duration (millis) actual %" PRIu64 " expected %" PRIu64 EOL, actual, expected);
-        uint32_t actual_dot_ms = (actual / (3 * 50));
-        uint8_t actual_wpm = 1000 * 60/(50 * actual_dot_ms);
-        V1_printf("wpm actual %u expected %u" EOL, actual_wpm, target_wpm);
-    
-    } else {
-        cw_send(morse_msg);
-    }
+    uint64_t start_millis = millis();
+    // we send 'PARIS ' 3x above
+    V1_print(EOL "Should start to hear CW now..RF should be toggling" EOL);
+    cw_send(morse_msg);
+    uint32_t actual = millis() - start_millis;
+    uint32_t expected = 3 * 50 * dot_ms;
+    V1_printf("duration (millis) actual %lu expected %lu" EOL, actual, expected);
+    uint32_t actual_dot_ms = (actual / (3 * 50));
+    float actual_wpm = (float) 1000 * 60/(50 * actual_dot_ms);
+    V1_printf("wpm actual %.3f expected %u" EOL, actual_wpm, target_wpm);
 
     // time for PARIS should be 50 * dot_ms
     // turns gps back on!
