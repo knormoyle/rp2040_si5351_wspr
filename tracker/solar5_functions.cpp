@@ -68,6 +68,15 @@ class Clock::time_point foo(int year, int month, int day, int hour, int minute, 
 }
 
 
+// port of suncalc. this is old though.
+// https://github.com/ypid/suncalc 
+// https://lib.haxe.org/p/suncalc
+
+
+#include <chrono>
+#include <ctime>
+#include <iostream>
+
 void solarZenithAndAzimuthAngle5(double *sza, double *saa, double longitude, double latitude, time_t timestamp) {
     double elevation = 0;
     double azimuth = 0;
@@ -88,13 +97,48 @@ void solarZenithAndAzimuthAngle5(double *sza, double *saa, double longitude, dou
     V1_print("rtc time (utc)"); 
     V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
         rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);
-
     auto tp = foo(rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second);
 
+    //**********************************************************************
+    if (VERBY[1]) {
+        // https://stackoverflow.com/questions/15957805/extract-year-month-day-etc-from-stdchronotime-point-in-c
+        // Reduce verbosity but let you know what is in what namespace
+        using namespace std;
+        using namespace std::chrono;
+        typedef duration<int, ratio_multiply<hours::period, ratio<24> >::type> days;
+        system_clock::time_point now = system_clock::now();
+        system_clock::duration tp = now.time_since_epoch();
+        days d = duration_cast<days>(tp);
+        tp -= d;
+        hours h = duration_cast<hours>(tp);
+        tp -= h;
+        minutes m = duration_cast<minutes>(tp);
+        tp -= m;
+        seconds s = duration_cast<seconds>(tp);
+        tp -= s;
+        std::cout << d.count() << "d " << h.count() << ':'
+                  << m.count() << ':' << s.count();
+        std::cout << " " << tp.count() << "["
+                  << system_clock::duration::period::num << '/'
+                  << system_clock::duration::period::den << "]\n";
+
+        time_t tt = system_clock::to_time_t(now);
+        tm utc_tm = *gmtime(&tt);
+        // not used
+        // tm local_tm = *localtime(&tt);
+        std::cout << utc_tm.tm_year + 1900 << '-';
+        std::cout << utc_tm.tm_mon + 1 << '-';
+        std::cout << utc_tm.tm_mday << ' ';
+        std::cout << utc_tm.tm_hour << ':';
+        std::cout << utc_tm.tm_min << ':';
+        std::cout << utc_tm.tm_sec << '\n';
+    }
+
+    //**********************************************************************
     // returns {azimuth(H, phi, c.dec), altitude(H, phi, c.dec)};
     // both are double
     // std::tie(azimuth, elevation) = suncalc.getPosition(tp, latitude, longitude);
-    suncalc.getPosition(&elevation, &azimuth, tp, latitude, longitude);
+    suncalc.getPosition(&azimuth, &elevation, tp, latitude, longitude);
 
     *sza = 90 - elevation;
     *saa = azimuth;
@@ -178,7 +222,7 @@ void calcSolarElevation5(double *solarElevation, double *solarAzimuth, double *s
 
     // should be able to handle it from an 'unsigned long' for time_t ?
     uint64_t epochTime = getEpochTime();
-    V1_printf("calculateSolarPosition4 epochTime %" PRIu64 " lat %.7f lon %.7f" EOL,
+    V1_printf("calculateSolarPosition5 epochTime %" PRIu64 " lat %.7f lon %.7f" EOL,
         epochTime, lat, lon);
 
     double sza;
@@ -191,8 +235,11 @@ void calcSolarElevation5(double *solarElevation, double *solarAzimuth, double *s
     // i.e., the angle between the sun's rays and the vertical direction. 
     // It is the complement to the solar altitude or solar elevation, 
     // which is the altitude angle or elevation angle between the sun's rays and a horizontal plane.
-    double elevation = 90 - sza;
-    double azimuth = saa;
+
+    // The algo returns radians?
+    // double elevation = 90 - sza;
+    double elevation = (sza * 180) / PI; // radians to degrees
+    double azimuth = (saa * 180) / PI ; // radians to degrees
     // FIX! printing before badSolar forces to 0?
     V1_printf("solarZenithAndAzimuthAngle5 elevation %.3f azimuth %.3f" EOL, elevation, azimuth);
 

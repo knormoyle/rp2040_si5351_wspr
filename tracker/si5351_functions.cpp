@@ -149,7 +149,7 @@ void vfo_init(void) {
 
     // clear any old remembered state we have outside of the si5351
     // hmm. maybe not this though
-    // si5351bx_clken = 0xff;
+    si5351bx_clken = 0xff;
     s_PLLB_ms_div_prev = 0;
     memset(s_PLLB_regs_prev, 0, 8);
     s_PLLA_ms_div_prev = 0;
@@ -216,7 +216,7 @@ void vfo_set_power_on(bool turn_on) {
     // FIX! always? or should we only do it if was not on?
     // clear any old remembered state we have outside of the si5351
     // hmm. maybe not this though
-    // si5351bx_clken = 0xff;
+    si5351bx_clken = 0xff;
     s_PLLB_ms_div_prev = 0;
     memset(s_PLLB_regs_prev, 0, 8);
     s_PLLA_ms_div_prev = 0;
@@ -1141,19 +1141,18 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
     if (clk_num != 0) {
         V1_printf("ERROR: vfo_turn_on_clk_out should only have clk_num 0 not %u"
             EOL, clk_num);
-    }
-    // enable clock 0 and 1. 0 is enabled
-    uint8_t disable_bits = 1 << clk_num;
-    // clk0 implies clk1 also. so do a 3!
-    if (clk_num == 0) {
+    } else {
+        // enable clock 0 and 1. 0 is enabled
+        uint8_t disable_bits = 1 << clk_num;
+        // clk0 implies clk1 also. so do a 3!
         disable_bits |= 1 << 1;
         // don't do anything if no bits change
-        if ((si5351bx_clken & !disable_bits) != si5351bx_clken) { // 0 is enabled
-            si5351bx_clken &= !disable_bits;
+        // note the use of bitwise inversion ~
+        if ((si5351bx_clken & ~disable_bits) != si5351bx_clken) {  // 0 is enabled
+            si5351bx_clken &= ~disable_bits;
+            V1_printf("vfo_turn_on_clk_out si5351bx_clken %04x" EOL, si5351bx_clken);
             i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
         }
-    } else {
-        V1_printf("ERROR: vfo_turn_on_clk_out illegal clk_num %u" EOL, clk_num);
     }
 
     // FIX! this should always have a pll reset after it?
@@ -1179,15 +1178,17 @@ void vfo_turn_off_clk_out(uint8_t clk_num, bool print) {
     uint8_t disable_bits = 1 << clk_num;
 
     // clk0 implies clk1 also
-    if (clk_num == 0) {
+    if (clk_num != 0) {
+        V1_printf("ERROR: vfo_turn_off_clk_out should only have clk_num 0 not %u"
+            EOL, clk_num);
+    } else {
         disable_bits |= 1 << 1;
         if ((si5351bx_clken | disable_bits) != si5351bx_clken) { // 0 is enabled
             si5351bx_clken |= disable_bits; // 1 is disable
             // if si5351a power is off we'll get ERROR: res -1 after i2cWrite 3
+            V1_printf("vfo_turn_off_clk_out si5351bx_clken %04x" EOL, si5351bx_clken);
             i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, si5351bx_clken);
         }
-    } else {
-        V1_printf("ERROR: vfo_turn_off_clk_out illegal clk_num %u" EOL, clk_num);
     }
     
     if (print) {
@@ -1213,9 +1214,8 @@ void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     memset(s_PLLB_regs_prev, 0, 8);
     memset(s_PLLA_regs_prev, 0, 8);
 
-    // not these though?
+    // No change on these though?
     // si5351bx_clken = 0xff;
-    // memset(s_vfo_drive_strength, 0, 4);
 
     // Triggering a pll reset requires some delay afterwards
     // so we don't want that to happen or be required (to retain 180 degree antiphase)
@@ -1337,7 +1337,8 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
         res = i2cWrite(SI5351A_OUTPUT_ENABLE_CONTROL, val);
         V1_flush();
     }
-    V1_print(F("vfo_write_clock_en_with_retry END"));
+    if (res==2) si5351bx_clken = val;
+    V1_printf("vfo_write_clock_en_with_retry res %d END" EOL, res);
 }
 //****************************************************
 void vfo_turn_on(uint8_t clk_num) {
@@ -1374,7 +1375,8 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // could disable all OEB pin enable control??
     // (OEB/SSEN pins don't exist on si5351a 3 output)
-    // i2cWrite(9, 0xFF);
+    i2cWrite(9, 0xFF);
+
     // 12/28/24 new writes below here are good
 
     // new: pll input source is XTAL for PLLA and PLLB

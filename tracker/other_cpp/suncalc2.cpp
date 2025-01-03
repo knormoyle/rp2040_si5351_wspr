@@ -102,8 +102,7 @@ public:
         double altitude;
     };
 
-    static Position getPosition(double *elev, double *azim, const std::chrono::system_clock::time_point& date, 
-        double lat, double lng) {
+    static Position getPosition(double *azim, double *elev, const std::chrono::system_clock::time_point& date, double lat, double lng) {
 
         double lw = rad * -lng;
         double phi = rad * lat;

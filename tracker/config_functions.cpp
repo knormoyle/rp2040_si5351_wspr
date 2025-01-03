@@ -346,9 +346,14 @@ void show_TELEN_msg() {
 void do_i2c_tests(void) {
     // quick and dirty way to execute some different tests
     if (true) {
-        // picks a good HF freq for the config'ed _Band. uses t_callsign a and t_grid6 in the message
+        // picks a good HF freq for the config'ed _Band. 
+        // uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
-        cw_send_message();
+        while (true)  {
+            V1_print(F(EOL "cw_send_message() with current _Band/_callsign/grid6/altitude" EOL));
+            cw_send_message();
+            V1_print(F(EOL "<enter> to get back to context menu, and X to reboot" EOL));
+        }
     } else if (true) {
         i2c_scan_both();
     } else {
@@ -420,7 +425,7 @@ void user_interface(void) {
         char confirm[2] = { 0 };
         switch ( c_char ) {
             case 'Z':
-                V0_print(F("Will run i2c tests" EOL));
+                V0_print(F("Will run test" EOL));
                 do_i2c_tests();
                 break;
 

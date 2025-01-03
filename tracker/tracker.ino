@@ -1334,7 +1334,8 @@ void loop1() {
             // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime()
             // so don't here. Only update LED state here, though
             // it is common for gps chips to send out 1/1/2080 dates when invalid
-            // I see 01/07/2080 in SIM65M. 00/00/2000 in ATGM336H.
+            // I see 2080-01-01 2080-01-07 in SIM65M. 2000-00-00 ? in ATGM336 (is month/day wrong?)
+            // On 1/2/25 ~19:00 I saw this: 2080-01-05 23:59:50 
             // although time sees okay? (utc time)
             // this is a check for validity
             if (gps.date.year() >= 2024 && gps.date.year() <= 2034)

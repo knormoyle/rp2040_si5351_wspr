@@ -72,8 +72,8 @@ enum key_state_e {
 };
 
 
-// init to 10 wpm
-uint32_t dot_length_ms = 1000 * 60/(50 * 10);
+// https://morsecode.world/international/timing.html
+uint32_t dot_length_ms = 1000 * 60/(50 * 12); // 12 wpm default
 uint32_t cw_ch_counter = 0;
 
 // morse reference table
@@ -139,12 +139,19 @@ int morse_lookup(char c) {
 }
 
 //**************************************
-uint8_t cw_keyer_speed(uint8_t wpm) {
+uint32_t cw_keyer_speed(uint8_t wpm) {
+    if (wpm < 5 || wpm > 20) {
+        V1_print(F(EOL "cw_keyer_speed illegal wpm, using 12" EOL));
+        wpm = 12;
+    }
     // scale to wpm (10 wpm == 60mS dot length)
     // https://morsecode.world/international/timing.html
     // seconds per dit = 60/(50 * wpm)
     // millisecs per dit = 1000 * 60/(50 * wpm)
-    uint8_t dot_length_ms = 1000 * 60/(50 * wpm);
+    uint32_t dot_length_ms = 1000 * 60/(50 * wpm);
+    uint8_t target_wpm = 1000 * 60/(50 * dot_length_ms);
+    V1_printf(EOL "cw_keyer_speed target_wpm %u dot_length_ms %lu" EOL,
+        target_wpm, dot_length_ms);
     return dot_length_ms;
 }
 
@@ -220,11 +227,11 @@ void cw_tx_state(tx_state_e s) {
 
 //**************************************
 void cw_send_dot() {
-    busy_wait_ms(dot_length_ms);  // wait for one dot period (space)
     // if(cw_ch_counter % SERIAL_LINE_WIDTH == 0) V1_println();
     cw_key_state(E_KEY_DOWN);
     busy_wait_ms(dot_length_ms);  // key down for one dot period
     cw_key_state(E_KEY_UP);
+    busy_wait_ms(dot_length_ms);  // wait for one dot period (space)
     // how much delay does this cause?
     V1_print(".");
     cw_ch_counter++;
@@ -232,11 +239,11 @@ void cw_send_dot() {
 
 //**************************************
 void cw_send_dash() {
-    busy_wait_ms(dot_length_ms);  // wait for one dot period (space)
     cw_key_state(E_KEY_DOWN);
     // if(cw_ch_counter % SERIAL_LINE_WIDTH == 0) V1_println();
     busy_wait_ms(dot_length_ms * CW_DASH_LEN);  // key down for CW_DASH_LEN dot periods
     cw_key_state(E_KEY_UP);
+    busy_wait_ms(dot_length_ms);  // wait for one dot period (space)
     // how much delay does this cause?
     V1_print("-");
     cw_ch_counter++;
@@ -323,14 +330,14 @@ void cw_init() {
 }
 //**************************************
 void cw_high_drive_strength() {
-    V1_print("cw_high_drive_strength START");
+    V1_print("cw_high_drive_strength START" EOL);
     // change the si5351a drive strength back to 8ma
     // it modifies s_vfo_drive_strength (in si5351a_functions.cpp)
     // which isn't used until a frequency is set. the s*ms_div_prev are cleared
     // so it will trigger a pll reset when you set a frequency
     // void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength);
     vfo_set_drive_strength(CW_CLK_NUM, SI5351A_CLK01_IDRV_8MA);
-    V1_print("cw_high_drive_strength END");
+    V1_print("cw_high_drive_strength END" EOL);
 }
 
 void cw_restore_drive_strength() {
@@ -342,18 +349,45 @@ void cw_restore_drive_strength() {
 void cw_send_message() {
     V1_print(F("cw_send_message START" EOL));
     Watchdog.reset();
-    uint8_t wpm = 12;
+    // uint8_t wpm = 12;
+    uint8_t wpm = 5;
     dot_length_ms = cw_keyer_speed(wpm);
     // up to 80 chars
     // has to be uppercase letters
-    snprintf(morse_msg, sizeof(morse_msg), "CQ CQ DE %s %s BALLOON %s %s %s %s K",
-        t_callsign, t_callsign, t_grid6, t_grid6, t_altitude, t_altitude);
+
+    bool MEASURE_WPM = true;
+    if (MEASURE_WPM) {
+        snprintf(morse_msg, sizeof(morse_msg), "PARIS PARIS PARIS ");
+    } else {
+        snprintf(morse_msg, sizeof(morse_msg), "CQ CQ DE %s %s BALLOON %s %s %s %s K",
+            t_callsign, t_callsign, t_grid6, t_grid6, t_altitude, t_altitude);
+    }
 
     // More power scotty! best chance of someone spotting!
     cw_high_drive_strength();
     cw_tx_state(E_STATE_TX);
-    cw_send(morse_msg);
+    // The neat thing about "PARIS " is that it's a nice even 50 units long. (with word space
+    // It translates to ".--. .- .-. .. .../" so there are:
+    // 10 dits: 10 units;
+    // 4 dahs: 12 units;
+    // 9 intra-character spaces: 9 units;
+    // 4 inter-character spaces: 12 units;
+    // 1 word space: 7 units.
+    // A grand total of 50 units.
 
+    if (MEASURE_WPM) {
+        uint64_t start_millis = millis();
+        // we send 'PARIS ' 3x above
+        cw_send(morse_msg);
+        uint64_t actual = millis() - start_millis;
+        uint64_t expected = 3 * 50 * dot_length_ms;
+        V1_printf("duration (millis) actual %" PRIu64 " expected %" PRIu64 EOL, 
+            actual, expected);
+    } else {
+        cw_send(morse_msg);
+    }
+
+    // time for PARIS should be 50 * dot_length_ms
     // turns gps back on!
     cw_tx_state(E_STATE_RX);
     cw_restore_drive_strength();

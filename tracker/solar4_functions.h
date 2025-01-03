@@ -13,8 +13,8 @@ void solarZenithAndAzimuthAngle4(double *sza, double *saa, double longitude, dou
 void calcSolarElevation4(double *solarElevation, double *solarAzimuth, double *solarDistance);
 
 // from solarfunctions.cpp originally
-double degToRad(double degrees);
-double radToDeg(double radians);
+// double degToRad(double degrees);
+// double radToDeg(double radians);
 double normalizeDegrees180(double angle);
 double normalizeDegrees360(double angle);
 double normalizeRadiansPi(double angle);

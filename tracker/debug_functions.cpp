@@ -230,14 +230,17 @@ void measureMyFreqs(void) {
 void realPrintFlush(char *debugMsg, bool print) {
     if (!VERBY[1]) return;
     uint32_t avail = Serial.availableForWrite();
+    uint32_t avail_last = 0;
     if (print) {
         Serial.printf("%s" EOL, debugMsg);
         Serial.printf("realPrintFlush avail %lu" EOL, avail);
     }
     uint32_t iter = 0;
     // FIX! does it ever get bigger than 256?
-    while (avail < 256) {
+    // get two consective samples of avail that are the same
+    while (avail < 256 || (avail != avail_last)) {
         sleep_ms(100);
+        avail_last = avail;
         avail = Serial.availableForWrite();
         // once a sec
         if (print && ((iter % 10) == 0))

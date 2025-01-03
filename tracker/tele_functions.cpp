@@ -125,15 +125,15 @@ void snapForTelemetry(void) {
 
     // suncalc.js translation to cpp
     calcSolarElevation5(&solarElevation, &solarAzimuth, &solarDistance);
-    V1_printf("snapForTelemetry() calcSolarElevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+    V1_printf("calcSolarElevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
         solarElevation, solarAzimuth, solarDistance);
     // fast algo
     calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
-    V1_printf("snapForTelemetry() calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+    V1_printf("calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
         solarElevation, solarAzimuth, solarDistance);
     // accurate algo
     calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
-    V1_printf("snapForTelemetry() calcSolarElevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+    V1_printf("calcSolarElevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
         solarElevation, solarAzimuth, solarDistance);
 
     // 
