@@ -49,9 +49,53 @@ extern TinyGPSPlus gps;
 // Return zenith and azimuth per standard api. Can change to be elevation.
 // Elevation is corrected for refraction here, before being returned as zenith (sza)
 
+
+#include <ctime>
+#include <chrono>
+
+SunCalc suncalc;
+
+template<class Clock = std::chrono::system_clock>
+class Clock::time_point foo(int year, int month, int day, int hour, int minute, int second) {
+    std::tm t{};
+    t.tm_year = year - 1900;
+    t.tm_mon = month - 1;
+    t.tm_mday = day;
+    t.tm_hour = hour;
+    t.tm_min = minute;
+    t.tm_sec = second;
+    return Clock::from_time_t(std::mktime(&t));
+}
+
+
 void solarZenithAndAzimuthAngle5(double *sza, double *saa, double longitude, double latitude, time_t timestamp) {
     double elevation = 0;
     double azimuth = 0;
+    // static Position getPosition(const std::chrono::system_clock::time_point& date, double lat, double lng) {
+    
+    // now() will be wrong if we didn't set time correctly from gps
+    int rtc_year = year();
+    int rtc_month = month();
+    int rtc_day = day();
+    int rtc_hour = hour();
+    int rtc_minute = minute();
+    int rtc_second = second();
+    
+    // this is a unsigned long? 
+    // Not used for the suncalc input
+    time_t epoch_now = now();
+    
+    V1_print("rtc time (utc)"); 
+    V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
+        rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);
+
+    auto tp = foo(rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second);
+
+    // returns {azimuth(H, phi, c.dec), altitude(H, phi, c.dec)};
+    // both are double
+    // std::tie(azimuth, elevation) = suncalc.getPosition(tp, latitude, longitude);
+    suncalc.getPosition(&elevation, &azimuth, tp, latitude, longitude);
+
     *sza = 90 - elevation;
     *saa = azimuth;
 }

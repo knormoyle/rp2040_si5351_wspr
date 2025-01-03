@@ -102,14 +102,20 @@ public:
         double altitude;
     };
 
-    static Position getPosition(const std::chrono::system_clock::time_point& date, 
-                              double lat, double lng) {
+    static Position getPosition(double *elev, double *azim, const std::chrono::system_clock::time_point& date, 
+        double lat, double lng) {
+
         double lw = rad * -lng;
         double phi = rad * lat;
         double d = toDays(date);
 
         auto c = sunCoords(d);
         double H = siderealTime(d, lw) - c.ra;
+
+        double azimuth_here = azimuth(H, phi, c.dec);
+        double altitude_here = altitude(H, phi, c.dec);
+        *azim = azimuth_here;
+        *elev = altitude_here;
 
         return {azimuth(H, phi, c.dec), altitude(H, phi, c.dec)};
     }
