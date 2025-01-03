@@ -2269,7 +2269,7 @@ void gpsDebug() {
     if (!VERBY[1]) return;
     // am I getting problems with constant strings in ram??
     char debugMsg0[] = "Before any gpsDebug prints";
-    realPrintFlush(debugMsg0);
+    realPrintFlush(debugMsg0, true);  // print
 
     V1_println(F("GpsDebug START"));
 
@@ -2280,7 +2280,7 @@ void gpsDebug() {
     bool validE = gps.course.isValid() && !GpsInvalidAll;
     bool validF = gps.speed.isValid() && !GpsInvalidAll;
     V1_printf("gps valids: %u %u %u %u %u %u %u" EOL,
-        GpsInvalidAll, validA, validB, validC, validD, validE, validF);
+        !GpsInvalidAll, validA, validB, validC, validD, validE, validF);
 
     V1_print(F(EOL));
     V1_print(F(EOL));
@@ -2290,7 +2290,7 @@ void gpsDebug() {
 
     // am I getting problems with constant strings in ram??
     char debugMsg1[] = "Before printInt/Float/String gpsDebug prints";
-    realPrintFlush(debugMsg1);
+    realPrintFlush(debugMsg1, false);  // no print
 
     // https://github.com/StuartsProjects/GPSTutorial
     if (VERBY[1]) {
@@ -2317,7 +2317,7 @@ void gpsDebug() {
     V1_print(F(EOL));
     // am I getting problems with constant strings in ram??
     char debugMsg2[] = "After all gpsDebug prints";
-    realPrintFlush(debugMsg2);
+    realPrintFlush(debugMsg2, true);  // print
 
     V1_println(F("GpsDebug END"));
 }

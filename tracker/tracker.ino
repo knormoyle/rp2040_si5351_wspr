@@ -233,6 +233,13 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // earlephilhower says the hw serial units use the hardware rx fifo
 // so only 32?
 
+// default? (for usb serial)
+// separate for rx. we don't want to be blocked 
+// also don't want large delay on flush!
+// leave it as default
+#define SERIAL_TX_BUFFER_SIZE 256
+
+
 //*********************************************
 // extern const int SIM65M_BAUD_RATE = 4800;
 // what we want to change it too

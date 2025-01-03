@@ -14,6 +14,6 @@ void StampPrintf(const char* pformat, ...);
 void DoLogPrint();
 // report all interesting clock freqs
 void measureMyFreqs(void);
-void realPrintFlush(char *debugMsg);
+void realPrintFlush(char *debugMsg, bool print);
 
 #endif
