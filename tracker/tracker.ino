@@ -1778,11 +1778,15 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         }
     }
 
-    if (_morse_also[0] == '1')
+    if (_morse_also[0] == '1') {
         // picks a good HF freq for the config'ed _Band. uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
         cw_send_message();
-    ;
+        // restore the wspr XMIT_FREQUENCY since cw changed it
+        // sets minute/lane/id from chan number.
+        // FIX! is it redundant at this point?..remove?
+        XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+    }
 
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     // Now: don't turn GPS back on until beginning of loop

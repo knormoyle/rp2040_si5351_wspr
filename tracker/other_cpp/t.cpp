@@ -14,7 +14,6 @@
 // convert to javascript with:
 // https://app.codeconvert.ai/code-converter?inputLang=C%2B%2B&outputLang=JavaScript
 
-
 //****************************************
 inline double deg2rad(double valInDegrees) {
     return M_PI * valInDegrees / 180.0;
@@ -72,6 +71,8 @@ void solarZenithAndAzimuthAngle2(double *sza, double *saa, double longitude, dou
         (3.3366e-2 * sin(wte - 0.06172)) + 
         (3.53e-4 * sin((2.0 * wte) - 0.1163));
 
+    // V1_print("*Angle2: timevec %.7f lambdaDecl %.7f" EOL, timeVec, lambdaDecl);
+    
     double epsilon = 4.089567e-1 - (6.19e-9 * te);
 
     double sl = sin(lambdaDecl);
