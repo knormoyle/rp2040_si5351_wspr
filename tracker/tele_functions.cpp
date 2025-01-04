@@ -14,7 +14,8 @@
 #include "tele_functions.h"
 
 // to calc solar elevations
-// #include "solar_functions.h"
+// first one I did
+#include "solar_functions.h"
 // fast algo
 #include "solar2_functions.h"
 // most accurate algo
@@ -118,11 +119,10 @@ void snapForTelemetry(void) {
     // always call, so we get prints we can use for debug, even if not used.
 
     // first one I did 
-    // calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
-    // will be all 0's if not valid
-    // V1_printf("snapForTelemetry() calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-    //     solarElevation, solarAzimuth, solarDistance);
-
+    // https://github.com/KenWillmott/SolarPosition/blob/master/SolarPosition.cpp
+    calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
+    V1_printf("calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+        solarElevation, solarAzimuth, solarDistance);
     // suncalc.js translation to cpp
     calcSolarElevation5(&solarElevation, &solarAzimuth, &solarDistance);
     V1_printf("calcSolarElevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,

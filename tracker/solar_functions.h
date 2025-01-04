@@ -32,7 +32,7 @@ struct SolarPosition_t {
 };
 
 // utility functions
-uint64_t JulianDate(uint32_t year, uint32_t month, uint32_t day);
+int64_t JulianDate(int32_t year, int32_t month, int32_t day);
 SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Longitude);
 
 // class interface

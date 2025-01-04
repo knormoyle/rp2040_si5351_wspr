@@ -2320,7 +2320,7 @@ void gpsDebug() {
         printStr("Date", 11);
         printStr("Time", 9);
         printStr("DTAge", 6);
-        printStr("Alt", 7);
+        printStr("Alt", 8);
         printStr("Course", 7);
         printStr("Degs.", 6);
         printStr("Speed", 6);
@@ -2342,7 +2342,7 @@ void gpsDebug() {
         printFloat(gps.location.lng(), validC, 12, 6);
         printInt(gps.location.age(), validC, 7);
         printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
-        printFloat(gps.altitude.meters(), validD, 7, 2);
+        printFloat(gps.altitude.meters(), validD, 8, 2);
         printFloat(gps.course.deg(), validE, 7, 2);
         printFloat(gps.speed.kmph(), validF, 6, 2);
         printStr(validE ? TinyGPSPlus::cardinal(gps.course.value()) : "*****", 6);

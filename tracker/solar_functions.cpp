@@ -8,6 +8,7 @@
 #include "led_functions.h"
 #include "print_functions.h"
 #include "solar_functions.h"
+#include "time_functions.h"
 // for time_t things..used to get epoch time from rtc
 
 // will this give me epoch time from rtc?
@@ -143,9 +144,9 @@ double SolarPosition::getSolarDistance(time_t t) {
 
 // beginning of utility functions
 //***********************************************************************
-uint64_t JulianDate(uint32_t year, uint32_t month, uint32_t day) {
-    uint64_t JD_whole;
-    uint32_t A, B;
+int64_t JulianDate(int32_t year, int32_t month, int32_t day) {
+    int64_t JD_whole;
+    int32_t A, B;
     if (month <= 2) {
         year--;
         month += 12;
@@ -153,8 +154,8 @@ uint64_t JulianDate(uint32_t year, uint32_t month, uint32_t day) {
     A = year / 100;
     B = 2 - A + (A / 4);
     JD_whole =
-        (uint64_t)( 365.25  * (year + 4716) ) +
-        (uint32_t)( 30.6001 * (month + 1) ) +
+        (int64_t)( 365.25  * (year + 4716) ) +
+        (int32_t)( 30.6001 * (month + 1) ) +
         (day + B - 1524);
 
     return JD_whole;
@@ -163,7 +164,7 @@ uint64_t JulianDate(uint32_t year, uint32_t month, uint32_t day) {
 //***********************************************************************
 SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Longitude) {
     const double DAYS_PER_JULIAN_CENTURY = 36525.0;
-    const uint64_t Y2K_JULIAN_DAY = 2451545;
+    const int64_t Y2K_JULIAN_DAY = 2451545;
 
     tmElements_t timeCandidate;
     static time_t timePrevious = 0;
@@ -171,8 +172,8 @@ SolarPosition_t calculateSolarPosition(time_t tParam, double Latitude, double Lo
     static double lonPrevious;
     static SolarPosition_t result;
 
-    uint64_t JD_whole;
-    uint64_t JDx;
+    int64_t JD_whole;
+    int64_t JDx;
 
     double JD_frac;
     double rightAscension;
@@ -385,28 +386,3 @@ void calcSolarElevation(double *solarElevation, double *solarAzimuth, double *so
 }
 
 //***********************************************************************
-// Function that gets current epoch time
-time_t getEpochTime() {
-    // from PaulStoffregen Timelib.h
-    // https://github.com/PaulStoffregen/Time
-    // now()  returns the current time as seconds since Jan 1 1970
-
-    // now() will be wrong if we didn't set time correctly from gps
-    int rtc_year = year();
-    int rtc_month = month();
-    int rtc_day = day();
-    int rtc_hour = hour();
-    int rtc_minute = minute();
-    int rtc_second = second();
-
-    // this is a unsigned long?
-    time_t epoch_now = now();
-    V1_print("getEpochTime (utc)"); 
-    V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
-        rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);
-
-    return epoch_now;
-}
-//***********************************************************************
-
-
