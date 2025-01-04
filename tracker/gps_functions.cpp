@@ -1780,18 +1780,16 @@ void invalidateTinyGpsState(void) {
     // are these declared private?
     // FIX! how can we clear these? Do we change the library to make them public?
 
-    /* from TinyGPS++.h in libraries..modify it and move to public?
-    (in struct TinyGPSDate what about location etc? they have valid and updated
+    // from TinyGPS++.h in libraries..modify it and move to public?
+    // (in struct TinyGPSDate what about location etc? they have valid and updated
 
-    private:
-       bool valid, updated;
-       uint32_t date, newDate;
-       uint32_t lastCommitTime;
-       void commit();
-       void setDate(const char *term);
-
-    TinyGPS++.h:   bool valid, updated;
-    */
+    // private:
+    // bool valid, updated;
+    // uint32_t date, newDate;
+    // uint32_t lastCommitTime;
+    // void commit();
+    // void setDate(const char *term);
+    // TinyGPS++.h:   bool valid, updated;
 
     // TinyGPS also has lastCommitTime = millis()
     // we don't change that?
@@ -2258,6 +2256,28 @@ void updateGpsDataAndTime(int ms) {
         }
     }
 
+    //******************************
+    // checksum errors at TinyGPS?
+    static uint32_t last_gcp;
+    static uint32_t last_gswf;
+    static uint32_t last_gfc;
+    
+    uint32_t gcp = gps.charsProcessed();
+    uint32_t gswf = gps.sentencesWithFix();
+    uint32_t gfc = gps.failedChecksum();
+
+    V1_printf("TinyGPS       charsProcessed %10lu sentencesWithFix %5lu failedChecksum %5lu" EOL,
+        gcp, gswf, gfc);
+    // can visually compare to prior sentences received and printed and see if tinygps
+    // is reporting check sum errors that shouldn't exist?
+    V1_printf("TinyGPS delta charsProcessed %10lu sentencesWithFix %5lu failedChecksum %5lu" EOL,
+        gcp - last_gcp, gswf - last_gswf, gfc - last_gfc);
+    last_gcp = gcp;
+    last_gswf = gswf;
+    last_gfc = gfc;
+    //******************************
+
+
     updateStatusLED();
     uint64_t total_millis = millis() - entry_millis;
     // will be interesting to compare total_millis to duration_millis
@@ -2284,9 +2304,31 @@ void gpsDebug() {
 
     V1_print(F(EOL));
     V1_print(F(EOL));
-    V1_println(F("Sats HDOP Latitude      Longitude   Fix    Date       Time     Date Alt     Course Speed Card    Chars FixSents  Checksum"));
-    V1_println(F("          (deg)         (deg)       Age                        Age  (m)     --- from GPS ----    RX    RX        Fail"));
-    V1_println(F("------------------------------------------------------------------------------------------------------------------------"));
+    if (false) {
+        // old way
+        V1_println(F("Sats HDOP Latitude      Longitude   Fix    Date       Time     Date Alt     Course Speed Card    Chars FixSents  Checksum"));
+        V1_println(F("          (deg)         (deg)       Age                        Age  (m)     --- from GPS ----    RX    RX        Fail"));
+        V1_println(F("------------------------------------------------------------------------------------------------------------------------"));
+    } else {
+        // new way
+        printStr("Sats", 5);
+        printStr("HDOP", 5);
+        printStr("Latitude", 12);
+        printStr("Longitude", 12);
+        printStr("FixAge", 7);
+        // 2025-01-04 21:46:31
+        printStr("Date", 11);
+        printStr("Time", 9);
+        printStr("DTAge", 6);
+        printStr("Alt", 7);
+        printStr("Course", 7);
+        printStr("Degs.", 6);
+        printStr("Speed", 6);
+        printStr("ChrsRx", 10);
+        printStr("SentsWfix", 10);
+        printStr("failCksum", 10);
+        V1_print(F(EOL));
+    }
 
     // am I getting problems with constant strings in ram??
     char debugMsg1[] = "Before printInt/Float/String gpsDebug prints";
@@ -2296,22 +2338,19 @@ void gpsDebug() {
     if (VERBY[1]) {
         printInt(gps.satellites.value(), validA, 5);
         printInt(gps.hdop.value(), validB, 5);
-        // was 12, 6 01/01/25
-        if (true) {
-            printFloat(gps.location.lat(), validC, 12, 6);
-            printFloat(gps.location.lng(), validC, 12, 6);
-            printInt(gps.location.age(), validC, 7);
-            printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
-            printFloat(gps.altitude.meters(), validD, 7, 2);
-            printFloat(gps.course.deg(), validE, 7, 2);
-            printFloat(gps.speed.kmph(), validF, 6, 2);
-            printStr(validE ? TinyGPSPlus::cardinal(gps.course.value()) : "*** ", 6);
-            // FIX! does this just wrap wround if it's more than 6 digits?
-            printInt(gps.charsProcessed(), true, 6);
-            // FIX! does this just wrap wround if it's more than 10 digits?
-            printInt(gps.sentencesWithFix(), true, 10);
-            printInt(gps.failedChecksum(), true, 9);
-        }
+        printFloat(gps.location.lat(), validC, 12, 6);
+        printFloat(gps.location.lng(), validC, 12, 6);
+        printInt(gps.location.age(), validC, 7);
+        printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
+        printFloat(gps.altitude.meters(), validD, 7, 2);
+        printFloat(gps.course.deg(), validE, 7, 2);
+        printFloat(gps.speed.kmph(), validF, 6, 2);
+        printStr(validE ? TinyGPSPlus::cardinal(gps.course.value()) : "*****", 6);
+        // FIX! does this just wrap wround if it's more than 6 digits?
+        printInt(gps.charsProcessed(), true, 10);
+        // FIX! does this just wrap wround if it's more than 10 digits?
+        printInt(gps.sentencesWithFix(), true, 10);
+        printInt(gps.failedChecksum(), true, 10);
     }
     V1_print(F(EOL));
     V1_print(F(EOL));
@@ -2555,75 +2594,3 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
 //                             |
 //                             \-- RTC 1:46875 @ 1Hz
 
-//***********************************
-// is this used for signed or unsigned?
-void printInt(uint64_t val, bool valid, int len) {
-    if (!VERBY[1]) return;
-    // FIX! should this really be %ld? why not %d
-    // int64_t should use
-    // printf("%" PRId64 "\n", t);
-    // uint64_t should use
-    // printf("%" PRIu64 "\n", t);
-    // to print in hexadecimal
-    // printf("%" PRIx64 "\n", t);
-
-    // https://stackoverflow.com/questions/9225567/how-to-portably-print-a-int64-t-type-in-c
-    // complete list of types and formats
-    // https://en.cppreference.com/w/cpp/types/integer
-    char sz[32] = "*****************";
-
-    if (valid) sprintf(sz, "%" PRIu64, val);
-    sz[len] = 0;
-
-    for (int i = strlen(sz); i < len; ++i)
-        sz[i] = ' ';
-
-    if (len > 0)
-        sz[len - 1] = ' ';
-
-    Serial.print(sz);
-
-    // whenever something might have taken a long time like printing
-    updateStatusLED();
-}
-
-// why was this static
-// with arduino, can't we just use printf to stdout rather than V1_print() ?
-void printStr(const char *str, int len) {
-    if (!VERBY[1]) return;
-    int slen = strlen(str);
-    for (int i = 0; i < len; ++i) {
-        Serial.print(i < slen ? str[i] : ' ');
-    }
-    // whenever something might have taken a long time like printing
-    Serial.flush();
-    updateStatusLED();
-}
-
-void printFloat(double val, bool valid, int len, int prec) {
-    if (!VERBY[1]) return;
-
-    if (!valid) {
-        while (len-- > 1) {
-            Serial.print(F("*"));
-        }
-        Serial.print(F(" "));
-        // add 1 more space? (to cover too many digits?)
-        Serial.print(F(" "));
-    } else {
-        Serial.print(val, prec);
-        int vi = abs((int)val);
-        int flen = prec + (val < 0.0 ? 2 : 1);  // . and -
-        flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
-
-        // FIX! should this be <= ? (kevin)
-        for (int i = flen; i < len; ++i) {
-            Serial.print(F(" "));
-        }
-    }
-    // kevin add 1 more space? we somehow did too many digits above?
-    Serial.print(F(" "));
-    // whenever something might have taken a long time like printing
-    Serial.flush();
-    updateStatusLED();
-}

@@ -69,7 +69,7 @@ bool TinyGPSPlus::encode(char c)
   ++encodedCharCount;
   switch(c)
   {
-  case ',': 
+  case ',':  // kbn doesn't work if we just return false here, after parity
   case '\r':
   case '\n':
   case '*':

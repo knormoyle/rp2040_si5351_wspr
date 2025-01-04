@@ -34,7 +34,8 @@ const bool DO_WPM_CORRECTION = false;
 const float DIT_MS_MULTIPLIER = 1.0;
 
 enum test_msg  {
-    SEND_DIT = 0,
+    SEND_PARIS3X = 0,
+    SEND_DIT,
     SEND_DIT5,
     SEND_DASH,
     SEND_DASH5,
@@ -42,7 +43,6 @@ enum test_msg  {
     SEND_DASHDIT,
     SEND_DASHDIT4,
     SEND_LONGCHAR,
-    SEND_PARIS3X,
     SEND_BALLOON,
     // SEND_TEST_CYCLE must be last enum
     SEND_TEST_CYCLE
@@ -197,10 +197,14 @@ morse_char_t MorseCode[] = {
     {'/', '-', '.', '.', '-', '.',  0},
     {'?', '.', '.', '-', '-', '.', '.'},
     {'.', '.', '-', '.', '-', '.', '-'},
-    {',', '-', '-', '.', '.', '-', '-'},
-    {'(', '-', '.', '-', '.', '-', 0},
-    {')', '.', '-', '.', '-', '.', 0}
+    {',', '-', '-', '.', '.', '-', '-'}
 };
+// orig
+// {'(', '-', '.', '-', '.', '-', 0}, // unclear if correct
+// {')', '.', '-', '.', '-', '.', 0} // unclear if correct
+// disagrees
+// https://blendertimer.com/web-tools/morse-code-translator
+
 
 
 #define MORSE_CHARS_MAX 80
@@ -514,40 +518,40 @@ void cw_send_message() {
     // cw_msg can be up to MORSE_CHARS_MAX  (80)
     // has to be uppercase letters
     switch (test_done) {
+        case SEND_PARIS3X:
+            snprintf(cw_msg, sizeof(cw_msg), "PARIS PARIS PARIS ");
+            break;
         case SEND_DIT:
             snprintf(cw_msg, sizeof(cw_msg),
-                "E EE EEE EEEE EEEEE  EEEEEE   /E / EEEEEEEEEEEEEEEEEE /?.,()");
+                "E EE EEE EEEE EEEEE  EEEEEE   /E / EEEEEEEEEEEEEEEEEE /?.,");
             break;
         case SEND_DIT5:
             snprintf(cw_msg, sizeof(cw_msg),
-                "5 55 555 5555 55555  555555   /5 / 555555555555555555 /?.,()");
+                "5 55 555 5555 55555  555555   /5 / 555555555555555555 /?.,");
             break;
         case SEND_DASH:
             snprintf(cw_msg, sizeof(cw_msg),
-                "T TT TTT TTTT TTTTT  TTTTTT   /T / TTTTTTTTTTTTTTTTTT /?.,()");
+                "T TT TTT TTTT TTTTT  TTTTTT   /T / TTTTTTTTTTTTTTTTTT /?.,");
             break;
         case SEND_DASH5:
             snprintf(cw_msg, sizeof(cw_msg),
-                "0 00 000 0000 00000  000000   /0 / 000000000000000000 /?.,()");
+                "0 00 000 0000 00000  000000   /0 / 000000000000000000 /?.,");
             break;
         case SEND_DITDASH:
             snprintf(cw_msg, sizeof(cw_msg),
-                "A AA AAA AAAA AAAAA  AAAAAA   /A / AAAAAAAAAAAAAAAAAA /?.,()");
+                "A AA AAA AAAA AAAAA  AAAAAA   /A / AAAAAAAAAAAAAAAAAA /?.,");
             break;
         case SEND_DASHDIT:
             snprintf(cw_msg, sizeof(cw_msg),
-                "N NN NNN NNNN NNNNN  NNNNNN   /N / NNNNNNNNNNNNNNNNNN /?.,()");
+                "N NN NNN NNNN NNNNN  NNNNNN   /N / NNNNNNNNNNNNNNNNNN /?.,");
             break;
         case SEND_DASHDIT4:
             snprintf(cw_msg, sizeof(cw_msg),
-                "C CC CCC CCCC CCCCC  CCCCCC   /C / CCCCCCCCCCCCCCCCCC /?.,()");
+                "C CC CCC CCCC CCCCC  CCCCCC   /C / CCCCCCCCCCCCCCCCCC /?.,");
             break;
         case SEND_LONGCHAR:
             snprintf(cw_msg, sizeof(cw_msg),
-                "? ?? ??? ???? ?????  ??????   /? / ?????????????????? /?.,()");
-            break;
-        case SEND_PARIS3X:
-            snprintf(cw_msg, sizeof(cw_msg), "PARIS PARIS PARIS ");
+                "? ?? ??? ???? ?????  ??????   /? / ?????????????????? /?.,");
             break;
         default:  // SEND_BALLOON
             // if we didn't get a gps snapForTelemetry() the t_* will be blank
@@ -582,6 +586,7 @@ void cw_send_message() {
     cw_send(cw_msg);
     uint32_t actual_duration = millis() - start_millis;
 
+    //******************************************
     uint32_t expected_duration;
     uint32_t actual_dit_ms;
     // actually counted the dits in the message sent: dit_cnt
@@ -596,22 +601,28 @@ void cw_send_message() {
         // dit_cnt can't ever be zero? (check for empty send message before)
         actual_dit_ms = actual_duration / dit_cnt;
     }
-
-    V1_printf("actual_duration %lu expected_duration %lu millis" EOL,
-        actual_duration, expected_duration);
-    // actual_dit_ms can't ever be zero
-    float actual_wpm = 1000.0 * 60.0/(50.0 * (float)actual_dit_ms);
-    V1_printf("wpm actual %.3f expected %u" EOL, actual_wpm, target_wpm);
-
     float new_dit_ms_multiplier = (float) dit_ms / (float) actual_dit_ms;
+    float actual_wpm = 1000.0 * 60.0/(50.0 * (float)actual_dit_ms);
+
+    //******************************************
+    V1_printf("test %d dit_cnt %lu actual_duration %lu expected_duration %lu millis" EOL,
+        test_done, dit_cnt, actual_duration, expected_duration);
+    V1_printf("test %d dit_cnt %lu dit_ms %lu actual_dit_ms %lu millis" EOL,
+        test_done, dit_cnt, dit_ms, actual_dit_ms);
+
+    // actual_dit_ms can't ever be zero
+    V1_printf("test %d wpm actual %.3f expected %u" EOL, 
+        test_done, actual_wpm, target_wpm);
+
     // shouldn't need correction!
     if (DO_WPM_CORRECTION) {
-        V1_printf("DIT_MS_MULTIPLIER should be: %.4f" EOL,
-            new_dit_ms_multiplier * DIT_MS_MULTIPLIER);
+        V1_printf("test %d DIT_MS_MULTIPLIER should be: %.4f" EOL,
+            test_done, new_dit_ms_multiplier * DIT_MS_MULTIPLIER);
     } else {
         // best calculate value is when we didn't do correction on this run
         // (and USE_PARIS3X?)
-        V1_printf("DIT_MS_MULTIPLIER should be: %.4f" EOL , new_dit_ms_multiplier);
+        V1_printf("test %d DIT_MS_MULTIPLIER should be: %.4f" EOL , 
+            test_done, new_dit_ms_multiplier);
     }
     //******************************************
 

@@ -16,4 +16,8 @@ void DoLogPrint();
 void measureMyFreqs(void);
 void realPrintFlush(char *debugMsg, bool print);
 
+void printStr(const char *str, int len);
+void printFloat(double val, bool valid, int len, int prec);
+void printInt(uint64_t val, bool valid, int len);
+
 #endif

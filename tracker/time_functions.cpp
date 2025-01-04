@@ -31,7 +31,7 @@ void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t) {
         V1_print(F("******** "));
     }
 
-    printInt(d.age(), d.isValid(), 5);
+    printInt(d.age(), d.isValid(), 6);
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }

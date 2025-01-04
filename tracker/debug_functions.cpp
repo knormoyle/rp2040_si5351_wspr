@@ -258,5 +258,121 @@ void realPrintFlush(char *debugMsg, bool print) {
     }
 }
 
+//***********************************
+// is this used for signed or unsigned?
+// len should be < 32
+void printInt(uint64_t val, bool valid, int len) {
+    if (!VERBY[1]) return;
+    // FIX! should this really be %ld? why not %d
+    // int64_t should use
+    // printf("%" PRId64 "\n", t);
+    // uint64_t should use
+    // printf("%" PRIu64 "\n", t);
+    // to print in hexadecimal
+    // printf("%" PRIx64 "\n", t);
 
+    // https://stackoverflow.com/questions/9225567/how-to-portably-print-a-int64-t-type-in-c
+    // complete list of types and formats
+    // https://en.cppreference.com/w/cpp/types/integer
+    char sz[32] = "*****************";
+    if (false) {
+        // old way. This is left justified (spaces on right)
+        if (valid) sprintf(sz, "%" PRIu64, val);
+        sz[len] = 0;
+        for (int i = strlen(sz); i < len; ++i)
+            sz[i] = ' ';
+        if (len > 0)
+            sz[len - 1] = ' ';
+        Serial.print(sz);
+    } else {
+        // new way. 
+        int lenm1 = len - 1;
+        // https://cplusplus.com/reference/cstdio/printf/
+        if (!valid) {
+            sz[lenm1] = 0; // terminator placed for len
+            Serial.print(sz);
+            // add a space on the right
+            Serial.print(F(" "));
+        }
+        else {
+            // variable in format. right justified is the default
+            // https://www.geeksforgeeks.org/using-variable-format-specifier-c/
+            // add a space on the right
+            Serial.printf("%*" PRIu64 " ", lenm1, val);
+        }
+    }
 
+    // whenever something might have taken a long time like printing
+    updateStatusLED();
+}
+
+// no valid on printStr?
+void printStr(const char *str, int len) {
+    if (!VERBY[1]) return;
+    if (false) {
+        // old way. This is left justified (spaces on right)
+        int slen = strlen(str);
+        for (int i = 0; i < len; ++i) {
+            Serial.print(i < slen ? str[i] : ' ');
+        }
+    } else {
+        int lenm1 = len - 1;
+        // new way. 
+        // variable in format. right justified is the default
+        // https://www.geeksforgeeks.org/using-variable-format-specifier-c/
+        // add a space on the right
+        Serial.printf("%*s ", lenm1, str);
+    }
+
+    // whenever something might have taken a long time like printing
+    updateStatusLED();
+}
+
+void printFloat(double val, bool valid, int len, int prec) {
+    if (!VERBY[1]) return;
+
+    if (false) {
+        // old way. This is left justified (spaces on right)
+        if (!valid) {
+            while (len-- > 1) {
+                Serial.print(F("*"));
+            }
+            Serial.print(F(" "));
+            // add 1 more space? (to cover too many digits?)
+            Serial.print(F(" "));
+        } else {
+            Serial.print(val, prec);
+            int vi = abs((int)val);
+            int flen = prec + (val < 0.0 ? 2 : 1);  // . and -
+            flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
+
+            // FIX! should this be <= ? (kevin)
+            for (int i = flen; i < len; ++i) {
+                Serial.print(F(" "));
+            }
+        }
+        // kevin add 1 more space? we somehow did too many digits above?
+        Serial.print(F(" "));
+    } else {
+        // new way. 
+        // variable in format. right justified is the default
+        // https://cplusplus.com/reference/cstdio/printf/
+        char sz[32] = "*****************";
+        int lenm1 = len - 1;
+        if (!valid) {
+            sz[lenm1] = 0; // terminator placed for len
+            Serial.print(sz);
+            // add a space on the right
+            Serial.print(F(" "));
+        } else {
+            // variable in format. right justified is the default
+            // https://www.geeksforgeeks.org/using-variable-format-specifier-c/
+            // add a space on the right
+            Serial.printf("%*.*f ", lenm1, prec, val);
+        }
+    }
+
+    // whenever something might have taken a long time like printing
+    Serial.flush();
+    updateStatusLED();
+}
