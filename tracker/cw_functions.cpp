@@ -215,11 +215,12 @@ void cw_keyer_speed(uint8_t wpm) {
         // FIX! this adjustment was done at 18Mhz
         // could be different at different PLL_SYS_MHZ
         if (PLL_SYS_MHZ != 18) {
-            V1_printf("ERROR: cw timing adjust from tested PLL_SYS_MHZ 18 Mhz, actual PLL_SYS_MHZ %lu", EOL,
+            V1_printf("ERROR: cw timing adjust from tested PLL_SYS_MHZ 18 Mhz, actual PLL_SYS_MHZ %lu" EOL,
                 PLL_SYS_MHZ);
         }
         // this was tested with default 18Mhz sys clk
-        const float DOT_MS_MULTIPLIER = 9.524 / 12.0; // actual wpm / target wpm for an unadjusted PARIS 3x test
+        // actual/target wpm for an unadjusted PARIS 3x test
+        const float DOT_MS_MULTIPLIER = 9.524 / 12.0; 
         dot_ms = (uint32_t)(DOT_MS_MULTIPLIER * (float) dot_ms);
     }
 
@@ -483,6 +484,9 @@ void cw_send_message() {
         // if we didn't get a gps snapForTelemetry() the t_* will be blank
         if (t_callsign[0] == 0 || t_grid6[0] == 0 || t_altitude[0] == 0) {
             V1_print(F("Didn't get a gps snapForTelemetry() before test? the t_* is blank" EOL));
+            V1_print(F("Wait for a successful wspr tx before switching to 'Z' test" EOL));
+            V1_print(F("snapForTelemetry() will have happened then" EOL));
+        }
         snprintf(morse_msg, sizeof(morse_msg), "CQ CQ DE %s %s BALLOON %s %s %s %s K",
             t_callsign, t_callsign, t_grid6, t_grid6, t_altitude, t_altitude);
     }
