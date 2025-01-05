@@ -2292,7 +2292,8 @@ void gpsDebug() {
     realPrintFlush(debugMsg0, true);  // print
 
     V1_println(F("GpsDebug START"));
-
+    V1_print(F(EOL));
+    V1_print(F(EOL));
     bool validA = gps.satellites.isValid() && !GpsInvalidAll;
     bool validB = gps.hdop.isValid() && !GpsInvalidAll;
     bool validC = gps.location.isValid() && !GpsInvalidAll;
@@ -2302,33 +2303,24 @@ void gpsDebug() {
     V1_printf("gps valids: %u %u %u %u %u %u %u" EOL,
         !GpsInvalidAll, validA, validB, validC, validD, validE, validF);
 
+    // new way
+    printStr("Sats", 5);
+    printStr("HDOP", 5);
+    printStr("Latitude", 12);
+    printStr("Longitude", 12);
+    printStr("FixAge", 7);
+    // 2025-01-04 21:46:31
+    printStr("Date", 11);
+    printStr("Time", 9);
+    printStr("DTAge", 6);
+    printStr("Alt", 8);
+    printStr("Course", 7);
+    printStr("Degs.", 6);
+    printStr("Speed", 6);
+    printStr("ChrsRx", 10);
+    printStr("SentsWfix", 10);
+    printStr("failCksum", 10);
     V1_print(F(EOL));
-    V1_print(F(EOL));
-    if (false) {
-        // old way
-        V1_println(F("Sats HDOP Latitude      Longitude   Fix    Date       Time     Date Alt     Course Speed Card    Chars FixSents  Checksum"));
-        V1_println(F("          (deg)         (deg)       Age                        Age  (m)     --- from GPS ----    RX    RX        Fail"));
-        V1_println(F("------------------------------------------------------------------------------------------------------------------------"));
-    } else {
-        // new way
-        printStr("Sats", 5);
-        printStr("HDOP", 5);
-        printStr("Latitude", 12);
-        printStr("Longitude", 12);
-        printStr("FixAge", 7);
-        // 2025-01-04 21:46:31
-        printStr("Date", 11);
-        printStr("Time", 9);
-        printStr("DTAge", 6);
-        printStr("Alt", 8);
-        printStr("Course", 7);
-        printStr("Degs.", 6);
-        printStr("Speed", 6);
-        printStr("ChrsRx", 10);
-        printStr("SentsWfix", 10);
-        printStr("failCksum", 10);
-        V1_print(F(EOL));
-    }
 
     // am I getting problems with constant strings in ram??
     char debugMsg1[] = "Before printInt/Float/String gpsDebug prints";

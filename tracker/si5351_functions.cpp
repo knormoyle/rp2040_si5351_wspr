@@ -49,7 +49,6 @@
 // interesting thoughts on using gcd to determine things?
 // https://www.reddit.com/r/amateurradio/comments/lpdfpx/tutorial_how_to_find_the_exact_divider_ratios_fo/
 
-
 //****************************************************
 // Si5351A related functions
 // Developed by Kazuhisa "Kazu" Terasaki AG6NS
@@ -73,6 +72,7 @@
 #include "print_functions.h"
 #include "led_functions.h"
 #include "u4b_functions.h"
+#include "farey_functions.h" 
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
@@ -938,7 +938,7 @@ void si5351a_reset_PLLA(bool print) {
 // good for doing calc only, so see what changes with freq changes
 void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
-    uint32_t *r_divisor, uint32_t freq_x128) {
+    uint32_t *r_divisor, uint32_t freq_x128, bool do_farey) {
     Watchdog.reset();
 
     // interesting they had relatively low pll freq (620Mhz) for 15M case
@@ -1123,17 +1123,58 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // C = y1
     // it's interesting these are done in the non-scaled domain (not *128)
     // since pll_freq_here is what we want to get to, shouldn't we be scaled here?
-
     uint64_t pll_remain_x128 = pll_freq_x128 - (pll_mult_here * tcxo_freq_x128);
-    uint64_t pnh_x128 = (pll_remain_x128 * PLL_DENOM_x128) / tcxo_freq_x128;
 
-    // here's how we add 0.5 (in the scaled domain) to get rounding effect before shift down
-    // the r divisor reduces
-    uint64_t pll_num_x128 = pnh_x128 + (1 << (PLL_CALC_SHIFT - 1));
-    uint64_t pll_num_here = pll_num_x128 >> PLL_CALC_SHIFT;
-    if (pll_num_here > 1048575) {
+    //*******************************************************************
+    bool USE_FAREY_WITH_PLL_REMAINDER = true;
+    bool TEST_FAREY_WITH_PLL_REMAINDER = true;
+    rational_t retval;
+    if (TEST_FAREY_WITH_PLL_REMAINDER | USE_FAREY_WITH_PLL_REMAINDER) {
+        // lets see what farey/magnusson get with the remainder
+        // we can't use this as we need to adjust the remainder to get 
+        // the wspr shifts after the divide by divisor and R shift
+        // I suppose we'd just need to redo this algo and create 4 num/denom pairs
+        // calculate the first pll freq/output freq, then generate 3 freqs from that
+        // and calculate their num/denom pairs. 
+        uint32_t maxdenom = (uint32_t)PLL_DENOM_MAX;
+        double pll_remain = (double)pll_remain_x128 / pow(2, PLL_CALC_SHIFT);
+        // we want a fraction to multiple the txco_freq with
+        double target = (double)pll_remain / (double)tcxo_freq;
+        retval = rational_approximation(target, maxdenom);
+        double actual_real = ((double)retval.numerator) / (double)retval.denominator;
+
+        V1_print(F(EOL));
+        V1_printf("Farey target %.14f" EOL, target);
+        V1_printf("Farey numerator %lu" EOL, retval.numerator); // result
+        V1_printf("Farey denominator %lu" EOL, retval.denominator); // result
+        V1_printf("Farey iterations %lu" EOL, retval.iterations); // result
+        V1_printf("Farey actual real %.14f" EOL, actual_real);
+        V1_printf("Farey actual real error %.14f" EOL, target - actual_real);
+    }
+
+    //*******************************************************************
+    uint64_t pll_num_here;
+    uint64_t pll_denom_here;
+    if (USE_FAREY_WITH_PLL_REMAINDER) {
+        pll_num_here = retval.numerator;
+        pll_denom_here = retval.denominator;
+    } else {
+        uint64_t pnh_x128 = (pll_remain_x128 * PLL_DENOM_x128) / tcxo_freq_x128;
+        // here's how we add 0.5 (in the scaled domain) to get rounding effect before shift down
+        // the r divisor reduces
+        uint64_t pll_num_x128 = pnh_x128 + (1 << (PLL_CALC_SHIFT - 1));
+        pll_num_here = pll_num_x128 >> PLL_CALC_SHIFT;
+        pll_denom_here = PLL_DENOM;
+    }
+
+    //*******************************************************************
+    if (pll_num_here > PLL_DENOM_MAX) { // 1048575
         V1_printf("ERROR: pll_num %" PRIu64 " is out of range 0 to 1048575" EOL,
             pll_num_here);
+    }
+    if (pll_denom_here > PLL_DENOM_MAX) { // 1048575
+        V1_printf("ERROR: pll_denom %" PRIu64 " is out of range 0 to 1048575" EOL,
+            pll_denom_here);
     }
 
     // https://rfzero.net/tutorials/si5351a/
@@ -1143,17 +1184,16 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // hmm. looking at the sweep of "actual" seems like they are 2 hz steps?
     // need to make that a real number
     double actual_pll_freq_here = (double)tcxo_freq *
-        ((double)pll_mult_here + ((double)pll_num_here / (double)PLL_DENOM));
+        ((double)pll_mult_here + ((double)pll_num_here / (double)pll_denom_here));
 
     // note we return a double here...only for printing
-    double actual_here = actual_pll_freq_here / 
-        (double)(ms_div_here << R_DIVISOR_SHIFT);
+    double actual_here = actual_pll_freq_here / (double)(ms_div_here << R_DIVISOR_SHIFT);
 
     // output so we can print or use
     *ms_div    = (uint32_t)ms_div_here;
     *pll_mult  = (uint32_t)pll_mult_here;
     *pll_num   = (uint32_t)pll_num_here;
-    *pll_denom = (uint32_t)PLL_DENOM;
+    *pll_denom = (uint32_t)pll_denom_here;
     *r_divisor = (uint32_t)pow(2, R_DIVISOR_SHIFT);
     *actual = actual_here;
     *actual_pll_freq = actual_pll_freq_here;
@@ -1179,9 +1219,21 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
 
     // we get pll_denom to know what was used in the calc
     // R_DIVISOR_SHIFT is hardwired constant (/4 => shift 2)
+
+    // in here is where we need to cache values for freq_x128
+    // at least 4 (4 last symbols?)
+    // the mode to use Farey is not a config, so that won't change 
+    // relative to the other algo and this cache.
+    // same with r_divisor
+    // I guess same with PLL_TARGET_FREQ..no side configurable state
+    // needs to flush a cache of 4 results? (ASSUMING WE REDID THE 4 SYMBOLS
+    // after the denom search sweep? Should have a ash flush mechanism
+    // (rather than the print, it should be a "use cache" or "flush cache"
+    // let "use cache" miss. basically everything refills
+    // OH: keep 5, one for the cw freq! 
     vfo_calc_div_mult_num(&actual, &actual_pll_freq,
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor,
-        freq_x128);
+        freq_x128, true);
 
     // if (only_pll_num) {
     // calcs were done to show that only pll_num needs to change for symbols 0 to 3
@@ -1729,6 +1781,14 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
         V1_print(F(EOL));
         oneShotDebugPrinted = true;
     }
+
+    // FIX! we should cache the last four symbol results with hf_freq and symbol?
+    // inside freq_x128_with_symbol? so then if you recalc and PLL_TARGET_FREQ
+    // is the same, I shouldn't have to recalculate? use the saved result?
+    // if any of the saved PLL_TARGET_FREQ are not the same as current, ignore them
+    // or if the saved hf_freq is not the same.. Oh save the denom, since PLL_DENOM_OPTIMIZE also
+    // affects the numerator-shift algo
+    
     // not expensive to always recalc the symbol freq
     uint32_t freq_x128_with_symbol = calcSymbolFreq_x128(hf_freq, symbol);
     // FIX! does this change the state of the clock output enable?
@@ -1957,7 +2017,9 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
         freq_x128 = calcSymbolFreq_x128(xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor, freq_x128);
+            &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor, 
+            freq_x128, true);
+
         if (print) {
             V1_printf("channel %s symbol %u pll_num %lu pll_denom %lu actual %.4f" EOL,
                 _U4B_chan, symbol,  pll_num_here, pll_denom, actual);
@@ -2062,7 +2124,7 @@ void si5351a_calc_sweep(void) {
         // everything is 32 bit in and out of this, but 64-bit calcs inside it.
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor,
-            freq_x128);
+            freq_x128, true); // FIX! do_farey for now
 
         // pow() returns double
         // not used (float version of the desired freq which was given in the *128 domain
@@ -2161,7 +2223,8 @@ void si5351a_calc_sweep_band() {
         freq_x128 = calcSymbolFreq_x128(xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor, freq_x128);
+            &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor, 
+            freq_x128, true); // FIX! do_farey for now
 
         V1_print(F(EOL));
         V1_printf("sweep band %s xmit_freq %lu PLL_FREQ_TARGET %lu r_divisor %lu" EOL,
@@ -2245,4 +2308,138 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
             }
     }
     V1_println(F("set_PLL_DENOM_OPTIMIZE END"));
+}
+
+
+//*********************************************************************************
+void si5351a_denom_optimize_search() {
+    // no need to do the calcs if we're not going to print them!
+    // the optimized values should be baked into si5351_functions.cpp()
+    // so we don't have to calc. one magic denom per band?
+    // check the freq bin boundaries. (channel 0 and 599?)
+    if (true && VERBY[1]) {
+        double sumShiftError;
+        double sumAbsoluteError;
+        double last_sumShiftError = 1e6;
+        double last_sumAbsoluteError = 1e6;
+        uint32_t last_PLL_DENOM_OPTIMIZE;
+        uint32_t pll_num;
+        uint32_t STEP;
+        int sse;
+
+        // Instead: use the best initial values per band in this function 
+        // (from spreadsheet or prior runs for a band)
+        set_PLL_DENOM_OPTIMIZE(_Band);
+        // print
+        uint32_t default_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
+        si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  
+        V1_printf("SEED values: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
+        V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
+            sumAbsoluteError, sumShiftError);
+        // check 4 digits of precision
+        sse = (int)10000 * sumShiftError;
+        if (sse != 0) {
+            V1_printf("WARN: SEED sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
+        }
+
+        last_sumShiftError = sumShiftError;
+        last_sumAbsoluteError = sumAbsoluteError;
+        last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
+        STEP = PLL_DENOM_OPTIMIZE >> 1; // divide-by-4
+        V1_print(F(EOL));
+
+        //**********
+        uint8_t iter;
+        int stepDir;
+        // FIX! what's the max # of iterations that the algo could take over the range
+        // have to account for some iters not changing the STEP !!
+        for (iter = 1; iter <= 30; iter++) {
+            if (STEP == 0) break;
+            // iter 1. Assume convex curve on the error function, over the whole range?
+            last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
+            uint32_t PLL_DENOM_OPTIMIZE_pos;
+            uint32_t PLL_DENOM_OPTIMIZE_neg;
+
+            PLL_DENOM_OPTIMIZE_pos = PLL_DENOM_OPTIMIZE + STEP;
+            if (PLL_DENOM_OPTIMIZE_pos > 1048575) PLL_DENOM_OPTIMIZE_pos = 1048575;
+            if (STEP > PLL_DENOM_OPTIMIZE) PLL_DENOM_OPTIMIZE_neg = 0;
+            else PLL_DENOM_OPTIMIZE_neg = PLL_DENOM_OPTIMIZE - STEP;
+                
+            // try positive step. one liner print
+            V1_print(F("***********************"));
+            V1_printf(" try PLL_DENOM_OPTIMIZE_pos %lu with pos STEP %lu", PLL_DENOM_OPTIMIZE_pos, STEP);
+            V1_print(F(" ***********************" EOL));
+            PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
+            si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, false);  // don't print
+            V1_printf("best pll_num %lu for pll_denom %lu -> sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
+                pll_num, PLL_DENOM_OPTIMIZE, sumAbsoluteError, sumShiftError);
+            
+            // both should improve
+            stepDir = 0;
+            // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
+            if (sumShiftError < last_sumShiftError) {
+                stepDir = 1;
+                last_sumShiftError = sumShiftError;
+                last_sumAbsoluteError = sumAbsoluteError;
+            }
+            // try negative step. one liner print
+            V1_print(F("***********************"));
+            V1_printf(" try PLL_DENOM_OPTIMIZE_neg %lu with neg STEP %lu", PLL_DENOM_OPTIMIZE_neg, STEP);
+            V1_print(F(" ***********************" EOL));
+            PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
+            si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, false);  // don't print
+            V1_printf("best pll_num %lu for pll_denom %lu -> sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
+                pll_num, PLL_DENOM_OPTIMIZE, sumAbsoluteError, sumShiftError);
+            // both should improve
+            // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
+            if (sumShiftError < last_sumShiftError) {
+                stepDir = -1;
+                last_sumShiftError = sumShiftError;
+                last_sumAbsoluteError = sumAbsoluteError;
+            }
+            if ((stepDir == 1) || (stepDir == -1)) {
+                if (stepDir == 1) PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
+                else PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
+                V1_print(F(EOL));
+                V1_printf("FOUND BETTER: iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumAbsoluteError %.8f" EOL,
+                    iter, stepDir, PLL_DENOM_OPTIMIZE, last_sumAbsoluteError);
+                V1_printf("FOUND BETTER: iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumShiftError %.8f" EOL,
+                    iter, stepDir, PLL_DENOM_OPTIMIZE, last_sumShiftError);
+                // note how we don't change the step size until we confirm we're stuck at the new place
+            } else {
+                // stepDir 0, stuck at this place, change step size
+                PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
+                V1_printf("iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu" EOL,
+                    iter, stepDir, PLL_DENOM_OPTIMIZE);
+                // reduce the step size (1/2)
+                STEP = STEP >> 1;
+            }
+        }
+
+        //************************
+        // Final report.
+        V1_print(F(EOL "***********************"));
+        PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
+        V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE: %lu", PLL_DENOM_OPTIMIZE);
+        V1_print(F(" ***********************" EOL));
+        si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  // print
+        V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
+        V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
+            sumAbsoluteError, sumShiftError);
+
+        // check 4 digits of precision
+        sse = (int)10000 * sumShiftError;
+        if (sse != 0) {
+            V1_printf("WARN: BEST FOUND sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
+        }
+
+        if (PLL_DENOM_OPTIMIZE == default_PLL_DENOM_OPTIMIZE) {
+            V1_printf("GOOD: couldn't improve on hard-wired PLL_DENOM_OPTIMIZE" EOL);
+        }
+        else {
+            V1_printf("ERROR: shouldn't have improved on hard-wired PLL_DENOM_OPTIMIZE" EOL);
+            V1_printf("ERROR: default_PLL_DENOM_OPTIMIZE %lu PLL_DENOM_OPTIMIZE %lu " EOL, 
+                default_PLL_DENOM_OPTIMIZE, PLL_DENOM_OPTIMIZE);
+        }
+    }
 }

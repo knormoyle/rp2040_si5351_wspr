@@ -964,148 +964,36 @@ void setup1() {
 
     //***************
     // varies by band PLL_FREQ_TARGET
-    if (true && VERBY[1]) {
+    if (false && VERBY[1]) {
         set_PLL_DENOM_OPTIMIZE(_Band);
         si5351a_calc_sweep();
     }
-    if (true && VERBY[1]) {
+    if (false && VERBY[1]) {
         si5351a_calc_sweep_band();
     }
+    if (false && VERBY[1]) {
+        si5351a_denom_optimize_search();
+    }
+
     //***************
-    // no need to do the calcs if we're not going to print them!
-    // the optimized values should be baked into si5351_functions.cpp()
-    // so we don't have to calc. one magic denom per band?
-    // check the freq bin boundaries. (channel 0 and 599?)
-    if (true && VERBY[1]) {
-        double sumShiftError;
-        double sumAbsoluteError;
-        double last_sumShiftError = 1e6;
-        double last_sumAbsoluteError = 1e6;
-        uint32_t last_PLL_DENOM_OPTIMIZE;
-        uint32_t pll_num;
-        uint32_t STEP;
-        int sse;
-
-        // Instead: use the best initial values per band in this function 
-        // (from spreadsheet or prior runs for a band)
-        set_PLL_DENOM_OPTIMIZE(_Band);
-        // print
-        uint32_t default_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
-        si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  
-        V1_printf("SEED values: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
-        V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
-            sumAbsoluteError, sumShiftError);
-        // check 4 digits of precision
-        sse = (int)10000 * sumShiftError;
-        if (sse != 0) {
-            V1_printf("WARN: SEED sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
-        }
-
-        last_sumShiftError = sumShiftError;
-        last_sumAbsoluteError = sumAbsoluteError;
-        last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
-        STEP = PLL_DENOM_OPTIMIZE >> 1; // divide-by-4
-        V1_print(F(EOL));
-
-        //**********
-        uint8_t iter;
-        int stepDir;
-        // FIX! what's the max # of iterations that the algo could take over the range
-        // have to account for some iters not changing the STEP !!
-        for (iter = 1; iter <= 30; iter++) {
-            if (STEP == 0) break;
-            // iter 1. Assume convex curve on the error function, over the whole range?
-            last_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
-            uint32_t PLL_DENOM_OPTIMIZE_pos;
-            uint32_t PLL_DENOM_OPTIMIZE_neg;
-
-            PLL_DENOM_OPTIMIZE_pos = PLL_DENOM_OPTIMIZE + STEP;
-            if (PLL_DENOM_OPTIMIZE_pos > 1048575) PLL_DENOM_OPTIMIZE_pos = 1048575;
-            if (STEP > PLL_DENOM_OPTIMIZE) PLL_DENOM_OPTIMIZE_neg = 0;
-            else PLL_DENOM_OPTIMIZE_neg = PLL_DENOM_OPTIMIZE - STEP;
-                
-            // try positive step. one liner print
-            V1_print(F("***********************"));
-            V1_printf(" try PLL_DENOM_OPTIMIZE_pos %lu with pos STEP %lu", PLL_DENOM_OPTIMIZE_pos, STEP);
-            V1_print(F(" ***********************" EOL));
-            PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
-            si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, false);  // don't print
-            V1_printf("best pll_num %lu for pll_denom %lu -> sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
-                pll_num, PLL_DENOM_OPTIMIZE, sumAbsoluteError, sumShiftError);
-            
-            // both should improve
-            stepDir = 0;
-            // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
-            if (sumShiftError < last_sumShiftError) {
-                stepDir = 1;
-                last_sumShiftError = sumShiftError;
-                last_sumAbsoluteError = sumAbsoluteError;
-            }
-            // try negative step. one liner print
-            V1_print(F("***********************"));
-            V1_printf(" try PLL_DENOM_OPTIMIZE_neg %lu with neg STEP %lu", PLL_DENOM_OPTIMIZE_neg, STEP);
-            V1_print(F(" ***********************" EOL));
-            PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
-            si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, false);  // don't print
-            V1_printf("best pll_num %lu for pll_denom %lu -> sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
-                pll_num, PLL_DENOM_OPTIMIZE, sumAbsoluteError, sumShiftError);
-            // both should improve
-            // if ((sumShiftError < last_sumShiftError) && (sumAbsoluteError < last_sumAbsoluteError)) {
-            if (sumShiftError < last_sumShiftError) {
-                stepDir = -1;
-                last_sumShiftError = sumShiftError;
-                last_sumAbsoluteError = sumAbsoluteError;
-            }
-            if ((stepDir == 1) || (stepDir == -1)) {
-                if (stepDir == 1) PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
-                else PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
-                V1_print(F(EOL));
-                V1_printf("FOUND BETTER: iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumAbsoluteError %.8f" EOL,
-                    iter, stepDir, PLL_DENOM_OPTIMIZE, last_sumAbsoluteError);
-                V1_printf("FOUND BETTER: iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu last_sumShiftError %.8f" EOL,
-                    iter, stepDir, PLL_DENOM_OPTIMIZE, last_sumShiftError);
-                // note how we don't change the step size until we confirm we're stuck at the new place
-            } else {
-                // stepDir 0, stuck at this place, change step size
-                PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
-                V1_printf("iter %u stepDir %d PLL_DENOM_OPTIMIZE %lu" EOL,
-                    iter, stepDir, PLL_DENOM_OPTIMIZE);
-                // reduce the step size (1/2)
-                STEP = STEP >> 1;
-            }
-        }
-
-        //************************
-        // Final report.
-        V1_print(F(EOL "***********************"));
-        PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
-        V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE: %lu", PLL_DENOM_OPTIMIZE);
-        V1_print(F(" ***********************" EOL));
-        si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);  // print
-        V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
-        V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL, 
-            sumAbsoluteError, sumShiftError);
-
-        // check 4 digits of precision
-        sse = (int)10000 * sumShiftError;
-        if (sse != 0) {
-            V1_printf("WARN: BEST FOUND sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
-        }
-
-        if (PLL_DENOM_OPTIMIZE == default_PLL_DENOM_OPTIMIZE) {
-            V1_printf("GOOD: couldn't improve on hard-wired PLL_DENOM_OPTIMIZE" EOL);
-        }
-        else {
-            V1_printf("ERROR: shouldn't have improved on hard-wired PLL_DENOM_OPTIMIZE" EOL);
-            V1_printf("ERROR: default_PLL_DENOM_OPTIMIZE %lu PLL_DENOM_OPTIMIZE %lu " EOL, 
-                default_PLL_DENOM_OPTIMIZE, PLL_DENOM_OPTIMIZE);
-        }
-        //************************
-            
-    } // end of the optimization search
-
     // restore to know fixed values per band
     set_PLL_DENOM_OPTIMIZE(_Band);
+    // do this to sweep the symbols for the u4b channel in use and fill the cache for Farey results?
+    // FIX! should we calc the 4 symbols?
+    double sumShiftError; 
+    double sumAbsoluteError;
+    uint32_t pll_num;
+    // this walks thru the 4 symbols we're going to use
+    si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);
+    V1_printf("SEED values: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
+    V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL,
+        sumAbsoluteError, sumShiftError);
+
+    // check 4 digits of precision
+    int sse = (int)10000 * sumShiftError;
+    if (sse != 0) {
+        V1_printf("WARN:FINAL sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
+    }
 
     //***************
     V1_println(F("setup1() END"));

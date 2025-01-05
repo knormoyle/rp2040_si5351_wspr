@@ -26,6 +26,12 @@
 // https://github.com/lightaprs/LightAPRS-W-2.0/tree/main/LightAPRS-W-2-pico-balloon (2023)
 // https://www.hakkican.com/ (turkish but google translate works well)
 
+// Incorporates work by: Per Magnusson. Thank you.
+// Farey sequence-based rational approximation of numbers.
+// https://axotron.se/blog/fast-algorithm-for-rational-approximation-of-floating-point-numbers/
+
+// TODO: solar elevation calc sources
+
 //*******************************************
 // Arduino IDE created by many
 // Adafruit libraries created by many

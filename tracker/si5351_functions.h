@@ -88,7 +88,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num);
 
 // used to print (not change) for walking a range in setup,
 // just to see what changes
-void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t *r_divisor, uint32_t freq_x128);
+void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t *r_divisor, uint32_t freq_x128, bool do_farey);
 
 void vfo_set_freq_x128(uint8_t clk_number, uint32_t freq, bool only_pll_num);
 void vfo_turn_on_clk_out(uint8_t clk_number, bool print);
@@ -100,6 +100,8 @@ uint32_t doCorrection(uint32_t freq);
 void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, bool print);
 void si5351a_calc_sweep(void);
 void si5351a_calc_sweep_band(void);
+
+void si5351a_denom_optimize_search();
 void set_PLL_DENOM_OPTIMIZE(char *band);
 
 void si5351a_reset_PLLA(bool print);

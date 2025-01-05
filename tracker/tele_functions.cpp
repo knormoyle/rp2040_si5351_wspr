@@ -30,6 +30,8 @@ bool SPEED_IS_SOLAR_ELEVATION_MODE = true;
 
 extern uint64_t GpsTimeToLastFix;  // milliseconds
 
+extern bool BALLOON_MODE;
+
 extern char t_course[4];      // 3 bytes
 extern char t_speed[4];       // 3 bytes
 extern char t_altitude[7];    // 6 bytes
@@ -118,19 +120,22 @@ void snapForTelemetry(void) {
     double solarDistance; // can this be negative? maybe error case. kilometers.
     // always call, so we get prints we can use for debug, even if not used.
 
-    // first one I did 
-    // https://github.com/KenWillmott/SolarPosition/blob/master/SolarPosition.cpp
-    calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
-    V1_printf("calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-        solarElevation, solarAzimuth, solarDistance);
-    // suncalc.js translation to cpp
-    calcSolarElevation5(&solarElevation, &solarAzimuth, &solarDistance);
-    V1_printf("calcSolarElevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-        solarElevation, solarAzimuth, solarDistance);
-    // fast algo
-    calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
-    V1_printf("calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-        solarElevation, solarAzimuth, solarDistance);
+    // just in case this might blow up in flight (fp error?)
+    if (!BALLOON_MODE) {
+        // first one I did 
+        // https://github.com/KenWillmott/SolarPosition/blob/master/SolarPosition.cpp
+        calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
+        V1_printf("calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+            solarElevation, solarAzimuth, solarDistance);
+        // suncalc.js translation to cpp
+        calcSolarElevation5(&solarElevation, &solarAzimuth, &solarDistance);
+        V1_printf("calcSolarElevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+            solarElevation, solarAzimuth, solarDistance);
+        // fast algo
+        calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
+        V1_printf("calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+            solarElevation, solarAzimuth, solarDistance);
+    }
     // accurate algo
     calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
     V1_printf("calcSolarElevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
