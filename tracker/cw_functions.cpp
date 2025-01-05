@@ -47,8 +47,11 @@ enum test_msg  {
     // SEND_TEST_CYCLE must be last enum
     SEND_TEST_CYCLE
 };
-// const uint8_t test_to_do = SEND_BALLOON;
-const uint8_t test_to_do = SEND_TEST_CYCLE;
+
+// for balloon flight!
+const uint8_t test_to_do = SEND_BALLOON;
+// for ground level test!
+// const uint8_t test_to_do = SEND_TEST_CYCLE;
 
 //********************************
 // we the full differential clk0/clk1 set with this
