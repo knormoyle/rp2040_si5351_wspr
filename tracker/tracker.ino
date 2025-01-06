@@ -1145,6 +1145,7 @@ const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
 
 //*************************************************************************
 void loop1() {
+
     // used to ignore TinyGps++ state for couple of iterations of GPS burst gathering after
     // turning Gps off then on.
     if (GpsIsOn() && GpsInvalidAllCnt > 0) GpsInvalidAllCnt--;
@@ -1470,6 +1471,20 @@ void loop1() {
             }
         }
     }
+
+    //*****************************************************************
+    // should have 5 entries after the first looping. problem if less than that?
+    // can print an error here if not 5
+    uint8_t VCC_valid_cnt = vfo_calc_cache_print_and_check();
+    // should be 4 if just sending wspr. 5 if sending cw too
+    if (_morse_also[0] == '1') {
+        if (VCC_valid_cnt != 5)
+            V1_printf("ERROR: loop1() VCC_valid_cnt %u != 5" EOL, VCC_valid_cnt);
+    } else {
+        if (VCC_valid_cnt != 4)
+            V1_printf("ERROR: loop1() VCC_valid_cnt %u != 4" EOL, VCC_valid_cnt);
+    }
+    //*****************************************************************
 
     absolute_time_t loop_us_end = get_absolute_time();
     int64_t loop_us_elapsed = absolute_time_diff_us(loop_us_start, loop_us_end);

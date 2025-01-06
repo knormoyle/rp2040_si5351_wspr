@@ -107,12 +107,14 @@ void si5351a_power_up_clk01(void);
 void si5351a_power_down_clk01(void);
 
 // 0: invalidate, 1: lookup, 2: install
-bool vfo_calc_cache(
+uint8_t vfo_calc_cache(
     double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
     uint32_t *r_divisor, uint32_t freq_x128, uint8_t operation);
 
 // shorthand for calling a flush
 void vfo_calc_cache_flush();
+// in the tracker.ino, we can print valid entries and validate that valid entries don't have 0 values
+uint8_t vfo_calc_cache_print_and_check();
 
 #endif  // SI5351_FUNCTIONS_H
