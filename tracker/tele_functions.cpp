@@ -124,10 +124,14 @@ void snapForTelemetry(void) {
     if (!BALLOON_MODE) {
         // first one I did 
         // https://github.com/KenWillmott/SolarPosition/blob/master/SolarPosition.cpp
-        calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
-        V1_printf("calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
-            solarElevation, solarAzimuth, solarDistance);
+
+        // not working? don't use for now
+        // calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
+        // V1_printf("calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
+        //     solarElevation, solarAzimuth, solarDistance);
+
         // suncalc.js translation to cpp
+        // Not working? need to debug
         calcSolarElevation5(&solarElevation, &solarAzimuth, &solarDistance);
         V1_printf("calcSolarElevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.7f" EOL,
             solarElevation, solarAzimuth, solarDistance);
