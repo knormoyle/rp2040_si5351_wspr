@@ -13,47 +13,47 @@
 #include "farey_functions.h"
 
 // Background:
-// Farey's work as a geologist is forgotten. His contribution to math continues on, 
+// Farey's work as a geologist is forgotten. His contribution to math continues on,
 // but it's crazy how it started:
 // https://mathshistory.st-andrews.ac.uk/Biographies/Farey/
 
-// Farey's article ..was also published in the Philosophical Magazine and appeared in 1816. 
-// It was called 'On a curious property of vulgar fractions' and it was sent to the editor 
-// from Howland Street in London, the residence of Farey's eldest son where he spent the 
+// Farey's article ..was also published in the Philosophical Magazine and appeared in 1816.
+// It was called 'On a curious property of vulgar fractions' and it was sent to the editor
+// from Howland Street in London, the residence of Farey's eldest son where he spent the
 // last years of his life (in fact he died in that house).
 
-// The article consists of only four paragraphs. 
-// In the first paragraph Farey says that he noted the "curious property" 
-// while examining the tables of Complete decimal quotients produced by Henry Goodwin. 
+// The article consists of only four paragraphs.
+// In the first paragraph Farey says that he noted the "curious property"
+// while examining the tables of Complete decimal quotients produced by Henry Goodwin.
 // In the second paragraph he defines the Farey series and states the "curious property".
 
-// The final paragraph of [5] 
-// 
-// I am not acquainted, whether this curious property of vulgar fractions has been before pointed out?; 
-// or whether it may admit of some easy or general demonstration?; 
-// which are points on which I should be glad to learn the sentiments of some of 
-// your mathematical readers ...
+// The final paragraph of [5]
+//
+//   I am not acquainted, whether this curious property of vulgar fractions has been before 
+//   pointed out?; or whether it may admit of some easy or general demonstration?;
+//   which are points on which I should be glad to learn the sentiments of some of
+//   your mathematical readers ...
 
 // [5] J Farey, On a curious property of vulgar fractions, Philos. Mag. J. 47 (1816), 385-386.
 
 
-// In 1816 the British geologist John Farey defined the Farey sequence Fn as the list, written 
-// in increasing order,of all the rational numbers between 0 and 1 that have only the 
+// In 1816 the British geologist John Farey defined the Farey sequence Fn as the list, written
+// in increasing order,of all the rational numbers between 0 and 1 that have only the
 // numbers 1,2,3,...,n as denominators.
 
 // We can do the same thing for rational numbers between any two positive numbers.
 // For example we can consider sequences betweeen 1 and 2 where we have:
 // F1 = 1/1, 2/1
 // F2 = 1/1, 3/2, 2/1 .
-// 
+//
 // What would F3 and F4 be in this case?
 // For the two positive rational numbers b/d and a/c the mediant is defined as (a+b) / (c+d).
-// The mediant has the nice property that it is always in between the two fractions giving rise 
+// The mediant has the nice property that it is always in between the two fractions giving rise
 // to it:
 //     if 0 < (b/d) < (a/c) then (b/d)< (a+b)/(c+d) < (a/c).
-// 
+//
 // Clearly each Farey sequence Fn+1 must contain all of the terms of Fn, along with some new terms.
-// Mediants also have the nice property that each 'new' term in the Farey sequence Fn+1 is the 
+// Mediants also have the nice property that each 'new' term in the Farey sequence Fn+1 is the
 // mediant // of two consecutive terms in Fn.
 
 
@@ -95,8 +95,8 @@ rational_t rational_approximation(double target, uint32_t maxdenom) {
     double epsilon = 1e-10;  // To handle rounding issues in conjunction with floor
     uint32_t a = 0, b = 1, c = 1, d = 1, ac, bd, Nint;
     // kbn: max it at 100
-    // saw iterations going to 1001 for a 10M wspr freq . 
-    const int maxIter = 100; 
+    // saw iterations going to 1001 for a 10M wspr freq .
+    const int maxIter = 100;
 
     if (target > 1) {
         // Invalid

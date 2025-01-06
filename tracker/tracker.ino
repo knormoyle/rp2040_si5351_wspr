@@ -66,41 +66,53 @@ bool FORCE_BALLOON_MODE = false;
 //**************************
 // flash config
 #include "hardware/flash.h"
+#include "hardware/gpio.h"
+#include "hardware/i2c.h"
 
 //**************************
+// libraries/TinyGpsPlus
 #include <TinyGPS++.h>  // https://github.com/mikalhart/TinyGPSPlus
 // gets the head 1.1-beta? not released version
 // wget https://github.com/mikalhart/TinyGPSPlus/archive/refs/heads/master.zip
 // TinyGPSPlus is a Arduino library for parsing NMEA data streams provided
 // by GPS modules.
 
-// in libraries: wget https://github.com/adafruit/Adafruit_SleepyDog/archive/refs/heads/master.zip
+// libraries/Adafruit_SleepyDog
+// wget https://github.com/adafruit/Adafruit_SleepyDog/archive/refs/heads/master.zip
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-// in libraries: wget https://github.com/adafruit/Adafruit_BMP280_Library/archive/refs/heads/master.zip
+// libraries/Adafruit_BMP280_Library
+// wget https://github.com/adafruit/Adafruit_BMP280_Library/archive/refs/heads/master.zip
 #include <Adafruit_BMP280.h>  // https://github.com/adafruit/Adafruit_BMP280_Library
 
-// this needs the Adafruit_Sensor.h also
-// in libraries: wget https://github.com/adafruit/Adafruit_Sensor/archive/refs/heads/master.zip
+// libraries/Adafruit_Sensor
+// wget https://github.com/adafruit/Adafruit_Sensor/archive/refs/heads/master.zip
 // https://github.com/adafruit/Adafruit_sensor
 // added Adafruit_BusIO to our repo 11_7_24 (libraries)
 // in libraries: wget https://github.com/adafruit/Adafruit_BusIO/archive/refs/heads/master.zip
 // #include <Adafruit_I2CDevice.h>  // https://github.com/adafruit/Adafruit_BusIO
 
+// libraries/JTEncode
 #include <JTEncode.h>  // https://github.com/etherkit/JTEncode (JT65/JT9/JT4/FT8/WSPR/FSQ Encoder Library)
-// in libraries, getting more recent (if necessary)
 // wget https://github.com/etherkit/JTEncode/archive/refs/heads/master.zip
-// wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 
+// libraries/Time
+// wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 
-#include <MemoryFree.h>
-#include "hardware/gpio.h"
-#include "hardware/i2c.h"
+// libraries/arduinomorse
+// wget https://github.com/knormoyle/arduinomorse/archive/refs/heads/master.zip
+// might be interesting for getting better led messaging. not used yet.
+// this has non-blocking capability. 
+// I could use my morse cw and have it toggle an led? but it would be blocking
+#include <morse.h> // https://github.com/markfickett/arduinomorse
+
+// libraries/Arduino-MemoryFree
+// wget https://github.com/maniacbug/MemoryFree/archive/refs/heads/master.zip
+#include <MemoryFree.h>  // https://github.com/maniacbug/MemoryFree
 
 // https://docs.arduino.cc/tutorials/generic/secrets-of-arduino-pwm/
-#include "hardware/pwm.h"
-
+// #include "hardware/pwm.h"
 // https://arduino-pico.readthedocs.io/en/latest/rp2040.html
 
 // The RP2040 has two hardware-based UARTS with configurable pin selection.
@@ -190,15 +202,16 @@ JTEncode jtencode;
 // extern here also (like in the other files that reference this)
 extern const int STATUS_LED_PIN = 25;
 // these are the short blinks or long blinks, depending on value
-extern const int LED_STATUS_NO_GPS = 1;
-extern const int LED_STATUS_GPS_TIME = 2;
-extern const int LED_STATUS_GPS_FIX = 3;
-extern const int LED_STATUS_TX_WSPR = 4;
-extern const int LED_STATUS_TX_TELEMETRY = 5;
-extern const int LED_STATUS_TX_TELEN1 = 6;
-extern const int LED_STATUS_TX_TELEN2 = 7;
-extern const int LED_STATUS_REBOOT_NO_SERIAL = 8;  // this does 3 long blinks?
-extern const int LED_STATUS_USER_CONFIG = 9;       // this does 4 long blinks?
+extern const int LED_STATUS_NO_GPS = 1;        // 1 short
+extern const int LED_STATUS_GPS_TIME = 2;      // 2 short
+extern const int LED_STATUS_GPS_FIX = 3;       // 3 short
+extern const int LED_STATUS_TX_WSPR = 4;       // 4 short
+extern const int LED_STATUS_TX_TELEMETRY = 5;  // 1 long
+extern const int LED_STATUS_TX_TELEN1 = 6;     // 2 long  
+extern const int LED_STATUS_TX_TELEN2 = 7;     // 3 long
+extern const int LED_STATUS_TX_CW = 8;         // 4 long
+extern const int LED_STATUS_REBOOT_NO_SERIAL = 8; // 5 long
+extern const int LED_STATUS_USER_CONFIG = 9;   // 6 long
 
 //*********************************
 // some stuff on using namespace
@@ -208,8 +221,7 @@ extern const int LED_STATUS_USER_CONFIG = 9;       // this does 4 long blinks?
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 
 //*********************************
-// all extern consts can be externed for reference in another file
-// so it can be used in gps_functions.cpp
+// all extern consts can be externed for reference in another file (like gps_functions.cpp)
 // extern is needed here or the linker doesn't find it.
 // see https://forum.arduino.cc/t/linker-problems-with-extern-const-struct/647136/2
 extern const int GpsPwr = 16;  // output ..this cuts VCC, leaves VBAT. assert low
@@ -862,20 +874,18 @@ void setup1() {
     //    Wire.setSCL(VFO_I2C0_SCL_PIN);  // 13
     //    Wire.begin();
 
-    // default pins for Wire  are SDA=4   SCL=5
-    // default pins for Wire1 are SDA=26  SCL=27
-    // our ISC1 for the BMP    is SDA 2,  SCL 3))
-    // our ISC0 for the Si5351 is SDA 12, SCL 13))
-
+    // I don't use Wire, so this shouldn't matter
     // https://docs.arduino.cc/language-reference/en/functions/communication/wire/
-    // default pins for Wire 1 are SDA=26 SCL=27 ..wants to be our ISC0
-    // default pins for Wire 0 are SDA=4 SCL=5 (our ISC1 for the BMP)
+    // default pins for Wire  are SDA=4 SCL=5 (not right for our ISC1? or ??)
+    // default pins for Wire1 are SDA=26 SCL=27 ..wants to be our ISC0
+
+    // our ISC0 for the Si5351 is SDA 12, SCL 13))
+    // our ISC1 for the BMP    is SDA 2,  SCL 3))
 
     Watchdog.reset();
+
     // also turns on and checks for output
     // does a full gps cold reset now?
-
-
     // 12/7/24. the GpsINIT covers GpsON() now?
     GpsINIT();
 
@@ -1056,7 +1066,7 @@ int tx_cnt_0 = 0;
 int tx_cnt_1 = 0;
 int tx_cnt_2 = 0;
 int tx_cnt_3 = 0;
-int tx_cnt_cw = 0;
+int tx_cnt_4 = 0;
 
 //*************************************************************************
 // GPS NMEA bursts: The thinking behind how we deal with it
@@ -1721,14 +1731,22 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     }
 
     if (_morse_also[0] == '1') {
+        setStatusLEDBlinkCount(LED_STATUS_TX_CW);
+        txNum = 4;
+        V1_printf("CW txNum %d using cw_send_message().." EOL, txNum);
+        V1_flush();
         // picks a good HF freq for the config'ed _Band. uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
         cw_send_message();
-        tx_cnt_cw += 1;
         // restore the wspr XMIT_FREQUENCY since cw changed it
         // sets minute/lane/id from chan number.
         // FIX! is it redundant at this point?..remove?
         XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+        tx_cnt_4 += 1;
+        if (VERBY[1]) {
+            StampPrintf("CW Tx sent. minute: %d second: %d" EOL, minute(), second());
+            DoLogPrint();
+        }
     }
 
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -1865,7 +1883,7 @@ bool alignMinute(int offset) {
 // expected this is called at least 10 secs before starting minute
 // if not in the minute before starting minute,
 // it will wait until the right starting minute (depends on txNum)
-// txNum can be 0, 1, 2, 3
+// txNum can be 0, 1, 2, 3, or 4 for cw
 
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhenDone) {
     // currently don't do this, but good strategy?

@@ -16,6 +16,7 @@ extern const int LED_STATUS_TX_WSPR;
 extern const int LED_STATUS_TX_TELEMETRY;
 extern const int LED_STATUS_TX_TELEN1;
 extern const int LED_STATUS_TX_TELEN2;
+extern const int LED_STATUS_TX_CW;
 extern const int LED_STATUS_REBOOT_NO_SERIAL;
 extern const int LED_STATUS_USER_CONFIG;
 

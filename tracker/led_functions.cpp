@@ -38,9 +38,9 @@ void updateStatusLED(void) {
     bool longBlinks = false;
     int blinkCntInit;
 
-    if (statusLEDBlinkCnt >= 8) {
+    if (statusLEDBlinkCnt >= 5) {
         // threshold for indicating 3, 4, ... long blinks
-        blinkCntInit = statusLEDBlinkCnt - 5;
+        blinkCntInit = (statusLEDBlinkCnt - 5) + 1;
         longBlinks = true;
     } else {
         // short blinks
