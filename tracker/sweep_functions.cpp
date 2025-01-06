@@ -200,8 +200,9 @@ void si5351a_calc_sweep_band() {
 void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     uint32_t *pll_num, bool print) {
     V1_print(F("si5351a_calc_optimize() START" EOL));
-    // FIX! do we need this?
-    vfo_calc_cache_flush();
+
+    // don't flush here, so we keep the results for the 4 symbols
+
     // just to see what we get, calculate the si5351 stuff for
     // all the 0.25 Hz variations for possible tx in a band.
     // all assuming u4b channel 0 freq bin.
@@ -324,9 +325,8 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
         V1_print(F(EOL));
         V1_print(F("si5351a_calc_optimize() END" EOL));
     }
-    // FIX! maybe not needed if we didn't load anything into the cache!
-    // not needed at end also?
-    // vfo_calc_cache_flush();
+
+    // no flush here!
 }
 
 //*********************************************************************************
