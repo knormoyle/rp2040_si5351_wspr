@@ -155,7 +155,7 @@ void DoLogPrint() {
 // don't namespace collide with measure_freqs() in SPI.h?
 void measureMyFreqs(void) {
     if (!VERBY[1]) return;
-    V1_print(F("measureMyFreqs() START" EOL));
+    V1_print(F("measureMyFreqs START" EOL));
 
     // see for frequency_count_khz()
     // evidently uses a special frequency counter ??
@@ -209,7 +209,7 @@ void measureMyFreqs(void) {
 #endif
 
     // Can't measure clk_ref / xosc as it is the ref
-    V1_print(F("measureMyFreqs() END" EOL));
+    V1_print(F("measureMyFreqs END" EOL));
     V1_flush();
     // FIX! need a delay after flush also? (usb can be disabled soon)
     busy_wait_ms(1000);

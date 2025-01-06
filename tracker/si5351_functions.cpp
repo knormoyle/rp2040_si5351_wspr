@@ -1381,6 +1381,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         V1_printf("Farey iterations %lu" EOL, retval.iterations); // result
         V1_printf("Farey actual real %.14f" EOL, actual_real);
         V1_printf("Farey actual real error %.14f" EOL, target - actual_real);
+        V1_print(F(EOL));
     }
 
     //*******************************************************************
@@ -1472,7 +1473,7 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
         uint8_t retval = vfo_calc_cache(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 1);
         if (retval!=1) { // hit?
-            V1_print(F("WARN: vfo_set_freq_x128 has to redo vfo_calc_div_mult_num()"));
+            V1_print(F(EOL "WARN: vfo_set_freq_x128 must redo vfo_calc_div_mult_num()" EOL));
             vfo_calc_div_mult_num(&actual, &actual_pll_freq,
                 &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, true);
             // install. If we install it when already there, we'll flag the double
@@ -1673,7 +1674,7 @@ bool vfo_is_off(void) {
 //****************************************************
 void vfo_write_clock_en_with_retry(uint8_t val) {
     Watchdog.reset();
-    V1_print(F("vfo_write_clock_en_with_retry START"));
+    V1_print(F("vfo_write_clock_en_with_retry START" EOL));
     // This can power the vfo off/on on failure! and we'll lose state
     V1_flush();
     // set all CLKx output disable. will re-enable clk0/1 later
@@ -1700,15 +1701,11 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
         V1_flush();
 
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
-        V1_println("i2c_deinit() start");
         i2c_deinit(VFO_I2C_INSTANCE);
-        V1_println("i2c_deinit() complete");
         busy_wait_ms(1000);
 
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
-        V1_println("i2c_init() start");
         i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
-        V1_println("i2c_init() complete");
         busy_wait_ms(1000);
 
         // gpio_pull_up(VFO_I2C0_SDA_PIN);
@@ -1741,7 +1738,7 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
 void vfo_turn_on(uint8_t clk_num) {
     // FIX! what if clk_num is not zero?
     // turn on of 0 turns on 0 and 1 now    clk_num = 0;
-    V1_printf("vfo_turn_on START clk_num %u" EOL, clk_num);
+    V1_printf(EOL "vfo_turn_on START clk_num %u" EOL, clk_num);
     Watchdog.reset();
 
     // already on successfully?
@@ -1934,7 +1931,7 @@ uint32_t doCorrection(uint32_t freq) {
 }
 //****************************************************
 void vfo_turn_off(void) {
-    V1_println(F("vfo_turn_off START"));
+    V1_println(F(EOL "vfo_turn_off START"));
     // V1_println(F("NEVER TURNING VFO OFF (DEBU)"));
     // return;
     // already off successfully?

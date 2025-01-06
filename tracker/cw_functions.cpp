@@ -305,7 +305,7 @@ void cw_tx_state(tx_state_e s) {
     // changes global 'cw_state' {E_STATE_RX, E_STATE_TX}
     switch (s) {
         case E_STATE_RX: if (tx_state != E_STATE_RX) {
-            V1_print(F(EOL "cw_tx_state E_STATE_RX" EOL));
+            V1_print(F(EOL "cw_tx_state E_STATE_RX start" EOL));
             vfo_turn_off();
             // turn gps back on!
             // cw should be at the end of wspr (during the extended telemetry time slot)
@@ -313,20 +313,20 @@ void cw_tx_state(tx_state_e s) {
             // don't do it here..to avoid while testing
             // GpsON(false); // no full cold reset
             tx_state = E_STATE_RX;
-            V1_print(F(EOL ">Rx" EOL));
+            V1_print(F(EOL "cw_tx_state E_STATE_RX complete" EOL));
             V1_flush();
         }
         break;
 
         // should we check if already in the state?
         case E_STATE_TX: if (tx_state != E_STATE_TX) {
-            V1_print(F(EOL "cw_tx_state E_STATE_TX" EOL));
+            V1_print(F(EOL "cw_tx_state E_STATE_TX start" EOL));
             // make sure it GPS is off.
             GpsOFF(true);  // keep TinyGPS state
             updateStatusLED();
             // start with the vfo off
             vfo_turn_off();
-            KEYING_DELAY(2000);
+            KEYING_DELAY(1000);
 
             uint32_t hf_freq = get_cw_freq(_Band);
             XMIT_FREQUENCY = hf_freq;
@@ -339,7 +339,7 @@ void cw_tx_state(tx_state_e s) {
             char debugMsg[] = "";
             realPrintFlush(debugMsg, true);
 
-            V1_print(EOL "Should not hear sdr CW tone now for 5 secs..RF should be off" EOL);
+            V1_print(EOL "Should not hear sdr CW tone now for 4 secs..RF should be off" EOL);
             realPrintFlush(debugMsg, true);
             if (USE_CLK_POWERDOWN_MODE) {
                 si5351a_power_down_clk01();  // this does a pllb reset too
@@ -352,10 +352,10 @@ void cw_tx_state(tx_state_e s) {
             }
 
             Watchdog.reset();
-            KEYING_DELAY(5000);
+            KEYING_DELAY(4000);
 
             tx_state = E_STATE_TX;
-            V1_print(F(EOL ">Tx" EOL));
+            V1_print(F(EOL "cw_tx_state E_STATE_TX complete" EOL));
             V1_flush();
         }
         break;
@@ -628,12 +628,11 @@ void cw_send_message() {
             test_done, new_dit_ms_multiplier);
     }
     //******************************************
-
     // time for PARIS should be 50 * dit_ms
     // turns gps back on!
     cw_tx_state(E_STATE_RX);
     V1_print(EOL "Shouldn't hear any CW now..RF should be off" EOL);
-    KEYING_DELAY(5000);
+    KEYING_DELAY(1000);
 
     cw_restore_drive_strength();
     Watchdog.reset();

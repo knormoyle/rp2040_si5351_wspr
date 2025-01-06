@@ -379,7 +379,7 @@ void u4b_encode_std(char *hf_callsign, char *hf_grid4, char *hf_power,
 void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power,
     uint32_t t_telen_val1, uint32_t t_telen_val2, bool for_telen2, char *id13) {
 
-    V1_printf("u4b_encode_telen() START t_telen_val1 %lu t_telen_val2 %lu" EOL,
+    V1_printf("u4b_encode_telen START t_telen_val1 %lu t_telen_val2 %lu" EOL,
             t_telen_val1, t_telen_val2);
 
     //********************************************
@@ -456,6 +456,6 @@ void u4b_encode_telen(char *hf_callsign, char *hf_grid4, char *hf_power,
     snprintf(hf_grid4, 5, "%s", grid4);
     snprintf(hf_power, 3, "%s", power);
 
-    V1_printf("u4b_encode_telen() END hf_callsign %s hf_grid4 %s hf_power %s" EOL,
+    V1_printf("u4b_encode_telen END hf_callsign %s hf_grid4 %s hf_power %s" EOL,
         hf_callsign, hf_grid4, hf_power);
 }

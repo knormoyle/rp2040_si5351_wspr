@@ -27,7 +27,7 @@ extern uint32_t PLL_FREQ_TARGET;
 extern uint32_t PLL_DENOM_OPTIMIZE;
 
 void si5351a_calc_sweep(void) {
-    V1_print(F("si5351a_calc_sweep() START" EOL));
+    V1_print(F("si5351a_calc_sweep START" EOL));
     // FIX! do we need this
     vfo_calc_cache_flush();
 
@@ -98,7 +98,7 @@ void si5351a_calc_sweep(void) {
     V1_print(F(EOL));
     // FIX! maybe not needed if we didn't load anything into the cache
     vfo_calc_cache_flush();
-    V1_print(F("si5351a_calc_sweep() END" EOL));
+    V1_print(F("si5351a_calc_sweep END" EOL));
 }
 //****************************************************************************
 // does this work? no. Hans method on 144Mhz is to fix the numerator and
@@ -146,7 +146,7 @@ void si5351a_calc_sweep(void) {
 // sweep the bands for the current PLL_FREQ_TARGET to get the mult/div
 // for the spreadsheet to compute optimum denom for the PLL_FREQ_TARGET
 void si5351a_calc_sweep_band() {
-    V1_print(F("si5351a_calc_sweep_band() START" EOL));
+    V1_print(F("si5351a_calc_sweep_band START" EOL));
     double actual;
     double actual_pll_freq;
     uint32_t ms_div;
@@ -194,12 +194,12 @@ void si5351a_calc_sweep_band() {
     }
     // FIX! do we need this if we didn't load anything into the cache?
     vfo_calc_cache_flush();
-    V1_print(F("si5351a_calc_sweep_band() END" EOL));
+    V1_print(F("si5351a_calc_sweep_band END" EOL));
 }
 //*********************************************************************************
 void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     uint32_t *pll_num, bool print) {
-    V1_print(F("si5351a_calc_optimize() START" EOL));
+    V1_print(F("si5351a_calc_optimize START" EOL));
 
     // don't flush here, so we keep the results for the 4 symbols
 
@@ -323,7 +323,7 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
         V1_printf("sumAbsoluteError (just symbol 1): %.4f" EOL, sumAbsoluteError_here);
         V1_printf("sumShiftError (just symbol 1): %.4f" EOL, sumShiftError_here);
         V1_print(F(EOL));
-        V1_print(F("si5351a_calc_optimize() END" EOL));
+        V1_print(F("si5351a_calc_optimize END" EOL));
     }
 
     // no flush here!

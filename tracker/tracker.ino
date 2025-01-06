@@ -1031,7 +1031,7 @@ void setup1() {
     }
 
     //***************
-    V1_println(F("setup1() END"));
+    V1_println(F(EOL "setup1() END"));
     // show we're done with setup1() with long 2 sec on, 2 sec off
     // the other core won't be messing with led's at this time
     // unless it goes to user config?
@@ -1354,8 +1354,12 @@ void loop1() {
                 V1_printf("%" PRIu64 " WARN: GPS fix issue: valid but fix_age %lu millisecs" EOL,
                     loopCnt, fix_age);
             } else {
-                V1_printf("%" PRIu64 " WARN: GPS fix not valid. fix_age %lu millisecs" EOL,
-                    loopCnt, fix_age);
+                // invalid gps should have this fix_age
+                V1_printf("%" PRIu64 "WARN: invalid GPS fix.", loopCnt);
+                if (fix_age != 4294967295) {
+                    V1_printf(" Why unexpected fix_age %lu ? (millis)", fix_age);
+                }
+                V1_print(F(EOL));
             }
             // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
             vfo_turn_off();
@@ -1567,6 +1571,9 @@ void loop1() {
 
 //*******************************************************
 int alignAndDoAllSequentialTx(uint32_t hf_freq) {
+    V1_println(F(EOL "alignAndDoAllSequentialTX START"));
+    V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
+
     // if we called this too early, just return so we don't wait 10 minutes here
     // it should loop around in loop1() ..after how much of a wait? smartWait?
     // (calculated delay above?)
@@ -1577,8 +1584,6 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         return -1;
     }
 
-    V1_print(F("alignAndDoAllSequentialTX START"));
-    V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
     while (second() < 40)  {
         Watchdog.reset();
         delay(5);  // 5 millis
@@ -1760,7 +1765,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 void sleepSeconds(int secs) {
     // this doesn't have an early out (although the updateGpsDataAndTime() can
     // so the delay will be >= secs
-    V1_println(F("sleepSeconds() START"));
+    V1_println(F("sleepSeconds START"));
     V1_flush();
     uint64_t start_millis = millis();
     uint64_t current_millis = start_millis;
@@ -1827,7 +1832,7 @@ void sleepSeconds(int secs) {
     }
 
     // Gps gets left off it the voltage was low at any point
-    V1_println(F("sleepSeconds() END"));
+    V1_println(F("sleepSeconds END"));
 }
 
 //***********************************************************
@@ -1902,11 +1907,11 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
     //*******************************
     // Note we print this after the extra PROCEED delay(s). (or any additional fixed delay)
-    V1_printf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
+    V1_printf(EOL "sendWspr START now: minute: %d second: %d" EOL, minute(), second());
     if (VERBY[2]) {
         // do a StampPrintf, so we can measure usec duration from here to the first symbol
         // remember, it's usec running time, it's not aligned to the gps time.
-        StampPrintf("sendWspr() START now: minute: %d second: %d" EOL, minute(), second());
+        StampPrintf("sendWspr START now: minute: %d second: %d" EOL, minute(), second());
     }
     vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false); // no print. clk0/1 both affected
     //*******************************
@@ -2075,13 +2080,13 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     }
 
     Watchdog.reset();
-    V1_println(F("sendWspr() END"));
+    V1_println(F("sendWspr END"));
 }
 
 //**********************************
 void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
-    V1_printf("syncAndSendWSPR() START now: minute: %d second: %d" EOL, minute(), second());
+    V1_printf("syncAndSendWSPR START now: minute: %d second: %d" EOL, minute(), second());
     if (txNum < 0 || txNum > 3) {
         V1_printf("syncAndSendWSPR() bad txNum %d, using 0" EOL, txNum);
         txNum = 0;
@@ -2133,14 +2138,14 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // to the realtime gps time. those are "since program started running"
 
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
-    V1_println(F("syncAndSendWSPR() END"));
+    V1_println(F("syncAndSendWSPR END"));
 }
 
 //**********************************
 void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     char *hf_callsign, char *hf_grid4, uint8_t power) {
 
-    V1_println(F("set_hf_tx_buffer() START"));
+    V1_println(F("set_hf_tx_buffer START"));
     // Clear out the transmit buffer
     memset(hf_tx_buffer, 0, 162);  // same number of bytes as hf_tx_buffer is declared
 
@@ -2209,7 +2214,7 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
 
     // maybe useful python for testing wspr encoding
     // https://github.com/robertostling/wspr-tools/blob/master/README.md
-    V1_println(F("set_hf_tx_buffer() END"));
+    V1_println(F("set_hf_tx_buffer END"));
 }
 
 //**********************************
@@ -2250,7 +2255,7 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
 
 //**********************************
 void freeMem() {
-    V1_print(F("freeMem() START" EOL));
+    V1_print(F("freeMem START" EOL));
     if (!VERBY[1]) return;
     // Nice to use F() for strings that are constant
     // compiled string stays in flash.
@@ -2288,7 +2293,7 @@ void freeMem() {
     // V1_print("Heap size=");
     // V1_println((unsigned int)__brkval - RAM_start);
 
-    V1_print(F("freeMem() END" EOL));
+    V1_print(F("freeMem END" EOL));
 }
 
 

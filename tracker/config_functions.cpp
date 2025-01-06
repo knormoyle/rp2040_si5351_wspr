@@ -191,7 +191,7 @@ void forceHACK(void) {
 // input_variable: Variable to which we want to read input <output>
 // max_length: Maximum length of input string <input>
 void get_user_input(const char *prompt, char *input_variable, int max_length) {
-    V0_println(F("get_user_input() START"));
+    V0_println(F("get_user_input START"));
     Watchdog.reset();
     updateStatusLED();
 
@@ -241,7 +241,7 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
 
     input_variable[index] = '\0';  // Null-terminate the string
     V0_print(F(EOL));
-    V0_println(F("get_user_input() END"));
+    V0_println(F("get_user_input END"));
 }
 
 //***************************************
@@ -266,7 +266,7 @@ void printFLASH(const uint8_t *buf, size_t len) {
 
 //***************************************
 void config_intro(void) {
-    V0_println(F("config_intro() START"));
+    V0_println(F("config_intro START"));
     setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
     updateStatusLED();
 
@@ -306,7 +306,7 @@ void config_intro(void) {
 
     Watchdog.reset();
     // string concat works here with defines.sh special strings
-    V0_print(F("config_intro() END" CLEAR_SCREEN));
+    V0_print(F("config_intro END" EOL CLEAR_SCREEN));
 }
 
 //***************************************
@@ -393,7 +393,7 @@ void do_i2c_tests(void) {
 void user_interface(void) {
     // Does println do better compared to my V0_print() with LINEND as \r\n ??
     // V0_println() does \r\n line ending?
-    V0_println(F("user_interface() START"));
+    V0_println(F("user_interface START"));
     sleep_ms(100);
     // FIX! do we change the led blink pattern during config?
     config_intro();
@@ -584,7 +584,7 @@ void user_interface(void) {
             V0_print(F("ERROR: check_data_validity_and_set_defaults() fixed some illegal value (2)"));
         }
         show_values();
-        V0_println(F("user_interface() END"));
+        V0_println(F("user_interface END"));
     }
 }
 
@@ -1128,7 +1128,7 @@ int check_data_validity_and_set_defaults(void) {
 //***************************************
 // print the current config
 void show_values(void) {
-    V0_println(F("show_values() START" EOL));
+    V0_println(F("show_values START" EOL));
 
     // V0_print(F(EOL, CLEAR_SCREEN, UNDERLINE_ON, BRIGHT));
     // since these macros are "" strings in print_functions.h, they will just concat here
@@ -1160,12 +1160,12 @@ void show_values(void) {
     // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
     V0_printf("SIE_STATUS: 0x%" PRIx32 EOL, sieValue);
 
-    V0_println(F("show_values() END" EOL));
+    V0_println(F("show_values END" EOL));
 }
 
 // show list of valid commands
 void show_commands(void) {
-    V0_println(F("show_commands() START" EOL));
+    V0_println(F("show_commands START" EOL));
 
     V0_println(F(EOL "Valid commands:" EOL));
     V0_println(F("X: exit config mode and reboot"));
@@ -1186,12 +1186,12 @@ void show_commands(void) {
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
     V0_println(F("M: morse_also: 1 tx cw msg after all wspr(default: 0)"));
 
-    V0_print(F("show_commands() END" EOL));
+    V0_print(F("show_commands END" EOL));
 }
 
 //*****************************************************
 void doFactoryReset() {
-    V0_print(F("doFactoryReset() START"));
+    V0_println(F("doFactoryReset START"));
     snprintf(_callsign, sizeof(_callsign), "AB1CDE");
     snprintf(_verbose, sizeof(_verbose), "1");
     snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
@@ -1210,7 +1210,7 @@ void doFactoryReset() {
 
     // What about the side decodes? Don't worry, just reboot
     write_FLASH();
-    V0_print(F("doFactoryReset() END"));
+    V0_println(F("doFactoryReset END"));
 
     // reboot
     V0_print(F("Goodbye ..rebooting after doFactorReset()" EOL));

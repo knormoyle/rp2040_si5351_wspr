@@ -452,7 +452,7 @@ void setGnssOn_SIM65M(void) {
     }
 
     sleep_ms(2000);
-    V1_println(F("setGnsOn_SIM65M END"));
+    V1_println(F(EOL "setGnsOn_SIM65M END"));
 }
 
 //************************************************
@@ -1726,7 +1726,7 @@ void writeGpsConfigNoBroadcastToFlash() {
     // set desired broadcast.
     setGpsBroadcast();
 
-    V1_println(F("writeGpsConfigNoBroadcastToFlash() END"));
+    V1_println(F("writeGpsConfigNoBroadcastToFlash END"));
 }
 
 //************************************************
@@ -1821,7 +1821,7 @@ void invalidateTinyGpsState(void) {
         gps.location.fixModeFlush();
         gps.date.flush();
     }
-    V1_println(F("invalidateTinyGpsState() END"));
+    V1_println(F("invalidateTinyGpsState END"));
 }
 
 //************************************************
@@ -1886,6 +1886,7 @@ void updateGpsDataAndTime(int ms) {
     // can visually compare these in the stdout...ideally should always be the same
     static int sentenceStartCnt = 0;
     // inc on '*' (comes before the checksum)
+    // hmm. can we inc on getting complete *nn (checksum)
     static int sentenceEndCnt = 0;
 
     // unload each char to TinyGps++ object as it arrives and print it
@@ -1898,7 +1899,9 @@ void updateGpsDataAndTime(int ms) {
     // but I think better not to average..just track this particular call.
     int incomingCharCnt = 0;
     bool stopPrint = false;
-    bool last_stopPrint = false;
+    // NEW: start with no printing..so we don't print until we get a $ to start
+    // saves some buffer space, maybe useful at higher baud rates
+    bool last_stopPrint = true;
     bool nullChar = false;
     bool spaceChar = false;
     bool printable = true;
@@ -1963,7 +1966,9 @@ void updateGpsDataAndTime(int ms) {
             printable = isprint(incomingChar);
             switch (incomingChar) {
                 case '$':  sentenceStartCnt++; stopPrint = false; break;
-                case '*':  sentenceEndCnt++; stopPrint = false; break;
+                // 1/6/24 was:
+                // case '*':  sentenceEndCnt++; stopPrint = false; break;
+                case '*':  sentenceEndCnt++; break;
                 case '\n': stopPrint = true; break;
                 case '\r': stopPrint = true; break;
                 // don't change the stopPrint flow if get a unprintable or these

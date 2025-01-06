@@ -186,7 +186,7 @@ static uint32_t pwm_interrupt_cnt = 0;
 static uint32_t pwm_interrupt_total_cnt = 0;
 void PWM4_Handler() {
     // too much output!
-    // V1_print/ln(F("PWM4_Handler() START"));
+    // V1_println(F("PWM4_Handler START"));
     pwm_clear_irq(WSPR_PWM_SLICE_NUM);
     pwm_interrupt_cnt++;
     pwm_interrupt_total_cnt++;
@@ -211,7 +211,7 @@ void PWM4_Handler() {
             DoLogPrint();
         }
     }
-    // V1_print/ln(F("PWM4_Handler() END"));
+    // V1_println(F("PWM4_Handler END"));
 }
 
 //*******************************************************
@@ -243,7 +243,7 @@ void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     // FIX! we could do bounds checking? or ??
     // assumes the values are right for INTERRUPTS_PER_SYMBOL
     // which is now 8 (instead of 500)
-    // V1_print/ln(F("zeroTimerSetPeriodMs() START"));
+    // V1_println(F("zeroTimerSetPeriodMs START"));
 
     static pwm_config wspr_pwm_config = pwm_get_default_config();
     // 250 clocks at 125Mhz .008 uSec per clock, is 250 * .008 = 2 uSec
@@ -282,7 +282,7 @@ void setPwmDivAndWrap(uint32_t PWM_DIV, uint32_t PWM_WRAP_CNT) {
     // setup the base frequency earlier, so we don't see this extra variation on first symbol!
     // due to the "change" optimization in the i2c writes.
     pwm_set_enabled(WSPR_PWM_SLICE_NUM, true);
-    // V1_print/ln(F("zeroTimerSetPeriodMs() END"));
+    // V1_println(F("zeroTimerSetPeriodMs END"));
 }
 
 //*******************************************************
@@ -306,7 +306,7 @@ void disablePwmInterrupts(void) {
 // to figure a good div and wrap cnt period for the PWM (subtract 1 for TOP)
 void calcPwmDivAndWrap(uint32_t *PWM_DIV, uint32_t *PWM_WRAP_CNT,
         uint32_t INTERRUPTS_PER_SYMBOL, uint32_t PLL_SYS_MHZ) {
-    V1_print(F("calcPwmDivAndWrap START"));
+    V1_println(F("calcPwmDivAndWrap START"));
     V1_printf(" for INTERRUPTS_PER_SYMBOL %lu PLL_SYS_MHZ %lu" EOL,
         INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 
