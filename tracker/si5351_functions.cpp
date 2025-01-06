@@ -999,6 +999,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     uint32_t pll_num_here = 0;
     uint32_t pll_denom_here = 0;
     uint32_t r_divisor_here = 0;
+    uint32_t freq_x128_here = 0;
 
     // count the current valid entries
     uint8_t totalValid = 0;
@@ -1026,7 +1027,8 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
         }
         case 1:  { // search in cache
             for (uint8_t i = 0; i < VCC_SIZE; i++) {
-                if (cache_valid[i] && (cache_freq_x128[i] == freq_x128)) {
+                freq_x128_here = cache_freq_x128[i];
+                if (cache_valid[i] && (freq_x128_here == freq_x128)) {
                     actual_here = cache_actual[i];
                     actual_pll_freq_here = cache_actual_pll_freq[i];
                     ms_div_here = cache_ms_div[i];
@@ -1039,7 +1041,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         V1_printf("ERROR: vfo_calc_cache multiple hits: i %u prior found_i %u" EOL,
                             i, found_i);
                         V1_print(F("MULTI HIT: "));
-                        V1_printf(" vfo_calc_cache hit on i %u freq_x128 %lu", i, freq_x128);
+                        V1_printf(" vfo_calc_cache hit on i %u freq_x128 %lu", i, freq_x128_here);
                         V1_printf(" actual %.4f actual_pll_freq %.4f", actual_here, actual_pll_freq_here);
                         V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
                             pll_mult_here, pll_num_here, pll_denom_here, ms_div_here, r_divisor_here);
@@ -1053,25 +1055,28 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         (pll_num_here == 0) ||    // should never happen? very unlikely
                         (pll_denom_here == 0) ||
                         (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
-                        (freq_x128 == 0);         // we should never lookup freq_x128 
+                        (freq_x128_here == 0);    // we should never lookup freq_x128 
 
                         // is 900 really the upper limiter or ?? we have 908 for 24Mhz
                         // do we need lower pll freq?
                         if (ms_div_here < 4 || ms_div_here > 900) {
                             V1_printf("ERROR: cached ms_div %lu is out of range 4 to 900" EOL, ms_div_here);
                             // FIX! how should we recalc
-                            V1_print(F("ERROR: won't use anything from this cache entry" EOL));
                             badCache = true;
                         }
                         if (pll_mult_here < 15 || pll_mult_here > 90) {
                             V1_printf("ERROR: cached pll_mult %lu is out of range 15 to 90." EOL, pll_mult_here);
-                            V1_print(F("ERROR: won't use anything from this cache entry" EOL));
+                            badCache = true;
+                        }
+                        if (freq_x128_here == 0) {
+                            V1_printf("ERROR: cached freq_x128 %lu is 0." EOL, freq_x128_here);
                             badCache = true;
                         }
                         // FIX! we could check the num/denum for range also?
 
                     if (badCache) {
-                        V0_println(F("ERROR: fatal. previous valid cache entry had 0 or freq_x128 0." EOL));
+                        V1_println(F("ERROR: fatal. previous valid cache entry had 0 or freq_x128 0." EOL));
+                        V1_print(F("ERROR: won't use anything from this cache entry" EOL));
                         found = false;
                     } else {
                         found = true;
@@ -1116,8 +1121,9 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                     pll_num_here = cache_pll_num[i];
                     pll_denom_here = cache_pll_denom[i];
                     r_divisor_here = cache_r_divisor[i];
+                    freq_x128_here = cache_freq_x128[i];
                     V1_print(F("DEBUG:"));
-                    V1_printf(" vfo_calc_cache valid i %u freq_x128 %lu", i, freq_x128);
+                    V1_printf(" vfo_calc_cache valid i %u freq_x128 %lu", i, freq_x128_here);
                     V1_printf(" actual %.4f actual_pll_freq %.4f", actual_here, actual_pll_freq_here);
                     V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
                         pll_mult_here, pll_num_here, pll_denom_here, ms_div_here, r_divisor_here);
@@ -1130,7 +1136,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         (pll_num_here == 0) ||    // should never happen? very unlikely
                         (pll_denom_here == 0) ||
                         (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
-                        (freq_x128 == 0);         // we should never lookup freq_x128 
+                        (freq_x128_here == 0);    // we should never lookup freq_x128 
                     
                     if (badCache) {
                         V0_println(F("ERROR: fatal. valid cache entry had 0 or freq_x128 0. rebooting" EOL));
