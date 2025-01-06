@@ -85,6 +85,7 @@
 extern uint32_t PLL_FREQ_TARGET;
 extern bool USE_FAREY_WITH_PLL_REMAINDER;
 extern bool TEST_FAREY_WITH_PLL_REMAINDER;
+bool DISABLE_CACHE = true; 
 
 // from tracker.ino
 extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
@@ -1077,6 +1078,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                     } else {
                         found = true;
                         found_i = i;
+                        retval = 1;
                         *actual = actual_here;
                         *actual_pll_freq = actual_pll_freq_here;
                         *ms_div = ms_div_here;
@@ -1085,10 +1087,8 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         *pll_denom = pll_denom_here;
                         *r_divisor = r_divisor_here;
                     }
-                    
                 }
             }
-            retval = 1;
             break;
         }
         case 2: {  // write to cache and make valid
@@ -1458,20 +1458,25 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     // let "use cache" miss. basically everything refills
     // OH: keep 5, one for the cw freq!
 
-    // lookup. get values if in cache already!
-    // don't do any prints on the lookup
-    uint8_t retval = vfo_calc_cache(&actual, &actual_pll_freq,
-        &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 1);
-    if (retval!=1) { // hit?
-        V1_print(F("WARN: vfo_set_freq_x128 has to redo vfo_calc_div_mult_num()"));
+    if (DISABLE_CACHE || !USE_FAREY_WITH_PLL_REMAINDER) {
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, true);
-        // install. If we install it when already there, we'll flag the double
-        // entry on lookup later
-        vfo_calc_cache(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 2);
-        V1_printf("vfo_set_freq_x128 after redo: pll_mult %lu ms_div %lu" EOL,
-            pll_mult, ms_div);
+    } else {
+        // lookup. get values if in cache already!
+        // don't do any prints on the lookup
+        uint8_t retval = vfo_calc_cache(&actual, &actual_pll_freq,
+            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 1);
+        if (retval!=1) { // hit?
+            V1_print(F("WARN: vfo_set_freq_x128 has to redo vfo_calc_div_mult_num()"));
+            vfo_calc_div_mult_num(&actual, &actual_pll_freq,
+                &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, true);
+            // install. If we install it when already there, we'll flag the double
+            // entry on lookup later
+            vfo_calc_cache(&actual, &actual_pll_freq,
+                &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 2);
+            V1_printf("vfo_set_freq_x128 after redo: pll_mult %lu ms_div %lu" EOL,
+                pll_mult, ms_div);
+        }
     }
 
     // if (only_pll_num) {
@@ -1505,7 +1510,7 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     // make PLLA the same (so it locks? Is that better power than unlocked?)
     si5351a_setup_PLLA(pll_mult, pll_num, pll_denom);
     s_PLLA_ms_div_prev = ms_div;
-    V1_printf(EOL "vfo_set_freq_x128 setting (1) s_PLLA_ms_div_prev %lu" EOL EOL,  ms_div);
+    // V1_printf(EOL "vfo_set_freq_x128 setting (1) s_PLLA_ms_div_prev %lu" EOL EOL,  ms_div);
 
     // V1_printf("vfo_set_freq_x128 END clk_num %u freq %lu" EOL, clk_num, freq);
 }
