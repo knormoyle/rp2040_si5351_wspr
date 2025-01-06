@@ -8,8 +8,8 @@
 //****************************
 // from https://app.codeconvert.ai/code-converter?inputLang=Python&outputLang=C%2B%2B
 // Notes
-// 
-// The translation maintains the core logic of the original Python code while adapting it to C++ idioms and patterns.
+// The translation maintains the core logic of the original Python code while 
+// adapting it to C++ idioms and patterns.
 // Key changes made in the translation:
 // Replaced Python's tuple returns with a custom RationalResult struct
 // Used C++'s getopt_long for command line argument parsing
@@ -53,10 +53,19 @@ void at_exit(const std::string& msg) {
 }
 
 struct RationalResult {
-    double error;
-    long numerator;
-    long denominator;
-    int iterations;
+    // this struct has to be in this order because there are returns that set some?
+    // return {err, n, d, niter};
+    double error; // kbn err..for consistency with other algo
+    long numerator; // kbn n..for consistency with other algo
+    long denominator; // kbn d..for consistency with other algo
+    int iterations; // kbn niter..for consistency with other algo
+
+    // not used..just match the continued fractions algo
+    double err;
+    int n; // the two algos vary: int vs long
+    int d; // the two algos vary: int vs long
+    int niter;
+
     double actual_real;  // kbn
     double actual_error; // kbn
     double target; // kbn
@@ -66,13 +75,26 @@ struct RationalResult {
 RationalResult find_best_rat(long l, double t) {
     assert(l >= 1);
 
-    double t_int;
-    double t_frac = modf(t, &t_int);
+    // kbn Should we assume it's between 0 and 1 to start?
+    // double t_int;
+    // double t_frac = modf(t, &t_int);
+    double t_frac = t; // kbn
+    double t_int = 0; // kbn
 
     // handle the trivial case
-    if (t_frac <= 0) {
+    // kbn: it should return 0 for target == 0.0
+    // was returning a numerator halfway..so getting bad error
+    // if (t_frac <= 0) {
+    // Should compare to smallest number?
+    if (t_frac <= 1e-15) {
         return {0, static_cast<long>(t), 1, 0};
     }
+    // kbn: what about the trival max case. not legal?
+    // assert below will detect t_frac 1.0 and fail?
+    // just return l (in case of our random 0,1 range checking
+    // if (t_frac == 1.0) {
+    //    return {l, static_cast<long>(t), 1, 0};
+    //}
 
     // begin the processing for t_frac
     assert(0 < t_frac && t_frac < 1);

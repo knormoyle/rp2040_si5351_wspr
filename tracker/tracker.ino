@@ -174,6 +174,7 @@ TinyGPSPlus gps;
 #include "keyboard_functions.h"
 #include "gps_functions.h"
 #include "cw_functions.h"
+#include "sweep_functions.h"
 
 //*********************************
 // extern so it links okay
@@ -966,13 +967,22 @@ void setup1() {
     // varies by band PLL_FREQ_TARGET
     if (false && VERBY[1]) {
         set_PLL_DENOM_OPTIMIZE(_Band);
+        // FIX! is this needed? do we look in the cache or install it during sweep?
+        vfo_calc_cache_flush();
         si5351a_calc_sweep();
+        vfo_calc_cache_flush();
     }
     if (false && VERBY[1]) {
+        vfo_calc_cache_flush();
+        // FIX! is this needed? do we look in the cache or install it during sweep?
         si5351a_calc_sweep_band();
+        vfo_calc_cache_flush();
     }
     if (false && VERBY[1]) {
+        vfo_calc_cache_flush();
+        // FIX! is this needed? do we look in the cache or install it during this search?
         si5351a_denom_optimize_search();
+        vfo_calc_cache_flush();
     }
 
     //***************

@@ -95,13 +95,8 @@ void vfo_turn_on_clk_out(uint8_t clk_number, bool print);
 // FIX! ...this doesn't seem to work on ms5351m
 void vfo_turn_off_clk_out(uint8_t clk_number, bool print);
 void vfo_set_drive_strength(uint8_t clk_number, uint8_t strength);
+
 uint32_t doCorrection(uint32_t freq);
-
-void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, bool print);
-void si5351a_calc_sweep(void);
-void si5351a_calc_sweep_band(void);
-
-void si5351a_denom_optimize_search();
 void set_PLL_DENOM_OPTIMIZE(char *band);
 
 void si5351a_reset_PLLA(bool print);
@@ -110,5 +105,14 @@ void si5351a_reset_PLLB(bool print);
 // just flip the PDN bit..using previously set _prev state 
 void si5351a_power_up_clk01(void);
 void si5351a_power_down_clk01(void);
+
+// 0: invalidate, 1: lookup, 2: install
+bool vfo_calc_cache(
+    double *actual, double *actual_pll_freq,
+    uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
+    uint32_t *r_divisor, uint32_t freq_x128, uint8_t operation);
+
+// shorthand for calling a flush
+void vfo_calc_cache_flush();
 
 #endif  // SI5351_FUNCTIONS_H
