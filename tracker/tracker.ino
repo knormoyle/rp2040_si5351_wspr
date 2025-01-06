@@ -338,7 +338,12 @@ extern const int PLL_CALC_SHIFT = 7;
 // not good
 // uint32_t PLL_FREQ_TARGET = 416000000;
 // this is good
-uint32_t PLL_FREQ_TARGET = 500000000;
+// in use 1/6/24 for both Fary and num-shift methods
+// uint32_t PLL_FREQ_TARGET = 500000000;
+
+// won't work well for num-shift method. may work for Farey
+uint32_t PLL_FREQ_TARGET = 400000000;
+
 
 // why am I getting it shift to 10hz wide audio signal on sdruno?
 // oh, that's the symbol shifting at 1.46 secs or so
@@ -482,10 +487,10 @@ uint32_t XMIT_FREQUENCY;
 // optimized?
 uint32_t PLL_DENOM_OPTIMIZE = 1048575;
 
-// bool USE_FAREY_WITH_PLL_REMAINDER = true;
-// bool TEST_FAREY_WITH_PLL_REMAINDER = true;
-bool USE_FAREY_WITH_PLL_REMAINDER = false;
-bool TEST_FAREY_WITH_PLL_REMAINDER = false;
+bool USE_FAREY_WITH_PLL_REMAINDER = true;
+bool TEST_FAREY_WITH_PLL_REMAINDER = true;
+// bool USE_FAREY_WITH_PLL_REMAINDER = false;
+// /bool TEST_FAREY_WITH_PLL_REMAINDER = false;
 
 //*****************************
 bool BALLOON_MODE = true;

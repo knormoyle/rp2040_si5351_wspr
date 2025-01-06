@@ -85,7 +85,7 @@
 extern uint32_t PLL_FREQ_TARGET;
 extern bool USE_FAREY_WITH_PLL_REMAINDER;
 extern bool TEST_FAREY_WITH_PLL_REMAINDER;
-bool DISABLE_CACHE = true; 
+bool DISABLE_CACHE = false;
 
 // from tracker.ino
 extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
@@ -1039,13 +1039,11 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         V1_printf("ERROR: vfo_calc_cache multiple hits: i %u prior found_i %u" EOL,
                             i, found_i);
                         V1_print(F("MULTI HIT: "));
-                    } else {
-                        V1_print(F("GOOD: "));
+                        V1_printf(" vfo_calc_cache hit on i %u freq_x128 %lu", i, freq_x128);
+                        V1_printf(" actual %.4f actual_pll_freq %.4f", actual_here, actual_pll_freq_here);
+                        V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
+                            pll_mult_here, pll_num_here, pll_denom_here, ms_div_here, r_divisor_here);
                     }
-                    V1_printf(" vfo_calc_cache hit on i %u freq_x128 %lu", i, freq_x128);
-                    V1_printf(" actual %.4f actual_pll_freq %.4f", actual_here, actual_pll_freq_here);
-                    V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
-                        pll_mult_here, pll_num_here, pll_denom_here, ms_div_here, r_divisor_here);
 
                     bool badCache = 
                         (actual_here == 0.0) ||
