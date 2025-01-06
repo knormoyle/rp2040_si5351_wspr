@@ -5,8 +5,12 @@ The shorthand name for this pcb is AG6NS 0.4 pcb. The bom and cpl files (BOM* an
 
 [sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1) is an open-hardware project. Kazu AG6NS released the pcb schematics/gerber etc and his port of LightAPRS firmware as open source. Thank you Kazu. Note there were 4 revisions of his work. I forked 0.4 of his pcb work.
 
-The pcb used for this firmware is currently at [AD6Z tracker](https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/tree/main/pcb/tracker/v0.4_kbn)
-(v0.4_kbn dir). There are multiple BOM and CPL files for jlcpcb.com there. Contact me by email to find out which you should use if interested in building some at jlcpcb.com.
+The PCB gerber/boms==/placement files  for this firmware is currently at [AD6Z tracker](https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/tree/main/pcb/tracker/v0.4_kbn)
+(v0.4_kbn dir). 
+There are multiple BOM and CPL files that work for jlcpcb.com there. Nothing special for using and ordering from jlcpcb.com. Pretty much just like ordering traquito pcbs, if you're familiar with that. Economic assembly works, so stays cheap.
+
+Contact me by email to find out which you should use if interested in building some at jlcpcb.com. I left the original AG6NS bom in there for comparison, but don't use that one!
+
 Schematic and board png from jlcpcb are there also. The schematic has a buck/boost converter that's not used, some supercaps that are not used, an the LPFs on the si5351a clk0/clk1 have been changed in the bom/cpl files. But the schematic is pretty usable for understanding what's going on.. There are some datasheets for parts there also. Alternatives and other things being investigated.
 
 I think the power consumption, at 3.6V, doesn't exceed 40mA during gps or rf or idle times. Gps is left on except when rf'ing, so theoretically a battery powered tracker could be more agressive at saving energy by using gps less. I try to slow turn-on stuff to minimize the effect of gps chip surge currents during cold gps reset (start of day). (not an issue I think with gps warm reset, the normal gps off->on transition with VBAT power)
