@@ -1056,6 +1056,21 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
                         (freq_x128 == 0);         // we should never lookup freq_x128 
 
+                        // is 900 really the upper limiter or ?? we have 908 for 24Mhz
+                        // do we need lower pll freq?
+                        if (ms_div_here < 4 || ms_div_here > 900) {
+                            V1_printf("ERROR: cached ms_div %lu is out of range 4 to 900" EOL, ms_div_here);
+                            // FIX! how should we recalc
+                            V1_print(F("ERROR: won't use anything from this cache entry" EOL));
+                            badCache = true;
+                        }
+                        if (pll_mult_here < 15 || pll_mult_here > 90) {
+                            V1_printf("ERROR: cached pll_mult %lu is out of range 15 to 90." EOL, pll_mult_here);
+                            V1_print(F("ERROR: won't use anything from this cache entry" EOL));
+                            badCache = true;
+                        }
+                        // FIX! we could check the num/denum for range also?
+
                     if (badCache) {
                         V0_println(F("ERROR: fatal. previous valid cache entry had 0 or freq_x128 0." EOL));
                         found = false;
@@ -1367,8 +1382,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint64_t pll_num_here;
     uint64_t pll_denom_here;
     if (USE_FAREY_WITH_PLL_REMAINDER) {
-        pll_num_here = retval.numerator;
-        pll_denom_here = retval.denominator;
+        pll_num_here = (uint64_t)retval.numerator;
+        pll_denom_here = (uint64_t)retval.denominator;
     } else {
         uint64_t pnh_x128 = (pll_remain_x128 * PLL_DENOM_x128) / tcxo_freq_x128;
         // here's how we add 0.5 (in the scaled domain) to get rounding effect before shift down
@@ -1401,7 +1416,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     double actual_here = actual_pll_freq_here / (double)(ms_div_here << R_DIVISOR_SHIFT);
 
     // output so we can print or use
-    *ms_div    = (uint32_t)ms_div_here;
+    *ms_div    = (uint32_t)ms_div_here;  // these uint64_t turn into uint32_t here
     *pll_mult  = (uint32_t)pll_mult_here;
     *pll_num   = (uint32_t)pll_num_here;
     *pll_denom = (uint32_t)pll_denom_here;
@@ -1422,7 +1437,7 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     double actual_pll_freq;
     double actual;
     if (clk_num != 0) {
-        V1_println("ERROR: vfo_set_freq_16() should only be called with clk_num 0");
+        V1_println("ERROR: vfo_set_freq_x128 should only be called with clk_num 0");
         // I guess force clk_num, although code is broken somewhere
         clk_num = 0;
         // note we only have one s_PLLB_ms_div_prev copy state also
@@ -1448,13 +1463,15 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     uint8_t retval = vfo_calc_cache(&actual, &actual_pll_freq,
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 1);
     if (retval!=1) { // hit?
-        // have to calc it!
+        V1_print(F("WARN: vfo_set_freq_x128 has to redo vfo_calc_div_mult_num()"));
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, true);
         // install. If we install it when already there, we'll flag the double
         // entry on lookup later
         vfo_calc_cache(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 2);
+        V1_printf("vfo_set_freq_x128 after redo: pll_mult %lu ms_div %lu" EOL,
+            pll_mult, ms_div);
     }
 
     // if (only_pll_num) {
@@ -1481,11 +1498,14 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
         // si5351a_reset_PLLB(true);
 
         // static global? for comparison next time
+        
         s_PLLB_ms_div_prev = ms_div;
+        V1_printf(EOL "vfo_set_freq_x128 setting (1) s_PLLB_ms_div_prev %lu" EOL EOL,  ms_div);
     }
     // make PLLA the same (so it locks? Is that better power than unlocked?)
     si5351a_setup_PLLA(pll_mult, pll_num, pll_denom);
     s_PLLA_ms_div_prev = ms_div;
+    V1_printf(EOL "vfo_set_freq_x128 setting (1) s_PLLA_ms_div_prev %lu" EOL EOL,  ms_div);
 
     // V1_printf("vfo_set_freq_x128 END clk_num %u freq %lu" EOL, clk_num, freq);
 }

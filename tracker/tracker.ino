@@ -482,8 +482,10 @@ uint32_t XMIT_FREQUENCY;
 // optimized?
 uint32_t PLL_DENOM_OPTIMIZE = 1048575;
 
-bool USE_FAREY_WITH_PLL_REMAINDER = true;
-bool TEST_FAREY_WITH_PLL_REMAINDER = true;
+// bool USE_FAREY_WITH_PLL_REMAINDER = true;
+// bool TEST_FAREY_WITH_PLL_REMAINDER = true;
+bool USE_FAREY_WITH_PLL_REMAINDER = false;
+bool TEST_FAREY_WITH_PLL_REMAINDER = false;
 
 //*****************************
 bool BALLOON_MODE = true;

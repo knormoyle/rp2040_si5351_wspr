@@ -18,7 +18,7 @@
 
 // one or the other. same methods/classes so can drop in
 // if (DO_BEST_RAT) will evaluate true if 1
-#define DO_BEST_RAT 0
+#define DO_BEST_RAT 1
 #define DO_BEST_RAT_CONTINUED_FRACTIONS 0
 
 #if DO_BEST_RAT_CONTINUED_FRACTIONS == 1
@@ -402,6 +402,7 @@ int main() {
         // multiplier_fraction = 0.4642856924664300;
         // multiplier_fraction = 0.4642856924664400;
 
+        // multiplier_fraction = 0.47194409375000;
         double target = multiplier_fraction;
         // ad_rat doesn't like this case 
         // maxerr_target 0.285714341919480
