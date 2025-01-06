@@ -1001,12 +1001,6 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     uint32_t r_divisor_here = 0;
     uint32_t freq_x128_here = 0;
 
-    // count the current valid entries
-    uint8_t totalValid = 0;
-    for (uint8_t i = 0; i < VCC_SIZE; i++) {
-        if (cache_valid[i]) totalValid += 1;
-    }
-
     bool found = false;
     uint8_t retval = 0;
     uint8_t found_i = 0;
@@ -1156,6 +1150,13 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
             retval = 1;
         }
     }
+
+    // count the current valid entries (after any update)
+    uint8_t totalValid = 0;
+    for (uint8_t i = 0; i < VCC_SIZE; i++) {
+        if (cache_valid[i]) totalValid += 1;
+    }
+
     // no print on lookup
     if (operation!=1) {
         V1_printf("vfo_calc_cache END totalValid %u" EOL, totalValid);
