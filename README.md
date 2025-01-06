@@ -128,7 +128,8 @@ To give an example of where the files should be and the libraries issue:
 
 You have to have a Arduino dir for libraries. I copied Kazu notes on where the Arduino dir is on different systems in my readme
 
-I just created links (ln -s) from the Arduino libraries dir to the files in my repo libraries. You can just cp them though
+I just created links (ln -s) from the Arduino libraries dir to the files in my repo libraries. You can just cp them though.
+I put 'cp_libraries.sh' in the repo's tracker dir. I use 'cp_libraries.sh to create links in my Arduino directory to the libraries. This makes it easy for me to be stupid if I add libraries. You can modify it to work for whatever your local config is. You should only have to redo the Arduino libraries links or copies, if I had any new library usage (i just added a library for blinking led with morse code, which I may use for detailed error messaging in the future. (that library seems cool. can be non-blocking!)
 
 ```
 kevin@pc8c:~$ cd Arduino
@@ -225,8 +226,58 @@ Here's the usb cable with on/off switch I ordered. I think it will be very usefu
   - Disconnect the USB cable
   - While shorting the H5 (two thru-hole next to the USB connector, maybe with pins or tweezers), connect the USB cable
   - After your PC recognized the board, release the shorting
+  - 
+### 5. Setup putty to have a session that is config'ed to log to putty.log
+I set up a session with these configurations and save to a session named putty_config_for_ad6z_tracker. Remember to enter the name of the config you want to save: 'putty_config_for_ad6z_tracker' and click save to save it.  On Ubuntu (linux) the usb serial port should always be created as /dev/ttyACM0. If you plug in multiple usb serial devices, or unplug and replug too quickly, it might use /dev/ttyACM1, etc. 
 
-### 5. More detail on compile/upload and getting to a serial window for keyboard input and print output
+If using Windows, or maybe Mac, you probably have different usb serial ports. I expect you've dealt with this before, so do the right thing!
+If there's a problem and maybe the port isn't being created, check like this at the command line
+```
+$ ls /dev/ttyA*
+/dev/ttyACM0
+```
+
+the putty config setup I use..everything else is same as default.
+
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/putty1.png"/>
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/putty2.png"/>
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/putty3.png"/>
+
+Then I create a myputty.sh in my home directory.
+
+Then I create an entry in my .bashrc so that I can type 'mp" at the command line, and it goes to my home dir and executes my putty.sh
+
+That way, putty.log will always overwrite any putty.log in my home dir, and I know where to find it. So you don't have to remember to log, you just always do it this way, and you always have a log if there was some issue with the session. Notably if the tracker reboots unexpectedly.
+
+When you 'X' to force reboot after config, or the config times out, it will reboot and close the putty session. Just redo 'mp' or whatever, and open a new session within 10 secs.
+Windows should have similar thing you can do to have a script to execute putty.
+myputty.sh looks like this:
+
+```
+#!/usr/bin/env bash
+
+# SESSION="/home/kevin/.putty/sessions/Default%20Settings"
+# SESSION="/home/kevin/.putty/sessions/putty_config_kc3lbr.10_20_24"
+SESSION="/home/kevin/.putty/sessions/putty_config_for_ad6z_tracker"
+
+# don't include the path above
+# this autostarts
+SESSION="putty_config_kc3lbr.10_20_24"
+
+# in case there was an existing putty session writing to putty.log
+pkill putty.log
+echo "putty -load $SESSION" 
+putty -load "$SESSION"
+```
+
+So the combination of the on/off switch on the usb cable, and my fast 'mp' to start a putty session, means I can reboot (power on/off) the tracker quickly when necessary, like right before a compile upload, or if I missed the putty window open timing ,and have to reboot the tracker to get it out of BALLOON_MODE.
+
+This is why I just have short 10-15 sec timeouts on things, to enter BALLOON_MODE etc.
+
+It might be maddening at first to see how the putty window closes on reboot, but that's safest for propagating configuration changes. They are just written to flash, and then the tracker reboots (after timeout or when you give teh command 'X'.. Then the new config is used on reboot, just like normal!
+
+
+### 6. More detail on compile/upload and getting to a serial window for keyboard input and print output
 Forgive the wild descriptions here, will improve this shortly. Excerpts from late night email with a collaborator here:
 
 I went hog wild playing with clock speeds and turning usb pll off and sys pll off.
