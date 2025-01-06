@@ -196,8 +196,6 @@ void si5351a_calc_sweep_band() {
     vfo_calc_cache_flush();
     V1_print(F("si5351a_calc_sweep_band() END" EOL));
 }
-
-
 //*********************************************************************************
 void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     uint32_t *pll_num, bool print) {
@@ -329,7 +327,6 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
     // FIX! maybe not needed if we didn't load anything into the cache!
     // not needed at end also?
     // vfo_calc_cache_flush();
-
 }
 
 //*********************************************************************************

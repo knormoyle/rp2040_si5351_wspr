@@ -83,6 +83,8 @@
 // this is the target PLL freq when making muliplier/divider initial calculations
 // set in tracker.ino
 extern uint32_t PLL_FREQ_TARGET;
+extern bool USE_FAREY_WITH_PLL_REMAINDER;
+extern bool TEST_FAREY_WITH_PLL_REMAINDER;
 
 // from tracker.ino
 extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
@@ -750,8 +752,8 @@ void si5351a_setup_multisynth012(uint32_t div) {
     i2cWrite(SI5351A_CLK2_CONTROL, CLK2_control_data);
     s_CLK2_control_prev = CLK2_control_data;
 
-    V1_printf("VFO_DRIVE_STRENGTH CLK0: %d" EOL, (int)s_vfo_drive_strength[0]);
-    V1_printf("VFO_DRIVE_STRENGTH CLK1: %d" EOL, (int)s_vfo_drive_strength[1]);
+    V1_printf("s_vfo_drive_strength[0] %02x" EOL, (int)s_vfo_drive_strength[0]);
+    V1_printf("s_vfo_drive_strength[1] %02x" EOL, (int)s_vfo_drive_strength[1]);
     V1_printf("si5351a_setup_multisynth012 END div %lu" EOL, div);
 }
 
@@ -972,7 +974,10 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
     uint32_t *r_divisor, uint32_t freq_x128, uint8_t operation) {
 
-    V1_print(F("vfo_calc_cache START" EOL));
+    // no prints on the lookup
+    if (operation!=1) {
+        V1_print(F("vfo_calc_cache START" EOL));
+    }
 
     static bool cache_valid[VCC_SIZE] = { 0 };
     static double cache_actual[VCC_SIZE] = { 0 };
@@ -986,13 +991,13 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
 
     static uint8_t ptr = 0;
 
-    double actual_here;
-    double actual_pll_freq_here;
-    uint32_t ms_div_here;
-    uint32_t pll_mult_here;
-    uint32_t pll_num_here;
-    uint32_t pll_denom_here;
-    uint32_t r_divisor_here;
+    double actual_here = 0.0;
+    double actual_pll_freq_here = 0.0;
+    uint32_t ms_div_here = 0;
+    uint32_t pll_mult_here = 0;
+    uint32_t pll_num_here = 0;
+    uint32_t pll_denom_here = 0;
+    uint32_t r_divisor_here = 0;
 
     // count the current valid entries
     uint8_t totalValid = 0;
@@ -1036,20 +1041,36 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                     } else {
                         V1_print(F("GOOD: "));
                     }
-                    V1_printf(" vfo_calc_cache hit i %u freq_x128 %lu", i, freq_x128);
+                    V1_printf(" vfo_calc_cache hit on i %u freq_x128 %lu", i, freq_x128);
                     V1_printf(" actual %.4f actual_pll_freq %.4f", actual_here, actual_pll_freq_here);
                     V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
                         pll_mult_here, pll_num_here, pll_denom_here, ms_div_here, r_divisor_here);
 
-                    found = true;
-                    found_i = i;
-                    *actual = actual_here;
-                    *actual_pll_freq = actual_pll_freq_here;
-                    *ms_div = ms_div_here;
-                    *pll_mult = pll_mult_here;
-                    *pll_num = pll_num_here;
-                    *pll_denom = pll_denom_here;
-                    *r_divisor = r_divisor_here;
+                    bool badCache = 
+                        (actual_here == 0.0) ||
+                        (actual_pll_freq_here == 0.0) ||
+                        (ms_div_here == 0) ||
+                        (pll_mult_here == 0) ||
+                        (pll_num_here == 0) ||    // should never happen? very unlikely
+                        (pll_denom_here == 0) ||
+                        (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
+                        (freq_x128 == 0);         // we should never lookup freq_x128 
+
+                    if (badCache) {
+                        V0_println(F("ERROR: fatal. previous valid cache entry had 0 or freq_x128 0." EOL));
+                        found = false;
+                    } else {
+                        found = true;
+                        found_i = i;
+                        *actual = actual_here;
+                        *actual_pll_freq = actual_pll_freq_here;
+                        *ms_div = ms_div_here;
+                        *pll_mult = pll_mult_here;
+                        *pll_num = pll_num_here;
+                        *pll_denom = pll_denom_here;
+                        *r_divisor = r_divisor_here;
+                    }
+                    
                 }
             }
             retval = 1;
@@ -1099,7 +1120,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         (freq_x128 == 0);         // we should never lookup freq_x128 
                     
                     if (badCache) {
-                        V0_println(F("ERROR: fatal. previous valid cache entry had 0 or freq_x128 0. rebooting" EOL));
+                        V0_println(F("ERROR: fatal. valid cache entry had 0 or freq_x128 0. rebooting" EOL));
                         V0_flush();
                         Watchdog.enable(5000);  // milliseconds
                         while (true) tight_loop_contents();
@@ -1116,7 +1137,10 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
             retval = 1;
         }
     }
-    V1_printf("vfo_calc_cache END totalValid %u" EOL, totalValid);
+    // no print on lookup
+    if (operation!=1) {
+        V1_printf("vfo_calc_cache END totalValid %u" EOL, totalValid);
+    }
     return retval;
 }
 
@@ -1312,9 +1336,10 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint64_t pll_remain_x128 = pll_freq_x128 - (pll_mult_here * tcxo_freq_x128);
 
     //*******************************************************************
-    bool USE_FAREY_WITH_PLL_REMAINDER = true;
-    bool TEST_FAREY_WITH_PLL_REMAINDER = true;
     rational_t retval;
+    // should never use these initial values?
+    retval.numerator = 0;
+    retval.denominator = 0;
     if (TEST_FAREY_WITH_PLL_REMAINDER | USE_FAREY_WITH_PLL_REMAINDER) {
         // lets see what farey/magnusson get with the remainder
         // we can't use this as we need to adjust the remainder to get
@@ -1419,9 +1444,10 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     // OH: keep 5, one for the cw freq!
 
     // lookup. get values if in cache already!
+    // don't do any prints on the lookup
     uint8_t retval = vfo_calc_cache(&actual, &actual_pll_freq,
         &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 1);
-    if (retval!=1) {
+    if (retval!=1) { // hit?
         // have to calc it!
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, true);

@@ -482,6 +482,9 @@ uint32_t XMIT_FREQUENCY;
 // optimized?
 uint32_t PLL_DENOM_OPTIMIZE = 1048575;
 
+bool USE_FAREY_WITH_PLL_REMAINDER = true;
+bool TEST_FAREY_WITH_PLL_REMAINDER = true;
+
 //*****************************
 bool BALLOON_MODE = true;
 bool CORE1_PROCEED = false;
@@ -995,9 +998,14 @@ void setup1() {
     uint32_t pll_num;
     // this walks thru the 4 symbols we're going to use
     si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);
-    V1_printf("SEED values: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
-    V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL,
+    if (USE_FAREY_WITH_PLL_REMAINDER) {
+        V1_printf("Using Farey? sumAbsoluteError %.8f sumShiftError %.8f" EOL,
         sumAbsoluteError, sumShiftError);
+    } else {
+        V1_printf("SEED for num-shift algo: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
+        V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL,
+        sumAbsoluteError, sumShiftError);
+    }
 
     // check 4 digits of precision
     int sse = (int)10000 * sumShiftError;
@@ -1037,10 +1045,11 @@ int t_TELEN1_val2 = 0;
 int t_TELEN2_val1 = 0;
 int t_TELEN2_val2 = 0;
 
-int tx_cnt_0;
-int tx_cnt_1;
-int tx_cnt_2;
-int tx_cnt_3;
+int tx_cnt_0 = 0;
+int tx_cnt_1 = 0;
+int tx_cnt_2 = 0;
+int tx_cnt_3 = 0;
+int tx_cnt_cw = 0;
 
 //*************************************************************************
 // GPS NMEA bursts: The thinking behind how we deal with it
@@ -1477,12 +1486,16 @@ void loop1() {
     // can print an error here if not 5
     uint8_t VCC_valid_cnt = vfo_calc_cache_print_and_check();
     // should be 4 if just sending wspr. 5 if sending cw too
-    if (_morse_also[0] == '1') {
-        if (VCC_valid_cnt != 5)
-            V1_printf("ERROR: loop1() VCC_valid_cnt %u != 5" EOL, VCC_valid_cnt);
-    } else {
-        if (VCC_valid_cnt != 4)
-            V1_printf("ERROR: loop1() VCC_valid_cnt %u != 4" EOL, VCC_valid_cnt);
+    // won't get any until first wspr tx goes out
+    if (tx_cnt_0 > 0)  {
+        if (_morse_also[0] == '1') {
+            
+            if (VCC_valid_cnt != 5)
+                V1_printf("WARN: loop1() VCC_valid_cnt %u != 5" EOL, VCC_valid_cnt);
+        } else {
+            if (VCC_valid_cnt != 4)
+                V1_printf("ERROR: loop1() VCC_valid_cnt %u != 4" EOL, VCC_valid_cnt);
+        }
     }
     //*****************************************************************
 
@@ -1695,6 +1708,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         // picks a good HF freq for the config'ed _Band. uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
         cw_send_message();
+        tx_cnt_cw += 1;
         // restore the wspr XMIT_FREQUENCY since cw changed it
         // sets minute/lane/id from chan number.
         // FIX! is it redundant at this point?..remove?
