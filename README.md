@@ -219,7 +219,7 @@ you should be able to see "Raspberry Pi Pico" in the top left white box when you
 - The firmware turns USB pll off at times. If you can't upload, unplug the usb (better yet get a usb cable with switch to avoid plug/unplug cycles). Then plug it back in. The green led should be on steady. immediately do the compile upload. After that you have 15 secs to open a putty window (setup a fast way to start putty with a session defined. save output (logging) to a putty.log for later analysis/debug. You will interact with the putty window for keyboard entry (if necessary). Hit enter to interrupt to get to config screen and keyboard entry. X to leave config mode and reboot. You will have to repeat opening putty at this point because of the reboot. If there is no usb, but just power, the tracker will enter balloon mode. Also, all usb input/output will be disabled if you don't open the putty session within 15 secs of boot. There is much debug output. it can be disabled with the V command in the config (VERBY). 0 is least output. 1 is more. 2 is more than that. 3 is most so far. The printing does not interfere with wspr operations. You can set K (clock) to 18 Mhz. There is a factory reset in the config selection. It will default any bad/illegal entries in the config.
 - 
 Here's the usb cable with on/off switch I ordered. I think it will be very useful!
-[USB cable](https://www.amazon.com/dp/B0CVZQ66C6) Note your existing USB/A micro-usb cable will plug into the female jack. Pick an appopriate length for comfort!
+[USB cable with on/off switch](https://www.amazon.com/dp/B0CVZQ66C6) Note your existing USB/A micro-usb cable will plug into the female jack. Pick an appopriate length for comfort!
 
 - 
 - If you see an error, you may need to put the tracker board into "Bootloader" mode before uploading:
@@ -349,10 +349,16 @@ Basically get microHertz level accuracy on the symbol shifts, and absolute error
 Different denominators targeted for different bands, using the spreadsheet data for deciding optimal denominator (per band). Same denominator used for all 4 u4b frequency bins on a band. By getting exact symbol shifts, I think the DT and SNR and frequency report from my WSJT-X sdr testing, has improved (more energy into the ffts being done by WSJT-X)
 
 ## Questions?
-I (Kevin Normoyle) will try to answer all questions or email.
+I (Kevin Normoyle) will try to answer all questions or email. Feel free to use Issues or Discussions here to everyone can benefit!
+[Issues](https://github.com/knormoyle/rp2040_si5351_wspr/discussions)
+[Discussions](https://github.com/knormoyle/rp2040_si5351_wspr/issues)
  
 
 ## Project Background and History (Kazu AG6NS prehistory to this fork)
+**Jan 2024** - Seems to have all the features I wanted. Can do CW also, and uses Farey algo for si5351a config. Changes both numerator/denominator on symbol shift frequencies. So 400 Mhz Si5351a PLL target frequency is used with pretty accurate WSPR symbol shifts. Can target higher PLL frequencies if wanted, (600-900 is si5351a/ms5351m spec). Interestingly I couldn't key the CW on the ms5351m with the clk output enable reg. Used the clk PDN (power down) instead. requires PLL reset to keep clk0/clk1 phase relationship for the dipole antiphase drive, but that's okay. CW timing is perfect at 12 wpm, but can be changed.
+
+Alternate symbol shift strategy of numerator-only shift is still in the code (mode that can be changed with recompile). I have fixed denominator per band constants for that mode, that allow PERFECT wspr symbol shifts of 1.4641...Hz for a couple of different target PLL frequencies (also choosable with constants, with recompile). But that shouldn't be necessary (unless we run into a lock problem with the si5351a/ms5351m at 400Mhz, or increased phase noise or ??. Right now, the 393Mhz pll frequency seems to save a couple mA of power, so good!
+
 **Nov 2024** - This fork initiated by Kevin Normoyle AD6Z
 
 **Oct 2021** - attend to [SF-HAB (San Francisco Bay Area High Altitude Balloon) group](https://sf-hab.org/)'s Amateur Radio Pico Balloon presentation at Pacificon 2021, then joined the group
