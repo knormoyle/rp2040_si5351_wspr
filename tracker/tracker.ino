@@ -103,7 +103,7 @@ bool FORCE_BALLOON_MODE = false;
 // libraries/arduinomorse
 // wget https://github.com/knormoyle/arduinomorse/archive/refs/heads/master.zip
 // might be interesting for getting better led messaging. not used yet.
-// this has non-blocking capability. 
+// this has non-blocking capability.
 // I could use my morse cw and have it toggle an led? but it would be blocking
 #include <morse.h> // https://github.com/markfickett/arduinomorse
 
@@ -207,7 +207,7 @@ extern const int LED_STATUS_GPS_TIME = 2;      // 2 short
 extern const int LED_STATUS_GPS_FIX = 3;       // 3 short
 extern const int LED_STATUS_TX_WSPR = 4;       // 4 short
 extern const int LED_STATUS_TX_TELEMETRY = 5;  // 1 long
-extern const int LED_STATUS_TX_TELEN1 = 6;     // 2 long  
+extern const int LED_STATUS_TX_TELEN1 = 6;     // 2 long
 extern const int LED_STATUS_TX_TELEN2 = 7;     // 3 long
 extern const int LED_STATUS_TX_CW = 8;         // 4 long
 extern const int LED_STATUS_REBOOT_NO_SERIAL = 8; // 5 long
@@ -247,7 +247,7 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // so only 32?
 
 // default? (for usb serial)
-// separate for rx. we don't want to be blocked 
+// separate for rx. we don't want to be blocked
 // also don't want large delay on flush!
 // leave it as default
 #define SERIAL_TX_BUFFER_SIZE 256
@@ -324,23 +324,23 @@ extern const int PLL_CALC_SHIFT = 7;
 // uint32_t PLL_FREQ_TARGET = 600000000;
 
 // 15 (min multiplier) * 26Mhz = 390 Mhz
-// the other (not used PLL) will run at this freq in default config? 
+// the other (not used PLL) will run at this freq in default config?
 // so what about targetting that? (will it error on the multiplier?)
 // check that code (set to min 15 if too small in si5351_functions.cpp
 // so we should be able
 
 //***************************
-// 390Mhz pll test: 
-// here's results from the magic spreadsheet showing denom values for 10/12/15/17/20M 
-// with mult/divisor selected to get pll in the 390Mhz region. 
+// 390Mhz pll test:
+// here's results from the magic spreadsheet showing denom values for 10/12/15/17/20M
+// with mult/divisor selected to get pll in the 390Mhz region.
 // 10M doesn't have a good value (uses max value: means there was no perfect value)
-//  
-// It shows that I can't get optimal denominator on 10M  
-// ..so the target pll freq is too low. 
+//
+// It shows that I can't get optimal denominator on 10M
+// ..so the target pll freq is too low.
 // But there were numerator-step-1 values that worked for 12/15/17/20M
-// I don't show actual pll freq in spreadsheet, 
+// I don't show actual pll freq in spreadsheet,
 // because I generate the numerator elsewhere (in tracker code)
-//  
+//
 // no green cells on 10M (and the 12M value is small)
 // so I won't use 390Mhz target because I want the perfect symbol shift on 10M too
 //***************************
@@ -443,7 +443,7 @@ char t_callsign[7] = { 0 };
 char t_grid6[7] = { 0 };       // 6 bytes
 char t_power[3] = { 0 };       // 2 bytes
 char t_hdop[4] = { 0 };        // 3 bytes;
-char t_solarElevation[5] = { 0 }; // 3 bytes -90 to 90? 
+char t_solarElevation[5] = { 0 }; // 3 bytes -90 to 90?
 char t_solarAzimuth[7] = { 0 };   // 4 bytes -180 to 180?
 char t_solarDistance[8] = { 0 };  // 3 bytes 145 to 150 km ?
 
@@ -1010,7 +1010,7 @@ void setup1() {
     set_PLL_DENOM_OPTIMIZE(_Band);
     // do this to sweep the symbols for the u4b channel in use and fill the cache for Farey results?
     // FIX! should we calc the 4 symbols?
-    double sumShiftError; 
+    double sumShiftError;
     double sumAbsoluteError;
     uint32_t pll_num;
     // this walks thru the 4 symbols we're going to use
@@ -1263,7 +1263,7 @@ void loop1() {
             // so don't here. Only update LED state here, though
             // it is common for gps chips to send out 1/1/2080 dates when invalid
             // I see 2080-01-01 2080-01-07 in SIM65M. 2000-00-00 ? in ATGM336 (is month/day wrong?)
-            // On 1/2/25 ~19:00 I saw this: 2080-01-05 23:59:50 
+            // On 1/2/25 ~19:00 I saw this: 2080-01-05 23:59:50
             // although time sees okay? (utc time)
             // this is a check for validity
             if (gps.date.year() >= 2024 && gps.date.year() <= 2034)
@@ -1419,7 +1419,7 @@ void loop1() {
             // it will stall until lined up on secs below
             // align to somewhere in the minute before the callsign starting minute
 
-            // so we can start the vfo 30 seconds before needed
+            // so we can start the vfo 20 seconds before needed
             // if we're in the minute before sending..just live with gps fix
             // because it might take a minute to have another one?
             Watchdog.reset();
@@ -1429,7 +1429,7 @@ void loop1() {
             if (voltageBeforeWSPR >= WsprBattMin) {
                 if (!alignMinute(-1)) {
                     // oneliner
-                    V1_printf("%" PRIu64 " OKAY: wspr no send.", loopCnt);
+                    V1_printf(EOL "%" PRIu64 " OKAY: wspr no send.", loopCnt);
                     V1_printf(" because minute() %d second: %d *alignMinute(-1) %u*" EOL,
                         minute(), second(), alignMinute(-1));
                     // we fall thru and can get another gps fix or just try again.
@@ -1443,11 +1443,11 @@ void loop1() {
                 } else {
                     V1_printf("%" PRIu64 " wspr good alignMinute(-1) and voltageBeforeWSPR %.f" EOL,
                         loopCnt, voltageBeforeWSPR);
-                    if (second() > 30) {
+                    if (second() > 40) {
                         // to late..don't try to send
                         // minute() second() come from Time.h as ints
                         // oneliner
-                        V1_printf("%" PRIu64 " WARN: wspr no send, past 30 secs in pre-minute:",
+                        V1_printf(EOL "%" PRIu64 " WARN: wspr no send, past 40 secs in pre-minute:",
                             loopCnt);
                         V1_printf(" minute: %d *second: %d* alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
@@ -1459,22 +1459,20 @@ void loop1() {
                         sleepSeconds(SMART_WAIT);
                     } else {
                         // oneliner
-                        V1_printf("%" PRIu64 " wspr: wait until 30 secs before starting minute",
+                        V1_printf("%" PRIu64 " wspr: wait until 20 secs before starting minute",
                             loopCnt);
                         V1_printf(" now: minute: %d *second: %d*" EOL, minute(), second());
-                        while (second() < 30) {
+                        while (second() < 40) {
                             Watchdog.reset();
                             delay(10);  // 10 millis
-                            // we could end up waiting for 30 secs so update LED
                             updateStatusLED();
                         }
-                        // will call this with less than or equal to 30 secs to go
-                        V1_printf("%" PRIu64 " wspr: 30 secs until starting minute",
-                            loopCnt);
+                        V1_printf("%" PRIu64 " wspr: 20 secs until starting minute", loopCnt);
                         // oneliner
                         V1_print(F(" wspr: vfo turn on for warmup"));
                         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
+                        // will call this with less than or equal to 20 secs to go
                         uint32_t hf_freq = XMIT_FREQUENCY;
                         int res = alignAndDoAllSequentialTx(hf_freq);
                         if (res == -1) {
@@ -1491,7 +1489,7 @@ void loop1() {
             } else {
                 // this line will print a lot if we're failing because of this?
                 // but we have the min at 0.0 for now
-                V1_printf("%" PRIu64 " WARN: no send: voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
+                V1_printf(EOL "%" PRIu64 " WARN: no send: voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
                     loopCnt, voltageBeforeWSPR, WsprBattMin);
                 sleepSeconds(BATT_WAIT);
             }
@@ -1506,7 +1504,7 @@ void loop1() {
     // won't get any until first wspr tx goes out
     if (tx_cnt_0 > 0)  {
         if (_morse_also[0] == '1') {
-            
+
             if (VCC_valid_cnt != 5)
                 V1_printf("WARN: loop1() VCC_valid_cnt %u != 5" EOL, VCC_valid_cnt);
         } else {
@@ -1581,10 +1579,10 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
     V1_print(F("alignAndDoAllSequentialTX START"));
     V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
-    while (second() < 30)  {
+    while (second() < 40)  {
         Watchdog.reset();
         delay(5);  // 5 millis
-        // we could end up waiting for 30 secs
+        // we could end up waiting for 40 secs
         updateStatusLED();
     }
 
@@ -1777,7 +1775,7 @@ void sleepSeconds(int secs) {
 
         solarVoltage = readVoltage();
         if (solarVoltage < BattMin || solarVoltage < GpsMinVolt) {
-            V1_printf("sleepSeconds() bad solarVoltage %.f ..(1) turn gps off" EOL, 
+            V1_printf("sleepSeconds() bad solarVoltage %.f ..(1) turn gps off" EOL,
                 solarVoltage);
             GpsOFF(false);  // don't keep TinyGPS state
         }
@@ -1807,7 +1805,7 @@ void sleepSeconds(int secs) {
     // if it's off, we turn it on. If it's on, we turn it off
     // that should be good for power
     if (solarVoltage < BattMin || solarVoltage < GpsMinVolt) {
-        V1_printf("sleepSeconds() bad solarVoltage %.f ..(2) turn gps off" EOL, 
+        V1_printf("sleepSeconds() bad solarVoltage %.f ..(2) turn gps off" EOL,
             solarVoltage);
         GpsOFF(false);  // don't keep TinyGPS state
     } else {
@@ -2075,7 +2073,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     } else {
         vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true); // print. clk0/1 both affected
     }
-    
+
     Watchdog.reset();
     V1_println(F("sendWspr() END"));
 }
@@ -2276,7 +2274,7 @@ void freeMem() {
 
     // https://forum.arduino.cc/t/trying-to-make-sense-of-ram-usage/622666
     // char __stack = 0;
-     
+
     // V1_print(F("__brkval="));
     // V1_println((unsigned int)__brkval);
     // V1_print(F("__malloc_heap_start="));
