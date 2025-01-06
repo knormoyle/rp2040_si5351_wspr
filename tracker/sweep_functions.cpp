@@ -272,7 +272,7 @@ void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError,
         if (print) {
             V1_printf("channel %s symbol %u", _U4B_chan, symbol);
             V1_printf(" actual %.4f actual_pll_freq %.4f", actual, actual_pll_freq);
-            V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu",
+            V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
                 pll_mult, pll_num_here, pll_denom, ms_div, r_divisor);
         }
         switch (symbol) {
