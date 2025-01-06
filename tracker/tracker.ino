@@ -1589,7 +1589,16 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // FIX! does this include a full init at the rp2040?
     // vfo_turn_on() doesn't turn on the clk outputs!
     vfo_turn_on(WSPR_TX_CLK_0_NUM);  // clk0/1 both affected
-    startSymbolFreq(hf_freq, 0, false);  // symbol 0, change more than just pll_num
+
+
+    // New 1/6/24
+    // Quickly flip thru all 4 symbols to see the cache with the Farey algo results
+    // to avoid adding latency due to the iterations when the symbol is first used and cache
+    // end with symbol 0
+    startSymbolFreq(hf_freq, 3, false);  // symbol 3, change more than just pll_num
+    startSymbolFreq(hf_freq, 2, true);   // symbol 2, should just be num and denom change?
+    startSymbolFreq(hf_freq, 1, true);   // symbol 1, should just be num and denom change?
+    startSymbolFreq(hf_freq, 0, true);   // symbol 0, should just be num and denom change?
     // will print programming if false, since we have time
 
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
