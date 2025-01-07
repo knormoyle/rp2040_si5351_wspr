@@ -283,11 +283,11 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
         V1_print(F("Showing shifts in symbol frequencies, rather than absolute error" EOL));
         V1_printf("channel %s symbol 0 actual %.6f" EOL,
             _U4B_chan, symbol0actual);
-        V1_printf("channel %s symbol 1 actual %.6f shift0to1 %.6f" EOL,
+        V1_printf("channel %s symbol 1 actual %.6f shift0to1 %.6f Hz" EOL,
             _U4B_chan, symbol1actual, symbol1actual - symbol0actual);
-        V1_printf("channel %s symbol 2 actual %.6f shift0to2 %.6f" EOL,
+        V1_printf("channel %s symbol 2 actual %.6f shift0to2 %.6f Hz" EOL,
             _U4B_chan, symbol2actual, symbol2actual - symbol0actual);
-        V1_printf("channel %s symbol 3 actual %.6f shift0to3 %.6f" EOL,
+        V1_printf("channel %s symbol 3 actual %.6f shift0to3 %.6f Hz" EOL,
             _U4B_chan, symbol3actual, symbol3actual - symbol0actual);
     }
 
@@ -316,9 +316,9 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     double symbolShiftError_2 = abs(symbol2actual - symbol1actual) - expectedShift;
     double symbolShiftError_3 = abs(symbol3actual - symbol2actual) - expectedShift;
     V1_print(F(EOL));
-    V1_printf("Expected shift 0 to 1: %.6f" EOL, 1 * expectedShift);
-    V1_printf("Expected shift 0 to 2: %.6f" EOL, 2 * expectedShift);
-    V1_printf("Expected shift 0 to 3: %.6f" EOL, 3 * expectedShift);
+    V1_printf("Expected shift 0 to 1: %.6f Hz" EOL, 1 * expectedShift);
+    V1_printf("Expected shift 0 to 2: %.6f Hz" EOL, 2 * expectedShift);
+    V1_printf("Expected shift 0 to 3: %.6f Hz" EOL, 3 * expectedShift);
 
     double symbolShiftError_here = symbolShiftError_1;
     if (symbolShiftError_2 > symbolShiftError_here)
@@ -332,8 +332,8 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
 
     if (print) {
         V1_print(F(EOL));
-        V1_printf("symbolAbsoluteError: %.6f" EOL, symbolAbsoluteError_here);
-        V1_printf("symbolShiftError: %.6f" EOL, symbolShiftError_here);
+        V1_printf("symbolAbsoluteError: %.6f Hz" EOL, symbolAbsoluteError_here);
+        V1_printf("symbolShiftError: %.6f Hz" EOL, symbolShiftError_here);
         V1_print(F(EOL));
         V1_print(F("si5351a_calc_optimize END" EOL));
     }

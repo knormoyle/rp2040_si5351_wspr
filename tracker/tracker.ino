@@ -1072,10 +1072,15 @@ void setup1() {
         symbolAbsoluteError, symbolShiftError);
     }
 
-    // check 4 digits of precision
-    int sse = (int)10000 * symbolShiftError;
-    if (sse != 0) {
-        V1_printf("WARN:FINAL symbolShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
+    // check for micro or milli Hz precision (quality)
+    int sse_micro = roundf(1e6 * symbolShiftError);
+    int sse_milli = roundf(1e3 * symbolShiftError);
+    if (sse_micro == 0) {
+        V1_printf("WARN: worst symbolShiftError has better than microHz precision. sse * 1e6 %d" EOL, sse_micro);
+    } else if (sse_milli == 0) {
+        V1_printf("WARN: worst symbolShiftError has better than milliHz precision. sse * 1e3 %d" EOL, sse_milli);
+    } else {
+        V1_printf("WARN: worst symbolShiftError has < milli Hz precision. sse * 1e3 %d" EOL, sse_milli);
     }
 
     //***************
