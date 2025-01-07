@@ -1192,7 +1192,7 @@ void loop1() {
     // they all go in a burst together? so all within one sec, and actually a tighter burst.
     loopCnt++;
     Watchdog.reset();
-    V1_printf(EOL "%" PRIu64 " loop1() START" EOL, loopCnt);
+    V1_printf(EOL "loopCnt %" PRIu64 " loop1() START" EOL, loopCnt);
 
     // copied from loop_us_end while in the loop (at bottom)
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
@@ -1351,11 +1351,11 @@ void loop1() {
         Watchdog.reset();
         if ( !(fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX)) ) {
             if (fix_valid_all) {
-                V1_printf("%" PRIu64 " WARN: GPS fix issue: valid but fix_age %lu millisecs" EOL,
+                V1_printf("loopCnt %" PRIu64 " WARN: GPS fix issue: valid but fix_age %lu millisecs" EOL,
                     loopCnt, fix_age);
             } else {
                 // invalid gps should have this fix_age
-                V1_printf("%" PRIu64 "WARN: invalid GPS fix.", loopCnt);
+                V1_printf("loopCnt %" PRIu64 " WARN: invalid GPS fix.", loopCnt);
                 if (fix_age != 4294967295) {
                     V1_printf(" Why unexpected fix_age %lu ? (millis)", fix_age);
                 }
@@ -1369,7 +1369,7 @@ void loop1() {
 
         } else if (fix_sat_cnt <= 3) {  // implied also 'not the first if clause' .. i.e good fix
             // FIX! should we have separate led count for 2d fix and 3d fix?
-            V1_printf("%" PRIu64 "WARN: GPS fix issue: only %lu sats ..2d fix only" EOL,
+            V1_printf("loopCnt %" PRIu64 "WARN: GPS fix issue: only %lu sats ..2d fix only" EOL,
                 loopCnt, fix_sat_cnt);
             // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
             vfo_turn_off();
@@ -1378,7 +1378,7 @@ void loop1() {
             sleepSeconds(BEACON_WAIT);
 
         } else {
-            V1_printf("%" PRIu64 " Good recent 3d fix" EOL, loopCnt);
+            V1_printf("loopCnt %" PRIu64 " Good recent 3d fix" EOL, loopCnt);
             // GpsWatchdog doesn't get cleared unti we got a 3d fix here!
             // so we can get a gps cold reset if we never get here!
             GpsWatchdogCnt = 0;
@@ -1405,14 +1405,14 @@ void loop1() {
                     absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
             }
 
-            V1_printf("%" PRIu64 " first Gps Fix, after off->on! "
+            V1_printf("loopCnt %" PRIu64 " first Gps Fix, after off->on! "
                 PRIu64 " GpsTimeToLastFix %" PRIu64 EOL, loopCnt, GpsTimeToLastFix);
 
             // sets all the t_* strings above
             // voltage is captured when we write the buff? So it's before GPS is turned off?
             // should we look at the live voltage instead?
             V1_printf(
-                "%" PRIu64 " After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
+                "loopCnt %" PRIu64 " After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
                 loopCnt, timeStatus(), minute(), second());
 
             // FIX! it should depend on the channel starting minute - 1 (modulo 10)
@@ -1433,37 +1433,37 @@ void loop1() {
             if (voltageBeforeWSPR >= WsprBattMin) {
                 if (!alignMinute(-1)) {
                     // oneliner
-                    V1_printf(EOL "%" PRIu64 " OKAY: wspr no send.", loopCnt);
+                    V1_printf(EOL "loopCnt %" PRIu64 " OKAY: wspr no send.", loopCnt);
                     V1_printf(" because minute() %d second: %d *alignMinute(-1) %u*" EOL,
                         minute(), second(), alignMinute(-1));
                     // we fall thru and can get another gps fix or just try again.
                     // sleep because we don't want to cycle endlessly waiting to align
                     SMART_WAIT = (60 - second() + 20);
                     // oneliner
-                    V1_printf("%" PRIu64 " case 0: sleepSeconds() 20 secs into the next minute",
+                    V1_printf("loopCnt %" PRIu64 " case 0: sleepSeconds() 20 secs into the next minute",
                         loopCnt);
                     V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
                     sleepSeconds(SMART_WAIT);
                 } else {
-                    V1_printf("%" PRIu64 " wspr good alignMinute(-1) and voltageBeforeWSPR %.f" EOL,
+                    V1_printf("loopCnt %" PRIu64 " wspr good alignMinute(-1) and voltageBeforeWSPR %.f" EOL,
                         loopCnt, voltageBeforeWSPR);
                     if (second() > 40) {
                         // to late..don't try to send
                         // minute() second() come from Time.h as ints
                         // oneliner
-                        V1_printf(EOL "%" PRIu64 " WARN: wspr no send, past 40 secs in pre-minute:",
+                        V1_printf(EOL "loopCnt %" PRIu64 " WARN: wspr no send, past 40 secs in pre-minute:",
                             loopCnt);
                         V1_printf(" minute: %d *second: %d* alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
                         SMART_WAIT = (60 - second() + 20);
                         // oneliner
-                        V1_printf("%" PRIu64 " case 1: sleepSeconds() 20 secs into the next minute",
+                        V1_printf("loopCnt %" PRIu64 " case 1: sleepSeconds() 20 secs into the next minute",
                             loopCnt);
                         V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
                         sleepSeconds(SMART_WAIT);
                     } else {
                         // oneliner
-                        V1_printf("%" PRIu64 " wspr: wait until 20 secs before starting minute",
+                        V1_printf("loopCnt %" PRIu64 " wspr: wait until 20 secs before starting minute",
                             loopCnt);
                         V1_printf(" now: minute: %d *second: %d*" EOL, minute(), second());
                         while (second() < 40) {
@@ -1471,7 +1471,7 @@ void loop1() {
                             delay(10);  // 10 millis
                             updateStatusLED();
                         }
-                        V1_printf("%" PRIu64 " wspr: 20 secs until starting minute", loopCnt);
+                        V1_printf("loopCnt %" PRIu64 " wspr: 20 secs until starting minute", loopCnt);
                         // oneliner
                         V1_print(F(" wspr: vfo turn on for warmup"));
                         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
@@ -1483,7 +1483,7 @@ void loop1() {
                             // FIX! gps should be off at this point and not firing data? or ?
                             SMART_WAIT = (60 - second() + 20);
                             // oneliner
-                            V1_printf("%" PRIu64 " alignAndDoAllSequentialTx() res -1 alignment?",
+                            V1_printf("loopCnt %" PRIu64 " alignAndDoAllSequentialTx() res -1 alignment?",
                                 loopCnt);
                             V1_printf(" sleep with SMART_WAIT %d" EOL, SMART_WAIT);
                             sleepSeconds(SMART_WAIT);
@@ -1493,8 +1493,9 @@ void loop1() {
             } else {
                 // this line will print a lot if we're failing because of this?
                 // but we have the min at 0.0 for now
-                V1_printf(EOL "%" PRIu64 " WARN: no send: voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
-                    loopCnt, voltageBeforeWSPR, WsprBattMin);
+                V1_printf(EOL "loopCnt %" PRIu64, loopCnt);
+                V1_printf(" WARN: no send: voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
+                    voltageBeforeWSPR, WsprBattMin);
                 sleepSeconds(BATT_WAIT);
             }
         }
@@ -1529,7 +1530,7 @@ void loop1() {
     // use V1_printf()
     V1_println(F(EOL));
     V1_printf(
-        "loopCnt: %" PRIu64 " "
+        "loopCnt %" PRIu64 " "
         "t_tx_count_0: %s "
         "t_callsign: %s "
         "t_temp: %s "
@@ -1546,7 +1547,7 @@ void loop1() {
 
     V1_println(F(EOL));
     V1_printf(
-        "loopCnt: %" PRIu64 " "
+        "loopCnt %" PRIu64 " "
         "t_tx_count_0: %s "
         "_Band %s "
         "loop_ms_elapsed: %" PRIu64 " millisecs "
@@ -1566,7 +1567,7 @@ void loop1() {
     }
 
     // whenever we have spin loops we need to updateStatusLED()
-    V1_printf("%" PRIu64 " loop1() END" EOL, loopCnt);
+    V1_printf("loopCnt %" PRIu64 " loop1() END" EOL, loopCnt);
 }
 
 //*******************************************************
