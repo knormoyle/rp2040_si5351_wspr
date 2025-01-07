@@ -67,6 +67,7 @@
 #include <cstring>
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
+
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 #include "si5351_functions.h"
@@ -1233,9 +1234,15 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // so the ms_div would be 1/4th what it would be for a divide-by-1 R0 and R1
     // the << 2 in the divisor
     // not doing that any more. R_DIVISOR_SHIFT is zero.
-    uint64_t ms_div_here = 1 + 
-        (((PLL_FREQ_TARGET << PLL_CALC_SHIFT) / freq_xxx) >> R_DIVISOR_SHIFT);
 
+    // hmm what does rp2040 have for 64-bit integer divided. Is it sometimes 
+    // getting the wrong answers
+    // https://lorenz-ruprecht.at/docu/pico-sdk/1.4.0/html/group__pico__divider.html
+
+    uint64_t quotient = 
+        (PLL_FREQ_TARGET << PLL_CALC_SHIFT) /
+        (freq_xxx << R_DIVISOR_SHIFT); 
+    uint64_t ms_div_here = 1 + quotient;
     // make it even number
     // odd bumps down, even would stay the same.
     if ((ms_div_here % 2) == 1) {
@@ -1298,10 +1305,10 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
 
         // this alternate strategy will imply required ms_div
-        ms_div_here = 1 + (
+        uint64_t quotient =
             (PLL_FREQ_TARGET << PLL_CALC_SHIFT) /
-            (freq_xxx << R_DIVISOR_SHIFT));
-
+            (freq_xxx << R_DIVISOR_SHIFT); 
+        uint64_t ms_div_here = 1 + quotient;
         // make it even number
         // odd bumps down
         if ((ms_div_here % 2) == 1) {

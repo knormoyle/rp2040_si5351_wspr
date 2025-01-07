@@ -363,7 +363,8 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // doesn't work on 10M?
 // extern const int PLL_CALC_SHIFT = 16;
 
-extern const int PLL_CALC_SHIFT = 14;
+// extern const int PLL_CALC_SHIFT = 14;
+extern const int PLL_CALC_SHIFT = 10;
 
 // this is the target PLL freq when making muliplier/divider initial calculations
 // could change this per band?
@@ -1079,11 +1080,11 @@ void setup1() {
     int sse_micro = roundf(1e6 * symbolShiftError);
     int sse_milli = roundf(1e3 * symbolShiftError);
     if (sse_micro == 0) {
-        V1_printf("WARN: worst symbolShiftError has better than microHz precision. sse * 1e6 %d" EOL, sse_micro);
+        V1_printf("WARN: worst symbolShiftError has better than microHz precision. sse*1e6 %d" EOL, sse_micro);
     } else if (sse_milli == 0) {
-        V1_printf("WARN: worst symbolShiftError has better than milliHz precision. sse * 1e3 %d" EOL, sse_milli);
+        V1_printf("WARN: worst symbolShiftError has better than milliHz precision. sse*1e3 %d" EOL, sse_milli);
     } else {
-        V1_printf("WARN: worst symbolShiftError has < milli Hz precision. sse * 1e3 %d" EOL, sse_milli);
+        V1_printf("WARN: worst symbolShiftError has < milli Hz precision. sse*1e3 %d" EOL, sse_milli);
     }
 
     //***************
