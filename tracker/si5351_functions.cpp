@@ -1215,13 +1215,14 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // The chip will provide an output with lower jitter if this value is an integer.
     // better still if it is an even integer.
     // So we let e/f be zero and select a value for d that’s an even number.
-    // Remember that there is enough resolution in the PLL/VCO stage to provide fine tuning.
+    // Remember that there is enough resolution in the PLL/VCO stage to provide 
+    // fine tuning.
     // The data sheet calls the ‘d + e/f’ divider the Output Multisynth Divider,
     // because it acts on the output of the PLL/VCO.
     // we don't have to worry about the divider R. we use 1 for that
 
-    // So we’re down to six values to calculate which are the ‘a, b, c, d, e and f’ of
-    // the dividers ‘a + b/c’ and ‘d + e/f’.
+    // So we’re down to six values to calculate which are the ‘a, b, c, d, e and f’ 
+    // of the dividers ‘a + b/c’ and ‘d + e/f’.
     // But it will actually be a lot simpler.
     // We said that the second divider d + e/f will be an even integer,
     // so e and f are not needed.
@@ -1235,10 +1236,11 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint64_t ms_div_here = 1 + 
         (((PLL_FREQ_TARGET << PLL_CALC_SHIFT) / freq_xxx) >> R_DIVISOR_SHIFT);
 
-    // make sure it's a 64 bit constant by using boolean inversion
     // make it even number
-    // odd would bump up, even would stay the same.
-    ms_div_here &= ~1;   
+    // odd bumps down, even would stay the same.
+    if ((ms_div_here % 2) == 1) {
+        ms_div_here -= 1;
+    }
 
     // is 900 really the upper limiter or ?? we have 908 for 24Mhz
     // do we need lower pll freq?
@@ -1300,8 +1302,11 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
             (PLL_FREQ_TARGET << PLL_CALC_SHIFT) /
             (freq_xxx << R_DIVISOR_SHIFT));
 
-        // make sure it's a 64 bit constant by using boolean inversion
-        ms_div_here &= ~1;   // make it even number
+        // make it even number
+        // odd bumps down
+        if ((ms_div_here % 2) == 1) {
+            ms_div_here -= 1;
+        }
 
         V1_print(F("vfo_calc_div_mult_num pll_freq implied by new ms_div, pll_mult" EOL));
         V1_print(F("ms_div implied by that pll_freq" EOL));

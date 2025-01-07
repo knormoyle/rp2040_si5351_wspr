@@ -360,7 +360,10 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // extern const int PLL_CALC_SHIFT = 20;
 // didn't work?
 // extern const int PLL_CALC_SHIFT = 18;
-extern const int PLL_CALC_SHIFT = 16;
+// doesn't work on 10M?
+// extern const int PLL_CALC_SHIFT = 16;
+
+extern const int PLL_CALC_SHIFT = 14;
 
 // this is the target PLL freq when making muliplier/divider initial calculations
 // could change this per band?
