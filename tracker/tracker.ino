@@ -210,7 +210,7 @@ extern const int LED_STATUS_TX_TELEMETRY = 5;  // 1 long
 extern const int LED_STATUS_TX_TELEN1 = 6;     // 2 long
 extern const int LED_STATUS_TX_TELEN2 = 7;     // 3 long
 extern const int LED_STATUS_TX_CW = 8;         // 4 long
-extern const int LED_STATUS_REBOOT_NO_SERIAL = 8; // 5 long
+extern const int LED_STATUS_REBOOT_NO_SERIAL = 8;  // 5 long
 extern const int LED_STATUS_USER_CONFIG = 9;   // 6 long
 
 //*********************************
@@ -435,17 +435,18 @@ char t_sat_count[3] = { 0 };   // 2 bytes
 // https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
 // 6 decimal places represent accuracy for ~ 10 cm
 // 7 decimal places for ~ 1 cm
-// The use of 6 digits should be enough. +/- is 1 more. decimal is one more. 0-180 is 3 more.
+// The use of 6 digits should be enough. +/- is 1 more.
+// decimal is one more. 0-180 is 3 more.
 // so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
-char t_lat[13] = { 0 };        // 12 bytes
-char t_lon[13] = { 0 };        // 12 bytes
+char t_lat[13] = { 0 };            // 12 bytes
+char t_lon[13] = { 0 };            // 12 bytes
 char t_callsign[7] = { 0 };
-char t_grid6[7] = { 0 };       // 6 bytes
-char t_power[3] = { 0 };       // 2 bytes
-char t_hdop[4] = { 0 };        // 3 bytes;
-char t_solarElevation[5] = { 0 }; // 3 bytes -90 to 90?
-char t_solarAzimuth[7] = { 0 };   // 4 bytes -180 to 180?
-char t_solarDistance[8] = { 0 };  // 3 bytes 145 to 150 km ?
+char t_grid6[7] = { 0 };           // 6 bytes
+char t_power[3] = { 0 };           // 2 bytes
+char t_hdop[4] = { 0 };            // 3 bytes;
+char t_solarElevation[5] = { 0 };  // 3 bytes -90 to 90?
+char t_solarAzimuth[7] = { 0 };    // 4 bytes -180 to 180?
+char t_solarDistance[8] = { 0 };   // 3 bytes 145 to 150 km ?
 
 int t_snap_cnt = 0;
 
@@ -1010,24 +1011,25 @@ void setup1() {
     set_PLL_DENOM_OPTIMIZE(_Band);
     // do this to sweep the symbols for the u4b channel in use and fill the cache for Farey results?
     // FIX! should we calc the 4 symbols?
-    double sumShiftError;
-    double sumAbsoluteError;
+    double symbolShiftError;
+    double symbolAbsoluteError;
     uint32_t pll_num;
     // this walks thru the 4 symbols we're going to use
-    si5351a_calc_optimize(&sumShiftError, &sumAbsoluteError, &pll_num, true);
+    si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, true);
     if (USE_FAREY_WITH_PLL_REMAINDER) {
-        V1_printf("Using Farey? sumAbsoluteError %.8f sumShiftError %.8f" EOL,
-        sumAbsoluteError, sumShiftError);
+        V1_printf("Using Farey? symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
+        symbolAbsoluteError, symbolShiftError);
     } else {
-        V1_printf("SEED for num-shift algo: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
-        V1_printf(" sumAbsoluteError %.8f sumShiftError %.8f" EOL,
-        sumAbsoluteError, sumShiftError);
+        V1_print(F("SEED for num-shift algo:"));
+        V1_printf(" PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
+        V1_printf(" symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
+        symbolAbsoluteError, symbolShiftError);
     }
 
     // check 4 digits of precision
-    int sse = (int)10000 * sumShiftError;
+    int sse = (int)10000 * symbolShiftError;
     if (sse != 0) {
-        V1_printf("WARN:FINAL sumShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
+        V1_printf("WARN:FINAL symbolShiftError != 0 to 4 digits of precision. sse %d" EOL, sse);
     }
 
     //***************
@@ -1171,9 +1173,8 @@ const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
 
 //*************************************************************************
 void loop1() {
-
-    // used to ignore TinyGps++ state for couple of iterations of GPS burst gathering after
-    // turning Gps off then on.
+    // used to ignore TinyGps++ state for couple of iterations of GPS burst 
+    // gathering after turning Gps off then on.
     if (GpsIsOn() && GpsInvalidAllCnt > 0) GpsInvalidAllCnt--;
     GpsInvalidAll = GpsInvalidAllCnt > 0;
 
@@ -1183,7 +1184,8 @@ void loop1() {
     // based on new NMEA sentences. (should transition cleanly within 2 secs?)
     // if we were ready to go but not aligned, this is a computed delay into the next
     // minute to align better (not so good if we're only tx starting every 10 minutes
-    // but good for test mode _go_when_ready that disables channel starting minute requirement.
+    // but good for test mode _go_when_ready that disables
+    // channel starting minute requirement.
 
     int SMART_WAIT;
 
@@ -1237,7 +1239,7 @@ void loop1() {
         // this doesn't need qualification on whether we got a good date/time
         // since we check that first, before we do any looking for a 3d fix
         bool fix_valid_all = !GpsInvalidAll &&
-            (gps.date.year() >= 2024 && gps.date.year() <= 2034) && // new: 12/30/24
+            (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
             gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
             gps.hdop.isValid() &&
             gps.altitude.isValid() &&
@@ -1262,7 +1264,8 @@ void loop1() {
             // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime()
             // so don't here. Only update LED state here, though
             // it is common for gps chips to send out 1/1/2080 dates when invalid
-            // I see 2080-01-01 2080-01-07 in SIM65M. 2000-00-00 ? in ATGM336 (is month/day wrong?)
+            // I see 2080-01-01 2080-01-07 in SIM65M. 2000-00-00 ? in ATGM336 
+            // (is month/day wrong?)
             // On 1/2/25 ~19:00 I saw this: 2080-01-05 23:59:50
             // although time sees okay? (utc time)
             // this is a check for validity
@@ -1351,8 +1354,8 @@ void loop1() {
         Watchdog.reset();
         if ( !(fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX)) ) {
             if (fix_valid_all) {
-                V1_printf("loopCnt %" PRIu64 " WARN: GPS fix issue: valid but fix_age %lu millisecs" EOL,
-                    loopCnt, fix_age);
+                V1_printf("loopCnt %" PRIu64, loopCnt);
+                V1_printf(" WARN: GPS issue: valid but fix_age %lu millisecs" EOL, fix_age);
             } else {
                 // invalid gps should have this fix_age
                 V1_printf("loopCnt %" PRIu64 " WARN: invalid GPS fix.", loopCnt);
@@ -1411,9 +1414,9 @@ void loop1() {
             // sets all the t_* strings above
             // voltage is captured when we write the buff? So it's before GPS is turned off?
             // should we look at the live voltage instead?
-            V1_printf(
-                "loopCnt %" PRIu64 " After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
-                loopCnt, timeStatus(), minute(), second());
+            V1_printf("loopCnt %" PRIu64, loopCnt);
+            V1_printf(" After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
+                timeStatus(), minute(), second());
 
             // FIX! it should depend on the channel starting minute - 1 (modulo 10)
             // preparations for HF starts one minute before TX time
@@ -1440,40 +1443,41 @@ void loop1() {
                     // sleep because we don't want to cycle endlessly waiting to align
                     SMART_WAIT = (60 - second() + 20);
                     // oneliner
-                    V1_printf("loopCnt %" PRIu64 " case 0: sleepSeconds() 20 secs into the next minute",
-                        loopCnt);
+                    V1_printf("loopCnt %" PRIu64, loopCnt);
+                    V1_print(F(" case 0: sleepSeconds() 20 secs into the next minute"));
                     V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
                     sleepSeconds(SMART_WAIT);
                 } else {
-                    V1_printf("loopCnt %" PRIu64 " wspr good alignMinute(-1) and voltageBeforeWSPR %.f" EOL,
-                        loopCnt, voltageBeforeWSPR);
+                    V1_printf("loopCnt %" PRIu64, loopCnt);
+                    V1_printf("wspr good alignMinute(-1) and voltageBeforeWSPR %.f" EOL,
+                        voltageBeforeWSPR);
                     if (second() > 40) {
                         // to late..don't try to send
                         // minute() second() come from Time.h as ints
                         // oneliner
-                        V1_printf(EOL "loopCnt %" PRIu64 " WARN: wspr no send, past 40 secs in pre-minute:",
-                            loopCnt);
+                        V1_printf(EOL "loopCnt %" PRIu64, loopCnt);
+                        V1_print(F(" WARN: wspr no send, past 40 secs in pre-minute:"));
                         V1_printf(" minute: %d *second: %d* alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
                         SMART_WAIT = (60 - second() + 20);
                         // oneliner
-                        V1_printf("loopCnt %" PRIu64 " case 1: sleepSeconds() 20 secs into the next minute",
-                            loopCnt);
+                        V1_printf("loopCnt %" PRIu64, loopCnt);
+                        V1_print(F(" case 1: sleepSeconds() 20 secs into the next minute"));
                         V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
                         sleepSeconds(SMART_WAIT);
                     } else {
                         // oneliner
-                        V1_printf("loopCnt %" PRIu64 " wspr: wait until 20 secs before starting minute",
-                            loopCnt);
+                        V1_printf("loopCnt %" PRIu64, loopCnt);
+                        V1_print(F(" wspr: wait until 20 secs before starting minute"));
                         V1_printf(" now: minute: %d *second: %d*" EOL, minute(), second());
                         while (second() < 40) {
                             Watchdog.reset();
                             delay(10);  // 10 millis
                             updateStatusLED();
                         }
-                        V1_printf("loopCnt %" PRIu64 " wspr: 20 secs until starting minute", loopCnt);
-                        // oneliner
-                        V1_print(F(" wspr: vfo turn on for warmup"));
+                        V1_printf("loopCnt %" PRIu64, loopCnt);
+                        V1_print(F(" wspr: 20 secs until starting minute."));
+                        V1_print(F(" wspr: vfo turn on for warmup."));
                         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
                         // will call this with less than or equal to 20 secs to go
@@ -1483,8 +1487,8 @@ void loop1() {
                             // FIX! gps should be off at this point and not firing data? or ?
                             SMART_WAIT = (60 - second() + 20);
                             // oneliner
-                            V1_printf("loopCnt %" PRIu64 " alignAndDoAllSequentialTx() res -1 alignment?",
-                                loopCnt);
+                            V1_printf("loopCnt %" PRIu64, loopCnt);
+                            V1_print(F(" alignAndDoAllSequentialTx() res -1 alignment?"));
                             V1_printf(" sleep with SMART_WAIT %d" EOL, SMART_WAIT);
                             sleepSeconds(SMART_WAIT);
                         }
@@ -1509,7 +1513,6 @@ void loop1() {
     // won't get any until first wspr tx goes out
     if (tx_cnt_0 > 0)  {
         if (_morse_also[0] == '1') {
-
             if (VCC_valid_cnt != 5)
                 V1_printf("WARN: loop1() VCC_valid_cnt %u != 5" EOL, VCC_valid_cnt);
         } else {
@@ -1587,7 +1590,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
     while (second() < 40)  {
         Watchdog.reset();
-        delay(5);  // 5 millis
+        sleep_ms(50);  //
         // we could end up waiting for 40 secs
         updateStatusLED();
     }
@@ -1595,26 +1598,40 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // don't want gps power and tx power together
     GpsOFF(true);  // keep TinyGPS state
 
-    // start the vfo 30 seconds before needed
+    // start the vfo 20 seconds before needed
     // if off beforehand, it will have no clocks running
     // we could turn it off, then on, to guarantee always starting from reset state?
     vfo_turn_off();
-    sleep_ms(2000);
+    // new: 1/6/2025 was 2000 
+    sleep_ms(1000);
+
     // FIX! does this include a full init at the rp2040?
     // vfo_turn_on() doesn't turn on the clk outputs!
     vfo_turn_on(WSPR_TX_CLK_0_NUM);  // clk0/1 both affected
 
-
+    //**************************
     // New 1/6/24
-    // Quickly flip thru all 4 symbols to see the cache with the Farey algo results
+    // Quickly cycle thru all 4 symbols to see the cache with the Farey algo results
     // to avoid adding latency due to the iterations when the symbol is first used and cache
-    // end with symbol 0
+    // End with symbol 0
+    absolute_time_t start_usecs_1 = get_absolute_time();
+
+    // will print programming if false, since we have time
+    // how many in cache to start?
+    uint8_t VCC_init_valid_cnt = vfo_calc_cache_print_and_check();
     startSymbolFreq(hf_freq, 3, false);  // symbol 3, change more than just pll_num
     startSymbolFreq(hf_freq, 2, true);   // symbol 2, should just be num and denom change?
     startSymbolFreq(hf_freq, 1, true);   // symbol 1, should just be num and denom change?
     startSymbolFreq(hf_freq, 0, true);   // symbol 0, should just be num and denom change?
-    // will print programming if false, since we have time
 
+    absolute_time_t end_usecs_1 = get_absolute_time();
+    int64_t elapsed_usecs_1 = absolute_time_diff_us(start_usecs_1, end_usecs_1);
+    float elapsed_millisecs_1 = (float)elapsed_usecs_1 / 1000.0;
+    V1_printf("VCC cache initially had %u valid entries\n" EOL, VCC_init_valid_cnt);
+    V1_printf("Time to calc, or cache lookup, 4 Farey algo symbol freq si5351 reg values: %.4f millisecs" EOL, 
+        elapsed_millisecs_1);
+
+    //**************************
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
     // GPS will stay off for all
@@ -1739,7 +1756,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         txNum = 4;
         V1_printf("CW txNum %d using cw_send_message().." EOL, txNum);
         V1_flush();
-        // picks a good HF freq for the config'ed _Band. uses t_callsign a and t_grid6 in the message
+        // picks a good HF freq for the config'ed _Band.
+        // uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
         cw_send_message();
         // restore the wspr XMIT_FREQUENCY since cw changed it
@@ -1914,7 +1932,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // remember, it's usec running time, it's not aligned to the gps time.
         StampPrintf("sendWspr START now: minute: %d second: %d" EOL, minute(), second());
     }
-    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false); // no print. clk0/1 both affected
+    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);  // no print. clk0/1 both affected
     //*******************************
     // earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
     // i.e. code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
@@ -2077,7 +2095,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     if (vfoOffWhenDone) {
         vfo_turn_off();
     } else {
-        vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true); // print. clk0/1 both affected
+        vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true);  // print. clk0/1 both affected
     }
 
     Watchdog.reset();
@@ -2264,7 +2282,7 @@ void freeMem() {
     // string it has the PROGMEM property and runs from flash.
     V1_print(F("Free RAM: "));
     V1_print(freeMemory(), DEC);
-    V1_println(F(" byte"));
+    V1_println(F(" byte. Why is this < 0?. Is it's calc wrong?"));
 
     V1_print(F("Free Heap: "));
     V1_print(rp2040.getFreeHeap(), DEC);

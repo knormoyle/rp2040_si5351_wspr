@@ -349,21 +349,77 @@ int main() {
     uint32_t maxerr_iter = 0;
     uint32_t maxerr_i = 0;
 
-    // Declaring the upper and lower bounds
-    // do we care about 0? no unlikely
     double lower_bound = 0;
     double upper_bound = 1.0;
 
     // Seed the random number engine using the current time
+    unsigned seed1 = std::chrono::system_clock::now().time_since_epoch().count();
+    std::default_random_engine generator1(seed1);
+    std::uniform_real_distribution<double> unif1(lower_bound, upper_bound);
+    // default_random_engine re;
+
+    // Declaring the upper and lower bounds
+    // do we care about 0? no unlikely
+    // interesting how wide the variation is between low and high
+    // 2e-6
+    // since the change in output freq is just the divisor and the tcxo
+    // this is directly related to the change in pll freq
+    // depending on the divisor we need a bigger shift in pll freq.
+    // larger and we need more. smaller and we need less
+    
+    lower_bound = 0.14484461538462 - 1e-7;
+    upper_bound = 0.14484698377404 + 1e-7;
+
+    lower_bound = 0.14484000000000;
+    upper_bound = 0.14484999900000;
+
+    lower_bound = 0.10004000000000;
+    upper_bound = 0.10004999900000;
+
+    lower_bound = 0.14000000000000;
+    upper_bound = 0.14000010000000;
+
+    lower_bound = 0.54000000000000;
+    upper_bound = 0.54000010000000;
+
+    lower_bound = 0.1;
+    upper_bound = 0.9;
+
+    lower_bound = 0.4;
+    upper_bound = 0.7;
+
+    // a random center
+    lower_bound = 0 + 1e-6;
+    upper_bound = 1.0 - 1e-6;
+
+    double center = unif1(generator1);
+    lower_bound = center - 1e-6;
+    upper_bound = center + 1e-6;
+    printf("lower_bound %.16f\n", lower_bound);
+    printf("upper_bound %.16f\n", upper_bound);
+
+
+    // Seed the random number engine using the current time
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+    // don't do this again?:
     std::default_random_engine generator(seed);
     std::uniform_real_distribution<double> unif(lower_bound, upper_bound);
-    // default_random_engine re;
+
 
     // Seed the random number generator
     // https://linux.die.net/man/3/random
     // srand(time(NULL));
     srandom(time(NULL));
+
+    // our 393mhz 10M mul/div choices have reals  (including CW freq)
+    struct real_freqs_t { double f; };
+    real_freqs_t real_freqs[] = {
+        {0.14484461538462},
+        {0.14484540625000},
+        {0.14484619290865},
+        {0.14484698377404},
+        {0.10390000000000}
+    };
 
     for (uint32_t i = 0; i < NUM_TO_DO; i++) {
         // Generate a random double between 0 and 1
@@ -373,23 +429,16 @@ int main() {
         // only > 0.5?
         // had a bad case at 0.46
 
-        double multiplier_fraction = unif(generator);
+        double multiplier_fraction;
+        if (true) {
+            multiplier_fraction = unif(generator);
+        } else {
+            int j = i % 5;
+            multiplier_fraction = real_freqs[j].f;
+        }
+
         // double multiplier_fraction = unif(re);
 
-        if (false) {
-            // don't want close to 0 or 1
-            while  (multiplier_fraction == 0.0 || multiplier_fraction < 1e-14 || multiplier_fraction > (1 - 1e-14))
-                multiplier_fraction = unif(generator);
-                // multiplier_fraction = unif(re);
-            if (true) {
-                char str[40];
-                // round it to 14 digits of precision
-                // we know target is between 0 and 1 to start
-                sprintf(str, "%.14f", multiplier_fraction);
-                sscanf(str, "%lf", &multiplier_fraction);
-            }
-            if (multiplier_fraction < 1e-14) continue;
-        }
         // multiplier_fraction = (double)random() / (double)RAND_MAX;
 
         // this keeps the max error at:
@@ -403,6 +452,7 @@ int main() {
         // multiplier_fraction = 0.4642856924664400;
 
         // multiplier_fraction = 0.47194409375000;
+        printf("multiplier_fraction %.16f\n", multiplier_fraction);
         double target = multiplier_fraction;
         // ad_rat doesn't like this case 
         // maxerr_target 0.285714341919480

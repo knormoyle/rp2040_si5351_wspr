@@ -46,7 +46,7 @@ void adc_INIT() {
 
 //****************************************************
 float readTemp(void) {
-    V1_println(F("readTemp START"));
+    V1_println(F(EOL "readTemp START"));
     // 12-bit conversion, assume max value == ADC_VREF == 3.3 V
 
     float tempC = 0.0;

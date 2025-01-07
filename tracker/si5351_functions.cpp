@@ -1375,12 +1375,12 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         double actual_real = ((double)retval.numerator) / (double)retval.denominator;
 
         V1_print(F(EOL));
-        V1_printf("Farey target %.14f" EOL, target);
+        V1_printf("Farey target %.16f" EOL, target);
         V1_printf("Farey numerator %lu" EOL, retval.numerator); // result
         V1_printf("Farey denominator %lu" EOL, retval.denominator); // result
         V1_printf("Farey iterations %lu" EOL, retval.iterations); // result
-        V1_printf("Farey actual real %.14f" EOL, actual_real);
-        V1_printf("Farey actual real error %.14f" EOL, target - actual_real);
+        V1_printf("Farey actual real %.16f" EOL, actual_real);
+        V1_printf("Farey actual real error %.16f" EOL, target - actual_real);
         V1_print(F(EOL));
     }
 
@@ -1870,7 +1870,8 @@ void vfo_turn_on(uint8_t clk_num) {
     // 10: Internal CL = 8 pF.
     // 11: Internal CL = 10 pF (default).
     // new 12/28/24
-    i2cWrite(183, 0xC0);
+    // i2cWrite(183, 0xC0);
+    i2cWrite(183, 0x80);
 
     // FIX! is 187 this a reserved address?
     // in AN1234 register map, this is shown as CLKIN_FANOUT_EN and XO_FANOUT_EN

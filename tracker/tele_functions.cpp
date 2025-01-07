@@ -132,6 +132,7 @@ void snapForTelemetry(void) {
 
         // suncalc.js translation to cpp
         // Not working? need to debug
+        V1_print(F(EOL));
         calcSolarElevation5(&solarElevation, &solarAzimuth, &solarDistance);
         V1_printf("calcSolarElevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
             solarElevation, solarAzimuth, solarDistance);
@@ -144,8 +145,8 @@ void snapForTelemetry(void) {
     calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
     V1_printf("calcSolarElevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
         solarElevation, solarAzimuth, solarDistance);
+    V1_print(F(EOL));
 
-    // 
     // -90.0 to 90.0?
     snprintf(t_solarElevation, sizeof(t_solarElevation), "%.1f", solarElevation); 
     // -180.0 to 180.0
