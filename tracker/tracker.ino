@@ -397,10 +397,10 @@ extern const int PLL_CALC_SHIFT = 16;
 // uint64_t PLL_FREQ_TARGET = 416000000;
 // this is good
 // in use 1/6/24 for both Fary and num-shift methods
-// uint64_t PLL_FREQ_TARGET = 500000000;
+uint64_t PLL_FREQ_TARGET = 500000000;
 
-// won't work well for num-shift method. may work for Farey
-uint64_t PLL_FREQ_TARGET = 400000000;
+// won't work well for num-shift method. works for Farey
+// uint64_t PLL_FREQ_TARGET = 400000000;
 
 
 // why am I getting it shift to 10hz wide audio signal on sdruno?
