@@ -22,7 +22,7 @@ extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _U4B_chan[4];  // string with 0-599
 
 extern const int PLL_CALC_SHIFT;
-extern uint32_t PLL_FREQ_TARGET;
+extern uint64_t PLL_FREQ_TARGET;
 
 extern uint32_t PLL_DENOM_OPTIMIZE;
 
@@ -36,14 +36,14 @@ void si5351a_calc_sweep(void) {
     V0_printf("band %s channel %s xmit_freq %lu" EOL, _Band, _U4B_chan, xmit_freq);
     double symbol0desired = calcSymbolFreq(xmit_freq, 0, true);  // print
 
-    V1_printf("Now: sweep calc 5351a programming starting at %.4f" EOL, symbol0desired);
+    V1_printf("Now: sweep calc 5351a programming starting at %.6f" EOL, symbol0desired);
     V1_print(F(EOL "partial sweep at 0.25hz increment" EOL));
     uint32_t pll_num_last = 0;
     // integer start freq.
     // should be no fractional part in the double? (since it's the base symbol 0 freq?)
     // start at middle of the bin, u4b channel 0, symbol 0
     uint32_t freq = (uint32_t) symbol0desired;
-    uint32_t freq_x128;
+    uint64_t freq_xxx;
 
     double actual;
     double actual_pll_freq;
@@ -57,39 +57,33 @@ void si5351a_calc_sweep(void) {
     for (int i = 0; i < 80; i++) {
         if (false) {
             // use this for 0.25 steps
-            freq_x128 = (freq + i/4) << PLL_CALC_SHIFT;
+            freq_xxx = (freq << PLL_CALC_SHIFT) +
+                (i << (PLL_CALC_SHIFT - 2));  // + i/4
             switch (i % 4) {
                 case 0: break;
                 // adds 0.25 (shifted)
-                case 1: freq_x128 += ((1 << PLL_CALC_SHIFT) >> 2); break;
+                case 1: freq_xxx += ((1 << PLL_CALC_SHIFT) >> 2); break;
                 // adds 0.50 (shifted)
-                case 2: freq_x128 += ((2 << PLL_CALC_SHIFT) >> 2); break;
+                case 2: freq_xxx += ((2 << PLL_CALC_SHIFT) >> 2); break;
                 // adds 0.75 (shifted)
-                case 3: freq_x128 += ((3 << PLL_CALC_SHIFT) >> 2); break;
+                case 3: freq_xxx += ((3 << PLL_CALC_SHIFT) >> 2); break;
             }
         } else {
             // use for 1.0 steps
-            freq_x128 = (freq + i) << PLL_CALC_SHIFT;
+            freq_xxx = (freq + i) << PLL_CALC_SHIFT;  // + i
         }
 
         // note this will include any correction to SI5351_TCXO_FREQ (already done)
         // everything is 32 bit in and out of this, but 64-bit calcs inside it.
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor,
-            freq_x128, true); // FIX! do_farey for now
+            freq_xxx, true); // FIX! do_farey for now
 
-        // pow() returns double
-        // not used (float version of the desired freq which was given in the *128 domain
-        // double freq_float = (double)freq_x128 / pow(2, PLL_CALC_SHIFT);
-
-        // hmm. don't bother printing the target freq_float values? enough to show the actual
-        // changes we get during the sweep of target values?
-        V1_printf("actual %.4f actual_pll_freq %.4f", actual, actual_pll_freq);
+        V1_printf("actual %.6f actual_pll_freq %.6f", actual, actual_pll_freq);
         V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu",
             pll_mult, pll_num, pll_denom, ms_div, r_divisor);
 
-        // no good if two pll_nums are the same (sequentially)
-        // want unique pll_num changes for each 1 Hz change..
+        // not so good if two pll_nums are the same (sequentially)
         if (pll_num == pll_num_last) {
             // V1_print(F("UNDESIREABLE: pll_num and pll_num_last same"));
         }
@@ -154,7 +148,7 @@ void si5351a_calc_sweep_band() {
     uint32_t pll_num_here;
     uint32_t pll_denom;
     uint32_t r_divisor;
-    uint32_t freq_x128;
+    uint64_t freq_xxx;
 
     char band[3];
 
@@ -175,20 +169,20 @@ void si5351a_calc_sweep_band() {
 
         set_PLL_DENOM_OPTIMIZE(band);
         uint32_t xmit_freq = init_rf_freq(band, lane);
-        freq_x128 = calcSymbolFreq_x128(xmit_freq, symbol);
+        freq_xxx = calcSymbolFreq_xxx(xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor,
-            freq_x128, true); // FIX! do_farey for now
+            freq_xxx, true); // FIX! do_farey for now
 
         V1_print(F(EOL));
-        V1_printf("sweep band %s xmit_freq %lu PLL_FREQ_TARGET %lu r_divisor %lu" EOL,
+        V1_printf("sweep band %s xmit_freq %lu PLL_FREQ_TARGET %" PRIu64 " r_divisor %lu" EOL,
             band, xmit_freq, PLL_FREQ_TARGET, r_divisor);
         V1_printf("sweep band %s lane %s symbol %u", band, lane, symbol);
-        V1_printf(" pll_mult %lu ms_div %lu actual_pll_freq %.4f" EOL,
+        V1_printf(" pll_mult %lu ms_div %lu actual_pll_freq %.6f" EOL,
             pll_mult, ms_div, actual_pll_freq);
         V1_printf("sweep band %s lane %s symbol %u", band, lane, symbol);
-        V1_printf(" pll_num %lu pll_denom %lu actual %.4f" EOL,
+        V1_printf(" pll_num %lu pll_denom %lu actual %.6f" EOL,
             pll_num_here, pll_denom, actual);
         V1_print(F(EOL));
     }
@@ -199,7 +193,7 @@ void si5351a_calc_sweep_band() {
 //*********************************************************************************
 void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError,
     uint32_t *pll_num, bool print) {
-    V1_print(F("si5351a_calc_optimize START" EOL));
+    V1_print(F(EOL "si5351a_calc_optimize START" EOL));
     // don't flush the VCC cache here, so we keep the results for the 4 symbols
 
     // just to see what we get, calculate the si5351 stuff for
@@ -215,7 +209,7 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     uint32_t r_divisor;
 
     // stuff that's input to vfo_calc_div_mult_num()
-    uint32_t freq_x128;
+    uint64_t freq_xxx;
     // should already be set for band, channel? (XMIT_FREQUENCY)
     uint32_t xmit_freq = XMIT_FREQUENCY;
     if (print) {
@@ -240,21 +234,21 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     if (print) {
         V1_print(F(EOL));
         // + 0 Hz
-        // +1*(12000/8196) Hz [1.464 Hz]
-        // +2*(12000/8196) Hz [2.928 Hz]
-        // +3*(12000/8196) Hz [4.392 Hz]
-        V1_printf("band %s channel %s desired symbol 0 freq %.4f" EOL,
+        // +1*(12000/8192) Hz [1.4648 Hz]
+        // +2*(12000/8192) Hz [2.9296 Hz]
+        // +3*(12000/8192) Hz [4.3945 Hz]
+        V1_printf("band %s channel %s desired symbol 0 freq %.6f" EOL,
             _Band, _U4B_chan, symbol0desired);
-        V1_printf("band %s channel %s desired symbol 1 freq %.4f" EOL,
+        V1_printf("band %s channel %s desired symbol 1 freq %.6f" EOL,
             _Band, _U4B_chan, symbol1desired);
-        V1_printf("band %s channel %s desired symbol 2 freq %.4f" EOL,
+        V1_printf("band %s channel %s desired symbol 2 freq %.6f" EOL,
             _Band, _U4B_chan, symbol2desired);
-        V1_printf("band %s channel %s desired symbol 3 freq %.4f" EOL,
+        V1_printf("band %s channel %s desired symbol 3 freq %.6f" EOL,
             _Band, _U4B_chan, symbol3desired);
         V1_print(F(EOL));
     }
 
-    // check what pll_num gets calced in the freq_x128 (shifted) domain
+    // check what pll_num gets calced in the freq_xxx (shifted) domain
     // and also, the fp respresentation (actual) of the actual frequency after /128
     // of the *128 'shifted domain' integer representation
     // actual returned is now a double
@@ -263,16 +257,16 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     double symbol2actual;
     double symbol3actual;
     for (uint8_t symbol = 0; symbol <= 3; symbol++) {
-        freq_x128 = calcSymbolFreq_x128(xmit_freq, symbol);
+        freq_xxx = calcSymbolFreq_xxx(xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         // or will use Farey if that's enabled
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor,
-            freq_x128, true);
+            freq_xxx, true);
 
         if (print) {
             V1_printf("channel %s symbol %u", _U4B_chan, symbol);
-            V1_printf(" actual %.4f actual_pll_freq %.4f", actual, actual_pll_freq);
+            V1_printf(" actual %.6f actual_pll_freq %.6f", actual, actual_pll_freq);
             V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
                 pll_mult, pll_num_here, pll_denom, ms_div, r_divisor);
         }
@@ -287,13 +281,13 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     if (print) {
         V1_print(F(EOL));
         V1_print(F("Showing shifts in symbol frequencies, rather than absolute error" EOL));
-        V1_printf("channel %s symbol 0 actual %.4f" EOL,
+        V1_printf("channel %s symbol 0 actual %.6f" EOL,
             _U4B_chan, symbol0actual);
-        V1_printf("channel %s symbol 1 actual %.4f shift0to1 %.4f" EOL,
+        V1_printf("channel %s symbol 1 actual %.6f shift0to1 %.6f" EOL,
             _U4B_chan, symbol1actual, symbol1actual - symbol0actual);
-        V1_printf("channel %s symbol 2 actual %.4f shift0to2 %.4f" EOL,
+        V1_printf("channel %s symbol 2 actual %.6f shift0to2 %.6f" EOL,
             _U4B_chan, symbol2actual, symbol2actual - symbol0actual);
-        V1_printf("channel %s symbol 3 actual %.4f shift0to3 %.4f" EOL,
+        V1_printf("channel %s symbol 3 actual %.6f shift0to3 %.6f" EOL,
             _U4B_chan, symbol3actual, symbol3actual - symbol0actual);
     }
 
@@ -318,9 +312,13 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     // assume it's a positive shift
 
     // just look at adjacent shifts
-    double symbolShiftError_1 = abs((symbol1actual - symbol0actual) - expectedShift);
-    double symbolShiftError_2 = abs((symbol2actual - symbol1actual) - expectedShift);
-    double symbolShiftError_3 = abs((symbol3actual - symbol2actual) - expectedShift);
+    double symbolShiftError_1 = abs(symbol1actual - symbol0actual) - expectedShift;
+    double symbolShiftError_2 = abs(symbol2actual - symbol1actual) - expectedShift;
+    double symbolShiftError_3 = abs(symbol3actual - symbol2actual) - expectedShift;
+    V1_print(F(EOL));
+    V1_printf("Expected shift 0 to 1: %.6f" EOL, 1 * expectedShift);
+    V1_printf("Expected shift 0 to 2: %.6f" EOL, 2 * expectedShift);
+    V1_printf("Expected shift 0 to 3: %.6f" EOL, 3 * expectedShift);
 
     double symbolShiftError_here = symbolShiftError_1;
     if (symbolShiftError_2 > symbolShiftError_here)
@@ -334,8 +332,8 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
 
     if (print) {
         V1_print(F(EOL));
-        V1_printf("symbolAbsoluteError: %.4f" EOL, symbolAbsoluteError_here);
-        V1_printf("symbolShiftError: %.4f" EOL, symbolShiftError_here);
+        V1_printf("symbolAbsoluteError: %.6f" EOL, symbolAbsoluteError_here);
+        V1_printf("symbolShiftError: %.6f" EOL, symbolShiftError_here);
         V1_print(F(EOL));
         V1_print(F("si5351a_calc_optimize END" EOL));
     }

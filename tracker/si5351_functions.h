@@ -83,14 +83,14 @@ void si5351a_setup_multisynth012(uint32_t div);
 // (assume freq calibration errors of that much,
 // then symbol the 200hz passband?
 double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print);
-uint32_t calcSymbolFreq_x128(uint32_t hf_freq, uint8_t symbol);
+uint64_t calcSymbolFreq_xxx(uint32_t hf_freq, uint8_t symbol);
 void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num);
 
 // used to print (not change) for walking a range in setup,
 // just to see what changes
-void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t *r_divisor, uint32_t freq_x128, bool do_farey);
+void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t *r_divisor, uint64_t freq_xxx, bool do_farey);
 
-void vfo_set_freq_x128(uint8_t clk_number, uint32_t freq, bool only_pll_num);
+void vfo_set_freq_xxx(uint8_t clk_number, uint32_t freq, bool only_pll_num);
 void vfo_turn_on_clk_out(uint8_t clk_number, bool print);
 // FIX! ...this doesn't seem to work on ms5351m
 void vfo_turn_off_clk_out(uint8_t clk_number, bool print);
@@ -110,7 +110,7 @@ void si5351a_power_down_clk01(void);
 uint8_t vfo_calc_cache(
     double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
-    uint32_t *r_divisor, uint32_t freq_x128, uint8_t operation);
+    uint32_t *r_divisor, uint64_t freq_xxx, uint8_t operation);
 
 // shorthand for calling a flush
 void vfo_calc_cache_flush();

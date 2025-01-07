@@ -82,7 +82,7 @@
 
 // this is the target PLL freq when making muliplier/divider initial calculations
 // set in tracker.ino
-extern uint32_t PLL_FREQ_TARGET;
+extern uint64_t PLL_FREQ_TARGET;
 extern bool USE_FAREY_WITH_PLL_REMAINDER;
 extern bool TEST_FAREY_WITH_PLL_REMAINDER;
 bool DISABLE_CACHE = false;
@@ -946,7 +946,7 @@ void si5351a_reset_PLLA(bool print) {
 // 3: print current cache contents
 
 // cache size is fixed at 5 (four wspr freqs plus 1 cw freq, for configured band/ u4b channel
-// if any constants like PLL_TARGET_FREQ/R_DIVISOR are changed, there are hardwired constants
+// if any constants like PLL_FREQ_TARGET/R_DIVISOR are changed, there are hardwired constants
 // so no issue in flushing the cache. We do band sweeps and freq sweeps, but
 // the freq should be enough to managing cache validity.
 // cache is only used to save Farey results? could save fixed PLL_DENOM_OPTIMIZE results also?
@@ -973,7 +973,7 @@ uint8_t vfo_calc_cache_print_and_check() {
 const uint8_t VCC_SIZE = 5;
 uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
-    uint32_t *r_divisor, uint32_t freq_x128, uint8_t operation) {
+    uint32_t *r_divisor, uint64_t freq_xxx, uint8_t operation) {
 
     // no prints on the lookup
     if (operation!=1) {
@@ -988,7 +988,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     static uint32_t cache_pll_num[VCC_SIZE] = { 0 };
     static uint32_t cache_pll_denom[VCC_SIZE] = { 0 };
     static uint32_t cache_r_divisor[VCC_SIZE] = { 0 };
-    static uint32_t cache_freq_x128[VCC_SIZE] = { 0 };
+    static uint64_t cache_freq_xxx[VCC_SIZE] = { 0 };
 
     static uint8_t ptr = 0;
 
@@ -999,7 +999,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     uint32_t pll_num_here = 0;
     uint32_t pll_denom_here = 0;
     uint32_t r_divisor_here = 0;
-    uint32_t freq_x128_here = 0;
+    uint64_t freq_xxx_here = 0;
 
     bool found = false;
     uint8_t retval = 0;
@@ -1015,14 +1015,14 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
             memset(cache_pll_num, 0, sizeof(cache_pll_num));
             memset(cache_pll_denom, 0, sizeof(cache_pll_denom));
             memset(cache_r_divisor, 0, sizeof(cache_r_divisor));
-            memset(cache_freq_x128, 0, sizeof(cache_freq_x128));
+            memset(cache_freq_xxx, 0, sizeof(cache_freq_xxx));
             retval = 1;
             break;
         }
         case 1:  { // search in cache
             for (uint8_t i = 0; i < VCC_SIZE; i++) {
-                freq_x128_here = cache_freq_x128[i];
-                if (cache_valid[i] && (freq_x128_here == freq_x128)) {
+                freq_xxx_here = cache_freq_xxx[i];
+                if (cache_valid[i] && (freq_xxx_here == freq_xxx)) {
                     actual_here = cache_actual[i];
                     actual_pll_freq_here = cache_actual_pll_freq[i];
                     ms_div_here = cache_ms_div[i];
@@ -1035,8 +1035,8 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         V1_printf("ERROR: vfo_calc_cache multiple hits: i %u prior found_i %u" EOL,
                             i, found_i);
                         V1_print(F("MULTI HIT: "));
-                        V1_printf(" vfo_calc_cache hit on i %u freq_x128 %lu", i, freq_x128_here);
-                        V1_printf(" actual %.4f actual_pll_freq %.4f", actual_here, actual_pll_freq_here);
+                        V1_printf(" vfo_calc_cache hit on i %u freq_xxx %" PRIu64, i, freq_xxx_here);
+                        V1_printf(" actual %.6f actual_pll_freq %.6f", actual_here, actual_pll_freq_here);
                         V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
                             pll_mult_here, pll_num_here, pll_denom_here, ms_div_here, r_divisor_here);
                     }
@@ -1049,7 +1049,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         (pll_num_here == 0) ||    // should never happen? very unlikely
                         (pll_denom_here == 0) ||
                         (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
-                        (freq_x128_here == 0);    // we should never lookup freq_x128 
+                        (freq_xxx_here == 0);    // we should never lookup freq_xxx 
 
                         // is 900 really the upper limiter or ?? we have 908 for 24Mhz
                         // do we need lower pll freq?
@@ -1062,14 +1062,14 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                             V1_printf("ERROR: cached pll_mult %lu is out of range 15 to 90." EOL, pll_mult_here);
                             badCache = true;
                         }
-                        if (freq_x128_here == 0) {
-                            V1_printf("ERROR: cached freq_x128 %lu is 0." EOL, freq_x128_here);
+                        if (freq_xxx_here == 0) {
+                            V1_printf("ERROR: cached freq_xxx %" PRIu64 " is 0." EOL, freq_xxx_here);
                             badCache = true;
                         }
                         // FIX! we could check the num/denum for range also?
 
                     if (badCache) {
-                        V1_println(F("ERROR: fatal. previous valid cache entry had 0 or freq_x128 0." EOL));
+                        V1_println(F("ERROR: fatal. previous valid cache entry had 0 or freq_xxx 0." EOL));
                         V1_print(F("ERROR: won't use anything from this cache entry" EOL));
                         found = false;
                     } else {
@@ -1097,7 +1097,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
             cache_pll_num[ptr] = *pll_num;
             cache_pll_denom[ptr] = *pll_denom;
             cache_r_divisor[ptr] = *r_divisor;
-            cache_freq_x128[ptr] = freq_x128;
+            cache_freq_xxx[ptr] = freq_xxx;
             ptr = ((ptr+1) % VCC_SIZE);
             retval = 1;
             break;
@@ -1115,10 +1115,10 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                     pll_num_here = cache_pll_num[i];
                     pll_denom_here = cache_pll_denom[i];
                     r_divisor_here = cache_r_divisor[i];
-                    freq_x128_here = cache_freq_x128[i];
+                    freq_xxx_here = cache_freq_xxx[i];
                     V1_print(F("DEBUG:"));
-                    V1_printf(" vfo_calc_cache valid i %u freq_x128 %lu", i, freq_x128_here);
-                    V1_printf(" actual %.4f actual_pll_freq %.4f", actual_here, actual_pll_freq_here);
+                    V1_printf(" vfo_calc_cache valid i %u freq_xxx %" PRIu64, i, freq_xxx_here);
+                    V1_printf(" actual %.6f actual_pll_freq %.6f", actual_here, actual_pll_freq_here);
                     V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
                         pll_mult_here, pll_num_here, pll_denom_here, ms_div_here, r_divisor_here);
 
@@ -1130,10 +1130,10 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         (pll_num_here == 0) ||    // should never happen? very unlikely
                         (pll_denom_here == 0) ||
                         (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
-                        (freq_x128_here == 0);    // we should never lookup freq_x128 
+                        (freq_xxx_here == 0);    // we should never lookup freq_xxx 
                     
                     if (badCache) {
-                        V0_println(F("ERROR: fatal. valid cache entry had 0 or freq_x128 0. rebooting" EOL));
+                        V0_println(F("ERROR: fatal. valid cache entry had 0 or freq_xxx 0. rebooting" EOL));
                         V0_flush();
                         Watchdog.enable(5000);  // milliseconds
                         while (true) tight_loop_contents();
@@ -1168,7 +1168,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
 // good for doing calc only, so see what changes with freq changes
 void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
-    uint32_t *r_divisor, uint32_t freq_x128, bool do_farey) {
+    uint32_t *r_divisor, uint64_t freq_xxx, bool do_farey) {
     Watchdog.reset();
 
     // interesting they had relatively low pll freq (620Mhz) for 15M case
@@ -1203,7 +1203,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // search algo may have gone out of bounds?
     // should never negative
     if (PLL_DENOM > PLL_DENOM_MAX) PLL_DENOM = PLL_DENOM_MAX;
-    uint64_t PLL_DENOM_x128 = PLL_DENOM << PLL_CALC_SHIFT;
+    uint64_t PLL_DENOM_xxx = PLL_DENOM << PLL_CALC_SHIFT;
 
     //*****************************
     // the divider is 'a + b/c' or "Feedback Multisynth Divider"
@@ -1232,35 +1232,39 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // so the ms_div would be 1/4th what it would be for a divide-by-1 R0 and R1
     // the << 2 in the divisor
     // not doing that any more. R_DIVISOR_SHIFT is zero.
-    uint64_t ms_div_here = 1 + (
-        (((uint64_t)PLL_FREQ_TARGET) << PLL_CALC_SHIFT) /
-        (((uint64_t)freq_x128) << R_DIVISOR_SHIFT));
-    ms_div_here &= 0xfffffffe;   // make it even number
+    uint64_t ms_div_here = 1 + 
+        (((PLL_FREQ_TARGET << PLL_CALC_SHIFT) / freq_xxx) >> R_DIVISOR_SHIFT);
+
+    // make sure it's a 64 bit constant by using boolean inversion
+    // make it even number
+    // odd would bump up, even would stay the same.
+    ms_div_here &= ~1;   
 
     // is 900 really the upper limiter or ?? we have 908 for 24Mhz
     // do we need lower pll freq?
     if (ms_div_here < 4 || ms_div_here > 900) {
-        V1_printf("ERROR: ms_div %" PRIu64 " is out of range 4 to 900" EOL, ms_div_here);
-        // FIX! how should we recalc
-        V1_print(F("ERROR: no recalc done. Should never happen! rf output is wrong" EOL));
+        V1_printf("ERROR: vfo_calc_div_mult_num (1) ms_div %" PRIu64, ms_div_here);
+        V1_print(F(" is out of range 4 to 900" EOL));
+        V1_print(F("ERROR: vfo_calc_div_mult_num (1) no recalc done.")); 
+        V1_print(F(" Should never happen! rf output is wrong" EOL));
     }
 
     // R_DIVISOR_SHIFT: possible *4 for the R0 and R1 output divider.
     // 64 bit calcs so don't lose bits beyond 32-bits
-    uint64_t pll_freq_x128 = ((uint64_t)freq_x128 * ms_div_here) << R_DIVISOR_SHIFT;
+    uint64_t pll_freq_xxx = (freq_xxx * ms_div_here) << R_DIVISOR_SHIFT;
     // this is just integer. not useful!
-    uint64_t pll_freq_here = pll_freq_x128 >> PLL_CALC_SHIFT;
+    uint64_t pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
 
     // FIX! should we just apply correction to the crystal frequency? yes.
     // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
     // is just one once
 
     uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
-    uint64_t tcxo_freq_x128 = tcxo_freq << PLL_CALC_SHIFT;
+    uint64_t tcxo_freq_xxx = tcxo_freq << PLL_CALC_SHIFT;
 
     // remember: floor division (integer)
     // tcxo_freq is integer..
-    uint64_t pll_mult_here = pll_freq_x128 / tcxo_freq_x128;
+    uint64_t pll_mult_here = pll_freq_xxx / tcxo_freq_xxx;
 
     //*************************************************************
     // good info on out-of-spec behavior
@@ -1276,6 +1280,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         V1_print(F("ERROR: Need to pick a high target pll freq" EOL));
         V1_printf("integer pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL,
             pll_freq_here, tcxo_freq);
+
         // doesn't work to try to force it in terms of understanding calcs
         // if (pll_mult_here < 15) pll_mult_here = 15;
         // else pll_mult_here = 90;
@@ -1285,23 +1290,27 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // R_DIVISOR_SHIFT: possible *4 for the R0 and R1 output divider.
         // 64 bit calcs so don't lose bits beyond 32-bits
         // mult will be min or max
-        pll_freq_x128 = tcxo_freq_x128 * pll_mult_here;
+        pll_freq_xxx = tcxo_freq_xxx * pll_mult_here;
         // HACK bad
         // this is just integer. not useful!
-        pll_freq_here = pll_freq_x128 >> PLL_CALC_SHIFT;
+        pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
 
         // this alternate strategy will imply required ms_div
         ms_div_here = 1 + (
-            (((uint64_t)PLL_FREQ_TARGET) << PLL_CALC_SHIFT) /
-            (((uint64_t)freq_x128) << R_DIVISOR_SHIFT));
+            (PLL_FREQ_TARGET << PLL_CALC_SHIFT) /
+            (freq_xxx << R_DIVISOR_SHIFT));
 
-        // make sure it is even number
-        ms_div_here &= 0xfffffffe;
-        V1_print(F("ERROR: pll_freq implied by new min or max pll_mult" EOL));
+        // make sure it's a 64 bit constant by using boolean inversion
+        ms_div_here &= ~1;   // make it even number
+
+        V1_print(F("vfo_calc_div_mult_num pll_freq implied by new ms_div, pll_mult" EOL));
         V1_print(F("ms_div implied by that pll_freq" EOL));
+
         if (ms_div_here < 4 || ms_div_here > 900) {
-            V1_printf("ERROR: ms_div %" PRIu64 " is out of range 4 to 900" EOL, ms_div_here);
-            V1_print(F("ERROR: no recalc. Should never happen! rf output is wrong" EOL));
+            V1_printf("ERROR: vfo_calc_div_mult_num (2) ms_div %" PRIu64, ms_div_here);
+            V1_print(F(" is out of range 4 to 900" EOL));
+            V1_print(F("ERROR: vfo_calc_div_mult_num (2) no recalc done.")); 
+            V1_print(F(" Should never happen! rf output is wrong" EOL));
         }
         V1_printf("ERROR: Now integer pll_freq_here %" PRIu64 " integer tcxo_freq %" PRIu64 EOL,
             pll_freq_here, tcxo_freq);
@@ -1353,7 +1362,9 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // C = y1
     // it's interesting these are done in the non-scaled domain (not *128)
     // since pll_freq_here is what we want to get to, shouldn't we be scaled here?
-    uint64_t pll_remain_x128 = pll_freq_x128 - (pll_mult_here * tcxo_freq_x128);
+
+    // FIX! we should calc this as real for Farey!
+    uint64_t pll_remain_xxx = pll_freq_xxx - (pll_mult_here * tcxo_freq_xxx);
 
     //*******************************************************************
     rational_t retval;
@@ -1361,6 +1372,10 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     retval.numerator = 0;
     retval.denominator = 0;
     if (TEST_FAREY_WITH_PLL_REMAINDER | USE_FAREY_WITH_PLL_REMAINDER) {
+        // Farey algo wants double reals. So here we go 
+        // luckily all my integer *_xxx is shifts..i.e. powers of 2!
+        // so no loss of precision going back and forth 
+        double pll_remain = ((double) pll_remain_xxx) / pow(2, PLL_CALC_SHIFT);
         // lets see what farey/magnusson get with the remainder
         // we can't use this as we need to adjust the remainder to get
         // the wspr shifts after the divide by divisor and R shift
@@ -1368,9 +1383,10 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // calculate the first pll freq/output freq, then generate 3 freqs from that
         // and calculate their num/denom pairs.
         uint32_t maxdenom = (uint32_t)PLL_DENOM_MAX;
-        double pll_remain = (double)pll_remain_x128 / pow(2, PLL_CALC_SHIFT);
+        // FIX! why are we limiting ourselves to the PLL_CALC_SHIFT precision on the remainder!!
+
         // we want a fraction to multiple the txco_freq with
-        double target = (double)pll_remain / (double)tcxo_freq;
+        double target = pll_remain / (double)tcxo_freq;
         retval = rational_approximation(target, maxdenom);
         double actual_real = ((double)retval.numerator) / (double)retval.denominator;
 
@@ -1380,7 +1396,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         V1_printf("Farey denominator %lu" EOL, retval.denominator); // result
         V1_printf("Farey iterations %lu" EOL, retval.iterations); // result
         V1_printf("Farey actual real %.16f" EOL, actual_real);
-        V1_printf("Farey actual real error %.16f" EOL, target - actual_real);
+        V1_printf("Farey actual real error %.4e" EOL, target - actual_real);
         V1_print(F(EOL));
     }
 
@@ -1391,11 +1407,11 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         pll_num_here = (uint64_t)retval.numerator;
         pll_denom_here = (uint64_t)retval.denominator;
     } else {
-        uint64_t pnh_x128 = (pll_remain_x128 * PLL_DENOM_x128) / tcxo_freq_x128;
+        uint64_t pnh_xxx = (pll_remain_xxx * PLL_DENOM_xxx) / tcxo_freq_xxx;
         // here's how we add 0.5 (in the scaled domain) to get rounding effect before shift down
         // the r divisor reduces
-        uint64_t pll_num_x128 = pnh_x128 + (1 << (PLL_CALC_SHIFT - 1));
-        pll_num_here = pll_num_x128 >> PLL_CALC_SHIFT;
+        uint64_t pll_num_xxx = pnh_xxx + (1 << (PLL_CALC_SHIFT - 1));
+        pll_num_here = pll_num_xxx >> PLL_CALC_SHIFT;
         pll_denom_here = PLL_DENOM;
     }
 
@@ -1433,7 +1449,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
-void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
+void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num) {
     Watchdog.reset();
     uint32_t ms_div;
     uint32_t pll_mult;
@@ -1443,7 +1459,7 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     double actual_pll_freq;
     double actual;
     if (clk_num != 0) {
-        V1_println("ERROR: vfo_set_freq_x128 should only be called with clk_num 0");
+        V1_println("ERROR: vfo_set_freq_xxx should only be called with clk_num 0");
         // I guess force clk_num, although code is broken somewhere
         clk_num = 0;
         // note we only have one s_PLLB_ms_div_prev copy state also
@@ -1452,12 +1468,12 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
     // we get pll_denom to know what was used in the calc
     // R_DIVISOR_SHIFT is hardwired constant (/4 => shift 2)
 
-    // in here is where we need to cache values for freq_x128
+    // in here is where we need to cache values for freq_xxx
     // at least 4 (4 last symbols?)
     // the mode to use Farey is not a config, so that won't change
     // relative to the other algo and this cache.
     // same with r_divisor
-    // I guess same with PLL_TARGET_FREQ..no side configurable state
+    // I guess same with PLL_FREQ_TARGET..no side configurable state
     // needs to flush a cache of 4 results? (ASSUMING WE REDID THE 4 SYMBOLS
     // after the denom search sweep? Should have a ash flush mechanism
     // (rather than the print, it should be a "use cache" or "flush cache"
@@ -1466,21 +1482,21 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
 
     if (DISABLE_CACHE || !USE_FAREY_WITH_PLL_REMAINDER) {
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, true);
+            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, true);
     } else {
         // lookup. get values if in cache already!
         // don't do any prints on the lookup
         uint8_t retval = vfo_calc_cache(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 1);
+            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, 1);
         if (retval!=1) { // hit?
-            V1_print(F(EOL "WARN: vfo_set_freq_x128 must redo vfo_calc_div_mult_num()" EOL));
+            V1_print(F(EOL "WARN: vfo_set_freq_xxx must redo vfo_calc_div_mult_num()" EOL));
             vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-                &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, true);
+                &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, true);
             // install. If we install it when already there, we'll flag the double
             // entry on lookup later
             vfo_calc_cache(&actual, &actual_pll_freq,
-                &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_x128, 2);
-            V1_printf("vfo_set_freq_x128 after redo: pll_mult %lu ms_div %lu" EOL,
+                &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, 2);
+            V1_printf("vfo_set_freq_xxx after redo: pll_mult %lu ms_div %lu" EOL,
                 pll_mult, ms_div);
         }
     }
@@ -1511,14 +1527,13 @@ void vfo_set_freq_x128(uint8_t clk_num, uint32_t freq_x128, bool only_pll_num) {
         // static global? for comparison next time
         
         s_PLLB_ms_div_prev = ms_div;
-        V1_printf(EOL "vfo_set_freq_x128 setting (1) s_PLLB_ms_div_prev %lu" EOL EOL,  ms_div);
+        V1_printf(EOL "vfo_set_freq_xxx setting (1) s_PLLB_ms_div_prev %lu" EOL EOL,  ms_div);
     }
     // make PLLA the same (so it locks? Is that better power than unlocked?)
     si5351a_setup_PLLA(pll_mult, pll_num, pll_denom);
     s_PLLA_ms_div_prev = ms_div;
-    // V1_printf(EOL "vfo_set_freq_x128 setting (1) s_PLLA_ms_div_prev %lu" EOL EOL,  ms_div);
-
-    // V1_printf("vfo_set_freq_x128 END clk_num %u freq %lu" EOL, clk_num, freq);
+    // V1_printf(EOL "vfo_set_freq_xxx setting (1) s_PLLA_ms_div_prev %lu" EOL EOL,  ms_div);
+    // V1_printf("vfo_set_freq_xxx END clk_num %u freq %lu" EOL, clk_num, freq);
 }
 
 //****************************************************
@@ -1602,7 +1617,7 @@ void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     s_vfo_drive_strength[clk_num] = 0x3 && strength;
 
     //**********************
-    // reset the s_PLLB_ms_div_prev to force vfo_set_freq_x128()
+    // reset the s_PLLB_ms_div_prev to force vfo_set_freq_xxx()
     // to call si5351a_setup_multisynth012() next time
     s_PLLB_ms_div_prev = 0;
     s_PLLA_ms_div_prev = 0;
@@ -1895,19 +1910,19 @@ void vfo_turn_on(uint8_t clk_num) {
     uint32_t freq = XMIT_FREQUENCY;
 
     // this is aligned to integer. (symbol 0)
-    V1_printf("initial freq for vfo_set_freq_x128() is %lu" EOL, freq);
-    uint32_t freq_x128 = freq << PLL_CALC_SHIFT;
+    V1_printf("initial freq for vfo_set_freq_xxx() is %lu" EOL, freq);
+    uint64_t freq_xxx = freq << PLL_CALC_SHIFT;
 
     Watchdog.reset();
     // FIX! should we get rid of pll reset here and rely on the turn_on_clk
     // to do it?
-    vfo_set_freq_x128(clk_num, freq_x128, false);
+    vfo_set_freq_xxx(clk_num, freq_xxx, false);
 
     // The final state is clk0/clk1 running and clk outputs on?
     // this doesn't cause a reset_PLLB
     vfo_turn_on_clk_out(clk_num, true); // print
 
-    // it was done in vfo_set_freq_x128 if we didn't have initial state
+    // it was done in vfo_set_freq_xxx if we didn't have initial state
     // or didn't change initial state?
     // could there be two that overlap ?
 
@@ -1968,7 +1983,7 @@ void vfo_turn_off(void) {
 //**********************************
 // calculate the actual tx frequency for a symbol,
 // given the base xmit freq for the u4b channel config'ed
-// THIS MUST NOT BE USED FOR SI5351A work..just for printing!
+// WARNING: THIS MUST NOT BE USED FOR SI5351A calcs..just for printing!
 double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print) {
     if (symbol > 3) {
         V1_printf("ERROR: calcSymbolFreq symbol %u is not 0 to 3 ..using 0"
@@ -1976,32 +1991,35 @@ double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print) {
         symbol = 0;
     }
     // the frequency shift is 12000 / 8192 (approx 1.46hz)
-    double symbol_freq_x128 =
-        (hf_freq << PLL_CALC_SHIFT) +
-        ((symbol * (12000L << PLL_CALC_SHIFT) + 4096L) / 8192L);
-    double calcPrecisionDivisor = pow(2, PLL_CALC_SHIFT);
-    double symbolFreq = (double) symbol_freq_x128 / calcPrecisionDivisor;
-    double symbolOffset = symbolFreq - hf_freq;
-
     // 1.46..Hz per symbol
-    double expectedSymbolOffset = ((double) symbol * 12000.0) / 8192.0;
+    double symbolOffset = ((double) symbol * 12000.0) / 8192.0;
+    double symbolFreq = symbolOffset + (double) hf_freq;
     if (print) {
-        V1_printf("For hf_freq %lu symbol %u symbolFreq is %.4f",
+        V1_printf("For hf_freq %lu symbol %u symbolFreq is %.6f",
             hf_freq, symbol, symbolFreq);
-        V1_printf(" symbolOffset %.4f expectedSymbolOffset %.4f" EOL,
-            symbolOffset, expectedSymbolOffset);
+        V1_printf(" symbolOffset %.6f" EOL, symbolOffset);
     }
     return symbolFreq;
 }
 
 //**********************************
-uint32_t calcSymbolFreq_x128(uint32_t hf_freq, uint8_t symbol) {
+// uint64_t so we can get more precision!
+// 10M -> 29Mhz. Want 10e-4 precision on freq.
+// so log2(29e6*10e) = 38 or 39 bits of precision needed. 
+// so want 64-bits for the shifted *_xxx 
+uint64_t calcSymbolFreq_xxx(uint32_t hf_freq, uint8_t symbol) {
     // not expensive to always recalc the symbol freq
     // don't want printing though (too slow)
-    uint32_t freq_x128_with_symbol = (
-        hf_freq << PLL_CALC_SHIFT) +
-        ((symbol * (12000L << PLL_CALC_SHIFT) + 4096L) / 8192L);
-    return freq_x128_with_symbol;
+    // if we add 0.5 effectively, then it's like a round up?
+    // was: 1/7/25
+    //    ((symbol * (12000L << PLL_CALC_SHIFT) + 4096L) / 8192L);
+    // let's add nothing. Just have more precision (64 bits)
+    uint64_t wspr_shift_xxx = (12000L << PLL_CALC_SHIFT) / 8192L;
+    uint64_t freq_xxx_with_symbol = 
+        ((uint64_t) hf_freq << PLL_CALC_SHIFT) +
+        (wspr_shift_xxx * (uint64_t) symbol);
+
+    return freq_xxx_with_symbol;
 }
 
 //**********************************
@@ -2024,27 +2042,27 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
         double symbol_2_freq = calcSymbolFreq(hf_freq, 2, true);
         double symbol_3_freq = calcSymbolFreq(hf_freq, 3, true);
         V1_print(F(EOL));
-        V1_printf("symbol_0_freq %.4f" EOL, symbol_0_freq);
-        V1_printf("symbol_1_freq %.4f" EOL, symbol_1_freq);
-        V1_printf("symbol_2_freq %.4f" EOL, symbol_2_freq);
-        V1_printf("symbol_3_freq %.4f" EOL, symbol_3_freq);
+        V1_printf("symbol_0_freq %.6f" EOL, symbol_0_freq);
+        V1_printf("symbol_1_freq %.6f" EOL, symbol_1_freq);
+        V1_printf("symbol_2_freq %.6f" EOL, symbol_2_freq);
+        V1_printf("symbol_3_freq %.6f" EOL, symbol_3_freq);
         V1_print(F(EOL));
         oneShotDebugPrinted = true;
     }
 
     // FIX! we should cache the last four symbol results with hf_freq and symbol?
-    // inside freq_x128_with_symbol? so then if you recalc and PLL_TARGET_FREQ
+    // inside freq_xxx_with_symbol? so then if you recalc and PLL_FREQ_TARGET
     // is the same, I shouldn't have to recalculate? use the saved result?
-    // if any of the saved PLL_TARGET_FREQ are not the same as current, ignore them
+    // if any of the saved PLL_FREQ_TARGET are not the same as current, ignore them
     // or if the saved hf_freq is not the same.. Oh save the denom, since PLL_DENOM_OPTIMIZE also
     // affects the numerator-shift algo
 
     // not expensive to always recalc the symbol freq
-    uint32_t freq_x128_with_symbol = calcSymbolFreq_x128(hf_freq, symbol);
+    uint64_t freq_xxx_with_symbol = calcSymbolFreq_xxx(hf_freq, symbol);
     // FIX! does this change the state of the clock output enable?
     // no..
     // changes both clk0 and clk1
-    vfo_set_freq_x128(WSPR_TX_CLK_0_NUM, freq_x128_with_symbol, only_pll_num);
+    vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM, freq_xxx_with_symbol, only_pll_num);
 
     // Note: Remember to do setup with the base frequency and symbol == 0,
     // so the i2c writes have seeded the si5351

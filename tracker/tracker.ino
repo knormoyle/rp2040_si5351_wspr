@@ -315,13 +315,59 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // was 4, but not getting enough precision. see si5351_functions.cpp
 // 7 will give 1/128ths precision after the decimal (for symbol frequency),
 // as opposed to 1/16ths
-extern const int PLL_CALC_SHIFT = 7;
+// was 1/7/25
+// extern const int PLL_CALC_SHIFT = 7;
+
+// double precision fp mantissa only has 52 bits of precision
+// scaled integer arith has 64 bits of precision because we have 64-bit integers to use.
+// So scaled integer math can have more precision if you can cover the dynamic range of values 
+// needed.
+
+// The biggest numbers are the PLL freq. 900 Mhz at most.
+
+// And if you want the possibility of 1e-6 precision for the wspr shifts, 
+// that's 10e6 more range needed (which is 20 bits!!)
+// How many bits needed altogether:
+// log2(900e6 * 10e6) = 52.99 bits needed.
+// So actually, it's pushing the limits of what you can do with double precision fp (which only 
+// has 52 bits of precision)
+
+// Sure the fact that the si5351a divisor chops some low order bits out, in the output freq you
+// get, means you can reduce the precision needed by those lost bits. 
+// But with a small divisor like 19, that's just 4 or 5 bits less precision needed.
+
+// The integer-scaled arith is optimally a left shift/right shift, because that's powers of two, 
+// so less likely to misunderstand where bits get lost
+
+// If I shift everything left by 15 bits when I do the integer-scaled arith to figure
+// out the real I need to get a fraction for. 
+// so 900e6 * 2**15 = 2.95e13 and that needs log2(2.95e13) = 44.74 bits.
+
+// I should be able to shift by 20 bits to get the 1e-6 precision noted above?
+
+// Once I get that (scaled) remainder, I cast it as a double fp, then divide by pow(2, 15), 
+// to get back to a real I want to feed the Farey algo (which is between 0 and 1) to get fraction (num/denom). 
+
+// That gives me perfect accuracy for getting a Farey result that has perfect 
+// absolute accuracy and perfect symbol shift accuracy.
+
+// Once you get to the 0-1 real for Farey, then you you have plenty of bits of precision if you use double fp.
+// Since you're no longer dealing with the full 900e6 of the pll.
+
+// 1/7/25 This works now!
+// extern const int PLL_CALC_SHIFT = 15;
+// didn't work?
+// extern const int PLL_CALC_SHIFT = 20;
+// didn't work?
+// extern const int PLL_CALC_SHIFT = 18;
+extern const int PLL_CALC_SHIFT = 16;
+
 // this is the target PLL freq when making muliplier/divider initial calculations
 // could change this per band?
 // the implied mul/div for 5 bands is covered by denom choices from spreadsheet for 700000000
 // uint64_t PLL_FREQ_TARGET = 900000000;
-// uint32_t PLL_FREQ_TARGET = 700000000;
-// uint32_t PLL_FREQ_TARGET = 600000000;
+// uint64_t PLL_FREQ_TARGET = 700000000;
+// uint64_t PLL_FREQ_TARGET = 600000000;
 
 // 15 (min multiplier) * 26Mhz = 390 Mhz
 // the other (not used PLL) will run at this freq in default config?
@@ -344,24 +390,24 @@ extern const int PLL_CALC_SHIFT = 7;
 // no green cells on 10M (and the 12M value is small)
 // so I won't use 390Mhz target because I want the perfect symbol shift on 10M too
 //***************************
-// uint32_t PLL_FREQ_TARGET = 390000000;
+// uint64_t PLL_FREQ_TARGET = 390000000;
 
 // 16 * 26 = 416.. so maybe that will work
 // not good
-// uint32_t PLL_FREQ_TARGET = 416000000;
+// uint64_t PLL_FREQ_TARGET = 416000000;
 // this is good
 // in use 1/6/24 for both Fary and num-shift methods
-// uint32_t PLL_FREQ_TARGET = 500000000;
+// uint64_t PLL_FREQ_TARGET = 500000000;
 
 // won't work well for num-shift method. may work for Farey
-uint32_t PLL_FREQ_TARGET = 400000000;
+uint64_t PLL_FREQ_TARGET = 400000000;
 
 
 // why am I getting it shift to 10hz wide audio signal on sdruno?
 // oh, that's the symbol shifting at 1.46 secs or so
-// uint32_t PLL_FREQ_TARGET = 600000000;
+// uint64_t PLL_FREQ_TARGET = 600000000;
 // try 900
-// uint32_t PLL_FREQ_TARGET = 900000000;
+// uint64_t PLL_FREQ_TARGET = 900000000;
 
 // anything else will use PLL_DENOM_MAX
 // double check the values if the algo for div/mul in si5351_functios.cpp changes relative
