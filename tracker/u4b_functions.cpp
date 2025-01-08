@@ -11,7 +11,6 @@
 #include "print_functions.h"
 
 //********************************
-extern uint32_t XMIT_FREQUENCY;
 extern bool VERBY[10];
 
 //********************************

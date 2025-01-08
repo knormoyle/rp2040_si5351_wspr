@@ -1926,7 +1926,7 @@ void vfo_turn_on(uint8_t clk_num) {
 
     // this is aligned to integer. (symbol 0)
     V1_printf("initial freq for vfo_set_freq_xxx() is %lu" EOL, freq);
-    uint64_t freq_xxx = freq << PLL_CALC_SHIFT;
+    uint64_t freq_xxx = ((uint64_t) freq) << PLL_CALC_SHIFT;
 
     Watchdog.reset();
     // FIX! should we get rid of pll reset here and rely on the turn_on_clk
@@ -2034,7 +2034,7 @@ void calcSymbolFreq_xxx(uint64_t *freq_xxx, uint32_t hf_freq, uint8_t symbol) {
     // let's add nothing. Just have more precision (64 bits)
     uint64_t wspr_shift_xxx = (12000L << PLL_CALC_SHIFT) / 8192L;
     uint64_t freq_xxx_here =
-        ((uint64_t) hf_freq << PLL_CALC_SHIFT) +
+        (((uint64_t) hf_freq) << PLL_CALC_SHIFT) +
         (wspr_shift_xxx * (uint64_t) symbol);
 
     *freq_xxx = freq_xxx_here;

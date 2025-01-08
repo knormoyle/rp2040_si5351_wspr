@@ -57,7 +57,7 @@ void si5351a_calc_sweep(void) {
     for (int i = 0; i < 80; i++) {
         if (false) {
             // use this for 0.25 steps
-            freq_xxx = (freq << PLL_CALC_SHIFT) +
+            freq_xxx = (((uint64_t) freq) << PLL_CALC_SHIFT) +
                 (i << (PLL_CALC_SHIFT - 2));  // + i/4
             switch (i % 4) {
                 case 0: break;
@@ -70,7 +70,7 @@ void si5351a_calc_sweep(void) {
             }
         } else {
             // use for 1.0 steps
-            freq_xxx = (freq + i) << PLL_CALC_SHIFT;  // + i
+            freq_xxx = ((uint64_t) (freq + i)) << PLL_CALC_SHIFT;  // + i
         }
 
         // note this will include any correction to SI5351_TCXO_FREQ (already done)

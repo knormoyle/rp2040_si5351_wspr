@@ -376,7 +376,13 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // extern const uint64_t PLL_CALC_SHIFT = 17;
 // 1/7/25 worked. did the use of volatile matter?
 // extern const uint64_t PLL_CALC_SHIFT = 18;
-extern const uint64_t PLL_CALC_SHIFT = 19;
+// 1/7/25 worked. Changed calcSymbolFreq_xxx to return it's uint64_t thru the first arg ptr, instead of return
+// extern const uint64_t PLL_CALC_SHIFT = 19;
+// 1/7/25 got worse error with more bits here?
+// extern const uint64_t PLL_CALC_SHIFT = 20;
+// 1/17/25 worse error?
+// extern const uint64_t PLL_CALC_SHIFT = 18;
+extern const uint64_t PLL_CALC_SHIFT = 15;
 
 // 1/6/25 still failed
 // extern const uint64_t PLL_CALC_SHIFT = 20;
@@ -419,10 +425,11 @@ extern const uint64_t PLL_CALC_SHIFT = 19;
 // uint64_t PLL_FREQ_TARGET = 416000000;
 // this is good
 // in use 1/6/24 for both Fary and num-shift methods
-// uint64_t PLL_FREQ_TARGET = 500000000;
+uint64_t PLL_FREQ_TARGET = 500000000;
 
 // won't work well for num-shift method. works for Farey
-uint64_t PLL_FREQ_TARGET = 400000000;
+// hmm. is this not working?
+// uint64_t PLL_FREQ_TARGET = 400000000;
 
 
 // why am I getting it shift to 10hz wide audio signal on sdruno?
