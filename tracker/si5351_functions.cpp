@@ -1386,6 +1386,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // should never use these initial values?
     retval.numerator = 0;
     retval.denominator = 0;
+    // what we really need is an 64-bit int version of Farey so we wouldn't need reals!
+    // then we could increase our shift for scaled-integer?
     if (TEST_FAREY_WITH_PLL_REMAINDER | USE_FAREY_WITH_PLL_REMAINDER) {
         // Farey algo wants double reals. So here we go 
         // luckily all my integer *_xxx is shifts..i.e. powers of 2!
@@ -1431,9 +1433,14 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // Could multiply by 2**32 and cast it to a uint32_t ,  then put it 
         // back in the double and divide by 2**32. 
         // So then we just have 32 bits of precision (less than 36 bits, but close?)
-        char str[40];
-        sprintf(str, "%.11f", target);
-        sscanf(str, "%lf", &target);
+
+        // doesn't help because we are already limited in terms of how much we can shift
+        // so precision is already limited
+        if (false) {
+            char str[40];
+            sprintf(str, "%.11f", target);
+            sscanf(str, "%lf", &target);
+        }
                                                 
         // the Farey algo uses doubles but starting with lower precision is a good thing?
         printf("Farey after .11f digit sprintf/sscanf: zero-lsb'ed Farey target %.16f" EOL, target);
@@ -1934,8 +1941,10 @@ void vfo_turn_on(uint8_t clk_num) {
     // 10: Internal CL = 8 pF.
     // 11: Internal CL = 10 pF (default).
     // new 12/28/24
+    // better? low by 4hz of middle?
+    i2cWrite(183, 0x80); 
+    // off. high by 16 hz
     // i2cWrite(183, 0xC0);
-    i2cWrite(183, 0x80);
 
     // FIX! is 187 this a reserved address?
     // in AN1234 register map, this is shown as CLKIN_FANOUT_EN and XO_FANOUT_EN
