@@ -21,7 +21,7 @@ extern uint32_t XMIT_FREQUENCY;
 extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _U4B_chan[4];  // string with 0-599
 
-extern const int PLL_CALC_SHIFT;
+extern const uint64_t PLL_CALC_SHIFT;
 extern uint64_t PLL_FREQ_TARGET;
 
 extern uint32_t PLL_DENOM_OPTIMIZE;
@@ -169,7 +169,7 @@ void si5351a_calc_sweep_band() {
 
         set_PLL_DENOM_OPTIMIZE(band);
         uint32_t xmit_freq = init_rf_freq(band, lane);
-        freq_xxx = calcSymbolFreq_xxx(xmit_freq, symbol);
+        calcSymbolFreq_xxx(&freq_xxx, xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor,
@@ -257,7 +257,7 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     double symbol2actual;
     double symbol3actual;
     for (uint8_t symbol = 0; symbol <= 3; symbol++) {
-        freq_xxx = calcSymbolFreq_xxx(xmit_freq, symbol);
+        calcSymbolFreq_xxx(&freq_xxx, xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         // or will use Farey if that's enabled
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,

@@ -67,6 +67,11 @@
 #include <cstring>
 #include "hardware/gpio.h"
 #include "hardware/i2c.h"
+// https://github.com/raspberrypi/pico-sdk/blob/master/src/common/pico_divider_headers/include/pico/divider.h
+// https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__pico__divider.html
+// #include "pico.h"
+// #include "hardware/divider.h"
+// div_u64u64()
 
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
@@ -117,7 +122,7 @@ extern const int Si5351Pwr;
 extern const int VFO_I2C0_SDA_PIN;
 extern const int VFO_I2C0_SCL_PIN;
 
-extern const int PLL_CALC_SHIFT;
+extern const uint64_t PLL_CALC_SHIFT;
 
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
@@ -901,8 +906,6 @@ void si5351a_reset_PLLA(bool print) {
         uint8_t val;
         int res;
 
-        // FIX! is this mucking up anything?
-        //******************
         // clear the status, then read it
         reg = SI5351A_DEVICE_STATUS;
         i2cWrite(reg, 0);
@@ -1206,6 +1209,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     if (PLL_DENOM > PLL_DENOM_MAX) PLL_DENOM = PLL_DENOM_MAX;
     uint64_t PLL_DENOM_xxx = PLL_DENOM << PLL_CALC_SHIFT;
 
+    uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
+    uint64_t tcxo_freq_xxx = tcxo_freq << PLL_CALC_SHIFT;
     //*****************************
     // the divider is 'a + b/c' or "Feedback Multisynth Divider"
     // c is PLL_DENOM
@@ -1235,18 +1240,56 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // the << 2 in the divisor
     // not doing that any more. R_DIVISOR_SHIFT is zero.
 
-    // hmm what does rp2040 have for 64-bit integer divided. Is it sometimes 
-    // getting the wrong answers
+    // hmm what does rp2040 have for 64-bit integer divided. 
+    // Is it sometimes getting the wrong answers with big PLL_CALC_SHIFT?
     // https://lorenz-ruprecht.at/docu/pico-sdk/1.4.0/html/group__pico__divider.html
+    // FIX! is the compiler messing up when I have big shifts?
+    // does it optimize the the two shifts and lose precision as a result
+    uint64_t aaa = PLL_FREQ_TARGET << PLL_CALC_SHIFT;
+    uint64_t bbb = freq_xxx << R_DIVISOR_SHIFT; 
 
-    uint64_t quotient = 
-        (PLL_FREQ_TARGET << PLL_CALC_SHIFT) /
-        (freq_xxx << R_DIVISOR_SHIFT); 
-    uint64_t ms_div_here = 1 + quotient;
-    // make it even number
-    // odd bumps down, even would stay the same.
-    if ((ms_div_here % 2) == 1) {
-        ms_div_here -= 1;
+    // does divide use these?
+    // https://lorenz-ruprecht.at/docu/pico-sdk/1.4.0/html/group__pico__divider.html
+    // divider.h
+    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_divider/include/hardware/divider.h
+
+    // Apparently: The pico_divider library provides a more user friendly set of APIs over the divider 
+    // (and support for 64 bit divides), 
+    // You can just use C level `/` and `%` operators and gain the benefits of the fast hardware divider.
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__pico__divider.html
+    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__divider.html
+    // uint64_t div_u64u64 (uint64_t a, uint64_t b)
+
+    // wrong answer case? 19 bit shift
+    // DEBUG: PLL_FREQ_TARGET shifted: aaa 209715200000000 // correct
+    // DEBUG: freq_xxx shifted: bbb 1512046592 < shift of 2884? seems like missing bits? >
+    // DEBUG: ms_div_here = aa / bbb: 138696 <correct. so is the shifted PLL_FREQ_TARGET wrong?
+    // DEBUG: bits_aaa: 47.58
+    // DEBUG: bits_bbb: 30.49
+
+    uint64_t ms_div_here = aaa / bbb;
+
+    bool DEBUG = true;
+    if (DEBUG) {
+        uint64_t bits_shifted_out = PLL_FREQ_TARGET >> (64 - PLL_CALC_SHIFT);
+        double bits_pft = log2(PLL_FREQ_TARGET);
+        double bits_aaa = log2(aaa);
+        double bits_bbb = log2(bbb);
+        V1_printf("DEBUG: PLL_FREQ_TARGET shifted: aaa %" PRIu64 EOL, aaa);
+        V1_printf("DEBUG: bits_shifted_out: %" PRIu64 EOL, bits_shifted_out);
+        V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);
+        V1_printf("DEBUG: PLL_FREQ_TARGET %" PRIu64 EOL, PLL_FREQ_TARGET);
+        V1_printf("DEBUG: freq_xxx shifted: bbb %" PRIu64 EOL, bbb);
+        V1_printf("DEBUG: ms_div_here = aa / bbb: %" PRIu64 EOL, ms_div_here);
+        V1_printf("DEBUG: bits_pft: %.2f" EOL, bits_pft);
+        V1_printf("DEBUG: bits_aaa: %.2f" EOL, bits_aaa);
+        V1_printf("DEBUG: bits_bbb: %.2f" EOL, bits_bbb);
+    }
+
+    // make it even. odd bumps up.
+    if ((ms_div_here % 2) == 1) ms_div_here += 1;
+    if (DEBUG) {
+        V1_printf("DEBUG: ms_div_here post-inc?: %" PRIu64 EOL, ms_div_here);
     }
 
     // is 900 really the upper limiter or ?? we have 908 for 24Mhz
@@ -1261,15 +1304,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // R_DIVISOR_SHIFT: possible *4 for the R0 and R1 output divider.
     // 64 bit calcs so don't lose bits beyond 32-bits
     uint64_t pll_freq_xxx = (freq_xxx * ms_div_here) << R_DIVISOR_SHIFT;
-    // this is just integer. not useful!
-    uint64_t pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
-
-    // FIX! should we just apply correction to the crystal frequency? yes.
-    // SI5351_TXCO_FREQ is calculated in tracker.ino set so correction calc
-    // is just one once
-
-    uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
-    uint64_t tcxo_freq_xxx = tcxo_freq << PLL_CALC_SHIFT;
+    // this is just integer. only useful for printing/rough error check
+    uint64_t int_pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
 
     // remember: floor division (integer)
     // tcxo_freq is integer..
@@ -1282,38 +1318,31 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // mult has to be in the range 15 to 90
 
     // I was getting pll_mult of 14 for 10M when I targeted 390Mhz pll
-    // need 15 min
+    // need 15 minimum
     if (pll_mult_here < 15 || pll_mult_here > 90) {
         V1_printf("ERROR: pll_mult %" PRIu64 " is out of range 15 to 90." EOL,
             pll_mult_here);
-        V1_print(F("ERROR: Need to pick a high target pll freq" EOL));
-        V1_printf("integer pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL,
-            pll_freq_here, tcxo_freq);
+        V1_print(F("ERROR: Need to pick another arget pll freq" EOL));
+        V1_printf("int_pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL,
+            int_pll_freq_here, tcxo_freq);
 
-        // doesn't work to try to force it in terms of understanding calcs
-        // if (pll_mult_here < 15) pll_mult_here = 15;
-        // else pll_mult_here = 90;
+        // Would this work. forcing the boundary cases?
+        if (pll_mult_here < 15) pll_mult_here = 15;
+        else pll_mult_here = 90;
 
         // Have to recompute the divisor if we change pll_mult? i.e. it's forced..
         // recompute the pll_freq based on the forced multiplier
         // R_DIVISOR_SHIFT: possible *4 for the R0 and R1 output divider.
+
         // 64 bit calcs so don't lose bits beyond 32-bits
         // mult will be min or max
         pll_freq_xxx = tcxo_freq_xxx * pll_mult_here;
-        // HACK bad
-        // this is just integer. not useful!
-        pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
+        // this is just integer. for printing/quick compare only!
+        int_pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
 
-        // this alternate strategy will imply required ms_div
-        uint64_t quotient =
-            (PLL_FREQ_TARGET << PLL_CALC_SHIFT) /
-            (freq_xxx << R_DIVISOR_SHIFT); 
-        uint64_t ms_div_here = 1 + quotient;
-        // make it even number
-        // odd bumps down
-        if ((ms_div_here % 2) == 1) {
-            ms_div_here -= 1;
-        }
+        ms_div_here = pll_freq_xxx / bbb;  // bbb from above
+        // make it even. odd bumps up.
+        if ((ms_div_here % 2) == 1) ms_div_here += 1;
 
         V1_print(F("vfo_calc_div_mult_num pll_freq implied by new ms_div, pll_mult" EOL));
         V1_print(F("ms_div implied by that pll_freq" EOL));
@@ -1324,57 +1353,31 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
             V1_print(F("ERROR: vfo_calc_div_mult_num (2) no recalc done.")); 
             V1_print(F(" Should never happen! rf output is wrong" EOL));
         }
-        V1_printf("ERROR: Now integer pll_freq_here %" PRIu64 " integer tcxo_freq %" PRIu64 EOL,
-            pll_freq_here, tcxo_freq);
-        V1_printf("ERROR: Now pll_mult %" PRIu64 " ms_div %" PRIu64 EOL,
+        V1_printf("ERROR: Now (2) pll_mult %" PRIu64 " ms_div %" PRIu64 EOL,
             pll_mult_here, ms_div_here);
     }
 
     //*************************************************************
     // check the range of "legal" pll frequencies
-    // change to use my "legal" pll range
-    if (false) {
-        if (pll_freq_here < 600000000 || pll_freq_here > 900000000) {
-            V1_printf("WARN: integer pll_freq %" PRIu64 " is outside datasheet legal range" EOL,
-                pll_freq_here);
-        }
+    if (false && (int_pll_freq_here < 600000000 || int_pll_freq_here > 900000000)) {
+        V1_printf("WARN: integer pll_freq %" PRIu64, int_pll_freq_here);
+        V1_print(F(" is outside datasheet legal range" EOL));
     }
-    else {
-        // (16 * 25) - (1 * 25)  = 375.
-        // So I think I shouldn't see less than 375? with 400 target?
-        // That's if I use a 25Mhz tcxo rather than 26,
-        // which should have 390 min also?
-        // check for 390 min
-        if (pll_freq_here < 390000000 || pll_freq_here > 900000000) {
-            V1_printf("WARN: integer pll_freq %" PRIu64 " is outside my 'legal' range" EOL,
-                pll_freq_here);
-        }
+    // live with it. maybe upgrade to ERROR to not miss with grep?
+    if (int_pll_freq_here < 390000000 || int_pll_freq_here > 900000000) {
+        V1_printf("WARN: integer pll_freq %" PRIu64, int_pll_freq_here);
+        V1_print(F(" is outside my 'legal' range" EOL));
     }
-    // live with it. maybe upgrade to ERROR to not miss with grep?    }
+
     // pll_num max 20 bits (0 to 1048575)?
 
-    // In the Si5351A, the "PLL num" refers to a 20-bit register value
-    // used to set the numerator of the fractional PLL multiplier,
-    // allowing for fine-tuning of the internal PLL frequency within a specified range;
-
-    // essentially, it provides the fractional part of the multiplication factor
-    // with 20 bits of precision.
     // also look at https://github.com/etherkit/Si5351Arduino
     // a new method. (greatest common divisor?)
     // https://github.com/etherkit/Si5351Arduino/issues/79
-    // he says to choose INTEGER_FACTOR1 to be 10e*
-    // y1 = Fout/INTEGER_FACTOR1
-    // x1 = 900e6*/INTEGER_FACTOR1  <-- needs to be an integer.
 
-    // If you choose INTEGER_FACTOR1 to be 10^something, this will be an integer too!
-    // Multisynth output equation:
-    // A+B/C
-    // A = floor(x1, y1)
-    // B = x1 % y1
-    // C = y1
+    //*******************************************************************
     // it's interesting these are done in the non-scaled domain (not *128)
     // since pll_freq_here is what we want to get to, shouldn't we be scaled here?
-
     // FIX! we should calc this as real for Farey!
     uint64_t pll_remain_xxx = pll_freq_xxx - (pll_mult_here * tcxo_freq_xxx);
 
@@ -2019,7 +2022,10 @@ double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print) {
 // 10M -> 29Mhz. Want 10e-4 precision on freq.
 // so log2(29e6*10e) = 38 or 39 bits of precision needed. 
 // so want 64-bits for the shifted *_xxx 
-uint64_t calcSymbolFreq_xxx(uint32_t hf_freq, uint8_t symbol) {
+// was: Change to using ptr. seems like I lose half of the return 64-bit sometimes?
+
+// was: uint64_t calcSymbolFreq_xxx(uint32_t hf_freq, uint8_t symbol) {
+void calcSymbolFreq_xxx(uint64_t *freq_xxx, uint32_t hf_freq, uint8_t symbol) {
     // not expensive to always recalc the symbol freq
     // don't want printing though (too slow)
     // if we add 0.5 effectively, then it's like a round up?
@@ -2027,11 +2033,12 @@ uint64_t calcSymbolFreq_xxx(uint32_t hf_freq, uint8_t symbol) {
     //    ((symbol * (12000L << PLL_CALC_SHIFT) + 4096L) / 8192L);
     // let's add nothing. Just have more precision (64 bits)
     uint64_t wspr_shift_xxx = (12000L << PLL_CALC_SHIFT) / 8192L;
-    uint64_t freq_xxx_with_symbol = 
+    uint64_t freq_xxx_here =
         ((uint64_t) hf_freq << PLL_CALC_SHIFT) +
         (wspr_shift_xxx * (uint64_t) symbol);
 
-    return freq_xxx_with_symbol;
+    *freq_xxx = freq_xxx_here;
+    // return freq_xxx;
 }
 
 //**********************************
@@ -2070,7 +2077,8 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
     // affects the numerator-shift algo
 
     // not expensive to always recalc the symbol freq
-    uint64_t freq_xxx_with_symbol = calcSymbolFreq_xxx(hf_freq, symbol);
+    uint64_t freq_xxx_with_symbol;
+    calcSymbolFreq_xxx(&freq_xxx_with_symbol, hf_freq, symbol);
     // FIX! does this change the state of the clock output enable?
     // no..
     // changes both clk0 and clk1

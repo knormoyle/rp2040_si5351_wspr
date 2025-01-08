@@ -316,7 +316,7 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // 7 will give 1/128ths precision after the decimal (for symbol frequency),
 // as opposed to 1/16ths
 // was 1/7/25
-// extern const int PLL_CALC_SHIFT = 7;
+// extern const uint64_t PLL_CALC_SHIFT = 7;
 
 // double precision fp mantissa only has 52 bits of precision
 // scaled integer arith has 64 bits of precision because we have 64-bit integers to use.
@@ -354,17 +354,35 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // Once you get to the 0-1 real for Farey, then you you have plenty of bits of precision if you use double fp.
 // Since you're no longer dealing with the full 900e6 of the pll.
 
-// 1/7/25 This works now!
-// extern const int PLL_CALC_SHIFT = 15;
-// didn't work?
-// extern const int PLL_CALC_SHIFT = 20;
-// didn't work?
-// extern const int PLL_CALC_SHIFT = 18;
-// doesn't work on 10M?
-// extern const int PLL_CALC_SHIFT = 16;
 
-// extern const int PLL_CALC_SHIFT = 14;
-extern const int PLL_CALC_SHIFT = 10;
+// Hmm ran into problem where compile was messing up an 64-bit integer divide, probably
+// because it was optimizing away shifts in the same equation and losing precision
+// changed to separate assigns, and used volatile on he divide.
+
+// 1/7/25 This works now!
+// extern const uint64_t PLL_CALC_SHIFT = 15;
+// didn't work?
+// extern const uint64_t PLL_CALC_SHIFT = 20;
+// didn't work?
+// extern const uint64_t PLL_CALC_SHIFT = 18;
+// doesn't work on 10M?
+// extern const uint64_t PLL_CALC_SHIFT = 16;
+
+// 1/7/25 okay now with the divide/shift deoptimization managed 
+// (ms_div_here in si5351a_functions.cpp)
+// extern const uint64_t PLL_CALC_SHIFT = 16;
+// 1/7/25 hmm this failed (bad ms_div_here)
+// 1/7/25 now it worked! what changed?
+// extern const uint64_t PLL_CALC_SHIFT = 17;
+// 1/7/25 worked. did the use of volatile matter?
+// extern const uint64_t PLL_CALC_SHIFT = 18;
+extern const uint64_t PLL_CALC_SHIFT = 19;
+
+// 1/6/25 still failed
+// extern const uint64_t PLL_CALC_SHIFT = 20;
+
+// works with 500Mhz 10M 1/7/25
+// extern const uint64_t PLL_CALC_SHIFT = 10;
 
 // this is the target PLL freq when making muliplier/divider initial calculations
 // could change this per band?
@@ -401,10 +419,10 @@ extern const int PLL_CALC_SHIFT = 10;
 // uint64_t PLL_FREQ_TARGET = 416000000;
 // this is good
 // in use 1/6/24 for both Fary and num-shift methods
-uint64_t PLL_FREQ_TARGET = 500000000;
+// uint64_t PLL_FREQ_TARGET = 500000000;
 
 // won't work well for num-shift method. works for Farey
-// uint64_t PLL_FREQ_TARGET = 400000000;
+uint64_t PLL_FREQ_TARGET = 400000000;
 
 
 // why am I getting it shift to 10hz wide audio signal on sdruno?

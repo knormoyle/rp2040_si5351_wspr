@@ -83,7 +83,15 @@ void si5351a_setup_multisynth012(uint32_t div);
 // (assume freq calibration errors of that much,
 // then symbol the 200hz passband?
 double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print);
-uint64_t calcSymbolFreq_xxx(uint32_t hf_freq, uint8_t symbol);
+
+// BUG? this is the only thing I have that returns a 64-bit 
+// occasionaly wrong (ptr to wrong 32-bit ?)
+// https://stackoverflow.com/questions/28432224/returned-uint64-t-seems-truncated
+// is it because si5351_functions.cpp doesn't include it's own .h?
+// should always do that and not be dependent on Arduino doing it right?
+
+void calcSymbolFreq_xxx(uint64_t *freq_xxx, uint32_t hf_freq, uint8_t symbol);
+
 void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num);
 
 // used to print (not change) for walking a range in setup,
