@@ -15,6 +15,25 @@ Schematic and board png from jlcpcb are there also. The schematic has a buck/boo
 
 I think the power consumption, at 3.6V, doesn't exceed 40mA during gps or rf or idle times. Gps is left on except when rf'ing, so theoretically a battery powered tracker could be more agressive at saving energy by using gps less. I try to slow turn-on stuff to minimize the effect of gps chip surge currents during cold gps reset (start of day). (not an issue I think with gps warm reset, the normal gps off->on transition with VBAT power)
 
+## Reading/editting the code with an editor
+I dislike reading code with tab chars or inconsistent style. Here's the target:
+
+Uses 4 space indent, OTBS (One True Brace) indentation style.
+
+Single statement blocks can exclude braces.
+see: https://en.wikipedia.org/wiki/Indentation_style
+
+Linted with Google's cpplint. using Google's C++ Style guide, allowing 100 char lines
+````
+   cpplint --linelength=100
+````
+
+vim users can use this in .vimrc to good effect:
+````
+   set tabstop=4 softtabstop=0 expandtab shiftwidth=4 smarttab
+````
+
+
 ## Costs
 I could post invoices from some recent orders from jlcpcb.com. Cheaper with jlcpcb.com discounts and larger quantities. But even quantity 5 (the minimum) is cheap. Shouldn't be more than $10-$12 a board. (no bmp280, atgm336n gps). Shipping costs are $20 if you want fast shipping, but only $1.52 !! if you are willing to wait a bit for Global Standard Direct Line shipping.
 No extra pico board needed. RP2040 is integrated. You only have solder gps antenna and hf antenna and power connections. Debug done with usb cable for power/data, and gps antenna and short HF antenna stubs.
