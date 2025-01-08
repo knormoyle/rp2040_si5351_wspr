@@ -4,6 +4,8 @@
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
 // Uses 4 space indent, OTBS (One True Brace) indentation style
+// Linted with Google's cpplint. using Googl'es C++ Style guide
+// cpplint --linelength=100
 // although single statement blocks can exclude braces.
 // https://en.wikipedia.org/wiki/Indentation_style
 // vim users can use this in .vimrc to good effect:
