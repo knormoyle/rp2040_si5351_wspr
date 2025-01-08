@@ -21,7 +21,7 @@ I dislike reading code with tab chars or inconsistent style. Here's the target:
 Uses 4 space indent, OTBS (One True Brace) indentation style.
 
 Single statement blocks can exclude braces.
-see: https://en.wikipedia.org/wiki/Indentation_style
+See style forms at https://en.wikipedia.org/wiki/Indentation_style
 
 Linted with Google's cpplint. using Google's C++ Style guide, allowing 100 char lines
 ````
@@ -32,7 +32,6 @@ vim users can use this in .vimrc to good effect:
 ````
    set tabstop=4 softtabstop=0 expandtab shiftwidth=4 smarttab
 ````
-
 
 ## Costs
 I could post invoices from some recent orders from jlcpcb.com. Cheaper with jlcpcb.com discounts and larger quantities. But even quantity 5 (the minimum) is cheap. Shouldn't be more than $10-$12 a board. (no bmp280, atgm336n gps). Shipping costs are $20 if you want fast shipping, but only $1.52 !! if you are willing to wait a bit for Global Standard Direct Line shipping.
@@ -107,9 +106,9 @@ You'll get to where under Tools it will look like this and you'll select the boa
 
 <img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/board_screenshot2.png"/>
 
-that's the board you want
+That's the board you want
 
-here's another step-by-step
+Here's another step-by-step
 
 - Open the **Tools > Board > Boards Manager...** menu item.
 - Type "pico" in the search bar until you see the **Raspberry Pi Pico/RP2040** entry and click on it.
@@ -149,11 +148,12 @@ here's another step-by-step
 
 To give an example of where the files should be and the libraries issue:
 
-
 You have to have a Arduino dir for libraries. I copied Kazu notes on where the Arduino dir is on different systems in my readme
 
 I just created links (ln -s) from the Arduino libraries dir to the files in my repo libraries. You can just cp them though.
-I put 'cp_libraries.sh' in the repo's tracker dir. I use 'cp_libraries.sh to create links in my Arduino directory to the libraries. This makes it easy for me to be stupid if I add libraries. You can modify it to work for whatever your local config is. You should only have to redo the Arduino libraries links or copies, if I had any new library usage (i just added a library for blinking led with morse code, which I may use for detailed error messaging in the future. (that library seems cool. can be non-blocking!)
+I put 'cp_libraries.sh' in the repo's tracker dir. I use 'cp_libraries.sh to create links in my Arduino directory to the libraries. This makes it easy for me to be stupid if I add libraries. You can modify it to work for whatever your local config is. You should only have to redo the Arduino libraries links or copies, if I had any new library usage (i just 
+
+Added a library for blinking led with morse code, which I may use for detailed error messaging in the future. (that library seems cool. can be non-blocking!)
 
 ```
 kevin@pc8c:~$ cd Arduino
@@ -212,9 +212,9 @@ kevin@pc8c:~/rp2040_si5351_wspr/tracker$
 ```
 
 
-a WATCH OUT FOR: whenever the IDE is downloading something like the arduino-pico json, if you have the serial monitor open, the download can hang. so if it doesn't download, make sure you don't have serial montitor open.
+WATCH OUT FOR: whenever the IDE is downloading something like the arduino-pico json, if you have the serial monitor open, the download can hang. so if it doesn't download, make sure you don't have serial montitor open.
 
-if I cd ../libraries from there, I get:
+If I cd ../libraries from there, I get:
 ```
 kevin@pc8c:~/rp2040_si5351_wspr/tracker$ cd ../libraries
  
@@ -311,24 +311,23 @@ I did have it running at 12mhz on the crystall oscillator like kazu suggested bu
 
 I do some funky stuff on the first gps cold reset to try to get min power.
 
-since it messes with usb pll, there's some timing to get firmware compiled and uploaded
+Since it messes with usb pll, there's some timing to get firmware compiled and uploaded
 I found once I started with the code messing with usb, i had to unplug/replug in the usb to get the sequence right
 I ordered a usb cable from amazon that has a on/off switch that I'm going to use so I don't wear out my usb on my pc
 
-in any case...this is the way to do it
+In any case...this is the way to do it
 do the compile-only. you will compile a lot the first time.
 then unplug your usb to the rp2040 and plug it back in. This resets things if you were running the code before
 
-now hit the compile/upload icon
+Now hit the compile/upload icon
 if you had my pcb, this would be while a green led was lit
 
-you should see it upload
-have a script ready to open a putty session and start it. You have 15 secs to open the putty session otherwise it decides it's in balloon mode and you won't get any serial
+You should see it upload.
+Have a script ready to open a putty session and start it. You have 15 secs to open the putty session otherwise it decides it's in balloon mode and you won't get any serial
 
 I could change this to 30 secs until you get the hang of it, if you're continually getting a blank screen when you open the putty window after upload
 
 I couldn't think of a good way for deciding when to ignore the usb serial fully in balloon mode..this timeout method is what I came up 
-
 
 ## Interesting current info
 I think I'm seeing 40mA a on usb power when sending RF now. GPS cold reset current still is the peak current though, I think? (have to get better power measuring device).
@@ -368,7 +367,7 @@ Since it messes with usb pll, there's some timing to get firmware compiled and u
 I found once I started with the code messing with usb, i had to unplug/replug in the usb to get the sequence right
 I ordered a usb plug that has a on/off switch that I'm going to use so I don't wear out my usb on my pc
 
-exciting update: I've updated constants and the symbol freq algo, to use optimal denominators for the symbol freq generation, so that the symbol shifts are exactly = the desired wspr shifts of 12000/8196 = ~1.4648 Hz,
+Exciting update: I've updated constants and the symbol freq algo, to use optimal denominators for the symbol freq generation, so that the symbol shifts are exactly = the desired wspr shifts of 12000/8196 = ~1.4648 Hz,
 Basically get microHertz level accuracy on the symbol shifts, and absolute errors of < 1Hz.
 Different denominators targeted for different bands, using the spreadsheet data for deciding optimal denominator (per band). Same denominator used for all 4 u4b frequency bins on a band. By getting exact symbol shifts, I think the DT and SNR and frequency report from my WSJT-X sdr testing, has improved (more energy into the ffts being done by WSJT-X)
 
@@ -421,4 +420,4 @@ Alternate symbol shift strategy of numerator-only shift is still in the code (mo
 
 **Nov 2023** - release an **Ocean Buoy** with the v0.3 tracker [KQ6RS-12](https://aprs.fi/#!call=a%2FKQ6RS-12&timerange=604800&tail=604800) at 420 miles WSW of San Diego California (from a boat), as of Mar 30 2024 **still floating on Pacific Ocean for 144 days**
 
-prehistory by Kazuhisa "Kazu." Terasaki, AG6NS
+Prehistory by Kazuhisa "Kazu." Terasaki, AG6NS
