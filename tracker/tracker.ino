@@ -1105,11 +1105,11 @@ void setup1() {
     int sse_micro = roundf(1e6 * symbolShiftError);
     int sse_milli = roundf(1e3 * symbolShiftError);
     if (sse_micro == 0) {
-        V1_printf("WARN: worst symbolShiftError has better than microHz precision. sse*1e6 %d" EOL, sse_micro);
+        V1_print(F("GOOD: worst symbolShiftError has better than microHz precision." EOL));
     } else if (sse_milli == 0) {
-        V1_printf("WARN: worst symbolShiftError has better than milliHz precision. sse*1e3 %d" EOL, sse_milli);
+        V1_print(F("GOOD: worst symbolShiftError has better than milliHz precision." EOL));
     } else {
-        V1_printf("WARN: worst symbolShiftError has < milli Hz precision. sse*1e3 %d" EOL, sse_milli);
+        V1_print(F("WARN: worst symbolShiftError has < milli Hz precision." EOL));
     }
 
     //***************
