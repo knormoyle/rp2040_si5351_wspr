@@ -90,7 +90,7 @@ char EncodeBase36(uint8_t val) {
 }
 
 //*******************************
-uint32_t init_rf_freq(char *band, char *lane) {
+void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
     // base frequencies for different bands
     // 136000 474200 1836600 3568600 5364700 7038600 10138700
     // 14095600 18104600 21094600 24924600 28124600
@@ -116,23 +116,24 @@ uint32_t init_rf_freq(char *band, char *lane) {
         default: base_freq_used = BF20M;
     }
 
-    uint32_t xmit_frequency = base_freq_used + 1400UL;
+    uint32_t xmit_freq_here = base_freq_used + 1400UL;
     // offset from base for start of passband. same for all bands
     // add offset based on lane ..same for every band
     switch (lane[0]) {
-        case '1': xmit_frequency += 20UL;  break;
-        case '2': xmit_frequency += 60UL;  break;
-        case '3': xmit_frequency += 140UL; break;
-        case '4': xmit_frequency += 180UL; break;
+        case '1': xmit_freq_here += 20UL;  break;
+        case '2': xmit_freq_here += 60UL;  break;
+        case '3': xmit_freq_here += 140UL; break;
+        case '4': xmit_freq_here += 180UL; break;
         // in case invalid lane was read from EEPROM.
         // This is center passband?? (not a valid lane?)
-        default: xmit_frequency += 100UL;
+        default: xmit_freq_here += 100UL;
     }
 
     // printf uint32_t with %u
-    V1_printf(EOL "rf_freq_init band %s base_freq_used %lu xmit_frequency %lu " EOL,
-        band, base_freq_used, xmit_frequency);
-    return xmit_frequency;
+    V1_printf(EOL "rf_freq_init band %s base_freq_used %lu xmit_freq %lu " EOL,
+        band, base_freq_used, xmit_freq_here);
+
+    *xmit_freq = xmit_freq_here;
 }
 
 /*

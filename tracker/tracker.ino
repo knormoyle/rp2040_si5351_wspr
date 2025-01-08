@@ -312,16 +312,11 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // extern const int ATGM336H_BAUD_RATE = 115200;
 
 //*********************************
-// was 4, but not getting enough precision. see si5351_functions.cpp
-// 7 will give 1/128ths precision after the decimal (for symbol frequency),
-// as opposed to 1/16ths
-// was 1/7/25
-// extern const uint64_t PLL_CALC_SHIFT = 7;
-
 // double precision fp mantissa only has 52 bits of precision
 // scaled integer arith has 64 bits of precision because we have 64-bit integers to use.
 // So scaled integer math can have more precision if you can cover the dynamic range of values 
 // needed.
+// But: the numbers eventually go into fp doubles? so can't exceed 52 bits?
 
 // The biggest numbers are the PLL freq. 900 Mhz at most.
 
@@ -354,41 +349,15 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // Once you get to the 0-1 real for Farey, then you you have plenty of bits of precision if you use double fp.
 // Since you're no longer dealing with the full 900e6 of the pll.
 
-
 // Hmm ran into problem where compile was messing up an 64-bit integer divide, probably
 // because it was optimizing away shifts in the same equation and losing precision
 // changed to separate assigns, and used volatile on he divide.
 
-// 1/7/25 This works now!
-// extern const uint64_t PLL_CALC_SHIFT = 15;
-// didn't work?
-// extern const uint64_t PLL_CALC_SHIFT = 20;
-// didn't work?
-// extern const uint64_t PLL_CALC_SHIFT = 18;
-// doesn't work on 10M?
-// extern const uint64_t PLL_CALC_SHIFT = 16;
+extern const uint64_t PLL_CALC_SHIFT = 16;
 
-// 1/7/25 okay now with the divide/shift deoptimization managed 
-// (ms_div_here in si5351a_functions.cpp)
-// extern const uint64_t PLL_CALC_SHIFT = 16;
-// 1/7/25 hmm this failed (bad ms_div_here)
-// 1/7/25 now it worked! what changed?
-// extern const uint64_t PLL_CALC_SHIFT = 17;
-// 1/7/25 worked. did the use of volatile matter?
-// extern const uint64_t PLL_CALC_SHIFT = 18;
-// 1/7/25 worked. Changed calcSymbolFreq_xxx to return it's uint64_t thru the first arg ptr, instead of return
-// extern const uint64_t PLL_CALC_SHIFT = 19;
-// 1/7/25 got worse error with more bits here?
-// extern const uint64_t PLL_CALC_SHIFT = 20;
-// 1/17/25 worse error?
-// extern const uint64_t PLL_CALC_SHIFT = 18;
-extern const uint64_t PLL_CALC_SHIFT = 15;
-
-// 1/6/25 still failed
-// extern const uint64_t PLL_CALC_SHIFT = 20;
-
-// works with 500Mhz 10M 1/7/25
-// extern const uint64_t PLL_CALC_SHIFT = 10;
+// won't work well for num-shift method. works for Farey
+// hmm. is this not working?
+uint64_t PLL_FREQ_TARGET = 400000000;
 
 // this is the target PLL freq when making muliplier/divider initial calculations
 // could change this per band?
@@ -425,11 +394,8 @@ extern const uint64_t PLL_CALC_SHIFT = 15;
 // uint64_t PLL_FREQ_TARGET = 416000000;
 // this is good
 // in use 1/6/24 for both Fary and num-shift methods
-uint64_t PLL_FREQ_TARGET = 500000000;
+// uint64_t PLL_FREQ_TARGET = 500000000;
 
-// won't work well for num-shift method. works for Farey
-// hmm. is this not working?
-// uint64_t PLL_FREQ_TARGET = 400000000;
 
 
 // why am I getting it shift to 10hz wide audio signal on sdruno?
@@ -992,7 +958,7 @@ void setup1() {
     Watchdog.reset();
     // sets minute/lane/id from chan number.
     // FIX! is it redundant at this point?..remove?
-    XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+    init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
     Watchdog.reset();
     // FIX! do we really have to read flash again. No..I don't think so!
     // keeps the read_FLASH in core1() always? no worries about "safe" access to flash
@@ -1843,7 +1809,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         // restore the wspr XMIT_FREQUENCY since cw changed it
         // sets minute/lane/id from chan number.
         // FIX! is it redundant at this point?..remove?
-        XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+        init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
         tx_cnt_4 += 1;
         if (VERBY[1]) {
             StampPrintf("CW Tx sent. minute: %d second: %d" EOL, minute(), second());

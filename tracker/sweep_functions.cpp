@@ -168,7 +168,8 @@ void si5351a_calc_sweep_band() {
         lane[0] = '1';  // first freq bin
 
         set_PLL_DENOM_OPTIMIZE(band);
-        uint32_t xmit_freq = init_rf_freq(band, lane);
+        uint32_t xmit_freq;
+        init_rf_freq(&xmit_freq, band, lane);
         calcSymbolFreq_xxx(&freq_xxx, xmit_freq, symbol);
         // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
@@ -312,9 +313,9 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     // assume it's a positive shift
 
     // just look at adjacent shifts
-    double symbolShiftError_1 = abs(symbol1actual - symbol0actual) - expectedShift;
-    double symbolShiftError_2 = abs(symbol2actual - symbol1actual) - expectedShift;
-    double symbolShiftError_3 = abs(symbol3actual - symbol2actual) - expectedShift;
+    double symbolShiftError_1 = abs(abs(symbol1actual - symbol0actual) - expectedShift);
+    double symbolShiftError_2 = abs(abs(symbol2actual - symbol1actual) - expectedShift);
+    double symbolShiftError_3 = abs(abs(symbol3actual - symbol2actual) - expectedShift);
     V1_print(F(EOL));
     V1_printf("Expected shift 0 to 1: %.6f Hz" EOL, 1 * expectedShift);
     V1_printf("Expected shift 0 to 2: %.6f Hz" EOL, 2 * expectedShift);

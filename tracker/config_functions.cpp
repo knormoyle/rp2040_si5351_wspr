@@ -493,7 +493,7 @@ void user_interface(void) {
                 break;
             case 'U':
                 get_user_input("Enter U4B channel (0-599): " EOL, _U4B_chan, sizeof(_U4B_chan));
-                XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+                init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
 
                 write_FLASH();
                 break;
@@ -535,7 +535,7 @@ void user_interface(void) {
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
                 write_FLASH();
-                XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+                init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
                 break;
             case 'P':
                 get_user_input("Enter Tx high: (0 or 1)" EOL, _tx_high, sizeof(_tx_high));
@@ -738,7 +738,7 @@ int read_FLASH(void) {
     process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
 
     // FIX! define this as extern?
-    XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+    init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
 
     // fix anything bad! both in _* variables and FLASH (defaults)
     // -1 if anything got fixed
@@ -1049,7 +1049,7 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         // this will set _lane, _id13, _start_minute
         process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
-        XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+        init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
         result = -1;
     }
     //*****************
@@ -1068,7 +1068,7 @@ int check_data_validity_and_set_defaults(void) {
             // figure out the XMIT_FREQUENCY for new band, and set _32_dialfreqhz
             // have to do this whenever we change bands
             process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
-            XMIT_FREQUENCY = init_rf_freq(_Band, _lane);
+            init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
             result = -1;
             break;
     }

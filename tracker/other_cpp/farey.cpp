@@ -5,8 +5,8 @@
 // from
 // https://axotron.se/blog/fast-algorithm-for-rational-approximation-of-floating-point-numbers/
 
-
 #include <cstdint>
+#include <cinttypes>
 #include <cmath>
 #include <cstdio>
 #include <stdlib.h>
@@ -196,13 +196,6 @@ rational_t retval;
 char str[40];
 void doit(double target, bool bumped) {
     uint32_t maxdenom = 1048575;
-    if (false) {
-        // round it to 14 digits of precision
-        // we know target is between 0 and 1 to start
-        sprintf(str, "%.14f", target);
-        sscanf(str, "%lf", &target);
-    }
-
     retval.target = target;
     retval = rational_approximation(target, maxdenom);
 
@@ -210,7 +203,7 @@ void doit(double target, bool bumped) {
     double actual_error = target - actual_real;
     retval.actual_real = actual_real;
     retval.actual_error = actual_error;
-    
+
     printf("\n");
     if (bumped) {
         printf("bumped target %.16f\n", target);
@@ -218,7 +211,7 @@ void doit(double target, bool bumped) {
         printf("bumped denominator %u\n", retval.denominator);
         printf("bumped iterations %u\n", retval.iterations);
         printf("bumped actual_real %.16f\n", actual_real);
-        printf("bumped actual_error %.16f\n", actual_error);
+        printf("bumped actual_error %.16e\n", actual_error);
     } else {
         printf("target %.16f\n", target);
         printf("numerator %u\n", retval.numerator);
@@ -236,15 +229,6 @@ void doit2(double target) {
     // this just makes denom bigger
     // double eps = 1e-10;
     double eps = -1;
-
-    // round it to 14 digits of precision
-    // we know target is between 0 and 1 to start
-    if (false) {
-        // round it to 14 digits of precision
-        // we know target is between 0 and 1 to start
-        sprintf(str, "%.14f", target);
-        sscanf(str, "%lf", &target);
-    }
 
     double t = target;
     result.target = target;
@@ -266,10 +250,10 @@ void doit2(double target) {
         //        fabs(result.error), fabs(result.error)/eps, result.iterations);
     }
 
-    
+
     if (DO_BEST_RAT_CONTINUED_FRACTIONS==1) {
         // kbn ..for consistency with other algo
-        result.error = result.err; 
+        result.error = result.err;
         result.numerator = result.n;
         result.denominator = result.d;
         result.iterations = result.niter;
@@ -287,7 +271,7 @@ void doit2(double target) {
     printf("denominator %lu\n", result.denominator);
     printf("iterations %u\n", result.iterations);
     printf("actual_real %.16f\n", actual_real);
-    printf("actual_error %.16f\n", actual_error);
+    printf("actual_error %.16e\n", actual_error);
     }
 
 
@@ -366,7 +350,7 @@ int main() {
     // this is directly related to the change in pll freq
     // depending on the divisor we need a bigger shift in pll freq.
     // larger and we need more. smaller and we need less
-    
+
     lower_bound = 0.14484461538462 - 1e-7;
     upper_bound = 0.14484698377404 + 1e-7;
 
@@ -398,13 +382,13 @@ int main() {
     printf("lower_bound %.16f\n", lower_bound);
     printf("upper_bound %.16f\n", upper_bound);
 
-
+    lower_bound = 0+1e-16;
+    upper_bound = 1-1e-16;
     // Seed the random number engine using the current time
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     // don't do this again?:
     std::default_random_engine generator(seed);
     std::uniform_real_distribution<double> unif(lower_bound, upper_bound);
-
 
     // Seed the random number generator
     // https://linux.die.net/man/3/random
@@ -430,12 +414,8 @@ int main() {
         // had a bad case at 0.46
 
         double multiplier_fraction;
-        if (true) {
-            multiplier_fraction = unif(generator);
-        } else {
-            int j = i % 5;
-            multiplier_fraction = real_freqs[j].f;
-        }
+        int j = i % 5;
+        multiplier_fraction = real_freqs[j].f;
 
         // double multiplier_fraction = unif(re);
 
@@ -450,11 +430,33 @@ int main() {
 
         // multiplier_fraction = 0.4642856924664300;
         // multiplier_fraction = 0.4642856924664400;
-
         // multiplier_fraction = 0.47194409375000;
-        printf("multiplier_fraction %.16f\n", multiplier_fraction);
         double target = multiplier_fraction;
-        // ad_rat doesn't like this case 
+        
+        // Using a si5351a fractional feedback, With a 26mhz tcxo, 
+        // and maybe a 400mhz PLL with a minimal divisor of 15 after the pll,
+        // it seems like we need decimal 11 digits of precision
+        // on the fractional real being approximated.
+        // Because the effect of the 10th digit on on the wspr symbol freq is at most:
+        //    (1e-11 * 26e6) / 15 = 1.73e-5 Hz..
+        // which is plenty of precision (uHz level)
+
+        // So we only need 11 digits of precision  in the fractional real which is 0 to 1
+
+        // Ideally means integer-scaled shifting should save log2(10**11) == 36 bits
+        // ..but can we shift 32 bits into 64 bit? with 900Mhz max? yes we could?
+
+        // Alternative: to the sprintf/sscanf:
+        // Could multiply by 2**32 and cast it to a uint32_t ,  
+        // then put it back in the double and divide by 2**32. 
+        // So then we just have 32 bits of precision (less than 36 bits, but close?)
+
+        char str[40];
+        sprintf(str, "%.11f", target);
+        sscanf(str, "%lf", &target);
+        printf("target %.16f\n", target);
+
+        // ad_rat doesn't like this case
         // maxerr_target 0.285714341919480
         // maxerr_num 2
         // maxerr_denom 7
@@ -494,7 +496,7 @@ int main() {
                     }
                     // increase the bump amount by 10**tries * 1e-14
                     // new_target = new_target + (pow(10, tries) * 1e-14);
-                
+
                     switch (tries) {
                         case(1): sprintf(str, "%.12f", new_target);
                         case(2): sprintf(str, "%.11f", new_target);
@@ -502,9 +504,9 @@ int main() {
                         case(4): sprintf(str, "%.9f", new_target);
                         case(5): sprintf(str, "%.8f", new_target);
                     }
-            
+
                     sscanf(str, "%lf", &new_target);
-                    printf("ERROR: actual_error_xe10 %.4f tries (%d) bump to new_target %.14f chopping off precision\n", 
+                    printf("ERROR: actual_error_xe10 %.4f tries (%d) bump to new_target %.14f chopping off precision\n",
                         actual_error_xe10, tries, new_target);
                     // could try plus or minus direction randomly?
                     printf("-> doit with new_target %.14f\n", new_target);
@@ -533,7 +535,7 @@ int main() {
         }
     }
 
-    if (DO_BEST_RAT_CONTINUED_FRACTIONS) 
+    if (DO_BEST_RAT_CONTINUED_FRACTIONS)
         printf("\nUsed continued fractions find_best_rat(l, t)\n");
     else if (DO_BEST_RAT)
         printf("\nUsed fast farey find_best_rat(l, t)\n");
@@ -614,7 +616,7 @@ maxerr_iter 4
 maxerr_i 52668
 */
 
-/* 
+/*
 Ndenom_min wasn't assign (I had broken magnusson):
 after fixing that, always got same answer 3 like ad_rat..
 magnusson oscillated between 3 answers, when tried repeatedly with same hard target
@@ -645,7 +647,7 @@ actual_error 0.0000000562051943
 break 2
 */
 
-/* 
+/*
 continued fractions algo got same 2/7 result
 target 0.2857143419194800
 numerator 2

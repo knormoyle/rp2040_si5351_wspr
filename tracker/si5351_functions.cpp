@@ -1287,7 +1287,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     }
 
     // make it even. odd bumps up.
-    if ((ms_div_here % 2) == 1) ms_div_here += 1;
+    // switch: try bumping odd down
+    if ((ms_div_here % 2) == 1) ms_div_here -= 1;
     if (DEBUG) {
         V1_printf("DEBUG: ms_div_here post-inc?: %" PRIu64 EOL, ms_div_here);
     }
@@ -1301,8 +1302,6 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         V1_print(F(" Should never happen! rf output is wrong" EOL));
     }
 
-    // R_DIVISOR_SHIFT: possible *4 for the R0 and R1 output divider.
-    // 64 bit calcs so don't lose bits beyond 32-bits
     uint64_t pll_freq_xxx = (freq_xxx * ms_div_here) << R_DIVISOR_SHIFT;
     // this is just integer. only useful for printing/rough error check
     uint64_t int_pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
@@ -1342,7 +1341,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
         ms_div_here = pll_freq_xxx / bbb;  // bbb from above
         // make it even. odd bumps up.
-        if ((ms_div_here % 2) == 1) ms_div_here += 1;
+        // switch: try bumping odd down
+        if ((ms_div_here % 2) == 1) ms_div_here -= 1;
 
         V1_print(F("vfo_calc_div_mult_num pll_freq implied by new ms_div, pll_mult" EOL));
         V1_print(F("ms_div implied by that pll_freq" EOL));
@@ -1390,6 +1390,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // Farey algo wants double reals. So here we go 
         // luckily all my integer *_xxx is shifts..i.e. powers of 2!
         // so no loss of precision going back and forth 
+
+        // this cast of pll_remain_xxx can only have 52 bits of precision?
         double pll_remain = ((double) pll_remain_xxx) / pow(2, PLL_CALC_SHIFT);
         // lets see what farey/magnusson get with the remainder
         // we can't use this as we need to adjust the remainder to get
@@ -1402,11 +1404,43 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
         // we want a fraction to multiple the txco_freq with
         double target = pll_remain / (double)tcxo_freq;
+
+        // FIX! if we zero out some of the lower digits of the mantissa, does it help reduce error?
+        // with 26mhz tcxo, seems like we need 12 digits of precision
+        // on the real being approximated.
+        // (1e-12 * 26e6 (tcxo)) / 15  (divisor) = 1.73e-6
+        // so we need to shift at least 12 bits for the _xxx shifted-integer stuff?
+        V1_print(F(EOL));
+        V1_printf("Farey target %.16f" EOL, target);
+
+        // Using a si5351a fractional feedback, With a 26mhz tcxo, 
+        // and maybe a 400mhz PLL with a minimal divisor of 15 after the pll,
+
+        // it seems like we need decimal 11 digits of precision
+        // on the fractional real being approximated.
+        // Because the effect of the 10th digit on on the wspr symbol freq is at most:
+        //    (1e-11 * 26e6) / 15 = 1.73e-5 Hz..
+        // which is plenty of precision (uHz level)
+
+        // So we only need 11 digits of precision  in the fractional real which is 0 to 1
+
+        // Ideally means integer-scaled shifting should save log2(10**11) == 36 bits
+        // ..but can we shift 32 bits into 64 bit? with 900Mhz max? yes we could?
+
+        // Alternative to the sprintf/sscanf:
+        // Could multiply by 2**32 and cast it to a uint32_t ,  then put it 
+        // back in the double and divide by 2**32. 
+        // So then we just have 32 bits of precision (less than 36 bits, but close?)
+        char str[40];
+        sprintf(str, "%.11f", target);
+        sscanf(str, "%lf", &target);
+                                                
+        // the Farey algo uses doubles but starting with lower precision is a good thing?
+        printf("Farey after .11f digit sprintf/sscanf: zero-lsb'ed Farey target %.16f" EOL, target);
+
         retval = rational_approximation(target, maxdenom);
         double actual_real = ((double)retval.numerator) / (double)retval.denominator;
 
-        V1_print(F(EOL));
-        V1_printf("Farey target %.16f" EOL, target);
         V1_printf("Farey numerator %lu" EOL, retval.numerator); // result
         V1_printf("Farey denominator %lu" EOL, retval.denominator); // result
         V1_printf("Farey iterations %lu" EOL, retval.iterations); // result
