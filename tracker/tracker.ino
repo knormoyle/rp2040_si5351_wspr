@@ -367,11 +367,12 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 uint64_t PLL_CALC_SHIFT = 16;
 
 // won't work well for num-shift method. works for Farey
-uint64_t PLL_FREQ_TARGET = 400000000;
+// phase noise creating 14MDA print on sdr?
+// uint64_t PLL_FREQ_TARGET = 400000000;
 // uint64_t PLL_FREQ_TARGET = 500000000;
 
 // got below 600
-// uint64_t PLL_FREQ_TARGET = 600000000;
+uint64_t PLL_FREQ_TARGET = 600000000;
 
 // nice 10M result with this
 // symbolAbsoluteError: 0.000003 Hz
