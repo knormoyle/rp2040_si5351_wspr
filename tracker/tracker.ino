@@ -367,8 +367,7 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 uint64_t PLL_CALC_SHIFT = 16;
 
 // won't work well for num-shift method. works for Farey
-// hmm. is this not working?
-// uint64_t PLL_FREQ_TARGET = 400000000;
+uint64_t PLL_FREQ_TARGET = 400000000;
 // uint64_t PLL_FREQ_TARGET = 500000000;
 
 // got below 600
@@ -378,7 +377,7 @@ uint64_t PLL_CALC_SHIFT = 16;
 // symbolAbsoluteError: 0.000003 Hz
 // symbolShiftError: 0.000006 Hz
 // channel 0 symbol 3 actual 28126024.394533 actual_pll_freq 618772536.679732 pll_mult 23 pll_num 742154 pll_denom 928919 ms_div 22 r_divisor 1
-uint64_t PLL_FREQ_TARGET = 650000000;
+// uint64_t PLL_FREQ_TARGET = 650000000;
 
 // target PLL freq when making muliplier/divider initial calculations
 // could change this per band?
@@ -1692,10 +1691,13 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // will print programming if false, since we have time
     // how many in cache to start?
     uint8_t VCC_init_valid_cnt = vfo_calc_cache_print_and_check();
-    startSymbolFreq(hf_freq, 3, false);  // symbol 3, change more than just pll_num
-    startSymbolFreq(hf_freq, 2, true);   // symbol 2, should just be num and denom change?
-    startSymbolFreq(hf_freq, 1, true);   // symbol 1, should just be num and denom change?
-    startSymbolFreq(hf_freq, 0, true);   // symbol 0, should just be num and denom change?
+    // was getting 14MDA printed if I cycled these with RF?
+    // these are just filling the cache
+    startSymbolFreq(hf_freq, 3, false, true);  // symbol 3, change more than just pll_num
+    startSymbolFreq(hf_freq, 2, true, true);   // symbol 2, should just be num and denom change?
+    startSymbolFreq(hf_freq, 1, true, true);   // symbol 1, should just be num and denom change?
+    // only setup si5351a and RF out on this last one
+    startSymbolFreq(hf_freq, 0, true, false);   // symbol 0, should just be num and denom change?
 
     absolute_time_t end_usecs_1 = get_absolute_time();
     int64_t elapsed_usecs_1 = absolute_time_diff_us(start_usecs_1, end_usecs_1);
@@ -2076,7 +2078,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
             if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
 
         //****************************************************
-        startSymbolFreq(hf_freq, symbol, false);  // symbol 0 to 3, just change pll_num
+        startSymbolFreq(hf_freq, symbol, false, false);  // symbol 0 to 3, just change pll_num
 
         //****************************************************
         // Don't make StampPrintf log buffer bigger to try to save more
@@ -2193,7 +2195,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // make them globals for use by sendWspr()?
 
     // get the vfo going!
-    startSymbolFreq(hf_freq, symbol, true);  // only_pll_num (expected)
+    startSymbolFreq(hf_freq, symbol, true, false);  // only_pll_num (expected)
 
     // encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
     // https://stackoverflow.com/questions/27260304/equivalent-of-atoi-for-unsigned-integers

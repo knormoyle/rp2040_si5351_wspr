@@ -1423,6 +1423,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     retval.denominator = 0;
     // what we really need is an 64-bit int version of Farey so we wouldn't need reals!
     // then we could increase our shift for scaled-integer?
+    // so we won't be restricted by just 52 bits in fp mantissa here?
+    // eventually the 20-bit limit on num/denom should be the limiter
     if (TEST_FAREY_WITH_PLL_REMAINDER | USE_FAREY_WITH_PLL_REMAINDER) {
         // Farey algo wants double reals. So here we go
         // luckily all my integer *_xxx is shifts..i.e. powers of 2!
@@ -1430,6 +1432,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
         // this cast of pll_remain_xxx can only have 52 bits of precision?
         double pll_remain = ((double) pll_remain_xxx) / pow(2, PLL_CALC_SHIFT);
+
         // lets see what farey/magnusson get with the remainder
         // we can't use this as we need to adjust the remainder to get
         // the wspr shifts after the divide by divisor and R shift
@@ -1474,10 +1477,20 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // so precision is already limited
         // from case: 10M 400Mhz PLL_CALC_SHIFT 16
         // DEBUG: bits_pll_remain_xxx: 37.84
-        // but the conversion to real is another base (fp double) so unclear how many bits there
-        // this is doing a roundoff in the decimal digit domain...interesting. that's different
+        // but the conversion to real is another base (fp double) 
+        // Unclear how many bits there this is doing a roundoff in the decimal digit domain...
+        // interesting. that's different
         // it seems to help in the farey.cpp test file..which does random reals 0 to 1
         // and looks at errors. This seems to help the errors bunch? no outliers?
+        
+        // If we have 1-e-11 accuracy in the fractional real multiplier that goes into
+        // the pll, and a 26Mhz tcxo, and maybe a small divider like 15:
+        //   (1e-11 * 26e6) / 15 = 1.7e-5. So that's in the tens of uHz for accuracy.
+        // don't need more than that. So should be able to chop the Farley input (target)
+        // this still can be more than 36 bits of precision! Single precision float won't do!
+        // Oh: is 36 + 16 integer-shift(* 2**16) = 52 (double fp mantissa bits), the reason
+        // we can't integer shift scale more than 16?
+
         if (USE_FAREY_CHOPPED_PRECISION) {
             char str[40];
             snprintf(str, sizeof(str), "%.11f", target);
@@ -1550,7 +1563,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
-void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num) {
+void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, bool just_do_calcs) {
     Watchdog.reset();
     uint32_t ms_div;
     uint32_t pll_mult;
@@ -1602,6 +1615,8 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num) {
         }
     }
 
+    if (just_do_calcs) return;
+
     // if (only_pll_num) {
     // calcs were done to show that only pll_num needs to change for symbols 0 to 3
     // we always do an early turn-on with symbol 0 that gets all other state right
@@ -1624,7 +1639,6 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num) {
         // so there will be a turn on after this?
 
         // si5351a_reset_PLLB(true);
-
         // static global? for comparison next time
 
         s_PLLB_ms_div_prev = ms_div;
@@ -1928,7 +1942,6 @@ void vfo_turn_on(uint8_t clk_num) {
     // clk 4-7 ? shouldn't hurt..doesn't exist on si5351a 3 output
     i2cWrite(25, 0b10101010);
 
-
     // FIX! are these just initial values?
     // set PLLA-B for div_16 mode (minimum even integer division)
     const uint8_t s_plla_values[] = { 0, 0, 0, 0x05, 0x00, 0, 0, 0 };
@@ -2022,7 +2035,7 @@ void vfo_turn_on(uint8_t clk_num) {
     Watchdog.reset();
     // FIX! should we get rid of pll reset here and rely on the turn_on_clk
     // to do it?
-    vfo_set_freq_xxx(clk_num, freq_xxx, false);
+    vfo_set_freq_xxx(clk_num, freq_xxx, false, false);
 
     // The final state is clk0/clk1 running and clk outputs on?
     // this doesn't cause a reset_PLLB
@@ -2133,7 +2146,7 @@ void calcSymbolFreq_xxx(uint64_t *freq_xxx, uint32_t hf_freq, uint8_t symbol) {
 }
 
 //**********************************
-void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
+void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num, bool just_do_calcs) {
     // Calculate the frequency for a symbol
     // Note all the shifting so integer arithmetic is used everywhere,
     // and precision is not lost.
@@ -2173,7 +2186,7 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num) {
     // FIX! does this change the state of the clock output enable?
     // no..
     // changes both clk0 and clk1
-    vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM, freq_xxx_with_symbol, only_pll_num);
+    vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM, freq_xxx_with_symbol, only_pll_num, just_do_calcs);
 
     // Note: Remember to do setup with the base frequency and symbol == 0,
     // so the i2c writes have seeded the si5351

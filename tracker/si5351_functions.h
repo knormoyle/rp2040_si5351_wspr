@@ -92,13 +92,13 @@ double calcSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool print);
 
 void calcSymbolFreq_xxx(uint64_t *freq_xxx, uint32_t hf_freq, uint8_t symbol);
 
-void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num);
+void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num, bool just_do_calcs);
 
 // used to print (not change) for walking a range in setup,
 // just to see what changes
 void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq, uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom, uint32_t *r_divisor, uint64_t freq_xxx, bool do_farey);
 
-void vfo_set_freq_xxx(uint8_t clk_number, uint32_t freq, bool only_pll_num);
+void vfo_set_freq_xxx(uint8_t clk_number, uint32_t freq, bool only_pll_num, bool just_do_calcs);
 void vfo_turn_on_clk_out(uint8_t clk_number, bool print);
 // FIX! ...this doesn't seem to work on ms5351m
 void vfo_turn_off_clk_out(uint8_t clk_number, bool print);
