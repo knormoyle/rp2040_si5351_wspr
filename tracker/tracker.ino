@@ -107,7 +107,7 @@ bool FORCE_BALLOON_MODE = false;
 // might be interesting for getting better led messaging. not used yet.
 // this has non-blocking capability.
 // I could use my morse cw and have it toggle an led? but it would be blocking
-#include <morse.h> // https://github.com/markfickett/arduinomorse
+#include <morse.h>  // https://github.com/markfickett/arduinomorse
 
 // libraries/Arduino-MemoryFree
 // wget https://github.com/maniacbug/MemoryFree/archive/refs/heads/master.zip
@@ -279,7 +279,7 @@ extern const int SIM65M_BAUD_RATE = 9600;
 // Update: we use the gps resetn pin now, for full cold reset to revert
 // baud to 9600 ALWAYS at init (then set desired baud rate
 // created GpsWarmReset() and GpsColdReset()
-// GpsWarmReset is the normal "just power" on/off management that keeps vbat on
+// GpsWarmReset is normal "just power" on/off management that keeps vbat on.
 
 // see gps_functions.cpp and problems with resetting to 9600 from higher bauds
 // too dangerous to use anything higher than 9600..could get stuck
@@ -302,7 +302,8 @@ extern const int SIM65M_BAUD_RATE = 9600;
 extern const int ATGM336H_BAUD_RATE = 9600;
 // extern const int ATGM336H_BAUD_RATE = 19200;
 
-// can't seem to recover to 9600 after trying 38400? full cold reset not working?
+// can't seem to recover to 9600 after trying 38400?
+// full cold reset not working?
 // need to unplug usb to get back to 9600
 
 // extern const int ATGM336H_BAUD_RATE = 38400;
@@ -315,55 +316,65 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 
 //*********************************
 // double precision fp mantissa only has 52 bits of precision
-// scaled integer arith has 64 bits of precision because we have 64-bit integers to use.
-// So scaled integer math can have more precision if you can cover the dynamic range of values 
-// needed.
+// scaled integer arith has 64 bits of precision because we have
+// 64-bit integers to use.
+// So scaled integer math can have more precision if you can cover the
+// dynamic range of values needed.
 // But: the numbers eventually go into fp doubles? so can't exceed 52 bits?
 
 // The biggest numbers are the PLL freq. 900 Mhz at most.
 
-// And if you want the possibility of 1e-6 precision for the wspr shifts, 
+// And if you want the possibility of 1e-6 precision for the wspr shifts,
 // that's 10e6 more range needed (which is 20 bits!!)
 // How many bits needed altogether:
 // log2(900e6 * 10e6) = 52.99 bits needed.
-// So actually, it's pushing the limits of what you can do with double precision fp (which only 
-// has 52 bits of precision)
+// So actually, it's pushing the limits of what you can do with
+// double precision fp (which only  has 52 bits of precision)
 
-// Sure the fact that the si5351a divisor chops some low order bits out, in the output freq you
-// get, means you can reduce the precision needed by those lost bits. 
-// But with a small divisor like 19, that's just 4 or 5 bits less precision needed.
+// Sure the fact that the si5351a divisor chops some low order bits out,
+// in the output freq you get, means you can reduce the precision needed
+// by those lost bits.
+// But with a small divisor like 19, that's just 4 or 5 bits less precision
+// needed.
 
-// The integer-scaled arith is optimally a left shift/right shift, because that's powers of two, 
+// The integer-scaled arith is optimally a left shift/right shift,
+// because that's powers of two,
 // so less likely to misunderstand where bits get lost
 
-// If I shift everything left by 15 bits when I do the integer-scaled arith to figure
-// out the real I need to get a fraction for. 
+// If I shift everything left by 15 bits when I do the integer-scaled arith
+// to figure out the real I need to get a fraction for.
 // so 900e6 * 2**15 = 2.95e13 and that needs log2(2.95e13) = 44.74 bits.
 
 // I should be able to shift by 20 bits to get the 1e-6 precision noted above?
 
-// Once I get that (scaled) remainder, I cast it as a double fp, then divide by pow(2, 15), 
-// to get back to a real I want to feed the Farey algo (which is between 0 and 1) to get fraction (num/denom). 
+// Once I get that (scaled) remainder, I cast it as a double fp, then divide
+// by pow(2, 15)
+// To get back to a real I want to feed the Farey algo
+// (which is between 0 and 1) to get fraction (num/denom).
 
-// That gives me perfect accuracy for getting a Farey result that has perfect 
+// That gives me perfect accuracy for getting a Farey result that has perfect
 // absolute accuracy and perfect symbol shift accuracy.
 
-// Once you get to the 0-1 real for Farey, then you you have plenty of bits of precision if you use double fp.
+// Once you get to the 0-1 real for Farey,
+// then you you have plenty of bits of precision if you use double fp.
 // Since you're no longer dealing with the full 900e6 of the pll.
 
-// Hmm ran into problem where compile was messing up an 64-bit integer divide, probably
-// because it was optimizing away shifts in the same equation and losing precision
-// changed to separate assigns, and used volatile on he divide.
+// Hmm ran into problem where compile was messing up an 64-bit integer divide,
+// probably because it was optimizing away shifts in the same equation
+// and losing precision changed to separate assigns,
+// and used volatile on he divide.
 
-extern const uint64_t PLL_CALC_SHIFT = 16;
+uint64_t PLL_CALC_SHIFT = 16;
 
 // won't work well for num-shift method. works for Farey
 // hmm. is this not working?
-uint64_t PLL_FREQ_TARGET = 400000000;
+// uint64_t PLL_FREQ_TARGET = 400000000;
+uint64_t PLL_FREQ_TARGET = 500000000;
 
-// this is the target PLL freq when making muliplier/divider initial calculations
+// target PLL freq when making muliplier/divider initial calculations
 // could change this per band?
-// the implied mul/div for 5 bands is covered by denom choices from spreadsheet for 700000000
+// the implied mul/div for 5 bands is covered by denom choices
+// from spreadsheet for 700000000
 // uint64_t PLL_FREQ_TARGET = 900000000;
 // uint64_t PLL_FREQ_TARGET = 700000000;
 // uint64_t PLL_FREQ_TARGET = 600000000;
@@ -376,9 +387,11 @@ uint64_t PLL_FREQ_TARGET = 400000000;
 
 //***************************
 // 390Mhz pll test:
-// here's results from the magic spreadsheet showing denom values for 10/12/15/17/20M
+// here's results from the magic spreadsheet showing denom values
+// for 10/12/15/17/20M
 // with mult/divisor selected to get pll in the 390Mhz region.
-// 10M doesn't have a good value (uses max value: means there was no perfect value)
+// 10M doesn't have a good value (uses max value:
+// means there was no perfect value)
 //
 // It shows that I can't get optimal denominator on 10M
 // ..so the target pll freq is too low.
@@ -387,7 +400,8 @@ uint64_t PLL_FREQ_TARGET = 400000000;
 // because I generate the numerator elsewhere (in tracker code)
 //
 // no green cells on 10M (and the 12M value is small)
-// so I won't use 390Mhz target because I want the perfect symbol shift on 10M too
+// so I won't use 390Mhz target because
+// I want the perfect symbol shift on 10M too
 //***************************
 // uint64_t PLL_FREQ_TARGET = 390000000;
 
@@ -545,6 +559,7 @@ uint32_t PLL_DENOM_OPTIMIZE = 1048575;
 
 bool USE_FAREY_WITH_PLL_REMAINDER = true;
 bool TEST_FAREY_WITH_PLL_REMAINDER = true;
+bool USE_FAREY_CHOPPED_PRECISION = true;
 // bool USE_FAREY_WITH_PLL_REMAINDER = false;
 // /bool TEST_FAREY_WITH_PLL_REMAINDER = false;
 
@@ -752,8 +767,8 @@ void setup() {
 // (i.e. when called from core 0 it pauses core 1, and vice versa).
 // Waits for the other core to acknowledge before returning.
 
-// The other core will have its interrupts disabled and be busy-waiting in an RAM-based routine,
-// so flash and other peripherals can be accessed.
+// The other core will have its interrupts disabled and be busy-waiting
+// in an RAM-based routine, so flash and other peripherals can be accessed.
 
 // NOTE idle core 0 too long, and the USB port can become frozen.
 // Because core 0 manages the USB and needs to service IRQs
@@ -1136,7 +1151,8 @@ int tx_cnt_4 = 0;
 // Just a interesting note
 
 // we can handle each char at about 300 usec avg.
-// Obviously a char processing time is more when TinyGPS++ sees a char is a "end of NMEA sentence"
+// Obviously a char processing time is more when TinyGPS++ sees a char
+// is a "end of NMEA sentence"
 // (32 deep rx fifo can absorb some chars if we're delayed.
 // Always want the rx fifo to be almost empty,
 // to allow that little bit buffering if there's any backup.
@@ -1221,7 +1237,7 @@ const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
 
 //*************************************************************************
 void loop1() {
-    // used to ignore TinyGps++ state for couple of iterations of GPS burst 
+    // used to ignore TinyGps++ state for couple of iterations of GPS burst
     // gathering after turning Gps off then on.
     if (GpsIsOn() && GpsInvalidAllCnt > 0) GpsInvalidAllCnt--;
     GpsInvalidAll = GpsInvalidAllCnt > 0;
@@ -1312,7 +1328,7 @@ void loop1() {
             // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime()
             // so don't here. Only update LED state here, though
             // it is common for gps chips to send out 1/1/2080 dates when invalid
-            // I see 2080-01-01 2080-01-07 in SIM65M. 2000-00-00 ? in ATGM336 
+            // I see 2080-01-01 2080-01-07 in SIM65M. 2000-00-00 ? in ATGM336
             // (is month/day wrong?)
             // On 1/2/25 ~19:00 I saw this: 2080-01-05 23:59:50
             // although time sees okay? (utc time)
@@ -1577,8 +1593,8 @@ void loop1() {
 
     // maybe show GpsWatchdogCnt also? how old are they
     // FIX! StampPrintf doesn't seem to be printing correctly with this format string?
-    // oh I had the wrong formats for the variables. V1_printf exposed that. StampPrintf didn't.
-    // use V1_printf()
+    // oh I had the wrong formats for the variables. V1_printf exposed that.
+    // StampPrintf didn't.
     V1_println(F(EOL));
     V1_printf(
         "loopCnt %" PRIu64 " "
@@ -1650,7 +1666,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // if off beforehand, it will have no clocks running
     // we could turn it off, then on, to guarantee always starting from reset state?
     vfo_turn_off();
-    // new: 1/6/2025 was 2000 
+    // new: 1/6/2025 was 2000
     sleep_ms(1000);
 
     // FIX! does this include a full init at the rp2040?
@@ -1676,7 +1692,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     int64_t elapsed_usecs_1 = absolute_time_diff_us(start_usecs_1, end_usecs_1);
     float elapsed_millisecs_1 = (float)elapsed_usecs_1 / 1000.0;
     V1_printf("VCC cache initially had %u valid entries\n" EOL, VCC_init_valid_cnt);
-    V1_printf("Time to calc, or cache lookup, 4 Farey algo symbol freq si5351 reg values: %.4f millisecs" EOL, 
+    V1_printf("Time to calc/lookup, 4 Farey algo symbol freq si5351 reg values: %.4f millisecs" EOL,
         elapsed_millisecs_1);
 
     //**************************

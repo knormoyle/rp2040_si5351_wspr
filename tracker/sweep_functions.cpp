@@ -21,7 +21,7 @@ extern uint32_t XMIT_FREQUENCY;
 extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _U4B_chan[4];  // string with 0-599
 
-extern const uint64_t PLL_CALC_SHIFT;
+extern uint64_t PLL_CALC_SHIFT;
 extern uint64_t PLL_FREQ_TARGET;
 
 extern uint32_t PLL_DENOM_OPTIMIZE;

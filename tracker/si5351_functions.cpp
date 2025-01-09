@@ -90,7 +90,10 @@
 // set in tracker.ino
 extern uint64_t PLL_FREQ_TARGET;
 extern bool USE_FAREY_WITH_PLL_REMAINDER;
+extern bool USE_FAREY_CHOPPED_PRECISION;
 extern bool TEST_FAREY_WITH_PLL_REMAINDER;
+extern uint64_t PLL_CALC_SHIFT;
+
 bool DISABLE_CACHE = false;
 
 // from tracker.ino
@@ -122,7 +125,6 @@ extern const int Si5351Pwr;
 extern const int VFO_I2C0_SDA_PIN;
 extern const int VFO_I2C0_SCL_PIN;
 
-extern const uint64_t PLL_CALC_SHIFT;
 
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
@@ -1174,8 +1176,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     for (uint8_t i = 0; i < VCC_SIZE; i++) {
         if (cache_valid[i]) totalValid += 1;
     }
-
-    // no print on lookup
+// no print on lookup
     if (operation != 1) {
         V1_printf("vfo_calc_cache END totalValid %u" EOL, totalValid);
     }
@@ -1189,22 +1190,23 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint32_t *r_divisor, uint64_t freq_xxx, bool do_farey) {
     Watchdog.reset();
 
-    // interesting they had relatively low pll freq (620Mhz) for 15M case
+    if ((PLL_FREQ_TARGET % 1000000) != 0) {
+        V1_printf("ERROR: only support multiples of 1e6 for PLL_FREQ_TARGET %" PRIu64 EOL,
+            PLL_FREQ_TARGET);
+    }
+    if ((SI5351_TCXO_FREQ % 1000000) != 0) {
+        V1_printf("ERROR: only support multiples of 1e6 for SI5351_TCXO_FREQ %lu " EOL,
+            SI5351_TCXO_FREQ);
+    }
+
+    // background:
     // https://rfzero.net/documentation/tools/si5351a-frequency-tool/
-    // this is hans code from 2015:
+    // hans code from 2015:
     // https://qrp-labs.com/images/synth/demo6/si5351a.c
-
-    // const int PLL_MAX_FREQ  = 900000000;
-    // const int PLL_MIN_FREQ  = 600000000;
-
-    // all my spread sheet stuff was with band mult/div targeting 900Mhz
-    // PLL_FREQ_TARGET  = 900000000;
-    // new: what if we target 700Mhz?
-    // PLL_FREQ_TARGET  = 700000000;
-    // set in tracker.ino now. Might change per band!
 
     // http://www.wa5bdu.com/programming-the-si5351a-synthesizer/
     // http://www.wa5bdu.com/si5351a-quadrature-vfo/
+
     // Following the VCO is another divider stage that divides the VCO frequency
     // by a value of ‘d + e/f’
     // and can be used to take the frequency down into the low MHz range.
@@ -1213,6 +1215,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // So we let e/f be zero and select a value for d that’s an even number.
 
     const uint64_t PLL_DENOM_MAX = 0x000fffff;  // 1048575
+
+    // if doing numerator-shift algo (not Farey)
     // set from either optimize algo, or known best (per band) in tracker.ino
     // either by set_PLL_DENOM_OPTIMIZE() or by si5351a_calc_optimize() which can be
     // overwritten by the former
@@ -1225,6 +1229,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
     uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
     uint64_t tcxo_freq_xxx = tcxo_freq << PLL_CALC_SHIFT;
+
     //*****************************
     // the divider is 'a + b/c' or "Feedback Multisynth Divider"
     // c is PLL_DENOM
@@ -1259,7 +1264,11 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // https://lorenz-ruprecht.at/docu/pico-sdk/1.4.0/html/group__pico__divider.html
     // FIX! is the compiler messing up when I have big shifts?
     // does it optimize the the two shifts and lose precision as a result
+
+    // no need to do 1e6 shift down mode here
     uint64_t aaa = PLL_FREQ_TARGET << PLL_CALC_SHIFT;
+
+    // we're only outputting freqs up to 29Mhz, so no chance of losing bits here!
     uint64_t bbb = freq_xxx << R_DIVISOR_SHIFT;
 
     // does divide use these? I can't seem to call them directly though..
@@ -1333,6 +1342,9 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
     // I was getting pll_mult of 14 for 10M when I targeted 390Mhz pll
     // need 15 minimum
+
+    // FIX! not clear if this attempt to "fix" adds any value
+    // should never have this problem with good algo + pll target?
     if (pll_mult_here < 15 || pll_mult_here > 90) {
         V1_printf("ERROR: pll_mult %" PRIu64 " is out of range 15 to 90." EOL,
             pll_mult_here);
@@ -1350,11 +1362,12 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
         // 64 bit calcs so don't lose bits beyond 32-bits
         // mult will be min or max
-        pll_freq_xxx = tcxo_freq_xxx * pll_mult_here;
+        // This is no longer correct compared to creating it from the output freq
+        uint64_t pll_freq_xxx_2 = tcxo_freq_xxx * pll_mult_here;
         // this is just integer. for printing/quick compare only!
-        int_pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
+        int_pll_freq_here = pll_freq_xxx_2 >> PLL_CALC_SHIFT;
 
-        ms_div_here = pll_freq_xxx / bbb;  // bbb from above
+        ms_div_here = pll_freq_xxx_2 / bbb;  // bbb from above
         // make it even. odd bumps up.
         // switch: try bumping odd down
         if ((ms_div_here % 2) == 1) ms_div_here -= 1;
@@ -1368,6 +1381,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
             V1_print(F("ERROR: vfo_calc_div_mult_num (2) no recalc done."));
             V1_print(F(" Should never happen! rf output is wrong" EOL));
         }
+
         V1_printf("ERROR: Now (2) pll_mult %" PRIu64 " ms_div %" PRIu64 EOL,
             pll_mult_here, ms_div_here);
     }
@@ -1395,6 +1409,13 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // since pll_freq_here is what we want to get to, shouldn't we be scaled here?
     // FIX! we should calc this as real for Farey!
     uint64_t pll_remain_xxx = pll_freq_xxx - (pll_mult_here * tcxo_freq_xxx);
+    double bits_pll_remain_xxx = log2(pll_remain_xxx);
+    if (DEBUG) {
+        V1_printf("DEBUG: bits_pll_remain_xxx: %.2f" EOL, bits_pll_remain_xxx);
+        // this will only have the bits of precision the PLL_CALC_SHIFT gave us!
+        // prior should not exceed the latter
+        V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);
+    }
 
     //*******************************************************************
     rational_t retval;
@@ -1449,18 +1470,24 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // back in the double and divide by 2**32.
         // So then we just have 32 bits of precision (less than 36 bits, but close?)
 
-        // doesn't help because we are already limited in terms of how much we can shift
+        // hmm.. does this help Farey?
+        // we are already limited in terms of how much we can shift
         // so precision is already limited
-        if (false) {
+        // from case: 10M 400Mhz PLL_CALC_SHIFT 16
+        // DEBUG: bits_pll_remain_xxx: 37.84
+        // but the conversion to real is another base (fp double) so unclear how many bits there
+        // this is doing a roundoff in the decimal digit domain...interesting. that's different
+        // it seems to help in the farey.cpp test file..which does random reals 0 to 1
+        // and looks at errors. This seems to help the errors bunch? no outliers?
+        if (USE_FAREY_CHOPPED_PRECISION) {
             char str[40];
             snprintf(str, sizeof(str), "%.11f", target);
             sscanf(str, "%lf", &target);
             // the Farey algo uses doubles
             // but starting with lower precision can be a good thing?
-            printf("Farey after .11f digit sprintf/sscanf: Farey target %.16f" EOL,
-                target);
+            V1_print(F("Farey after .11f digit sprintf/sscanf:")); 
+            V1_printf("Farey new target %.16f" EOL, target);
         }
-
 
         retval = rational_approximation(target, maxdenom);
         double actual_real = ((double)retval.numerator) / (double)retval.denominator;
