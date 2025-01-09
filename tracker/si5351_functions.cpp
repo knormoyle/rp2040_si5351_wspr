@@ -1411,10 +1411,9 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint64_t pll_remain_xxx = pll_freq_xxx - (pll_mult_here * tcxo_freq_xxx);
     double bits_pll_remain_xxx = log2(pll_remain_xxx);
     if (DEBUG) {
-        V1_printf("DEBUG: bits_pll_remain_xxx: %.2f" EOL, bits_pll_remain_xxx);
-        // this will only have the bits of precision the PLL_CALC_SHIFT gave us!
-        // prior should not exceed the latter
+        V1_printf("DEBUG: pll_remain_xxx: %" PRIu64 EOL, pll_remain_xxx);
         V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);
+        V1_printf("DEBUG: bits_pll_remain_xxx: %.2f" EOL, bits_pll_remain_xxx);
     }
 
     //*******************************************************************
