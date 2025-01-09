@@ -371,8 +371,10 @@ uint64_t PLL_CALC_SHIFT = 16;
 // uint64_t PLL_FREQ_TARGET = 400000000;
 // uint64_t PLL_FREQ_TARGET = 500000000;
 
-// got below 600
-uint64_t PLL_FREQ_TARGET = 600000000;
+// got below 600. no good. 
+// uint64_t PLL_FREQ_TARGET = 600000000;
+// 650 is good
+uint64_t PLL_FREQ_TARGET = 650000000;
 
 // nice 10M result with this
 // symbolAbsoluteError: 0.000003 Hz
