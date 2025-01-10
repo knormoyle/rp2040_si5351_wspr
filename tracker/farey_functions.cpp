@@ -37,24 +37,27 @@
 // [5] J Farey, On a curious property of vulgar fractions, Philos. Mag. J. 47 (1816), 385-386.
 
 
-// In 1816 the British geologist John Farey defined the Farey sequence Fn as the list, written
-// in increasing order,of all the rational numbers between 0 and 1 that have only the
-// numbers 1,2,3,...,n as denominators.
+// In 1816 the British geologist John Farey defined the Farey sequence Fn as the list, 
+// written in increasing order, of all the rational numbers between 0 and 1 that 
+// have only the numbers 1,2,3,...,n as denominators.
 
 // We can do the same thing for rational numbers between any two positive numbers.
 // For example we can consider sequences betweeen 1 and 2 where we have:
 // F1 = 1/1, 2/1
 // F2 = 1/1, 3/2, 2/1 .
-//
+
 // What would F3 and F4 be in this case?
-// For the two positive rational numbers b/d and a/c the mediant is defined as (a+b) / (c+d).
-// The mediant has the nice property that it is always in between the two fractions giving rise
-// to it:
+// For the two positive rational numbers b/d and a/c the mediant is defined as 
+//     (a+b) / (c+d).
+
+// The mediant has the nice property that it is always in between the two 
+// fractions giving rise to it:
 //     if 0 < (b/d) < (a/c) then (b/d)< (a+b)/(c+d) < (a/c).
-//
-// Clearly each Farey sequence Fn+1 must contain all of the terms of Fn, along with some new terms.
-// Mediants also have the nice property that each 'new' term in the Farey sequence Fn+1 is the
-// mediant // of two consecutive terms in Fn.
+
+// Clearly each Farey sequence Fn+1 must contain all of the terms of Fn, 
+// along with some new terms.
+// Mediants also have the nice property that each 'new' term in the Farey sequence Fn+1 
+// is the mediant of two consecutive terms in Fn.
 
 
 // Find the best rational approximation to a number between 0 and 1.
