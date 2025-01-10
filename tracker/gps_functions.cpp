@@ -2138,11 +2138,15 @@ void updateGpsDataAndTime(int ms) {
         V1_flush();
     }
 
-    V1_printf("updateGpsDataAndTime: GpsInvalidAll:%u gps.time.isValid():%u" EOL,
-        GpsInvalidAll, gps.time.isValid());
+    V1_print(F("updateGpsDataAndTime:"));
+    // year is uint16_t
+    V1_printf(" GpsInvalidAll:%u gps.time.isValid():%u gps.date.year():%u" EOL,
+        GpsInvalidAll, gps.time.isValid(), gps.date.year());
     V1_flush();
 
-    if (gps.time.isValid() && !GpsInvalidAll) {
+    if (!GpsInvalidAll && gps.time.isValid() && 
+        (gps.date.year() >= 2024 && gps.date.year() <= 2034)) {
+
         // FIX! don't be updating this every time
         // this will end up checking every time we get a burst?
 
@@ -2169,121 +2173,104 @@ void updateGpsDataAndTime(int ms) {
         gps_minute = gps.time.minute();
         gps_second = gps.time.second();
 
-        if (false) {
-            // old way
-            if (hour() != gps_hour ||
+        // new way. more accurate syncing?
+        // FIX! hmm. we don't get hundredths any more?
+        // so we could be off by +- 0.5 sec + code delay?
+        // (300 millisecs + ?)
+        uint8_t gps_hundredths;
+        gps_hundredths = 0;
+        // FIX! we could also look at TimeLib timeStatus() to help qualify?
+        // https://github.com/PaulStoffregen/Time?tab=readme-ov-file
+        // enum is timeNotSet or timeSet
+        bool gps_date_valid = gps_year >= 2025 && gps_year <= 2034;
+
+        // function doesn't exist anymore?
+        // gps.crack_datetime(&gps_year, &gps_month, &gps_day, &gps_hour,
+        //     &gps_minute, &gps_second, &gps_hundredths, &fix_age);
+
+        // NOTE: looks like grep of fix_age in putty.log can be frequently
+        // just 125 to 143 millisecs
+        // so how about we only update when fix_age is < 300 millisecs??
+        if (!gpsTimeWasUpdated || (
+             (gps_date_valid && fix_age <= 300) && (
+                hour() != gps_hour ||
                 minute() != gps_minute ||
-                second() != gps_second) {
+                second() != gps_second) )) {
+            // use hundredths from the gps, to busy_wait_usecs
+            // until we're more likely aligned to the second exactly.
+            if (gps_hundredths > 99) {
+                V1_printf("ERROR: TinyGPS gps_hundredths %u > 99. using 100"
+                    EOL, gps_hundredths);
+                gps_hundredths = 0;
+            }
+            // Got some total code delay beyond the gps hundredths but assume 0.
+            // that will be our fixed error. (positive relative to gps). should be < 1.0 sec
+            // since we're polling gps NMEA every sec? Hmm, we should only use it if fix_age
+            // is small. fix_age is millisecs.
+            // So to keep error below 1 sec, lets only update if fix_millisecs < 1000
+            // or if we never updated.
+            uint32_t usecsToAlign = 1000000 - (gps_hundredths * 10000);
+            busy_wait_us(usecsToAlign);
+            // now we're one more second past the gps time we got from TinyGPS.
+            // adjust the second before we use it.
+            gps_second += 1;
+
+            //******************************
+            // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
+            // year can be given as full four digit year or two digts (2010 or 10 for 2010);
+            // it is converted to years since 1970
+            // we don't compare day/month/year on time anywhere, except when looking
+            // for bad time from TinyGPS state (tracker.ino)
+            // FIX! should I work about setting day month year? why not
+            // then we can get all that info from the rtc, so if the gps data is
+            // stail for time, we get a better solar elevation calculation..accurate time?
+
+            // JUST IN CASE: let's validate the ranges and not update if invalid!!
+            bool gpsTimeBad = false;
+            // all uint8_t so don't have to check negatives
+            if (gps_hour > 23) gpsTimeBad = true;
+            if (gps_minute > 59) gpsTimeBad = true;
+            if (gps_second > 59) gpsTimeBad = true;
+            // should we validate by the month? forget about that.
+            // unlikely to glitch that way?
+            if (gps_day > 31) gpsTimeBad = true;
+            if (gps_month > 12) gpsTimeBad = true;
+            if (gps_month < 1) gpsTimeBad = true;
+            // should already have validated year range? but do it here too
+            // will have to remember to update this in 10 years (and above too!)
+            if (gps_year < 2025 && gps_year > 2034) gpsTimeBad = true;
+
+            // what the heck, check the days in a month is write.
+            // (subtract one from month)
+            // if we have a valid month for this array!
+            static const uint8_t monthDays[] =
+                {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+            if (!gpsTimeBad) {
+                // we know will be 0 to 11, from above check of gps_month
+                uint8_t validDays = monthDays[gps_month - 1];
+                if (gps_day > validDays) {
+                    V1_print(F("ERROR: gps time is bad."));
+                    V1_printf(" day %u too big. max %u for the month" EOL,
+                        gps_day, validDays);
+                    gpsTimeBad = true;
+                }
+            }
+            if (gpsTimeBad) {
+                V1_print(F("ERROR: gps time is bad. Maybe no received gps time yet."));
+                V1_printf(" gps_hour %u gps_minute %u gps_second %u",
+                    gps_day, gps_month, gps_year);
+                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+                    gps_hour, gps_minute, gps_second);
+            } else {
                 setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                 // should be UTC time zone?
                 adjustTime(0);
+                gpsTimeWasUpdated = true;
                 V1_print(F("GOOD: rtc setTime() with"));
                 V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-                    gps_hour, gps_minute, gps_second);
-                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
                     gps_day, gps_month, gps_year);
-            }
-        } else {
-            // new way. more accurate syncing?
-            // FIX! hmm. we don't get hundredths any more?
-            // so we could be off by +- 0.5 sec + code delay?
-            // (300 millisecs + ?)
-            uint8_t gps_hundredths;
-            gps_hundredths = 0;
-            // FIX! we could also look at TimeLib timeStatus() to help qualify?
-            // https://github.com/PaulStoffregen/Time?tab=readme-ov-file
-            // enum is timeNotSet or timeSet
-            bool gps_date_valid = gps_year >= 2025 && gps_year <= 2034;
-
-            // function doesn't exist anymore?
-            // gps.crack_datetime(&gps_year, &gps_month, &gps_day, &gps_hour,
-            //     &gps_minute, &gps_second, &gps_hundredths, &fix_age);
-
-            // NOTE: looks like grep of fix_age in putty.log can be frequently
-            // just 125 to 143 millisecs
-            // so how about we only update when fix_age is < 300 millisecs??
-            if (!gpsTimeWasUpdated || (
-                 (gps_date_valid && fix_age <= 300) && (
-                    hour() != gps_hour ||
-                    minute() != gps_minute ||
-                    second() != gps_second) )) {
-                // use hundredths from the gps, to busy_wait_usecs
-                // until we're more likely aligned to the second exactly.
-                if (gps_hundredths > 99) {
-                    V1_printf("ERROR: TinyGPS gps_hundredths %u > 99. using 100"
-                        EOL, gps_hundredths);
-                    gps_hundredths = 0;
-                }
-                // Got some total code delay beyond the gps hundredths but assume 0.
-                // that will be our fixed error. (positive relative to gps). should be < 1.0 sec
-                // since we're polling gps NMEA every sec? Hmm, we should only use it if fix_age
-                // is small. fix_age is millisecs.
-                // So to keep error below 1 sec, lets only update if fix_millisecs < 1000
-                // or if we never updated.
-                uint32_t usecsToAlign = 1000000 - (gps_hundredths * 10000);
-                busy_wait_us(usecsToAlign);
-                // now we're one more second past the gps time we got from TinyGPS.
-                // adjust the second before we use it.
-                gps_second += 1;
-
-                //******************************
-                // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
-                // year can be given as full four digit year or two digts (2010 or 10 for 2010);
-                // it is converted to years since 1970
-                // we don't compare day/month/year on time anywhere, except when looking
-                // for bad time from TinyGPS state (tracker.ino)
-                // FIX! should I work about setting day month year? why not
-                // then we can get all that info from the rtc, so if the gps data is
-                // stail for time, we get a better solar elevation calculation..accurate time?
-
-                // JUST IN CASE: let's validate the ranges and not update if invalid!!
-                bool gpsTimeBad = false;
-                // all uint8_t so don't have to check negatives
-                if (gps_hour > 23) gpsTimeBad = true;
-                if (gps_minute > 59) gpsTimeBad = true;
-                if (gps_second > 59) gpsTimeBad = true;
-                // should we validate by the month? forget about that.
-                // unlikely to glitch that way?
-                if (gps_day > 31) gpsTimeBad = true;
-                if (gps_month > 12) gpsTimeBad = true;
-                if (gps_month < 1) gpsTimeBad = true;
-                // should already have validated year range? but do it here too
-                // will have to remember to update this in 10 years (and above too!)
-                if (gps_year < 2025 && gps_year > 2034) gpsTimeBad = true;
-
-                // what the heck, check the days in a month is write.
-                // (subtract one from month)
-                // if we have a valid month for this array!
-                static const uint8_t monthDays[] =
-                    {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-                if (!gpsTimeBad) {
-                    // we know will be 0 to 11, from above check of gps_month
-                    uint8_t validDays = monthDays[gps_month - 1];
-                    if (gps_day > validDays) {
-                        V1_print(F("ERROR: gps time is bad."));
-                        V1_printf(" day %u too big. max %u for the month" EOL,
-                            gps_day, validDays);
-                        gpsTimeBad = true;
-                    }
-                }
-                if (gpsTimeBad) {
-                    V1_print(F("ERROR: gps time is bad. Maybe no received gps time yet."));
-                    V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-                        gps_day, gps_month, gps_year);
-                    V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
-                        gps_hour, gps_minute, gps_second);
-                } else {
-                    setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
-                    // should be UTC time zone?
-                    adjustTime(0);
-                    gpsTimeWasUpdated = true;
-                    V1_print(F("GOOD: rtc setTime() with"));
-                    V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-                        gps_day, gps_month, gps_year);
-                    V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
-                        gps_hour, gps_minute, gps_second);
-                }
-                //******************************
+                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+                    gps_hour, gps_minute, gps_second);
             }
         }
     }

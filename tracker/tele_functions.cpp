@@ -228,18 +228,15 @@ void snapForTelemetry(void) {
     
     bool solarMorning = false;
     bool solarAfternoon = false;
-
     if (initialCondition) {
         solarPeak = false;
         solarMorning = true; // do we want to do anything in the morning?
         solarAfternoon = false; // do we want to do anything in the afternoon?
     } else {
         solarMorning = solarElevationInt >= solarElevationInt_prev;
-        solarAfternoon = solarElevationInt <= solarElevationInt_prev;
-
-        if (solarAfternoon && solarMorning_prev) {
-            solarPeak = true;
-        }
+        solarAfternoon = !solarMorning;
+        // should just happen once!
+        solarPeak = solarAfternoon && solarMorning_prev;
      
         if (solarPeak) {
             // should only have one of these?

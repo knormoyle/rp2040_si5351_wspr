@@ -1339,6 +1339,7 @@ void loop1() {
         // this doesn't need qualification on whether we got a good date/time
         // since we check that first, before we do any looking for a 3d fix
         bool fix_valid_all = !GpsInvalidAll &&
+            gps.time.isValid() &&
             (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
             gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
             gps.hdop.isValid() &&
