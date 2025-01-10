@@ -30,7 +30,21 @@
 // Farey sequence-based rational approximation of numbers.
 // https://axotron.se/blog/fast-algorithm-for-rational-approximation-of-floating-point-numbers/
 
-// TODO: solar elevation calc sources
+// Historical citations of code, and implementations of fast Farey, Farey, Continued Fractions 
+// Exhaustive search, were nicely provided by Ali Dasan, Thank you.
+// https://github.com/alidasdan/best-rational-approximation
+// I converted his python to cpp and used it to compare to Per Magnusson's algo. 
+// That test code is in other_cpp dir.
+
+// I have two algos for calculating solar elevation from lat/long/utc time.
+// Thank you David Salac for:
+// https://github.com/david-salac/Fast-SZA-and-SAA-computation
+// Fast algorithm for the computation of the SZA and SAA based on work by Roberto Grena in 2012.
+// https://doi.org/10.1016/j.solener.2012.01.024.
+
+// Thank you Chrisian Menne for:
+// https://github.com/chrmenne/solarfunctions
+// Uses formulae by Jean Meeus and the National Oceanic and Atmospheric Administration (NOAA) 
 
 //*******************************************
 // Arduino IDE created by many
