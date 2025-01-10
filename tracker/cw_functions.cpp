@@ -135,7 +135,14 @@ extern char t_callsign[7];
 extern char t_grid6[7];
 
 extern char _Band_cw[3];  // string with 2, 10, 12, 15, 17, 20 legal. null at end
+
+
+// can be 0 1 2 or 3
+// should I modify power using these
+extern uint8_t SOLAR_SI5351_TX_POWER;
+extern char _solar_tx_power[2];
 extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
+
 
 //********************************
 // stay in first 91 khz of each cw band for rbn?
@@ -495,6 +502,13 @@ void cw_high_drive_strength() {
     // which isn't used until a frequency is set. the s*ms_div_prev are cleared
     // so it will trigger a pll reset when you set a frequency
     // void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength);
+    // can be 0 1 2 or 3
+
+    // FIX! should I modify power using these:
+    // extern uint8_t SOLAR_SI531_TX_POWER;
+    // extern char _solar_tx_power[2];
+    // extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
+
     vfo_set_drive_strength(CW_CLK_NUM, SI5351A_CLK01_IDRV_8MA);
     V1_print("cw_high_drive_strength END" EOL);
 }

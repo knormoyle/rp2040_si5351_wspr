@@ -81,7 +81,6 @@
 //**************************************
 extern char _callsign[7];
 extern char _verbose[2];   // 0 is used to disable all. 1 is all printing for now. 2:9 same
-extern char _morse_also[2];   // 1: send morse cw message in the first TELEN slot
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];  // 1 to 3 digits?
@@ -111,7 +110,8 @@ extern char _correction[7];  // parts per billion -30000 to 30000. default 0
 extern char _go_when_rdy[2];
 extern char _factory_reset_done[2];
 extern char _use_sim65m[2];
-extern char _morse_also[2];
+extern char _morse_also[2];   
+extern char _solar_tx_power[2];
 
 extern char _id13[3];
 extern char _start_minute[2];
@@ -561,9 +561,9 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'G':
-                V0_print(F("test only: 1 means you don't wait for starting minute from _U4B_chan" EOL));
+                V0_print(F("test only: 1 Don't wait for starting minute from _U4B_chan" EOL));
                 V0_print(F("does wait for any 2 minute alignment though" EOL));
-                V0_print(F("MAKE SURE YOU ZERO THIS BEFORE BALLOON FLIGHT!! ignores BALLOON_MODE" EOL));
+                V0_print(F("ZERO THIS BEFORE BALLOON FLIGHT!! ignores BALLOON_MODE" EOL));
                 get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1):",
                     _go_when_rdy, sizeof(_go_when_rdy));
                 write_FLASH();
@@ -577,6 +577,11 @@ void user_interface(void) {
                 get_user_input("Send morse also? 0 or 1: " EOL, _morse_also, sizeof(_morse_also));
                 write_FLASH();
                 break;
+            case 'L':
+                get_user_input("Dynamic solar elevation tx power? 0 or 1: " EOL, 
+                    _solar_tx_power, sizeof(_solar_tx_power));
+                write_FLASH();
+                break;
             case 13:  break;
             case 10:  break;
             default:
@@ -588,7 +593,7 @@ void user_interface(void) {
         int result = check_data_validity_and_set_defaults();
         if (result == -1) {
             // this should include a fix of empty callsign?
-            V0_print(F("ERROR: check_data_validity_and_set_defaults() fixed some illegal value (2)"));
+            V0_print(F("ERROR: check_data_validity_and_set_defaults() fixed illegal value (2)"));
         }
         show_values();
         V0_println(F("user_interface END"));
@@ -663,7 +668,7 @@ void makeSureClockIsGood(void) {
 // https://github.com/MakerMatrix/RP2040_flash_programming/blob/main/RP2040_flash/RP2040_flash.ino
 
 // update whever you add a bit or more to flash used (the offsets used below)
-#define FLASH_BYTES_USED 33
+#define FLASH_BYTES_USED 34
 int read_FLASH(void) {
     Watchdog.reset();
     V1_print(F("read_FLASH START" EOL));
@@ -736,6 +741,7 @@ int read_FLASH(void) {
     strncpy(_use_sim65m,   flash_target_contents + 29, 1); _use_sim65m[1] = 0;
     strncpy(_morse_also,   flash_target_contents + 30,  1); _morse_also[1] = 0;
     strncpy(_Band_cw,      flash_target_contents + 31,  1); _Band_cw[2] = 0;
+    strncpy(_solar_tx_power,  flash_target_contents + 31,  1); _solar_tx_power[2] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
     // recalc
@@ -854,6 +860,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 29, _use_sim65m, 1);
     strncpy(data_chunk + 30, _morse_also, 1);
     strncpy(data_chunk + 31, _Band_cw, 2);
+    strncpy(data_chunk + 32, _solar_tx_power, 2);
 
     // alternative for casting the array to uint8_t
     // https://stackoverflow.com/questions/40579902/how-to-turn-a-character-array-into-uint8-t
@@ -1146,6 +1153,13 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
+    //*****************
+    if (_solar_tx_power[0] != '0' && _solar_tx_power[0] != '1') {
+        V0_printf(EOL "_solar_tx_power %s is not supported/legal, initting to 0" EOL, _solar_tx_power);
+        snprintf(_solar_tx_power, sizeof(_solar_tx_power), "0");
+        write_FLASH();
+        result = -1;
+    }
     return result;
 }
 
@@ -1176,9 +1190,11 @@ void show_values(void) {
     V0_printf("G: go_when_rdy: %s" EOL, _go_when_rdy);
     V0_printf("S: use_sim65m: %s" EOL, _use_sim65m);
     V0_printf("M: morse_also: %s" EOL, _morse_also);
+    V0_printf("L: dynamic tx power using solar elevation: %s" EOL, _solar_tx_power);
     V0_printf("*: factory_reset_done: %s" EOL, _factory_reset_done);
-    V0_printf("XMIT_FREQUENCY: %lu (symbol 0)" EOL, XMIT_FREQUENCY);
-    V0_print(F(EOL "SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
+
+    V0_printf(EOL "XMIT_FREQUENCY: %lu (symbol 0)" EOL, XMIT_FREQUENCY);
+    V0_print(F("SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
     // see bottom of tracker.ino for details about memory mapped usb SIE_STATUS register
     #define sieStatusPtr ((uint32_t*)0x50110050)
     uint32_t sieValue = *sieStatusPtr;
@@ -1211,6 +1227,7 @@ void show_commands(void) {
     V0_println(F("G: go_when_rdy (callsign tx starts at any modulo 2 starting minute (default: 0)"));
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
     V0_println(F("M: morse_also: 1 tx cw msg after all wspr(default: 0)"));
+    V0_println(F("L: solar_tx_power: 1 adjust power from solar elevation(default: 0)"));
 
     V0_print(F("show_commands END" EOL));
 }
@@ -1234,6 +1251,7 @@ void doFactoryReset() {
     snprintf(_factory_reset_done, sizeof(_go_when_rdy), "1");
     snprintf(_use_sim65m, sizeof(_use_sim65m), "0");
     snprintf(_morse_also, sizeof(_morse_also), "0");
+    snprintf(_solar_tx_power, sizeof(_solar_tx_power), "0");
 
     // What about the side decodes? Don't worry, just reboot
     write_FLASH();

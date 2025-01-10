@@ -557,6 +557,8 @@ char _go_when_rdy[2] = { 0 };
 char _factory_reset_done[2] = { 0 };
 char _use_sim65m[2] = { 0 };
 char _morse_also[2] = { 0 };
+char _solar_tx_power[2] = { 0 };
+
 
 // decoded stuff from config strings: all can be extern'ed by a function
 // decodes from _Band _U4B_chan
@@ -580,6 +582,9 @@ uint32_t SI5351_TCXO_FREQ = 26000000;
 uint32_t XMIT_FREQUENCY;
 // optimized?
 uint32_t PLL_DENOM_OPTIMIZE = 1048575;
+
+// can be 0 1 2 or 3
+uint8_t SOLAR_SI5351_TX_POWER = 0;
 
 // bool USE_FAREY_WITH_PLL_REMAINDER = true;
 // bool TEST_FAREY_WITH_PLL_REMAINDER = true;

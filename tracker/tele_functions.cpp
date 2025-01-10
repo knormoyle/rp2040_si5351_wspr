@@ -77,8 +77,14 @@ extern int TELEN2_val1;
 extern int TELEN2_val2;
 extern char _TELEN_config[5];
 
-extern char _tx_high[2];      // 1 byte
-extern char _callsign[7];     // 6 bytes
+extern char _tx_high[2];        // 1 byte
+extern char _callsign[7];       // 6 bytes
+extern char _solar_tx_power[2]; // 1 byte
+
+// FIX! update this based on solar elevation
+extern uint8_t SOLAR_SI5351_TX_POWER;
+extern char _solar_tx_power[2];
+extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
 
 extern TinyGPSPlus gps;
 extern int tx_cnt_0;
@@ -147,6 +153,94 @@ void snapForTelemetry(void) {
         solarElevation, solarAzimuth, solarDistance);
     V1_print(F(EOL));
 
+    //************************************
+    // figure how solar peak during the day
+    // keep a static for the last value. make it rounded to integer. Compare to current.
+    // keep the max found. When the current is less than the max, the first time, 
+    // say "solarPeak" is detected. I guess solarMorning/solarAfternoon
+    // the transition from solarMorning to solarAfternoon would be the time for solarPeak
+    // maybe save the time of the solar max also
+    static uint8_t solarElevationInt_prev = 0;
+    static uint8_t solarElevationIntMax  = 0;
+
+    static double solarElevation_earliest = 0;
+    static bool solarMorning_prev = false;
+    static bool solarAfternoon_prev = false;
+    static uint64_t solarPeak_epochTime = 0;
+    static bool solarPeak_prev = false;
+
+    uint64_t epochTime = getEpochTime();
+
+    if (solarElevation_earliest == 0) {
+        solarElevation_earliest = solarElevation;
+        V1_printf("GOOD: new solarElevation_earlist: %.1f epochTime %" PRIu64 EOL,
+            solarElevation_earliest, epochTime);
+    }
+    uint8_t solarElevationInt = (uint8_t) (solarElevation + 0.5);
+    if (solarElevationInt > solarElevationIntMax) {
+        solarElevationIntMax = solarElevationInt;
+        V1_printf("GOOD: new solarElevationIntMax %u: epochTime %" PRIu64 EOL,
+            solarElevationIntMax, epochTime);
+    }
+
+    // FIX! could adjust the tx power output (strength) depending 
+    // on solar elevation? Makes it dependent on correct gps lat/lon/utc calcs
+    // for ground level power testing, wouldn't want to enable dynamic power..
+    // separate config bit
+    // < 10 deg 2mA
+    // 11 to 20 deg 4mA
+    // > 20 8mA
+    // FIX! update this based on solar elevation
+    // extern uint8_t SOLAR_SI5351_TX_POWER;
+
+    // doesn't matter what these do..they control how prior is uesd.
+    // extern char _solar_tx_power[2];
+    // extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
+    uint8_t power = 3;
+    if (solarElevationInt < 10) {
+        SOLAR_SI5351_TX_POWER = 0;
+    } else if (solarElevationInt < 20) {
+        SOLAR_SI5351_TX_POWER = 1;
+    } else {
+        SOLAR_SI5351_TX_POWER = 3;
+    }
+    if (power != SOLAR_SI5351_TX_POWER) {
+        SOLAR_SI5351_TX_POWER = power;
+        V1_printf("GOOD: new SOLAR_SI5351_TX_POWER %u epochTime %" PRIu64 EOL,
+            SOLAR_SI5351_TX_POWER, epochTime);
+    }
+
+    // FIX! could send a peak speed number (82 knots) at the solarPeak, to mark it
+    // in the telemetry!
+    bool solarPeak = false;
+    uint8_t solarMorning = solarElevationInt >= solarElevationInt_prev;
+    uint8_t solarAfternoon = solarElevationInt <= solarElevationInt_prev;
+
+    if (solarAfternoon && solarMorning_prev) {
+        solarPeak = true;
+        solarPeak_epochTime = epochTime;
+    }
+ 
+    if (solarPeak) {
+        // should only have one of these?
+        V1_printf("GOOD: solarPeak discovered:" 
+            " solarElevation %.1f epochTime %" PRIu64 EOL,
+            epochTime, solarElevation);
+    }
+    if (solarPeak && solarPeak_prev) {
+        // should only have one of these?
+        V1_printf("ERROR: multiple solarPeak discovered/set:" 
+            " solarElevation %.1f epochTime %" PRIu64 EOL,
+            epochTime, solarElevation);
+    }
+
+    solarElevationInt_prev = solarElevation;
+    solarMorning_prev = solarMorning;
+    solarAfternoon_prev = solarAfternoon;
+    solarPeak_prev = solarPeak;
+    
+    //************************************
+   
     // -90.0 to 90.0?
     snprintf(t_solarElevation, sizeof(t_solarElevation), "%.1f", solarElevation); 
     // -180.0 to 180.0
