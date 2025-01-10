@@ -134,7 +134,7 @@ extern char t_grid6[7];
 extern char t_callsign[7];
 extern char t_grid6[7];
 
-extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
+extern char _Band_cw[3];  // string with 2, 10, 12, 15, 17, 20 legal. null at end
 extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
 
 //********************************
@@ -144,6 +144,7 @@ extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
 uint32_t get_cw_freq(char *band) {
     uint32_t cw_freq;
     switch (atoi(band)) {
+        case 2:  cw_freq = 144100000; break;
         case 10: cw_freq = 28050100; break;
         case 12: cw_freq = 24935100; break;
         case 15: cw_freq = 21050100; break;
@@ -329,7 +330,7 @@ void cw_tx_state(tx_state_e s) {
             vfo_turn_off();
             KEYING_DELAY(1000);
 
-            uint32_t hf_freq = get_cw_freq(_Band);
+            uint32_t hf_freq = get_cw_freq(_Band_cw);
             XMIT_FREQUENCY = hf_freq;
             // uses XMIT_FREQUENCY
 

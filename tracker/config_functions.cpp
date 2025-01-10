@@ -85,7 +85,8 @@ extern char _morse_also[2];   // 1: send morse cw message in the first TELEN slo
 extern char _TELEN_config[5];
 extern char _clock_speed[4];
 extern char _U4B_chan[4];  // 1 to 3 digits?
-extern char _Band[3];      // string with 10, 12, 15, 17, 20 legal. null at end
+extern char _Band[3];      // string with 2, 10, 12, 15, 17, 20 legal. null at end
+extern char _Band_cw[3];   // string with 2, 10, 12, 15, 17, 20 legal. null at end
 // https://rfzero.net/documentation/rf/
 // The table below shows the typical output power vs. current in the output stages 
 // running in push-pull with a T1 transformer
@@ -404,7 +405,7 @@ void user_interface(void) {
         V0_print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
         // no comma to concat strings
         // F() to keep string in flash, not ram
-        V0_println(F("Enter single char command: Z, *, @, /, X, C, U, V, T, K, A, P, D, R, G, S, M"));
+        V0_println(F("Enter single char command: Z, *, @, /, X, C, U, V, T, K, A, B, P, D, R, G, S, M"));
         V0_print(F(UNDERLINE_OFF NORMAL));
 
         Watchdog.reset();
@@ -531,11 +532,17 @@ void user_interface(void) {
 
                 break;
             case 'A':
-                get_user_input("Enter Band (10,12,15,17,20):" EOL, _Band, sizeof(_Band));
+                get_user_input("Enter Band (2,10,12,15,17,20):" EOL, _Band, sizeof(_Band));
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
                 write_FLASH();
                 init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+                break;
+            case 'B':
+                get_user_input("Enter CW Band (2,10,12,15,17,20):" EOL, _Band_cw, sizeof(_Band));
+                // redo channel selection if we change bands,
+                // since U4B definition changes per band
+                write_FLASH();
                 break;
             case 'P':
                 get_user_input("Enter Tx high: (0 or 1)" EOL, _tx_high, sizeof(_tx_high));
@@ -656,7 +663,7 @@ void makeSureClockIsGood(void) {
 // https://github.com/MakerMatrix/RP2040_flash_programming/blob/main/RP2040_flash/RP2040_flash.ino
 
 // update whever you add a bit or more to flash used (the offsets used below)
-#define FLASH_BYTES_USED 31
+#define FLASH_BYTES_USED 33
 int read_FLASH(void) {
     Watchdog.reset();
     V1_print(F("read_FLASH START" EOL));
@@ -728,6 +735,7 @@ int read_FLASH(void) {
     strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
     strncpy(_use_sim65m,   flash_target_contents + 29, 1); _use_sim65m[1] = 0;
     strncpy(_morse_also,   flash_target_contents + 30,  1); _morse_also[1] = 0;
+    strncpy(_Band_cw,      flash_target_contents + 31,  1); _Band_cw[2] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
     // recalc
@@ -845,6 +853,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 28, _factory_reset_done, 1);
     strncpy(data_chunk + 29, _use_sim65m, 1);
     strncpy(data_chunk + 30, _morse_also, 1);
+    strncpy(data_chunk + 31, _Band_cw, 2);
 
     // alternative for casting the array to uint8_t
     // https://stackoverflow.com/questions/40579902/how-to-turn-a-character-array-into-uint8-t
@@ -1055,6 +1064,7 @@ int check_data_validity_and_set_defaults(void) {
     //*****************
     // null returns 0
     switch (atoi(_Band)) {
+        case 2: break;
         case 10: break;
         case 12: break;
         case 15: break;
@@ -1064,11 +1074,25 @@ int check_data_validity_and_set_defaults(void) {
             V0_printf("_Band %s is not supported/legal, initting to 20" EOL, _Band);
             snprintf(_Band, sizeof(_Band), "20");
             write_FLASH();
-            // FIX! stop using _32_dialfreqhz
-            // figure out the XMIT_FREQUENCY for new band, and set _32_dialfreqhz
-            // have to do this whenever we change bands
+            // figure out the XMIT_FREQUENCY for new band
             process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
             init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+            result = -1;
+            break;
+    }
+    //*****************
+    // null returns 0
+    switch (atoi(_Band_cw)) {
+        case 2: break;
+        case 10: break;
+        case 12: break;
+        case 15: break;
+        case 17: break;
+        case 20: break;
+        default:
+            V0_printf("_Band_cw %s is not supported/legal, initting to 20" EOL, _Band);
+            snprintf(_Band_cw, sizeof(_Band_cw), "20");
+            write_FLASH();
             result = -1;
             break;
     }
@@ -1139,6 +1163,7 @@ void show_values(void) {
     V0_printf("C: callsign: %s" EOL, _callsign);
     V0_printf("U: U4B channel: %s" EOL, _U4B_chan);
     V0_printf("A: band: %s (meters)" EOL, _Band);
+    V0_printf("B: band for cw: %s (meters)" EOL, _Band_cw);
     V0_printf(" (id13: %s", _id13);
     V0_printf(" start Minute: %s", _start_minute);
     V0_printf(" lane: %s)" EOL, _lane);
@@ -1175,7 +1200,8 @@ void show_commands(void) {
     V0_println(F("Z: run i2c test or scan: which, currently?"));
     V0_println(F("C: change Callsign (6 char max)"));
     V0_println(F("U: change U4b channel # (0-599)"));
-    V0_println(F("A: change band (10,12,15,17,20 default 20)"));
+    V0_println(F("A: change band (2,10,12,15,17,20 default 20)"));
+    V0_println(F("B: change band for cw (2,10,12,15,17,20 default 20)"));
     V0_println(F("P: change tx power: 1 high, 0 lower default )"));
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
@@ -1198,6 +1224,7 @@ void doFactoryReset() {
     snprintf(_clock_speed, sizeof(_clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
     snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599"); // always 3 chars?
     snprintf(_Band, sizeof(_Band), "20");
+    snprintf(_Band_cw, sizeof(_Band), "20");
     snprintf(_tx_high, sizeof(_tx_high), "1");
     snprintf(_testmode, sizeof(_testmode), "0");
     snprintf(_correction, sizeof(_correction), "0");

@@ -102,7 +102,8 @@ void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
         BF17M = 18104600UL,
         BF15M = 21094600UL,
         BF12M = 24924600UL,
-        BF10M = 28124600UL
+        BF10M = 28124600UL,
+        BF02M = 144488500UL
     };
 
     uint32_t base_freq_used;
@@ -112,6 +113,7 @@ void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
         case 15: base_freq_used = BF15M; break;
         case 12: base_freq_used = BF12M; break;
         case 10: base_freq_used = BF10M; break;
+        case  2: base_freq_used = BF02M; break;
         // default to 20M in case of error cases
         default: base_freq_used = BF20M;
     }

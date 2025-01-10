@@ -548,7 +548,8 @@ char _clock_speed[4] = { 0 };
 char _U4B_chan[4] = { 0 };
 // FIX! why is this a compiler problem if volatile? parameter to function fails
 // error: invalid convesion fro 'volatile char*' to 'char*'
-char _Band[3] = { 0 };  // string with 10, 12, 15, 17, 20 legal. null at end
+char _Band[3] = { 0 };  // string with 2, 10, 12, 15, 17, 20 legal. null at end
+char _Band_cw[3] = { 0 };  // string with 2, 10, 12, 15, 17, 20 legal. null at end
 char _tx_high[2] = { 0 };  // 0 is 4mA si5351. 1 is 8mA si5351
 char _testmode[2] = { 0 };
 char _correction[7] = { 0 };
@@ -1722,11 +1723,10 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     uint8_t VCC_init_valid_cnt = vfo_calc_cache_print_and_check();
     // was getting 14MDA printed if I cycled these with RF?
     // these are just filling the cache
-    startSymbolFreq(hf_freq, 0, false, true);
-    startSymbolFreq(hf_freq, 1, true, true);
-    startSymbolFreq(hf_freq, 2, true, true);
-    // only setup si5351a and RF out on this last one
-    startSymbolFreq(hf_freq, 3, true, false);
+    startSymbolFreq(hf_freq, 3, false, true);
+    startSymbolFreq(hf_freq, 2, false, true);
+    startSymbolFreq(hf_freq, 1, false, true);
+    startSymbolFreq(hf_freq, 0, false, false);
 
     absolute_time_t end_usecs_1 = get_absolute_time();
     int64_t elapsed_usecs_1 = absolute_time_diff_us(start_usecs_1, end_usecs_1);
@@ -1998,7 +1998,7 @@ bool alignMinute(int offset) {
     // WARN: make sure _go_when_rdy is cleared before real balloon flight!
     if (_go_when_rdy[0] == '1') {
         // add 2 to cover the wrap of 0 to -1 with offset -1 (goes to 1)
-        align_minute = (2 + align_minute + offset) % 2;
+        align_minute = (2 + offset) % 2;
         aligned = (minute() % 2) == align_minute;
     } else {
         aligned = (minute() % 10) == align_minute;
@@ -2204,7 +2204,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         vfo_turn_off();
     } else {
         if (DO_CLK_OFF_FOR_WSPR_MODE) {
-            // FIX! if we leave RF on, should we set it to symbol 3 so every transition to 
+            // FIX! if we leave RF on, should we set it to symbol 0 so every transition to 
             // good message looks the same? But we're turning off the clock now, 
             // so it shouldn't matter?
             if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
@@ -2230,10 +2230,10 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
         txNum = 0;
     }
 
-    // actual freq for symbol 3 in the log buffer, eventually it will get printed
+    // actual freq for symbol 0 in the log buffer, eventually it will get printed
     // when we're not sending wspr, by something above
     // all the other starting freqs are symbol 3 too
-    uint8_t symbol = 3;  // can only be 0, 1, 2 or 3
+    uint8_t symbol = 0;  // can only be 0, 1, 2 or 3
     // don't need the symbol_freq for anything..just want a print here
     // FIX! we could pre-calc the 4 symbol freqs during the first warmup symbol.
     // so if only_pll_num, use the calc'ed freqs.
@@ -2262,12 +2262,12 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     absolute_time_t start_usecs_2;
 
     // we better do the loop iteration at least once!
-    while (!(alignMinute(i))) {
+    while (!(alignMinute(i-1))) {
         Watchdog.reset();
         updateStatusLED();
         sleep_ms(20);
     }
-    while (!clk01_turned_on || (second() != 0)) {
+    while (!clk01_turned_on || !(alignMinute(0) && (second() == 0))) {
         Watchdog.reset();
         // delay(1);
         // whenever we have spin loops we need to updateStatusLED()
@@ -2280,7 +2280,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
 
         // we better get here 1 sec before needed!
         // we shouldn't be here more than 1 minute before needed?
-        if (!clk01_turned_on && second()==59) {
+        if (!clk01_turned_on) {
             // if we used the PDN bit to disable the clocks, we'd need a pll reset.
             // to stay in phase
             // FIX! how fast or slow is this? 
@@ -2300,17 +2300,19 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
             start_usecs_2 = get_absolute_time();
             clk01_turned_on = true;
         }
-        sleep_ms(20);
+        busy_wait_ms(10);
     }
     if (!clk01_turned_on) {
         V1_print(F("ERROR: syncAndSendWspr big problem, no clk01_turned_on"));
     } else {
-        // for debug/checking/consistency..report how long RF is on before we need it here!
-        absolute_time_t end_usecs_2 = get_absolute_time();
-        uint64_t elapsed_usecs_2 = absolute_time_diff_us(start_usecs_2, end_usecs_2);
-        float elapsed_millisecs_2 = (float)elapsed_usecs_2 / 1000.0;
-        V1_printf("syncAndSendWspr rf is on for %.3f millisecs before real wspr msg" EOL, 
-            elapsed_millisecs_2);
+        if (DO_CLK_OFF_FOR_WSPR_MODE) {
+            // for debug/checking/consistency..report how long RF is on before we need it here!
+            absolute_time_t end_usecs_2 = get_absolute_time();
+            uint64_t elapsed_usecs_2 = absolute_time_diff_us(start_usecs_2, end_usecs_2);
+            float elapsed_millisecs_2 = (float)elapsed_usecs_2 / 1000.0;
+            V1_printf("syncAndSendWspr rf is on for %.3f millisecs before real wspr msg" EOL, 
+                elapsed_millisecs_2);
+        }
     }
 
     //*****************************************
@@ -2404,12 +2406,12 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     // dbm - Output power in dBm.
     // symbols - Array of channel symbols to transmit returned by the method.
     // Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT
-    if (VERBY[1]) { 
+    if (false) {
         V1_print(F("Before jtencode.wspr_encode() freeMem()" EOL));
         freeMem(); 
     }           
     jtencode.wspr_encode(hf_callsign, hf_grid4, power, hf_tx_buffer);
-    if (VERBY[1]) { 
+    if (false) {
         V1_print(F("After jtencode.wspr_encode() freeMem()" EOL));
         freeMem(); 
     }           

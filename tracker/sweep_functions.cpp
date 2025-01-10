@@ -156,11 +156,12 @@ void si5351a_calc_sweep_band() {
     vfo_calc_cache_flush();
     for (uint8_t i = 0; i <= 4 ; i++) {
         switch (i) {
-            case 0: snprintf(band, sizeof(band), "10"); break;
-            case 1: snprintf(band, sizeof(band), "12"); break;
-            case 2: snprintf(band, sizeof(band), "15"); break;
-            case 3: snprintf(band, sizeof(band), "17"); break;
-            case 4: snprintf(band, sizeof(band), "20"); break;
+            case 0: snprintf(band, sizeof(band), "2"); break;
+            case 1: snprintf(band, sizeof(band), "10"); break;
+            case 2: snprintf(band, sizeof(band), "12"); break;
+            case 3: snprintf(band, sizeof(band), "15"); break;
+            case 4: snprintf(band, sizeof(band), "17"); break;
+            case 5: snprintf(band, sizeof(band), "20"); break;
         }
         // will pick the _lane we're using for the current u4b channel config
         uint8_t symbol = 0;

@@ -246,7 +246,6 @@ void vfo_set_power_on(bool turn_on) {
     memset(s_vfo_drive_strength, 0, 3);
 
     V1_flush();
-    V1_println(F("vfo_set_power_on After V1_flush()"));
 
     // always just turn it on!
     s_is_on = turn_on;
@@ -640,6 +639,7 @@ void si5351a_setup_PLL(uint8_t mult, uint32_t num, uint32_t denom, bool do_pllb)
             reg = SI5351A_PLLA_BASE;
 
         len = 8;
+        start = 0;
         if (!ALWAYS_WRITE_SINGLES) {
             i2cWriten(reg, &PLL_regs[start], len);
         } else {
@@ -1666,17 +1666,17 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
         return;
     }
 
-    // if (only_pll_num) {
+    // for numerator-shift algo:
     // calcs were done to show that only pll_num needs to change for symbols 0 to 3
     // we always do an early turn-on with symbol 0 that gets all other state right
     // and it stays that way for the whole message. Guarantee no pll reset needed!
+
     // turns out there's no speedup to make use of this bool
-    // this has sticky s_regs_prev state that it uses if called multiple times?
     si5351a_setup_PLL(pll_mult, pll_num, pll_denom, true); // PLLB
+
     // make PLLA the same (so it locks? Is that better power than unlocked?)
     // maybe PLLA is disabled if not used? unknown
-
-    // HACK. don't change 1/10/25
+    // HACK. don't setup PLLA 1/10/25
     if (false) {
         si5351a_setup_PLL(pll_mult, pll_num, pll_denom, false); // PLLA
     }
@@ -1721,14 +1721,13 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
     // V1_printf("vfo_set_freq_xxx END clk_num %u freq %lu" EOL, clk_num, freq);
 
     // 1/9/25 HACK! after every frequency change? no.
-    if (false) {
+    if (true) {
         si5351a_reset_PLLB(false);
     }
 
     // new: 1/10/25
     // is this a must-have for ms5351m? we have to turn clocks off, then turn them on
     vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
-
 }
 
 //****************************************************
@@ -2071,10 +2070,10 @@ void vfo_turn_on() {
     // better? low by 4hz of middle?
     // did this cause variance over time?
     // seeing it vary between 133 and 136 hz
-    i2cWrite(183, 0x80);
+    // i2cWrite(183, 0x80);
 
     // off. high by 16 hz on 1 tracker
-    // i2cWrite(183, 0xC0);
+    i2cWrite(183, 0xC0);
 
     // FIX! is 187 this a reserved address?
     // in AN1234 register map, this is shown as CLKIN_FANOUT_EN and XO_FANOUT_EN
@@ -2098,10 +2097,10 @@ void vfo_turn_on() {
     si5351bx_clken = 0xff;  // all disabled
 
     Watchdog.reset();
-    // start with symbol 3 to match what we leave it to, during warm up time later?
+    // start with symbol 0 to match what we leave it to, during warm up time later?
     uint32_t hf_freq = XMIT_FREQUENCY;
     uint64_t freq_xxx_with_symbol;
-    calcSymbolFreq_xxx(&freq_xxx_with_symbol, hf_freq, 3);
+    calcSymbolFreq_xxx(&freq_xxx_with_symbol, hf_freq, 0);
     vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM,  freq_xxx_with_symbol, false, false);
 
     // the final state is clk0/clk1 running and clk outputs on?
