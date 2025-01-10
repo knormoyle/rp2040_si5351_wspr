@@ -414,10 +414,12 @@ int main() {
         // had a bad case at 0.46
 
         double multiplier_fraction;
-        int j = i % 5;
-        multiplier_fraction = real_freqs[j].f;
-
-        // double multiplier_fraction = unif(re);
+        if (false) {
+            int j = i % 5;
+            multiplier_fraction = real_freqs[j].f;
+        } else {
+            multiplier_fraction = unif(generator);
+        }
 
         // multiplier_fraction = (double)random() / (double)RAND_MAX;
 

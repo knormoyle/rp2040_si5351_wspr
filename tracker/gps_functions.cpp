@@ -121,7 +121,8 @@ extern bool IGNORE_KEYBOARD_CHARS;
 // FIX! gonna need an include for this? maybe note
 // # include <TimeLib.h>
 
-// we make RP2040 to 18mhz during the long gps cold reset fix time, then restore to this
+// we make RP2040 to 18mhz during the long gps cold reset fix time
+// then restore to this
 extern uint32_t PLL_SYS_MHZ;  // decode of _clock_speed
 extern bool BALLOON_MODE;
 
@@ -130,14 +131,17 @@ extern bool BALLOON_MODE;
 // sort power on for gps cold reset only
 bool PWM_COLD_GPS_POWER_ON_MODE = true;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
-bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false; // causing intermittent fails if true?
+// causing intermittent fails if true?
+bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false;
 
 // why isn't this true 12/15/24..true now. works (18Mhz)
 // occassionally having problems...Not needed?
 // bool ALLOW_USB_DISABLE_MODE = true;
 bool ALLOW_USB_DISABLE_MODE = false;
-bool ALLOW_KAZU_12MHZ_MODE = false;  // true not working with Serial2?
-bool ALLOW_TEMP_12MHZ_MODE = false;  // is true getting intermittent fails on usbserial (after restore)
+// true not working with Serial2?
+bool ALLOW_KAZU_12MHZ_MODE = false;
+// is true getting intermittent fails on usbserial (after restore)
+bool ALLOW_TEMP_12MHZ_MODE = false;
 
 //************************************************
 static bool GpsIsOn_state = false;
@@ -722,17 +726,26 @@ void setGpsConstellations(int desiredConstellations) {
     char nmeaSentence[62] = { 0 };
     if (USE_SIM65M) {
         switch (usedConstellations) {
-            // we don't have a code for including GALILEO?
-            case 1: strncpy(nmeaSentence, "$PAIR066,1,0,0,0,0,0,*3B" CR LF, 62); break;  // GPS
-            case 2: strncpy(nmeaSentence, "$PAIR066,0,0,0,1,0,0,*3B" CR LF, 62); break;  // BDS
-            case 3: strncpy(nmeaSentence, "$PAIR066,1,0,0,1,0,0,*3A" CR LF, 62); break;  // GPS+BDS
-            case 4: strncpy(nmeaSentence, "$PAIR066,0,1,0,0,0,0,*3B" CR LF, 62); break;  // GLONASS
-            case 5: strncpy(nmeaSentence, "$PAIR066,1,1,0,0,0,0,*3A" CR LF, 62); break;  // GPS+GLONASS
-            case 6: strncpy(nmeaSentence, "$PAIR066,0,1,0,1,0,0,*3A" CR LF, 62); break;  // BDS+GLONASS
-            case 7: strncpy(nmeaSentence, "$PAIR066,1,1,0,1,0,0,*3B" CR LF, 62); break;  // GPS+BDS+GLONASS
-            default:
+            // FIX! we don't have a code for including Galileo?
+            // But we seem to be getting it?
+            // are these not right, and Galileo is in default?
+            case 1:  // GPS
+                strncpy(nmeaSentence, "$PAIR066,1,0,0,0,0,0,*3B" CR LF, 62); break;
+            case 2:  // BDS
+                strncpy(nmeaSentence, "$PAIR066,0,0,0,1,0,0,*3B" CR LF, 62); break;
+            case 3:  // GPS+BDS
+                strncpy(nmeaSentence, "$PAIR066,1,0,0,1,0,0,*3A" CR LF, 62); break;
+            case 4:  // GLONASS
+                strncpy(nmeaSentence, "$PAIR066,0,1,0,0,0,0,*3B" CR LF, 62); break;
+            case 5:  // GPS+GLONASS
+                strncpy(nmeaSentence, "$PAIR066,1,1,0,0,0,0,*3A" CR LF, 62); break;
+            case 6:  // BDS+GLONASS
+                strncpy(nmeaSentence, "$PAIR066,0,1,0,1,0,0,*3A" CR LF, 62); break;
+            case 7:  // GPS+BDS+GLONASS
+                strncpy(nmeaSentence, "$PAIR066,1,1,0,1,0,0,*3B" CR LF, 62); break;
+            default:  // GPS+BDS
                 usedConstellations = 3;
-                strncpy(nmeaSentence, "$PAIR066,1,0,0,1,0,0,*3A" CR LF, 62); break;  // GPS+BDS
+                strncpy(nmeaSentence, "$PAIR066,1,0,0,1,0,0,*3A" CR LF, 62); break;
         }
     } else {
         switch (usedConstellations) {
@@ -1301,7 +1314,7 @@ void GpsFullColdReset(void) {
         uint64_t start_millis = millis();
         pwmGpsPwrOn();
         uint64_t duration_millis = millis() - start_millis;
-        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 "millisecs" EOL, duration_millis);
+        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 " millisecs" EOL, duration_millis);
         // soft power-on for GpsPwr (assert low, controls mosfet)
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
@@ -1358,13 +1371,13 @@ void GpsFullColdReset(void) {
         V1_print(F("No keyboard interrupts will work because will disable USB PLL too" EOL));
     }
     if (ALLOW_KAZU_12MHZ_MODE) {
-        V1_print(F("Will stay in 12Mhz (using xosc, not pll, for sys clk, after things are restored" EOL));
+        V1_print(F("Will stay in 12Mhz using xosc, after things are restored" EOL));
     }
     //**************************************
     if (ALLOW_TEMP_12MHZ_MODE) {
-        V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz then long sleep" EOL, PLL_SYS_MHZ);
+        V1_printf("Switch pll_sys PLL_SYS_MHZ %lu to xosc 12Mhz then sleep" EOL, PLL_SYS_MHZ);
     } else {
-        V1_printf("Switch from pll_sys PLL_SYS_MHZ %lu to pll 18Mhz then long sleep" EOL, PLL_SYS_MHZ);
+        V1_printf("Switch pll_sys PLL_SYS_MHZ %lu to pll 18Mhz then sleep" EOL, PLL_SYS_MHZ);
     }
     V1_flush();
 
@@ -1545,12 +1558,15 @@ void GpsFullColdReset(void) {
     // Don't do it in BALLOON_MODE. that should fix the issue
     if (ALLOW_UPDATE_GPS_FLASH_MODE && !BALLOON_MODE) {
         if (USE_SIM65M) {
-            V1_print(F("SIM65M: Write GPS current config (no broadcast, GNSS service disabled" EOL));
-            V1_print(F("SIM65M: (NO) still default constellations? (4) GPS/BDS/GLONASS/GALILEO" EOL));
-            V1_print(F(" to GPS Flash (for use in next GPS cold reset?)" EOL));
+            V1_print(F("SIM65M: Write GPS config"));
+            V1_print(F(" (no broadcast, GNSS service disabled)" EOL));
+            V1_print(F("SIM65M: (NO) still default constellations? (4)"));
+            V1_print(F(" GPS/BDS/GLONASS/GALILEO" EOL));
+            V1_print(F("SIM65M: to GPS Flash (for use in next GPS cold reset?)" EOL));
         } else {
-            V1_print(F(" to GPS Flash (for use in next GPS cold reset?)" EOL));
-            V1_print(F("ATGM336H: Write GPS current config (no broadcast, just GPS constellations" EOL));
+            V1_print(F("ATGM336H: Write GPS current config"));
+            V1_print(F(" (no broadcast, just GPS constellations" EOL));
+            V1_print(F("ATGM336H: to GPS Flash (for use in next GPS cold reset?)" EOL));
         }
         // this will init to just GPS for the right then restore as below
         writeGpsConfigNoBroadcastToFlash();
@@ -2162,13 +2178,16 @@ void updateGpsDataAndTime(int ms) {
                 // should be UTC time zone?
                 adjustTime(0);
                 V1_print(F("GOOD: rtc setTime() with"));
-                V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
-                    gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+                V1_printf(" gps_hour %u gps_minute %u gps_second %u",
+                    gps_hour, gps_minute, gps_second);
+                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+                    gps_day, gps_month, gps_year);
             }
         } else {
             // new way. more accurate syncing?
             // FIX! hmm. we don't get hundredths any more?
-            // so we could be off by +- 0.5 sec + code delay? (300 millisecs + ?)
+            // so we could be off by +- 0.5 sec + code delay?
+            // (300 millisecs + ?)
             uint8_t gps_hundredths;
             gps_hundredths = 0;
             // FIX! we could also look at TimeLib timeStatus() to help qualify?
@@ -2188,10 +2207,10 @@ void updateGpsDataAndTime(int ms) {
                     hour() != gps_hour ||
                     minute() != gps_minute ||
                     second() != gps_second) )) {
-                // use hundredths from the gps, to busy_wait_usecs until we're more likely
-                // aligned to the second exactly.
+                // use hundredths from the gps, to busy_wait_usecs
+                // until we're more likely aligned to the second exactly.
                 if (gps_hundredths > 99) {
-                    V1_printf("ERROR: TinyGPS gps_hundredths %u shouldn't be > 99. using 100"
+                    V1_printf("ERROR: TinyGPS gps_hundredths %u > 99. using 100"
                         EOL, gps_hundredths);
                     gps_hundredths = 0;
                 }
@@ -2223,7 +2242,8 @@ void updateGpsDataAndTime(int ms) {
                 if (gps_hour > 23) gpsTimeBad = true;
                 if (gps_minute > 59) gpsTimeBad = true;
                 if (gps_second > 59) gpsTimeBad = true;
-                // should we validate by the month? forget about that. unlikely to glitch that way?
+                // should we validate by the month? forget about that.
+                // unlikely to glitch that way?
                 if (gps_day > 31) gpsTimeBad = true;
                 if (gps_month > 12) gpsTimeBad = true;
                 if (gps_month < 1) gpsTimeBad = true;
@@ -2231,30 +2251,37 @@ void updateGpsDataAndTime(int ms) {
                 // will have to remember to update this in 10 years (and above too!)
                 if (gps_year < 2025 && gps_year > 2034) gpsTimeBad = true;
 
-                // what the heck, check the days in a month is write. (subtract one from month)
-                /// if we have a valid month for this array!
-                static const uint8_t monthDays[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+                // what the heck, check the days in a month is write.
+                // (subtract one from month)
+                // if we have a valid month for this array!
+                static const uint8_t monthDays[] =
+                    {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
                 if (!gpsTimeBad) {
                     // we know will be 0 to 11, from above check of gps_month
                     uint8_t validDays = monthDays[gps_month - 1];
                     if (gps_day > validDays) {
-                        V1_printf("ERROR: gps time is bad. day %u too big. max %u for the month" EOL,
+                        V1_print(F("ERROR: gps time is bad."));
+                        V1_printf(" day %u too big. max %u for the month" EOL,
                             gps_day, validDays);
                         gpsTimeBad = true;
                     }
                 }
                 if (gpsTimeBad) {
                     V1_print(F("ERROR: gps time is bad. Maybe no received gps time yet."));
-                    V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
-                        gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+                    V1_printf(" gps_hour %u gps_minute %u gps_second %u",
+                        gps_day, gps_month, gps_year);
+                    V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+                        gps_hour, gps_minute, gps_second);
                 } else {
                     setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                     // should be UTC time zone?
                     adjustTime(0);
                     gpsTimeWasUpdated = true;
                     V1_print(F("GOOD: rtc setTime() with"));
-                    V1_printf(" gps_hour %u gps_minute %u gps_second %u gps_day %u gps_month %u gps_year %u" EOL,
-                        gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+                    V1_printf(" gps_hour %u gps_minute %u gps_second %u",
+                        gps_day, gps_month, gps_year);
+                    V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+                        gps_hour, gps_minute, gps_second);
                 }
                 //******************************
             }
@@ -2266,7 +2293,7 @@ void updateGpsDataAndTime(int ms) {
     static uint32_t last_gcp;
     static uint32_t last_gswf;
     static uint32_t last_gfc;
-    
+
     uint32_t gcp = gps.charsProcessed();
     uint32_t gswf = gps.sentencesWithFix();
     uint32_t gfc = gps.failedChecksum();
@@ -2359,7 +2386,8 @@ void gpsDebug() {
 }
 
 //*****************
-// Was wondering why the HDOP was so high. it seems the 90 really means 90 / 100 = .9 HDOP
+// Was wondering why the HDOP was so high.
+// it seems the 90 really means 90 / 100 = .9 HDOP
 // i.e. less than 1. so that's ideal. Yeah!
 
 // https://en.wikipedia.org/wiki/Dilution_of_precision_(navigation)
@@ -2373,7 +2401,7 @@ void gpsDebug() {
 // > 20 Poor At this level, measurements should be discarded.
 
 // https://github.com/mikalhart/TinyGPSPlus/issues/8
-// It was a design decision to deliver the HDOP exactly as reported by the NMEA string.
+// Was design decision to deliver the HDOP exactly as in the NMEA string.
 // NMEA reports HDOP in hundredths.
 // We could have made this return a floating-point with the correct value,
 // but at the time it seemed better to not introduce floating-point values.
@@ -2386,35 +2414,39 @@ void gpsDebug() {
 // used without needing an explicit function prototype before hand.
 // The Arduino build creates these prototypes but not always correctly,
 // leading to errors which are not obvious.
+// (Did I have case of a uint64_t return variable, getting chopped to 32-bits?)
 // Example: if the function argument list contains user defined data types and
-// the automatically created function prototype is placed before the declaration of that
-// data type.
+// the automatically created function prototype is placed before
+// the declaration of that data type.
 
 //*****************
-// some notes on bad power on of ATGM336
+// notes on bad power on of ATGM336
 // https://www.eevblog.com/forum/rf-microwave/gps-lna-overheating-on-custom-pcb/
 
-// So the magic sequence to turn the LNA into a toaster is:
+// Magic sequence to turn the LNA into a toaster is:
 // 1) Have the 3V3 power off;
 // 2) Enable the ON_OFF pin
-//   (HIGH signal from an STM32 - powered by a separate 3.0V LDO Linear Regulator);
+//   (HIGH signal from an STM32 - powered by separate 3.0V LDO linear regulator);
 // 3) Turn 3V3 power on.
 // 4) Hot LNA!
 // After that, the only thing that cools down the LNA is turning 3V3 off again.
 // Disabling the ON_OFF pin does nothing.
 
-// A classic example of latch up caused by an input voltage exceeding a power rail?
+// classic example of latch up caused by an input voltage exceeding a power rail?
 // https://en.wikipedia.org/wiki/Latch-up
 
 // https://forum.arduino.cc/t/gps-power-management-reset-loop/529253/5
-// someone using the NDB6020P, which had a good suggestion by @MarkT to simply increase
+// which had a good suggestion to simply increase
 // the value of the gate resistor to slow the switching of the MOSFET.
-// So, I increased my gate resistor to 47 kOhm, watched as my turn on time increased to 150 μs
-// and was pleasantly surprised to discover the Arduino didn't reset when the GPS was turned on!
-// Out of curiousity, I increased the value of my gate resistor again to 100 kOhm,
-// which further increased the turn on time to 250 μs and also seemed to fix the reset problem.
-// With these higher value gate resistors, I put my scope leads back on the 3.3 V source,
-// and measured the voltage dropping to only ~3.0 V when the GPS is turned on (~250 mV).
+// So, increased gate resistor to 47 kOhm,
+// Turn on time increased to 150 μs
+// and the Arduino didn't reset when the GPS was turned on!
+// Increased the value of my gate resistor again to 100 kOhm,
+// which further increased the turn on time to 250 μs and
+// also seemed to fix the reset problem.
+// With these higher value gate resistors,
+// measured the source voltage dropping to only ~3.0 V
+// when the GPS is turned on (~250 mV).
 
 
 //************************************************
@@ -2545,10 +2577,11 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
         busy_wait_ms(500);
     }
 
+    V1_print(F("After long sleep,"));
     if (ALLOW_KAZU_12MHZ_MODE) {
-        V1_printf("After long sleep, left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL, PLL_SYS_MHZ);
+        V1_printf(" left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL, PLL_SYS_MHZ);
     } else {
-        V1_printf("After long sleep, Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
+        V1_printf(" Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
     }
 
     V1_print(F("Restored USB pll to 48Mhz, and did Serial.begin()" EOL));
@@ -2590,4 +2623,3 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
 //                   \-- clk_rtc 1:1024 @ 46,875 Hz
 //                             |
 //                             \-- RTC 1:46875 @ 1Hz
-

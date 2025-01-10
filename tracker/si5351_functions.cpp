@@ -92,9 +92,10 @@ extern uint64_t PLL_FREQ_TARGET;
 extern bool USE_FAREY_WITH_PLL_REMAINDER;
 extern bool USE_FAREY_CHOPPED_PRECISION;
 extern bool TEST_FAREY_WITH_PLL_REMAINDER;
+extern bool DISABLE_FAREY_CACHE;
 extern uint64_t PLL_CALC_SHIFT;
-
-bool DISABLE_CACHE = false;
+extern bool USE_SI5351A_CLK_POWERDOWN_MODE;
+extern bool USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE;
 
 // from tracker.ino
 extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
@@ -125,7 +126,6 @@ extern const int Si5351Pwr;
 extern const int VFO_I2C0_SDA_PIN;
 extern const int VFO_I2C0_SCL_PIN;
 
-
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
 
@@ -146,12 +146,14 @@ static uint8_t s_CLK2_control_prev = { 0 };
 
 static uint8_t s_PLLB_regs_prev[8] = { 0 };
 static uint32_t s_PLLB_ms_div_prev = 0;
+static uint32_t s_PLLB_pll_mult_prev = 0;
 
 // only used because we set PLLA the same as PLLB, so it can lock?
 // FIX! but if we set it up, does that cause it to be on when it was off before?
 
 static uint8_t s_PLLA_regs_prev[8] = { 0 };
 static uint32_t s_PLLA_ms_div_prev = 0;
+static uint32_t s_PLLA_pll_mult_prev = 0;
 
 //****************************************************
 // https://wellys.com/posts/rp2040_arduino_i2c/
@@ -541,23 +543,27 @@ int i2cWriten(uint8_t reg, uint8_t *vals, uint8_t vcnt) {   // write array
 }
 
 //****************************************************
-void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
+void si5351a_setup_PLL(uint8_t mult, uint32_t num, uint32_t denom, bool do_pllb) {
     Watchdog.reset();
-    // V1_printf("si5351a_setup_PLLB START mult %u num %lu denom %lu" EOL, mult, num, denom);
-    uint8_t PLLB_regs[8] = { 0 };
+    // V1_printf("si5351a_setup_PLL START do_pllb %u mult %u num %lu denom %lu" EOL, 
+    //     do_pllb, mult, num, denom);
+    uint8_t PLL_regs[8] = { 0 };
 
+    // see MSNx_p1, p2 p3 in 
+    // https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/application-notes/AN619.pdf
     uint32_t p1 = 128 * mult + ((128 * num) / denom) - 512;
     uint32_t p2 = 128 * num - denom * ((128 * num) / denom);
     uint32_t p3 = denom;
+    // V1_printf("setup_PLL do_pllb %u mult %u num %lu denom %lu" EOL, do_pllb, mult, num, denom);
 
-    PLLB_regs[0] = (uint8_t)(p3 >> 8);
-    PLLB_regs[1] = (uint8_t)p3;
-    PLLB_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
-    PLLB_regs[3] = (uint8_t)(p1 >> 8);
-    PLLB_regs[4] = (uint8_t)p1;
-    PLLB_regs[5] = ((uint8_t)(p3 >> 12) & 0xf0) | ((uint8_t)(p2 >> 16) & 0x0f);
-    PLLB_regs[6] = (uint8_t)(p2 >> 8);
-    PLLB_regs[7] = (uint8_t)p2;
+    PLL_regs[0] = (uint8_t)(p3 >> 8);
+    PLL_regs[1] = (uint8_t)p3;
+    PLL_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
+    PLL_regs[3] = (uint8_t)(p1 >> 8);
+    PLL_regs[4] = (uint8_t)p1;
+    PLL_regs[5] = ((uint8_t)(p3 >> 12) & 0xf0) | ((uint8_t)(p2 >> 16) & 0x0f);
+    PLL_regs[6] = (uint8_t)(p2 >> 8);
+    PLL_regs[7] = (uint8_t)p2;
 
     // Hans says registers are double-buffered,
     // and the last-of-8 triggers an update of all the changes
@@ -569,93 +575,95 @@ void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom) {
     // I'm doing numerator-change-only for symbol shift now, so p2 should always change
     // unless the symbol doesn't change!
 
-    // start and end are looked at below, if s_PLLB_ms_div_prev != 0 which
-    // says we can look at last saved state (s_PLLB_regs_prev)
-    // so these are out of the for loops
+    // Looking for a range of bits that changed?
+    // the i2cWriten writes as burst below.
+    // s_PLLB[AB]_ms_div_prev:
+    // used basically as a 'valid' bit: implies s_PLLB_regs_prev has good data?
+
+    //*************************
+    bool ALWAYS_WRITE_8 = true;
+    bool ALWAYS_WRITE_SINGLES = false;
+
+    // start and end are looked at below, 
+    // if PLLB_ms_div_prev != 0 which
+    // says we can look at last saved state (s_PLL[AB]_regs_prev)
     uint8_t start = 0;
     uint8_t end = 7;
 
-    // Looking for a range of bits that changed?
-    // the i2cWriten writes as burst below.
-    // global. basically a 'valid' bit: implies s_PLLB_regs_prev has data
-    if (s_PLLB_ms_div_prev != 0) {
-        for (; start < 8; start++) {
-            if (PLLB_regs[start] != s_PLLB_regs_prev[start]) break;
+    if (!ALWAYS_WRITE_8) {
+        uint8_t PLL_regs_prev[8];
+        uint8_t PLL_ms_div_prev;
+        if (do_pllb) {
+            memcpy(PLL_regs_prev, s_PLLB_regs_prev, 8);
+            PLL_ms_div_prev = s_PLLB_ms_div_prev;
+        } else {
+            memcpy(PLL_regs_prev, s_PLLA_regs_prev, 8);
+            PLL_ms_div_prev = s_PLLA_ms_div_prev;
         }
-        // detect no change of anything?
-        if (start == 8) return;
 
-        for (; end > start; end--) {
-            // so so we just write the start to end that has changed?
-            if (PLLB_regs[end] != s_PLLB_regs_prev[end]) break;
+        if (PLL_ms_div_prev != 0) {
+            for (; start < 8; start++) {
+                if (PLL_regs[start] != PLL_regs_prev[start]) break;
+            }
+            // detect no change of anything?
+            if (start == 8) return;
+            for (; end > start; end--) {
+                // so so we just write the start to end that has changed?
+                if (PLL_regs[end] != PLL_regs_prev[end]) break;
+            }
         }
     }
+    //*************************
+    // HACK: 1/9/24. always do the last one, per Hans!
+    // p2 isn't guaranteed to change if you change both num and denom
+    // this is the last in the block of 8, reg 7.
+    // p2 = 128 * num - denom * ((128 * num) / denom);
 
-    uint8_t reg = SI5351A_PLLB_BASE + start;
-    uint8_t len = end - start + 1;
-    i2cWriten(reg, &PLLB_regs[start], len);
+    uint8_t reg;
+    uint8_t len;
+    if (!ALWAYS_WRITE_8) {
+        if (do_pllb) 
+            reg = SI5351A_PLLB_BASE + start;
+        else 
+            reg = SI5351A_PLLA_BASE + start;
+
+        len = end - start + 1;
+        i2cWriten(reg, &PLL_regs[start], len);
+        busy_wait_us(50);
+        // per hans: write the last one, separately? to trigger update of double-buffer?
+        i2cWriten(reg + 7, &PLL_regs[7], 1);
+
+    } else {
+        if (do_pllb) 
+            reg = SI5351A_PLLB_BASE;
+        else 
+            reg = SI5351A_PLLA_BASE;
+
+        len = 8;
+        if (!ALWAYS_WRITE_SINGLES) {
+            i2cWriten(reg, &PLL_regs[start], len);
+        } else {
+            for (uint8_t i = 0; i < len ; i++) {
+                uint8_t data = PLL_regs[i];
+                i2cWrite(reg+i, data); 
+                busy_wait_us(50);
+            }
+        }
+    }
 
     // this can't be swap..so how could it have worked?
     // was it a pointer copy?
     // maybe PLLB_regs memory always got reallocated on the next call?
     // wouldn't if it was static?
-    // was:
-    // *((uint64_t *)s_PLLB_regs_prev) = *((uint64_t *)PLLB_regs);
-    memcpy(s_PLLB_regs_prev, PLLB_regs, 8);
+    // was: *((uint64_t *)s_PLLB_regs_prev) = *((uint64_t *)PLLB_regs);
 
-    // V1_printf("si5351a_setup_PLLB END mult %u num %lu denom %lu" EOL, mult, num, denom);
-}
+    if (do_pllb) 
+        memcpy(s_PLLB_regs_prev, PLL_regs, 8);
+    else
+        memcpy(s_PLLA_regs_prev, PLL_regs, 8);
 
-//****************************************************
-void si5351a_setup_PLLA(uint8_t mult, uint32_t num, uint32_t denom) {
-    Watchdog.reset();
-    // straight copy of *_setup_PLLB.
-    // has the global s_PLLA_regs_prev to compare to
-    // V1_printf("si5351a_setup_PLLA START mult %u num %lu denom %lu" EOL, mult, num, denom);
-    uint8_t PLLA_regs[8] = { 0 };
-
-    uint32_t p1 = 128 * mult + ((128 * num) / denom) - 512;
-    uint32_t p2 = 128 * num - denom * ((128 * num) / denom);
-    uint32_t p3 = denom;
-
-    PLLA_regs[0] = (uint8_t)(p3 >> 8);
-    PLLA_regs[1] = (uint8_t)p3;
-    PLLA_regs[2] = (uint8_t)(p1 >> 16) & 0x03;
-    PLLA_regs[3] = (uint8_t)(p1 >> 8);
-    PLLA_regs[4] = (uint8_t)p1;
-    PLLA_regs[5] = ((uint8_t)(p3 >> 12) & 0xf0) | ((uint8_t)(p2 >> 16) & 0x0f);
-    PLLA_regs[6] = (uint8_t)(p2 >> 8);
-    PLLA_regs[7] = (uint8_t)p2;
-
-    // start and end are looked at below, if s_PLLA_ms_div_prev != 0 which
-    // says we can look at last saved state (s_PLLA_regs_prev)
-    // so these are out of the for loops
-    uint8_t start = 0;
-    uint8_t end = 7;
-
-    // Looking for a range of bits that changed?
-    // the i2cWriten writes as burst below.
-    // global. basically a 'valid' bit: implies s_PLLA_regs_prev has data
-    if (s_PLLA_ms_div_prev != 0) {
-        for (; start < 8; start++) {
-            if (PLLA_regs[start] != s_PLLA_regs_prev[start]) break;
-        }
-        // detect no change of anything?
-        if (start == 8) return;
-
-        for (; end > start; end--) {
-            // so so we just write the start to end that has changed?
-            if (PLLA_regs[end] != s_PLLA_regs_prev[end]) break;
-        }
-    }
-
-    uint8_t reg = SI5351A_PLLA_BASE + start;
-    uint8_t len = end - start + 1;
-    i2cWriten(reg, &PLLA_regs[start], len);
-
-    memcpy(s_PLLA_regs_prev, PLLA_regs, 8);
-
-    // V1_printf("si5351a_setup_PLLA END mult %u num %lu denom %lu" EOL, mult, num, denom);
+    // V1_printf("si5351a_setup_PLL END do_pllb %u mult %u num %lu denom %lu" EOL, 
+    //    do_pllb, mult, num, denom);
 }
 
 //****************************************************
@@ -680,6 +688,7 @@ const uint8_t R_DIVISOR_SHIFT = 0;
 //****************************************************
 // div must be even number
 void si5351a_setup_multisynth012(uint32_t div) {
+    // this ignores the state of PDN. PDN==0 will always allow clocks on!
     V1_printf("si5351a_setup_multisynth012 START div %lu" EOL, div);
     Watchdog.reset();
     if ((div % 2) != 0) {
@@ -731,37 +740,63 @@ void si5351a_setup_multisynth012(uint32_t div) {
     s_regs[6] = 0;
     s_regs[7] = 0;
 
+    // if we're causing a change, the clocks better be off for cleanliness, 
+    // and we'll be turning them on later? We can check the powerdown mode
+    // and force PDN in here, so it doesn't turn on the clocks?
+
+    uint8_t force_clk0_powerdown;
+    uint8_t force_clk1_powerdown;
+    // okay if we start CW stuff with it not powered down
+    // since we'll power it down separately at first
+    if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
+        force_clk0_powerdown = SI5351A_CLK0_PDN;
+        force_clk1_powerdown = SI5351A_CLK1_PDN;
+    } else {
+        force_clk0_powerdown = 0x00;
+        force_clk1_powerdown = 0x00;
+    }
+
     i2cWriten(SI5351A_MULTISYNTH0_BASE, s_regs, 8);
+    // was 1/10/25 why was this here? it was sort of working?
+    //    SI5351A_CLK0_MS0_INT |
     uint8_t CLK0_control_data =
-        SI5351A_CLK0_MS0_INT |
+        force_clk0_powerdown |
         SI5351A_CLK0_MS0_SRC_PLLB |
         SI5351A_CLK0_SRC_MULTISYNTH_0 |
         s_vfo_drive_strength[0];  // should just be 2 bits 0,1,2,3 = 2,4,6,8mA
+
     i2cWrite(SI5351A_CLK0_CONTROL, CLK0_control_data);
     s_CLK0_control_prev = CLK0_control_data;
 
     // this is used for antiphase (differential tx: clk0/clk1)
-    // the output enable doesn't seem to disable..whether or not we use INV!!
-    // both always enabled?
+    // ms5351m: the output enable doesn't seem to disable..
+    // whether or not we use INV!!  both always enabled?
+    // which is why we're using the PDN bit! (means we'll need a pll reset
+    // when we PDN=0 later!
     i2cWriten(SI5351A_MULTISYNTH1_BASE, s_regs, 8);
+    // was 1/10/25
+    // SI5351A_CLK1_MS1_INT |
     uint8_t CLK1_control_data =
-        SI5351A_CLK1_MS1_INT |
+        force_clk1_powerdown |
         SI5351A_CLK1_MS1_SRC_PLLB |
         SI5351A_CLK1_SRC_MULTISYNTH_1 |
         SI5351A_CLK1_INV |
         s_vfo_drive_strength[1];  // should just be 2 bits 0,1,2,3 = 2,4,6,8mA
+
     i2cWrite(SI5351A_CLK1_CONTROL, CLK1_control_data);
     s_CLK1_control_prev = CLK1_control_data;
 
     // power down the CLK2. just make it 2MA drive
     // right now: we don't use it for freq calibration (to rp2040 on pcb)
     i2cWriten(SI5351A_MULTISYNTH2_BASE, s_regs, 8);
+    // was 1/10/25
+    // SI5351A_CLK2_MS2_INT |
     uint8_t CLK2_control_data =
-        SI5351A_CLK2_MS2_INT |
+        SI5351A_CLK2_PDN |
         SI5351A_CLK2_MS2_SRC_PLLB |
         SI5351A_CLK2_SRC_MULTISYNTH_2 |
-        SI5351A_CLK2_PDN |
         SI5351A_CLK2_IDRV_2MA;  // always just 2MA for clk2, if ever used
+
     i2cWrite(SI5351A_CLK2_CONTROL, CLK2_control_data);
     s_CLK2_control_prev = CLK2_control_data;
 
@@ -771,11 +806,12 @@ void si5351a_setup_multisynth012(uint32_t div) {
 }
 
 //****************************************************
-void si5351a_power_up_clk01() {
+void si5351a_power_up_clk01(bool print) {
     // Only used for keying cw since the clk output enable doesn't seem
     // to turn off clk on ms5351m??
     // uses the previously set s_CLKn_control_prev
-    // V1_print(F("si5351a_power_up_clk01 START" EOL));
+    if (print)
+        V1_print(F("si5351a_power_up_clk01 START" EOL));
     // Watchdog.reset();
 
     // boolean inversion. Clear PDN
@@ -789,16 +825,18 @@ void si5351a_power_up_clk01() {
 
     // always need to reset after change of CLKn_PDN to maintain phase relationship (Hans)
     i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
-    // V1_print(F("si5351a_power_up_clk01 END" EOL));
+    if (print)
+        V1_print(F("si5351a_power_up_clk01 END" EOL));
     // hans picture says 1.46ms for effect?
     // don't add delay here though. will change wpm timing
 }
 //****************************************************
-void si5351a_power_down_clk01() {
+void si5351a_power_down_clk01(bool print) {
     // Only used for keying cw since the clk output enable doesn't seem
     // to turn off clk on ms5351m??
     // uses the previously set s_CLKn_control_prev
-    // V1_print(F("si5351a_power_down_clk01 START" EOL));
+    if (print)
+        V1_print(F("si5351a_power_down_clk01 START" EOL));
     // Watchdog.reset();
 
     // set PDN
@@ -810,14 +848,18 @@ void si5351a_power_down_clk01() {
     i2cWrite(SI5351A_CLK1_CONTROL, CLK1_control_data);
     s_CLK1_control_prev = CLK1_control_data;
 
-    // always need to reset after change of CLKn_PDN to maintain phase relationship (Hans)
+    // always need to reset after change of CLKn_PDN to maintain phase
+    // relationship (Hans)
     // HACK: wait one millisecond before doing the pll reset?
+    // FIX! do we really need the pll reset to turn it off too?
     busy_wait_ms(1);
     i2cWrite(SI5351A_PLL_RESET, SI5351A_PLL_RESET_PLLB_RST);
+
     // hans picture says 1.46ms for effect?
     // don't add delay here though. will change wpm timing
     // sleep_ms(2);
-    // V1_print(F("si5351a_power_down_clk01 END" EOL));
+    if (print)
+        V1_print(F("si5351a_power_down_clk01 END" EOL));
 }
 
 // FIX! compare to https://github.com/etherkit/Si5351Arduino
@@ -1311,8 +1353,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     }
 
     // make it even. odd bumps up.
-    // switch: try bumping odd down
-    if ((ms_div_here % 2) == 1) ms_div_here -= 1;
+    // has to be a bump up? pll freq will increase..so mult may up too?
+    if ((ms_div_here % 2) == 1) ms_div_here += 1;
     if (DEBUG) {
         V1_printf("DEBUG: ms_div_here post-inc?: %" PRIu64 EOL, ms_div_here);
     }
@@ -1369,8 +1411,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
         ms_div_here = pll_freq_xxx_2 / bbb;  // bbb from above
         // make it even. odd bumps up.
-        // switch: try bumping odd down
-        if ((ms_div_here % 2) == 1) ms_div_here -= 1;
+        if ((ms_div_here % 2) == 1) ms_div_here += 1;
 
         V1_print(F("vfo_calc_div_mult_num pll_freq implied by new ms_div, pll_mult" EOL));
         V1_print(F("ms_div implied by that pll_freq" EOL));
@@ -1477,12 +1518,12 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // so precision is already limited
         // from case: 10M 400Mhz PLL_CALC_SHIFT 16
         // DEBUG: bits_pll_remain_xxx: 37.84
-        // but the conversion to real is another base (fp double) 
+        // but the conversion to real is another base (fp double)
         // Unclear how many bits there this is doing a roundoff in the decimal digit domain...
         // interesting. that's different
         // it seems to help in the farey.cpp test file..which does random reals 0 to 1
         // and looks at errors. This seems to help the errors bunch? no outliers?
-        
+
         // If we have 1-e-11 accuracy in the fractional real multiplier that goes into
         // the pll, and a 26Mhz tcxo, and maybe a small divider like 15:
         //   (1e-11 * 26e6) / 15 = 1.7e-5. So that's in the tens of uHz for accuracy.
@@ -1497,8 +1538,8 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
             sscanf(str, "%lf", &target);
             // the Farey algo uses doubles
             // but starting with lower precision can be a good thing?
-            V1_print(F("Farey after .11f digit sprintf/sscanf:")); 
-            V1_printf("Farey new target %.16f" EOL, target);
+            V1_print(F("Farey after .11f digit sprintf/sscanf:"));
+            V1_printf(" Farey new target %.16f" EOL, target);
         }
 
         retval = rational_approximation(target, maxdenom);
@@ -1563,6 +1604,7 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
+// only_pll_num allows num and denom, when doing Farey
 void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, bool just_do_calcs) {
     Watchdog.reset();
     uint32_t ms_div;
@@ -1579,6 +1621,10 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
         // note we only have one s_PLLB_ms_div_prev copy state also
     }
 
+    // new: 1/10/25
+    // is this a must-have for ms5351m? we have to turn clocks off, then turn them on
+    vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
+
     // we get pll_denom to know what was used in the calc
     // R_DIVISOR_SHIFT is hardwired constant (/4 => shift 2)
 
@@ -1594,7 +1640,7 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
     // let "use cache" miss. basically everything refills
     // OH: keep 5, one for the cw freq!
 
-    if (DISABLE_CACHE || !USE_FAREY_WITH_PLL_REMAINDER) {
+    if (DISABLE_FAREY_CACHE || !USE_FAREY_WITH_PLL_REMAINDER) {
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, true);
     } else {
@@ -1615,7 +1661,10 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
         }
     }
 
-    if (just_do_calcs) return;
+    if (just_do_calcs) {
+        V1_print(F("vfo_set_freq_xxx just_do_calcs" EOL));
+        return;
+    }
 
     // if (only_pll_num) {
     // calcs were done to show that only pll_num needs to change for symbols 0 to 3
@@ -1623,37 +1672,68 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
     // and it stays that way for the whole message. Guarantee no pll reset needed!
     // turns out there's no speedup to make use of this bool
     // this has sticky s_regs_prev state that it uses if called multiple times?
-    si5351a_setup_PLLB(pll_mult, pll_num, pll_denom);
+    si5351a_setup_PLL(pll_mult, pll_num, pll_denom, true); // PLLB
+    // make PLLA the same (so it locks? Is that better power than unlocked?)
+    // maybe PLLA is disabled if not used? unknown
+
+    // HACK. don't change 1/10/25
+    if (false) {
+        si5351a_setup_PLL(pll_mult, pll_num, pll_denom, false); // PLLA
+    }
+
+    // we don't check if the pll_mult has changed
+    if (pll_mult != s_PLLB_pll_mult_prev) {
+        if (only_pll_num) {
+            V1_print(F("ERROR: only_pll_num true"));
+            V1_printf(" but pll_mult %lu changed. s_PLLB_pll_mult_prev %lu",
+                pll_mult, s_PLLB_pll_mult_prev);
+            V1_print(F(" need to do si5351a_reset_PLLB() after this?" EOL));
+        }
+    }
+    s_PLLB_pll_mult_prev = pll_mult;
+    s_PLLA_pll_mult_prev = pll_mult;
+
     if (ms_div != s_PLLB_ms_div_prev) {
         // s_PLLB_ms_div_prev is global
         // only reset pll if ms_div changed?
         if (only_pll_num) {
-            V1_printf("ERROR: only_pll_num but ms_div %lu changed. s_PLLB_ms_div_prev %lu" EOL,
+            V1_print(F("ERROR: only_pll_num true"));
+            V1_printf(" but ms_div %lu changed. s_PLLB_ms_div_prev %lu",
                 ms_div, s_PLLB_ms_div_prev);
-            V1_print(F("ERROR: will cause si5351a_reset_PLLB()" EOL));
+            V1_print(F(" need to do si5351a_reset_PLLB() after this?" EOL));
         }
         // setting up multisynth0/1/2
+        // if we're causing a change, the clocks better be off, and 
+        // we'll be turning them on later? We can check the powerdown mode
+        // and force PDN in here, so it doesn't turn on the clocks?
         si5351a_setup_multisynth012(ms_div);
-        // FIX! should we rely on the clock turn on to reset pll?
-        // normally we should only change ms_div while the clock outputs are off?
-        // so there will be a turn on after this?
 
+        // FIX! should we change the multisynth setup to start with output clock PDN=1?
+        // then power it up later? (or here)
+
+        // I guess when we first turn change ms_div, we'll do a reset_PLLB (elsewhere)
         // si5351a_reset_PLLB(true);
-        // static global? for comparison next time
 
+        // static global? for comparison next time
         s_PLLB_ms_div_prev = ms_div;
-        V1_printf(EOL "vfo_set_freq_xxx setting (1) s_PLLB_ms_div_prev %lu" EOL EOL,  ms_div);
     }
-    // make PLLA the same (so it locks? Is that better power than unlocked?)
-    si5351a_setup_PLLA(pll_mult, pll_num, pll_denom);
     s_PLLA_ms_div_prev = ms_div;
-    // V1_printf(EOL "vfo_set_freq_xxx setting (1) s_PLLA_ms_div_prev %lu" EOL EOL,  ms_div);
     // V1_printf("vfo_set_freq_xxx END clk_num %u freq %lu" EOL, clk_num, freq);
+
+    // 1/9/25 HACK! after every frequency change? no.
+    if (false) {
+        si5351a_reset_PLLB(false);
+    }
+
+    // new: 1/10/25
+    // is this a must-have for ms5351m? we have to turn clocks off, then turn them on
+    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
+
 }
 
 //****************************************************
-// FIX! hans says we need pll reset whenever we turn clocks off/on
-// to retain 180 degree phase relationship (CLK0/CLK1)
+// no pll reset needed for maintaining 180 degree clk0/clk1
+// only pll reset if the clk PDN bit used
 void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
     Watchdog.reset();
     if (print) {
@@ -1727,8 +1807,6 @@ void vfo_turn_off_clk_out(uint8_t clk_num, bool print) {
 void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     Watchdog.reset();
     V1_printf("vfo_set_drive_strength START clk_num %u" EOL, clk_num);
-
-    // only called during the initial vfo_turn_on()
     s_vfo_drive_strength[clk_num] = 0x3 && strength;
 
     //**********************
@@ -1865,10 +1943,8 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
     V1_printf("vfo_write_clock_en_with_retry res %d END" EOL, res);
 }
 //****************************************************
-void vfo_turn_on(uint8_t clk_num) {
-    // FIX! what if clk_num is not zero?
-    // turn on of 0 turns on 0 and 1 now    clk_num = 0;
-    V1_printf(EOL "vfo_turn_on START clk_num %u" EOL, clk_num);
+void vfo_turn_on() {
+    V1_print(F(EOL "vfo_turn_on START" EOL));
     Watchdog.reset();
 
     // already on successfully?
@@ -1905,21 +1981,14 @@ void vfo_turn_on(uint8_t clk_num) {
     // new: pll input source is XTAL for PLLA and PLLB
     i2cWrite(15, 0x00);
 
-    // Power Down, Integer Mode. PLLB source to MultiSynth. Not inverted. Src Multisynth.
-    // hmm. why Integer Mode. means we have to switch to fractional mode?
-
-    // 12/28/24 change to fractional mode
-    // 2mA drive
-    // changed from PLLA source
-    // starts at 16?
-    // orig:   i2cWrite(reg, 0xAC);
-
+    // init:
+    // Power Down, Fractional Mode. PLLB source to MultiSynth. Not inverted.
+    // Src Multisynth. 2mA drive
     uint8_t reg;
     for (reg = SI5351A_CLK0_CONTROL; reg <= SI5351A_CLK7_CONTROL; reg++) {
         Watchdog.reset();
         i2cWrite(reg, 0xAC);
     }
-    // was:   i2cWrite(reg, 0xCC);
 
     memset(s_vfo_drive_strength, 0, 0);
     // Moved this down here ..we don't know if we'll hang earlier
@@ -2002,10 +2071,10 @@ void vfo_turn_on(uint8_t clk_num) {
     // better? low by 4hz of middle?
     // did this cause variance over time?
     // seeing it vary between 133 and 136 hz
-    // i2cWrite(183, 0x80);
+    i2cWrite(183, 0x80);
 
     // off. high by 16 hz on 1 tracker
-    i2cWrite(183, 0xC0);
+    // i2cWrite(183, 0xC0);
 
     // FIX! is 187 this a reserved address?
     // in AN1234 register map, this is shown as CLKIN_FANOUT_EN and XO_FANOUT_EN
@@ -2019,37 +2088,40 @@ void vfo_turn_on(uint8_t clk_num) {
     // Disable all fanout
 
     //***********************
+    // clear all the old state
     s_PLLB_ms_div_prev = 0;
     s_PLLA_ms_div_prev = 0;
-    // new 11/24/24 ..maybe clear all this old state
+    s_PLLB_pll_mult_prev = 0;
+    s_PLLA_pll_mult_prev = 0;
     memset(s_PLLB_regs_prev, 0, 8);
     memset(s_PLLA_regs_prev, 0, 8);
     si5351bx_clken = 0xff;  // all disabled
 
-    uint32_t freq = XMIT_FREQUENCY;
-
-    // this is aligned to integer. (symbol 0)
-    V1_printf("initial freq for vfo_set_freq_xxx() is %lu" EOL, freq);
-    uint64_t freq_xxx = ((uint64_t) freq) << PLL_CALC_SHIFT;
-
     Watchdog.reset();
-    // FIX! should we get rid of pll reset here and rely on the turn_on_clk
-    // to do it?
-    vfo_set_freq_xxx(clk_num, freq_xxx, false, false);
+    // start with symbol 3 to match what we leave it to, during warm up time later?
+    uint32_t hf_freq = XMIT_FREQUENCY;
+    uint64_t freq_xxx_with_symbol;
+    calcSymbolFreq_xxx(&freq_xxx_with_symbol, hf_freq, 3);
+    vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM,  freq_xxx_with_symbol, false, false);
 
-    // The final state is clk0/clk1 running and clk outputs on?
-    // this doesn't cause a reset_PLLB
-    vfo_turn_on_clk_out(clk_num, true);  // print
+    // the final state is clk0/clk1 running and clk outputs on?
+    // this doesn't cause a reset_PLLB.
+    // vfo_turn_on_clk_out(clk_num, true);  // print
+
+    // could have clocks off with this, but we're going to get the clks
+    // rf'ing soon anyhow.
+    // si5351a_power_down_clk01();
 
     // it was done in vfo_set_freq_xxx if we didn't have initial state
     // or didn't change initial state?
     // could there be two that overlap ?
 
     // does PLLA matter? these print the lock status by doing i2c reads
-    // si5351a_reset_PLLA(true);
+    if (false) si5351a_reset_PLLA(true);
+
     si5351a_reset_PLLB(true);
     vfo_turn_on_completed = true;
-    V1_printf("vfo_turn_on END clk_num %u" EOL, clk_num);
+    V1_print(F("vfo_turn_on END" EOL));
 }
 //****************************************************
 // do this on the tcxo 26Mhz, everything else shouldn't need correction
@@ -2341,8 +2413,6 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num, bool j
 // Most code and libraries you see just fix c at 0xFFFFF and just vary b.
 // This is what limits the resolution.
 
-
-
 //*********************************************************************************
 void set_PLL_DENOM_OPTIMIZE(char *band) {
     V1_println(F("set_PLL_DENOM_OPTIMIZE START"));
@@ -2400,6 +2470,9 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
             }
             break;
         default:
+            if (!USE_FAREY_WITH_PLL_REMAINDER) {
+                V1_printf("ERROR: using unoptimized PLL_DENOM_OPTIMIZE: %d" PRIu64 EOL, b);
+            }
             switch (b) {
                 case 10: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
                 case 12: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;

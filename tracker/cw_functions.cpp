@@ -20,7 +20,8 @@
 #include <stdint.h>
 
 // NOTE! the clock disable mode doesn't work for keying the clk0/1 (ms5351m) ??
-const bool USE_CLK_POWERDOWN_MODE = true;
+// set in tracker.ino
+extern bool USE_SI5351A_CLK_POWERDOWN_MODE;
 
 // always integers
 const uint8_t DEFAULT_WPM = 12;
@@ -270,8 +271,8 @@ void cw_key_state(key_state_e k) {
     switch (k) {
         case E_KEY_DOWN:
             // this has to be fast
-            if (USE_CLK_POWERDOWN_MODE) {
-                si5351a_power_up_clk01();  // this does a pllb reset too
+            if (USE_SI5351A_CLK_POWERDOWN_MODE) {
+                si5351a_power_up_clk01(false);  // no print. does pll reset too
             } else {
                 vfo_turn_on_clk_out(CW_CLK_NUM, false);  // don't print
                 // tried other things
@@ -284,8 +285,8 @@ void cw_key_state(key_state_e k) {
 
         case E_KEY_UP:
             // this has to be fast
-            if (USE_CLK_POWERDOWN_MODE) {
-                si5351a_power_down_clk01();  // this does a pllb reset too
+            if (USE_SI5351A_CLK_POWERDOWN_MODE) {
+                si5351a_power_down_clk01(false);  // no print. does pll reset too
             } else {
                 vfo_turn_off_clk_out(CW_CLK_NUM, false);  // don't print
                 // tried other things..ms5351m just won't turn off with clock enable
@@ -334,15 +335,15 @@ void cw_tx_state(tx_state_e s) {
 
             // vfo_turn_on() does turn on the clk outputs!
             // does pll reset too
-            vfo_turn_on(CW_CLK_NUM);
+            vfo_turn_on();
             V1_print(EOL "Should have been hearing sdr CW tone..RF should be on" EOL);
             char debugMsg[] = "";
             realPrintFlush(debugMsg, true);
 
             V1_print(EOL "Should not hear sdr CW tone now for 4 secs..RF should be off" EOL);
             realPrintFlush(debugMsg, true);
-            if (USE_CLK_POWERDOWN_MODE) {
-                si5351a_power_down_clk01();  // this does a pllb reset too
+            if (USE_SI5351A_CLK_POWERDOWN_MODE) {
+                si5351a_power_down_clk01(true);  // print. does pll reset too
             } else {
                 vfo_turn_off_clk_out(CW_CLK_NUM, false);  // don't print
                 // tried other things

@@ -60,24 +60,21 @@ const int SI5351A_CLK2_IDRV_2MA =            (0 << 0);
 const int SI5351A_PLL_RESET_PLLB_RST =       (1 << 7);
 const int SI5351A_PLL_RESET_PLLA_RST =       (1 << 5);
 
-// FIX! why were these static?
-// static would mean you can only call it from within this translation unit
 bool reserved_reg(uint8_t reg);
 int i2cWrite(uint8_t reg, uint8_t val);   // write reg via i2c
 int i2cWrRead(uint8_t reg, uint8_t val);  // read reg via i2c
 
-void vfo_init(void);  // removed static
-void vfo_set_power_on(bool turn_on);  // removed static
+void vfo_init(void);
+void vfo_set_power_on(bool turn_on);
 
 bool vfo_is_on(void);
-void vfo_turn_on(uint8_t clk_number);
+void vfo_turn_on();
 void vfo_turn_off(void);
 
-void si5351a_setup_PLLA(uint8_t mult, uint32_t num, uint32_t denom);
-void si5351a_setup_PLLB(uint8_t mult, uint32_t num, uint32_t denom);
+void si5351a_setup_PLL(uint8_t mult, uint32_t num, uint32_t denom, bool do_pllb);
 void si5351a_setup_multisynth012(uint32_t div);
 
-// this will give the freq you should see on wsjt-tx if
+// this will give the freq you should see on wsjt-x if
 // hf_freq is the XMIT_FREQ for a channelsymbol can be 0 to 3.
 // Can subtract 20 hz to get the low end of the bin
 // (assume freq calibration errors of that much,
@@ -111,8 +108,8 @@ void si5351a_reset_PLLA(bool print);
 void si5351a_reset_PLLB(bool print);
 
 // just flip the PDN bit..using previously set _prev state 
-void si5351a_power_up_clk01(void);
-void si5351a_power_down_clk01(void);
+void si5351a_power_up_clk01(bool print);
+void si5351a_power_down_clk01(bool print);
 
 // 0: invalidate, 1: lookup, 2: install
 uint8_t vfo_calc_cache(

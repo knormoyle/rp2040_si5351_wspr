@@ -22,12 +22,23 @@
 // HACK to stay in balloon mode for debug.  Normally should be false.
 bool FORCE_BALLOON_MODE = false;
 
+// ms5351m doesn't appear to honor clock disable?
+// honors PDN bit, but need to pll reset if that's off
+
+// used in cw_functions.cpp only?
+bool USE_SI5351A_CLK_POWERDOWN_MODE = true;
+
+// FIX! if we use this close to where we shift freqs, is the pll unstable?
+bool USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE = false;
+// need this true if prior is true
+bool DO_CLK_OFF_FOR_WSPR_MODE = false;
+
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
 // #include <SPI.h>
 // #include <Wire.h>
 
-// THe Raspberry Pi Pico SDK is included with the arduino-pico core,
+// The Raspberry Pi Pico SDK is included with the arduino-pico core,
 // and all functions in the core are available inside the standard link libraries.
 // When you use SDK functions, the core and libraries are not aware of any changes
 // to the Pico you perform.
@@ -107,7 +118,9 @@ bool FORCE_BALLOON_MODE = false;
 // might be interesting for getting better led messaging. not used yet.
 // this has non-blocking capability.
 // I could use my morse cw and have it toggle an led? but it would be blocking
-#include <morse.h>  // https://github.com/markfickett/arduinomorse
+
+// not used yet
+// #include <morse.h>  // https://github.com/markfickett/arduinomorse
 
 // libraries/Arduino-MemoryFree
 // wget https://github.com/maniacbug/MemoryFree/archive/refs/heads/master.zip
@@ -364,22 +377,24 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // and losing precision changed to separate assigns,
 // and used volatile on he divide.
 
-uint64_t PLL_CALC_SHIFT = 16;
+// uint64_t PLL_CALC_SHIFT = 16;
+uint64_t PLL_CALC_SHIFT = 15;
 
 // won't work well for num-shift method. works for Farey
 // phase noise creating 14MDA print on sdr?
 // uint64_t PLL_FREQ_TARGET = 400000000;
 // uint64_t PLL_FREQ_TARGET = 500000000;
 
-// got below 600. no good. 
-// uint64_t PLL_FREQ_TARGET = 600000000;
+// got below 600. no good.
+uint64_t PLL_FREQ_TARGET = 600000000;
 // 650 is good
-uint64_t PLL_FREQ_TARGET = 650000000;
+// uint64_t PLL_FREQ_TARGET = 650000000;
 
 // nice 10M result with this
 // symbolAbsoluteError: 0.000003 Hz
 // symbolShiftError: 0.000006 Hz
-// channel 0 symbol 3 actual 28126024.394533 actual_pll_freq 618772536.679732 pll_mult 23 pll_num 742154 pll_denom 928919 ms_div 22 r_divisor 1
+// channel 0 symbol 3 actual 28126024.394533 actual_pll_freq 618772536.679732
+// pll_mult 23 pll_num 742154 pll_denom 928919 ms_div 22 r_divisor 1
 // uint64_t PLL_FREQ_TARGET = 650000000;
 
 // target PLL freq when making muliplier/divider initial calculations
@@ -423,10 +438,6 @@ uint64_t PLL_FREQ_TARGET = 650000000;
 // in use 1/6/24 for both Fary and num-shift methods
 // uint64_t PLL_FREQ_TARGET = 500000000;
 
-
-
-// why am I getting it shift to 10hz wide audio signal on sdruno?
-// oh, that's the symbol shifting at 1.46 secs or so
 // uint64_t PLL_FREQ_TARGET = 600000000;
 // try 900
 // uint64_t PLL_FREQ_TARGET = 900000000;
@@ -444,6 +455,7 @@ extern const int VFO_I2C0_SCL_PIN = 13;
 // maybe go lower frequency?
 
 // FIX! is this wrong with lower frequency sys clk??
+// 1/9/25 was 100
 extern const int VFO_I2C0_SCL_HZ = (100 * 1000);
 extern const int BMP_I2C1_SCL_HZ = (100 * 1000);
 // FIX! used in i2c_functions for test of both i2c0 and i2c1
@@ -568,11 +580,15 @@ uint32_t XMIT_FREQUENCY;
 // optimized?
 uint32_t PLL_DENOM_OPTIMIZE = 1048575;
 
+// bool USE_FAREY_WITH_PLL_REMAINDER = true;
+// bool TEST_FAREY_WITH_PLL_REMAINDER = true;
+// bool USE_FAREY_CHOPPED_PRECISION = true;
+// bool DISABLE_FAREY_CACHE = false;
+
 bool USE_FAREY_WITH_PLL_REMAINDER = true;
-bool TEST_FAREY_WITH_PLL_REMAINDER = true;
-bool USE_FAREY_CHOPPED_PRECISION = true;
-// bool USE_FAREY_WITH_PLL_REMAINDER = false;
-// /bool TEST_FAREY_WITH_PLL_REMAINDER = false;
+bool TEST_FAREY_WITH_PLL_REMAINDER = false;
+bool USE_FAREY_CHOPPED_PRECISION = false;
+bool DISABLE_FAREY_CACHE = false;
 
 //*****************************
 bool BALLOON_MODE = true;
@@ -1095,15 +1111,18 @@ void setup1() {
         symbolAbsoluteError, symbolShiftError);
     }
 
-    // check for micro or milli Hz precision (quality)
-    int sse_micro = roundf(1e6 * symbolShiftError);
-    int sse_milli = roundf(1e3 * symbolShiftError);
-    if (sse_micro == 0) {
-        V1_print(F("GOOD: worst symbolShiftError has better than microHz precision." EOL));
-    } else if (sse_milli == 0) {
-        V1_print(F("GOOD: worst symbolShiftError has better than milliHz precision." EOL));
+    int sse_1e6 = roundf(1e6 * symbolShiftError);
+    int sse_1e5 = roundf(1e5 * symbolShiftError);
+    int sse_1e4 = roundf(1e4 * symbolShiftError);
+    if (sse_1e6 == 0) {
+        V1_print(F("GOOD: symbolShiftError is better than 1e-6 Hz precision." EOL));
+    } else if (sse_1e5 == 0) {
+        V1_print(F("GOOD: symbolShiftError is better than 1e-5 Hz precision." EOL));
+    } else if (sse_1e4 == 0) {
+        V1_print(F("GOOD: symbolShiftError is better than 1e-4 Hz precision." EOL));
     } else {
-        V1_print(F("WARN: worst symbolShiftError has < milli Hz precision." EOL));
+        V1_print(F("ERROR: symbolShiftError is worse than 1e-4 Hz precision."));
+        V1_printf(" Fix by changing PLL_FREQ_TARGET? %" PRIu64 EOL, PLL_FREQ_TARGET);
     }
 
     //***************
@@ -1123,7 +1142,7 @@ void setup1() {
 }
 
 //*************************************************************************
-uint64_t GpsTimeToLastFix = 0;    // milliseconds
+uint64_t GpsTimeToLastFix = 0;  // milliseconds
 
 // these are used as globals
 // FIX! right now, where are they set?
@@ -1447,7 +1466,7 @@ void loop1() {
 
         } else if (fix_sat_cnt <= 3) {  // implied also 'not the first if clause' .. i.e good fix
             // FIX! should we have separate led count for 2d fix and 3d fix?
-            V1_printf("loopCnt %" PRIu64 "WARN: GPS fix issue: only %lu sats ..2d fix only" EOL,
+            V1_printf("loopCnt %" PRIu64 " WARN: GPS fix issue: only %lu sats ..2d fix only" EOL,
                 loopCnt, fix_sat_cnt);
             // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
             vfo_turn_off();
@@ -1524,7 +1543,7 @@ void loop1() {
                     sleepSeconds(SMART_WAIT);
                 } else {
                     V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_printf("wspr good alignMinute(-1) and voltageBeforeWSPR %.f" EOL,
+                    V1_printf(" wspr good alignMinute(-1) and voltageBeforeWSPR %.f" EOL,
                         voltageBeforeWSPR);
                     if (second() > 40) {
                         // to late..don't try to send
@@ -1650,7 +1669,7 @@ void loop1() {
 
 //*******************************************************
 int alignAndDoAllSequentialTx(uint32_t hf_freq) {
-    V1_println(F(EOL "alignAndDoAllSequentialTX START"));
+    V1_print(F(EOL "alignAndDoAllSequentialTX START"));
     V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
     // if we called this too early, just return so we don't wait 10 minutes here
@@ -1675,14 +1694,21 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
     // start the vfo 20 seconds before needed
     // if off beforehand, it will have no clocks running
-    // we could turn it off, then on, to guarantee always starting from reset state?
-    vfo_turn_off();
-    // new: 1/6/2025 was 2000
+    // we could turn it off, then on,
+    // to guarantee always starting from reset state?
+    vfo_turn_on();
     sleep_ms(1000);
 
-    // FIX! does this include a full init at the rp2040?
-    // vfo_turn_on() doesn't turn on the clk outputs!
-    vfo_turn_on(WSPR_TX_CLK_0_NUM);  // clk0/1 both affected
+    if (DO_CLK_OFF_FOR_WSPR_MODE) {
+        // new 1/9/25: we used to have the clocks on here
+        if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
+            // FIX! does this work on ms5351m. do we care?
+            si5351a_power_down_clk01(true);  // print. this does a pllb reset too
+        } else {
+            // no print. clk0/1 both affected
+            vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true);
+        }
+    }
 
     //**************************
     // New 1/6/24
@@ -1696,18 +1722,19 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     uint8_t VCC_init_valid_cnt = vfo_calc_cache_print_and_check();
     // was getting 14MDA printed if I cycled these with RF?
     // these are just filling the cache
-    startSymbolFreq(hf_freq, 3, false, true);  // symbol 3, change more than just pll_num
-    startSymbolFreq(hf_freq, 2, true, true);   // symbol 2, should just be num and denom change?
-    startSymbolFreq(hf_freq, 1, true, true);   // symbol 1, should just be num and denom change?
+    startSymbolFreq(hf_freq, 0, false, true);
+    startSymbolFreq(hf_freq, 1, true, true);
+    startSymbolFreq(hf_freq, 2, true, true);
     // only setup si5351a and RF out on this last one
-    startSymbolFreq(hf_freq, 0, true, false);   // symbol 0, should just be num and denom change?
+    startSymbolFreq(hf_freq, 3, true, false);
 
     absolute_time_t end_usecs_1 = get_absolute_time();
     int64_t elapsed_usecs_1 = absolute_time_diff_us(start_usecs_1, end_usecs_1);
     float elapsed_millisecs_1 = (float)elapsed_usecs_1 / 1000.0;
-    V1_printf("VCC cache initially had %u valid entries\n" EOL, VCC_init_valid_cnt);
-    V1_printf("Time to calc/lookup, 4 Farey algo symbol freq si5351 reg values: %.4f millisecs" EOL,
-        elapsed_millisecs_1);
+    V1_printf("VCC cache initially had %u valid entries\n" EOL, 
+        VCC_init_valid_cnt);
+    V1_print(F("Time to calc/lookup, 4 Farey algo symbol freq si5351 reg values:"));
+    V1_printf(" %.4f millisecs" EOL, elapsed_millisecs_1);
 
     //**************************
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
@@ -1854,7 +1881,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // then we reset the fix time variables also (on the off -> on transition))
     // GpsON(false);  // no gps cold reset
 
-    V1_println(F("alignAndDoAllSequentialTX END"));
+    V1_print(F("alignAndDoAllSequentialTX END" EOL));
     return 0;  // success
 }
 
@@ -2010,7 +2037,6 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // remember, it's usec running time, it's not aligned to the gps time.
         StampPrintf("sendWspr START now: minute: %d second: %d" EOL, minute(), second());
     }
-    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);  // no print. clk0/1 both affected
     //*******************************
     // earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
     // i.e. code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
@@ -2080,6 +2106,9 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         if (VERBY[2])
             if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
 
+        // HACK to see the symbol
+        // V2_printf("%d", symbol);
+
         //****************************************************
         startSymbolFreq(hf_freq, symbol, false, false);  // symbol 0 to 3, just change pll_num
 
@@ -2109,6 +2138,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         // here..plus a little more?
         // basically this is a 'coarse', then 'very fine' alignment strategy.
         // resets watchdog too?
+
+        // 1/9/25 was (645)
         wsprSleepForMillis(645);
 
         // Will watchdog reset if we don't get PROCEED, which would mean
@@ -2168,12 +2199,22 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     if (VERBY[2]) DoLogPrint();
     disablePwmInterrupts();
 
-    // FIX! leave on if we're going to do more telemetry?
-    // or always turn off?
+    // FIX! leave on if we're going to do more telemetry?  or always turn off?
     if (vfoOffWhenDone) {
         vfo_turn_off();
     } else {
-        vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true);  // print. clk0/1 both affected
+        if (DO_CLK_OFF_FOR_WSPR_MODE) {
+            // FIX! if we leave RF on, should we set it to symbol 3 so every transition to 
+            // good message looks the same? But we're turning off the clock now, 
+            // so it shouldn't matter?
+            if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
+                // FIX! does this work on ms5351m. do we care?
+                si5351a_power_down_clk01(true);  // print. this does a pllb reset too
+            } else {
+                // print. clk0/1 both affected
+                vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true); // print. clk0/1 both affected.
+            }
+        }
     }
 
     Watchdog.reset();
@@ -2189,9 +2230,10 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
         txNum = 0;
     }
 
-    // actual freq for symbol 0 in the log buffer, eventually it will get printed
+    // actual freq for symbol 3 in the log buffer, eventually it will get printed
     // when we're not sending wspr, by something above
-    uint8_t symbol = 0;  // can only be 0, 1, 2 or 3
+    // all the other starting freqs are symbol 3 too
+    uint8_t symbol = 3;  // can only be 0, 1, 2 or 3
     // don't need the symbol_freq for anything..just want a print here
     // FIX! we could pre-calc the 4 symbol freqs during the first warmup symbol.
     // so if only_pll_num, use the calc'ed freqs.
@@ -2205,17 +2247,73 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     set_hf_tx_buffer(hf_tx_buffer, hf_callsign, hf_grid4, (uint8_t)atoi(hf_power));
 
     // this should be fine even if we wait a long time
+    // hmm. variable amount of time clock is on before the message
     int i = 2 * txNum;  // 0, 2, 4, 6
     // FIX! in debug, why aren't we aligning to any even minute?
     V1_printf("waiting for alignMinute(%d) && second()==0)" EOL, i);
-    while ( !(alignMinute(i) && (second() == 0)) ) {
+    V1_flush(); // so we'll have room in tx buffer going forward.
+
+    bool clk01_turned_on = false;
+    //*****************************************
+    // This is the turn on of clk0/1 (and final sync) before the real wspr message
+    // for debug/checking/consistency..report how long RF is on before we need it here!
+    // I guess we should always have clocks off when we hit here..even if 
+    // multiple wspr messages (check how we end a wspr message)
+    absolute_time_t start_usecs_2;
+
+    // we better do the loop iteration at least once!
+    while (!(alignMinute(i))) {
         Watchdog.reset();
-        // FIX! delay 1 sec? change to pico busy_wait_us()?
+        updateStatusLED();
         sleep_ms(20);
+    }
+    while (!clk01_turned_on || (second() != 0)) {
+        Watchdog.reset();
         // delay(1);
         // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();
+        // we must have come in here rght before we're aligned
+        // so we could look at millis() being > 900 and 
+        // we'll be 100 millis before the alignment to sec?
+        // that should cover any turn-on glitch
+        // just do it once!
+
+        // we better get here 1 sec before needed!
+        // we shouldn't be here more than 1 minute before needed?
+        if (!clk01_turned_on && second()==59) {
+            // if we used the PDN bit to disable the clocks, we'd need a pll reset.
+            // to stay in phase
+            // FIX! how fast or slow is this? 
+            // are we glitching our RF at the start of sending? 
+            // (hans mentioned 2ms garbage due to the pll reset)
+            if (DO_CLK_OFF_FOR_WSPR_MODE) {
+                if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
+                    // this doesn't work on ms5351m? clocks always on?
+                    si5351a_power_up_clk01(true); // print. does pll reset
+                } else {
+                    // don't print. does pll reset
+                    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, true);
+                }
+            }
+            // for debug/checking/consistency..
+            // report how long RF is on before we need it here!
+            start_usecs_2 = get_absolute_time();
+            clk01_turned_on = true;
+        }
+        sleep_ms(20);
     }
+    if (!clk01_turned_on) {
+        V1_print(F("ERROR: syncAndSendWspr big problem, no clk01_turned_on"));
+    } else {
+        // for debug/checking/consistency..report how long RF is on before we need it here!
+        absolute_time_t end_usecs_2 = get_absolute_time();
+        uint64_t elapsed_usecs_2 = absolute_time_diff_us(start_usecs_2, end_usecs_2);
+        float elapsed_millisecs_2 = (float)elapsed_usecs_2 / 1000.0;
+        V1_printf("syncAndSendWspr rf is on for %.3f millisecs before real wspr msg" EOL, 
+            elapsed_millisecs_2);
+    }
+
+    //*****************************************
     Watchdog.reset();
 
     // PWM_WRAP_CNT is full period value.
@@ -2226,13 +2324,13 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // out from where we are now, then?
     setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
 
-    // Now align to 1 seconds in
+    // Now align to 1 seconds in?
     // We could adjust this so the wspr starts EXACTLY at 1 sec in or 2 sec in
     // we know we should have still second()==0 at this point
 
     // can't align by looking for usec offset from realtime
-    // the usecs (or millis() we can read is not aligned
-    // to the realtime gps time. those are "since program started running"
+    // the usecs (or millis() we can read is not aligned to realtime gps time.
+    // those are "since program started running"
 
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
     V1_println(F("syncAndSendWSPR END"));
@@ -2245,15 +2343,6 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     V1_println(F("set_hf_tx_buffer START"));
     // Clear out the transmit buffer
     memset(hf_tx_buffer, 0, 162);  // same number of bytes as hf_tx_buffer is declared
-
-    // wspr_encode(const char * call, const char * loc, const uint8_t dbm, uint8_t * symbols)
-    // Takes a callsign, grid locator, and power level and returns a WSPR symbol
-    // table for a Type 1, 2, or 3 message.
-    // call - Callsign (12 characters maximum.. we guarantee 6 max).
-    // loc - Maidenhead grid locator (6 characters maximum).
-    // dbm - Output power in dBm.
-    // symbols - Array of channel symbols to transmit returned by the method.
-    // Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT to the method.
 
     //******************
     bool fatalErrorReboot = false;
@@ -2300,14 +2389,30 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     }
 
     if (fatalErrorReboot) {
-        V0_println(F("ERROR: set_hf_tx_buffer() rebooting because of prior fatal error" EOL));
+        V0_println(F("ERROR: set_hf_tx_buffer() fatal error, rebooting." EOL));
         V0_flush();
         Watchdog.enable(5000);  // milliseconds
         while (true) tight_loop_contents();
     }
 
     //******************
+    // wspr_encode(const char *call, const char *loc, const uint8_t dbm, uint8_t *symbols)
+    // Takes a callsign, grid locator, and power level and returns a WSPR symbol
+    // table for a Type 1, 2, or 3 message.
+    // call - Callsign (12 characters maximum.. we guarantee 6 max).
+    // loc - Maidenhead grid locator (6 characters maximum).
+    // dbm - Output power in dBm.
+    // symbols - Array of channel symbols to transmit returned by the method.
+    // Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT
+    if (VERBY[1]) { 
+        V1_print(F("Before jtencode.wspr_encode() freeMem()" EOL));
+        freeMem(); 
+    }           
     jtencode.wspr_encode(hf_callsign, hf_grid4, power, hf_tx_buffer);
+    if (VERBY[1]) { 
+        V1_print(F("After jtencode.wspr_encode() freeMem()" EOL));
+        freeMem(); 
+    }           
 
     // maybe useful python for testing wspr encoding
     // https://github.com/robertostling/wspr-tools/blob/master/README.md
@@ -2326,7 +2431,7 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
     // to avoid flash conflict resolution issues (multi-core)
     uint32_t clk_khz = PLL_SYS_MHZ * 1000UL;
     if (!set_sys_clock_khz(clk_khz, false)) {
-        V1_printf("ERROR: setup1(): RP2040 can't change clock to %lu Mhz. Using %lu instead" EOL,
+        V1_printf("ERROR: setup1(): can't change clock to %lu Mhz. Using %lu instead" EOL,
             PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
         snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
@@ -2335,7 +2440,7 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
         // check the default?
         clk_khz = PLL_SYS_MHZ * 1000UL;
         if (!set_sys_clock_khz(clk_khz, false)) {
-            V1_println("ERROR: setup1() The DEFAULT_SYS_MHZ is not legal either. will use 125");
+            V1_println("ERROR: setup1() DEFAULT_SYS_MHZ not legal either. Will use 125");
             PLL_SYS_MHZ = 125;
             snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
             // write_FLASH();
@@ -2395,7 +2500,8 @@ void freeMem() {
 
 
 //**********************
-// will just use c style string. stored in array of characters terminated by null: '\0'
+// will just use c style string. 
+// stored in array of characters terminated by null: '\0'
 // char e[] = "geeks";
 // char el[] = {'g', 'f', 'g', '10'}'
 // char* c = "geeksforgeeks"
