@@ -160,24 +160,31 @@ void snapForTelemetry(void) {
     // say "solarPeak" is detected. I guess solarMorning/solarAfternoon
     // the transition from solarMorning to solarAfternoon would be the time for solarPeak
     // maybe save the time of the solar max also
-    static uint8_t solarElevationInt_prev = 0;
-    static uint8_t solarElevationIntMax  = 0;
+    static uint8_t solarElevationInt_prev = 255;
+    static uint8_t solarElevationIntMax  = 255;
+    static double solarElevation_earliest = 255;
+    static uint64_t epochTime_earliest = 0;
 
-    static double solarElevation_earliest = 0;
+    bool initialCondition = solarElevation_earliest == 255;
+
     static bool solarMorning_prev = false;
-    static bool solarAfternoon_prev = false;
-    static uint64_t solarPeak_epochTime = 0;
     static bool solarPeak_prev = false;
 
     uint64_t epochTime = getEpochTime();
+    uint64_t flightSecs = 0;
+    if (!initialCondition) {
+        flightSecs = epochTime - epochTime_earliest;
+    }
+    V1_printf("flightSecs %" PRIu64 EOL, flightSecs);
 
-    if (solarElevation_earliest == 0) {
+    if (initialCondition) {
         solarElevation_earliest = solarElevation;
-        V1_printf("GOOD: new solarElevation_earlist: %.1f epochTime %" PRIu64 EOL,
+        V1_printf("GOOD: new solarElevation_earliest: %.1f epochTime %" PRIu64 EOL,
             solarElevation_earliest, epochTime);
     }
     uint8_t solarElevationInt = (uint8_t) (solarElevation + 0.5);
-    if (solarElevationInt > solarElevationIntMax) {
+
+    if (initialCondition || (solarElevationInt > solarElevationIntMax)) {
         solarElevationIntMax = solarElevationInt;
         V1_printf("GOOD: new solarElevationIntMax %u: epochTime %" PRIu64 EOL,
             solarElevationIntMax, epochTime);
@@ -213,30 +220,38 @@ void snapForTelemetry(void) {
     // FIX! could send a peak speed number (82 knots) at the solarPeak, to mark it
     // in the telemetry!
     bool solarPeak = false;
-    uint8_t solarMorning = solarElevationInt >= solarElevationInt_prev;
-    uint8_t solarAfternoon = solarElevationInt <= solarElevationInt_prev;
+    
+    bool solarMorning = false;
+    bool solarAfternoon = false;
 
-    if (solarAfternoon && solarMorning_prev) {
-        solarPeak = true;
-        solarPeak_epochTime = epochTime;
-    }
- 
-    if (solarPeak) {
-        // should only have one of these?
-        V1_printf("GOOD: solarPeak discovered:" 
-            " solarElevation %.1f epochTime %" PRIu64 EOL,
-            epochTime, solarElevation);
-    }
-    if (solarPeak && solarPeak_prev) {
-        // should only have one of these?
-        V1_printf("ERROR: multiple solarPeak discovered/set:" 
-            " solarElevation %.1f epochTime %" PRIu64 EOL,
-            epochTime, solarElevation);
+    if (initialCondition) {
+        solarPeak = false;
+        solarMorning = true; // do we want to do anything in the morning?
+        solarAfternoon = false; // do we want to do anything in the afternoon?
+    } else {
+        solarMorning = solarElevationInt >= solarElevationInt_prev;
+        solarAfternoon = solarElevationInt <= solarElevationInt_prev;
+
+        if (solarAfternoon && solarMorning_prev) {
+            solarPeak = true;
+        }
+     
+        if (solarPeak) {
+            // should only have one of these?
+            V1_printf("GOOD: solarPeak discovered:" 
+                " solarElevation %.1f epochTime %" PRIu64 EOL,
+                solarElevation, epochTime);
+        }
+        if (solarPeak && solarPeak_prev) {
+            // should only have one of these?
+            V1_printf("ERROR: multiple solarPeak discovered/set:" 
+                " solarElevation %.1f epochTime %" PRIu64 EOL,
+                solarElevation, epochTime);
+        }
     }
 
     solarElevationInt_prev = solarElevation;
     solarMorning_prev = solarMorning;
-    solarAfternoon_prev = solarAfternoon;
     solarPeak_prev = solarPeak;
     
     //************************************
