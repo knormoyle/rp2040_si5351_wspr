@@ -103,7 +103,7 @@ void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
         BF15M = 21094600UL,
         BF12M = 24924600UL,
         BF10M = 28124600UL,
-        BF02M = 144488500UL
+        BF02M = 144489000UL, 
     };
 
     uint32_t base_freq_used;
@@ -227,6 +227,7 @@ void process_chan_num(char *id13, char *start_minute, char *lane, char *band, ch
         case 15: txBand = 9;  break;  // 15m
         case 12: txBand = 10; break;  // 12m
         case 10: txBand = 11; break;  // 10m
+        case 2:  txBand = 14; break;  // 2m
         default: txBand = 7;  break;  // default to 20M in case of error cases
     }
     // will be char 0, 2, 4, 6 or 8 only
