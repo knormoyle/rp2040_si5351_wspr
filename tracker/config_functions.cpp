@@ -740,8 +740,8 @@ int read_FLASH(void) {
     strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
     strncpy(_use_sim65m,   flash_target_contents + 29, 1); _use_sim65m[1] = 0;
     strncpy(_morse_also,   flash_target_contents + 30,  1); _morse_also[1] = 0;
-    strncpy(_Band_cw,      flash_target_contents + 31,  1); _Band_cw[2] = 0;
-    strncpy(_solar_tx_power,  flash_target_contents + 31,  1); _solar_tx_power[2] = 0;
+    strncpy(_Band_cw,      flash_target_contents + 31,  2); _Band_cw[2] = 0;
+    strncpy(_solar_tx_power,  flash_target_contents + 33,  1); _solar_tx_power[1] = 0;
 
     PLL_SYS_MHZ = atoi(_clock_speed);
     // recalc
@@ -860,7 +860,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 29, _use_sim65m, 1);
     strncpy(data_chunk + 30, _morse_also, 1);
     strncpy(data_chunk + 31, _Band_cw, 2);
-    strncpy(data_chunk + 32, _solar_tx_power, 2);
+    strncpy(data_chunk + 33, _solar_tx_power, 1);
 
     // alternative for casting the array to uint8_t
     // https://stackoverflow.com/questions/40579902/how-to-turn-a-character-array-into-uint8-t

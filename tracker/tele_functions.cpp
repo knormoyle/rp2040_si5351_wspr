@@ -160,6 +160,10 @@ void snapForTelemetry(void) {
     // say "solarPeak" is detected. I guess solarMorning/solarAfternoon
     // the transition from solarMorning to solarAfternoon would be the time for solarPeak
     // maybe save the time of the solar max also
+
+    // we wouldn't get here (snapForTelemetry())
+    // unless we had qualified the fix as a good 3d fix.
+    // so don't need to qualify the gps info
     static uint8_t solarElevationInt_prev = 255;
     static uint8_t solarElevationIntMax  = 255;
     static double solarElevation_earliest = 255;
@@ -203,18 +207,19 @@ void snapForTelemetry(void) {
     // doesn't matter what these do..they control how prior is uesd.
     // extern char _solar_tx_power[2];
     // extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
-    uint8_t power = 3;
+    uint8_t tx_power = 3;
     if (solarElevationInt < 10) {
-        SOLAR_SI5351_TX_POWER = 0;
+        tx_power = 0;
     } else if (solarElevationInt < 20) {
-        SOLAR_SI5351_TX_POWER = 1;
+        tx_power = 1;
     } else {
-        SOLAR_SI5351_TX_POWER = 3;
+        tx_power = 3;
     }
-    if (power != SOLAR_SI5351_TX_POWER) {
-        SOLAR_SI5351_TX_POWER = power;
-        V1_printf("GOOD: new SOLAR_SI5351_TX_POWER %u epochTime %" PRIu64 EOL,
-            SOLAR_SI5351_TX_POWER, epochTime);
+
+    if (tx_power != SOLAR_SI5351_TX_POWER) {
+        SOLAR_SI5351_TX_POWER = tx_power;
+        V1_printf("GOOD: new SOLAR_SI5351_TX_POWER %u solarElevationInt %u epochTime %" PRIu64 EOL,
+            SOLAR_SI5351_TX_POWER, solarElevationInt, epochTime);
     }
 
     // FIX! could send a peak speed number (82 knots) at the solarPeak, to mark it
