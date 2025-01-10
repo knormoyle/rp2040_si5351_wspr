@@ -13,5 +13,7 @@ void process_TELEN_data(void);
 void doTelemetrySweepInteger(char *t_string, uint8_t t_length, int t_min, int t_max, int t_inc);
 void doTelemetrySweepFloat (char *t_string, uint8_t t_sizeof, float t_min, float t_max, float t_inc);
 void telemetrySweepAllForTest(void);
+void solarElevationCalcs(double solarElevation);
+
 
 #endif

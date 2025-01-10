@@ -153,110 +153,8 @@ void snapForTelemetry(void) {
         solarElevation, solarAzimuth, solarDistance);
     V1_print(F(EOL));
 
-    //************************************
-    // figure how solar peak during the day
-    // keep a static for the last value. make it rounded to integer. Compare to current.
-    // keep the max found. When the current is less than the max, the first time, 
-    // say "solarPeak" is detected. I guess solarMorning/solarAfternoon
-    // the transition from solarMorning to solarAfternoon would be the time for solarPeak
-    // maybe save the time of the solar max also
-
-    // we wouldn't get here (snapForTelemetry())
-    // unless we had qualified the fix as a good 3d fix.
-    // so don't need to qualify the gps info
-    static uint8_t solarElevationInt_prev = 255;
-    static uint8_t solarElevationIntMax  = 255;
-    static double solarElevation_earliest = 255;
-    static uint64_t epochTime_earliest = 0;
-
-    bool initialCondition = solarElevation_earliest == 255;
-
-    static bool solarMorning_prev = false;
-    static bool solarPeak_prev = false;
-
-    uint64_t epochTime = getEpochTime();
-    uint64_t flightSecs = 0;
-    if (!initialCondition) {
-        flightSecs = epochTime - epochTime_earliest;
-    }
-    V1_printf("flightSecs %" PRIu64 EOL, flightSecs);
-
-    if (initialCondition) {
-        solarElevation_earliest = solarElevation;
-        V1_printf("GOOD: new solarElevation_earliest: %.1f epochTime %" PRIu64 EOL,
-            solarElevation_earliest, epochTime);
-    }
-    uint8_t solarElevationInt = (uint8_t) (solarElevation + 0.5);
-
-    if (initialCondition || (solarElevationInt > solarElevationIntMax)) {
-        solarElevationIntMax = solarElevationInt;
-        V1_printf("GOOD: new solarElevationIntMax %u: epochTime %" PRIu64 EOL,
-            solarElevationIntMax, epochTime);
-    }
-
-    // FIX! could adjust the tx power output (strength) depending 
-    // on solar elevation? Makes it dependent on correct gps lat/lon/utc calcs
-    // for ground level power testing, wouldn't want to enable dynamic power..
-    // separate config bit
-    // < 10 deg 2mA
-    // 11 to 20 deg 4mA
-    // > 20 8mA
-    // FIX! update this based on solar elevation
-    // extern uint8_t SOLAR_SI5351_TX_POWER;
-
-    // doesn't matter what these do..they control how prior is uesd.
-    // extern char _solar_tx_power[2];
-    // extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
-    uint8_t tx_power = 3;
-    if (solarElevationInt < 10) {
-        tx_power = 0;
-    } else if (solarElevationInt < 20) {
-        tx_power = 1;
-    } else {
-        tx_power = 3;
-    }
-
-    if (tx_power != SOLAR_SI5351_TX_POWER) {
-        SOLAR_SI5351_TX_POWER = tx_power;
-        V1_printf("GOOD: new SOLAR_SI5351_TX_POWER %u solarElevationInt %u epochTime %" PRIu64 EOL,
-            SOLAR_SI5351_TX_POWER, solarElevationInt, epochTime);
-    }
-
-    // FIX! could send a peak speed number (82 knots) at the solarPeak, to mark it
-    // in the telemetry!
-    bool solarPeak = false;
     
-    bool solarMorning = false;
-    bool solarAfternoon = false;
-    if (initialCondition) {
-        solarPeak = false;
-        solarMorning = true; // do we want to do anything in the morning?
-        solarAfternoon = false; // do we want to do anything in the afternoon?
-    } else {
-        solarMorning = solarElevationInt >= solarElevationInt_prev;
-        solarAfternoon = !solarMorning;
-        // should just happen once!
-        solarPeak = solarAfternoon && solarMorning_prev;
-     
-        if (solarPeak) {
-            // should only have one of these?
-            V1_printf("GOOD: solarPeak discovered:" 
-                " solarElevation %.1f epochTime %" PRIu64 EOL,
-                solarElevation, epochTime);
-        }
-        if (solarPeak && solarPeak_prev) {
-            // should only have one of these?
-            V1_printf("ERROR: multiple solarPeak discovered/set:" 
-                " solarElevation %.1f epochTime %" PRIu64 EOL,
-                solarElevation, epochTime);
-        }
-    }
-
-    solarElevationInt_prev = solarElevation;
-    solarMorning_prev = solarMorning;
-    solarPeak_prev = solarPeak;
-    
-    //************************************
+    solarElevationCalcs(solarElevation);
    
     // -90.0 to 90.0?
     snprintf(t_solarElevation, sizeof(t_solarElevation), "%.1f", solarElevation); 
@@ -662,3 +560,121 @@ void telemetrySweepAllForTest(void) {
     V1_println(F("telemetrySweepAllForTest END"));
 }
 //****************************************************
+
+void solarElevationCalcs(double solarElevation) {
+    V1_print(F("solarElevationCalcs START"));
+    // Do nothing if the gps data isn't good
+    // what about GpsInvalidAll from tracker.ino???
+
+    // just need a good 2d fix?
+    bool fix_valid_all = gps.time.isValid() &&
+        (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
+        gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
+        gps.location.isValid();
+
+    if (!fix_valid_all) return;
+
+    // figure how solar peak during the day
+    // keep a static for the last value. make it rounded to integer. Compare to current.
+    // keep the max found. When the current is less than the max, the first time, 
+    // say "solarPeak" is detected. I guess solarMorning/solarAfternoon
+    // the transition from solarMorning to solarAfternoon would be the time for solarPeak
+    // maybe save the time of the solar max also
+
+    // we wouldn't get here (snapForTelemetry())
+    // unless we had qualified the fix as a good 3d fix.
+    // so don't need to qualify the gps info
+    static uint8_t solarElevationInt_prev = 255;
+    static uint8_t solarElevationIntMax  = 255;
+    static double solarElevation_earliest = 255;
+    static uint64_t epochTime_earliest = 0;
+
+    bool initialCondition = solarElevation_earliest == 255;
+
+    static bool solarMorning_prev = false;
+    static bool solarPeak_prev = false;
+
+    uint64_t epochTime = getEpochTime();
+    uint64_t flightSecs = 0;
+    if (!initialCondition) {
+        flightSecs = epochTime - epochTime_earliest;
+    }
+    V1_printf("flightSecs %" PRIu64 EOL, flightSecs);
+
+    if (initialCondition) {
+        solarElevation_earliest = solarElevation;
+        V1_printf("GOOD: new solarElevation_earliest: %.1f epochTime %" PRIu64 EOL,
+            solarElevation_earliest, epochTime);
+    }
+    uint8_t solarElevationInt = (uint8_t) (solarElevation + 0.5);
+
+    if (initialCondition || (solarElevationInt > solarElevationIntMax)) {
+        solarElevationIntMax = solarElevationInt;
+        V1_printf("GOOD: new solarElevationIntMax %u: epochTime %" PRIu64 EOL,
+            solarElevationIntMax, epochTime);
+    }
+
+    // FIX! could adjust the tx power output (strength) depending 
+    // on solar elevation? Makes it dependent on correct gps lat/lon/utc calcs
+    // for ground level power testing, wouldn't want to enable dynamic power..
+    // separate config bit
+    // < 10 deg 2mA
+    // 11 to 20 deg 4mA
+    // > 20 8mA
+    // FIX! update this based on solar elevation
+    // extern uint8_t SOLAR_SI5351_TX_POWER;
+
+    // doesn't matter what these do..they control how prior is uesd.
+    // extern char _solar_tx_power[2];
+    // extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
+    uint8_t tx_power = 3;
+    if (solarElevationInt < 10) {
+        tx_power = 0;
+    } else if (solarElevationInt < 20) {
+        tx_power = 1;
+    } else {
+        tx_power = 3;
+    }
+
+    if (tx_power != SOLAR_SI5351_TX_POWER) {
+        SOLAR_SI5351_TX_POWER = tx_power;
+        V1_printf("GOOD: new SOLAR_SI5351_TX_POWER %u solarElevationInt %u epochTime %" PRIu64 EOL,
+            SOLAR_SI5351_TX_POWER, solarElevationInt, epochTime);
+    }
+
+    // FIX! could send a peak speed number (82 knots) at the solarPeak, to mark it
+    // in the telemetry!
+    bool solarPeak = false;
+    
+    bool solarMorning = false;
+    bool solarAfternoon = false;
+    if (initialCondition) {
+        solarPeak = false;
+        solarMorning = true; // do we want to do anything in the morning?
+        solarAfternoon = false; // do we want to do anything in the afternoon?
+    } else {
+        solarMorning = solarElevationInt >= solarElevationInt_prev;
+        solarAfternoon = !solarMorning;
+        // should just happen once!
+        solarPeak = solarAfternoon && solarMorning_prev;
+     
+        if (solarPeak) {
+            // should only have one of these?
+            V1_printf("GOOD: solarPeak discovered:" 
+                " solarElevation %.1f epochTime %" PRIu64 EOL,
+                solarElevation, epochTime);
+        }
+        if (solarPeak && solarPeak_prev) {
+            // should only have one of these?
+            V1_printf("ERROR: multiple solarPeak discovered/set:" 
+                " solarElevation %.1f epochTime %" PRIu64 EOL,
+                solarElevation, epochTime);
+        }
+    }
+
+    solarElevationInt_prev = solarElevation;
+    solarMorning_prev = solarMorning;
+    solarPeak_prev = solarPeak;
+
+    V1_print(F("solarElevationCalcs END"));
+}
