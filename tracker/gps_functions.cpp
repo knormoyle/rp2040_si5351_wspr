@@ -2268,9 +2268,9 @@ void updateGpsDataAndTime(int ms) {
                 gpsTimeWasUpdated = true;
                 V1_print(F("GOOD: rtc setTime() with"));
                 V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-                    gps_day, gps_month, gps_year);
-                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
                     gps_hour, gps_minute, gps_second);
+                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+                    gps_day, gps_month, gps_year);
             }
         }
     }
