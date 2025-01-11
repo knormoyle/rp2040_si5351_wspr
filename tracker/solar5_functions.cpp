@@ -125,7 +125,11 @@ void solarZenithAndAzimuthAngle5(double *sza, double *saa, double longitude, dou
     // returns {azimuth(H, phi, c.dec), altitude(H, phi, c.dec)};
     // both are double
     // std::tie(azimuth, elevation) = suncalc.getPosition(tp, latitude, longitude);
-    suncalc.getPosition(&azimuth, &elevation, tp, latitude, longitude);
+    using namespace std;
+    using namespace std::chrono;
+    system_clock::time_point now = system_clock::now();
+    // suncalc.getPosition(&azimuth, &elevation, tp, latitude, longitude);
+    suncalc.getPosition(&azimuth, &elevation, now, latitude, longitude);
 
     *sza = 90 - elevation;
     *saa = azimuth;

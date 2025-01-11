@@ -669,21 +669,25 @@ void solarElevationCalcs(double solarElevation) {
     
     bool solarRising = false;
     bool solarSetting = false;
-    // bool solarSame = false;
+    bool solarSame = false;
+
     if (initialCondition) {
         solarPeakPos = false;
         solarPeakNeg = false;
-        // solarSame = false;
-        solarRising = true; // do we want to do anything in the morning?
-        solarSetting = false; // do we want to do anything in the afternoon?
+        solarRising = true;
+        solarSetting = false;
+        solarSame = false;
     } else {
         // there must be someplace where we hit the int transition
         // solarSame = solarElevationInt == solarElevationInt_prev;
         solarRising  = solarElevationInt > solarElevationInt_prev;
         solarSetting = solarElevationInt < solarElevationInt_prev;
+        solarSame = solarElevationInt == solarElevationInt_prev;
         // should just happen once!
         solarPeakPos = solarSetting && solarRising_prev;
         solarPeakNeg = solarRising && solarSetting_prev;
+        V1_printf("solarRising %u solarSetting %u solarSame %u %" PRIu64 EOL,
+            solarRising, solarSetting, solarSame, epochTime);
      
         if (solarPeakPos) {
             // should only have one of these?
@@ -711,7 +715,7 @@ void solarElevationCalcs(double solarElevation) {
         }
     }
 
-    solarElevationInt_prev = solarElevation;
+    solarElevationInt_prev = solarElevationInt;
     solarRising_prev = solarRising;
     solarSetting_prev = solarSetting;
     // sticky!

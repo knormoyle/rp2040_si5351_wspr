@@ -1813,7 +1813,8 @@ void vfo_turn_off_clk_out(uint8_t clk_num, bool print) {
 //****************************************************
 void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     Watchdog.reset();
-    V1_printf("vfo_set_drive_strength START clk_num %u" EOL, clk_num);
+    V1_printf("vfo_set_drive_strength START clk_num %u strength %u" EOL, 
+        clk_num, strength);
     s_vfo_drive_strength[clk_num] = 0x3 && strength;
 
     //**********************
@@ -1836,7 +1837,7 @@ void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength) {
     // see comments from Hans.
     // Not well documented when a pll reset is required.
     // Not needed/desired for the small Hz shifts during symbol tx
-    V1_printf("vfo_set_drive_strength END clk_num %u" EOL, clk_num);
+    V1_printf("vfo_set_drive_strength END clk_num %u strength %u" EOL, clk_num, strength);
 }
 
 //****************************************************
@@ -2006,8 +2007,8 @@ void vfo_turn_on() {
     if (_solar_tx_power[0] == '1') {
         switch (SOLAR_SI5351_TX_POWER)  {
             case 0: power = SI5351A_CLK01_IDRV_2MA; break;
-            case 1: power = SI5351A_CLK01_IDRV_2MA; break;
-            case 2: power = SI5351A_CLK01_IDRV_4MA; break;
+            case 1: power = SI5351A_CLK01_IDRV_4MA; break;
+            case 2: power = SI5351A_CLK01_IDRV_6MA; break;
             case 3: power = SI5351A_CLK01_IDRV_8MA; break;
             default: power = SI5351A_CLK01_IDRV_8MA;
         }
@@ -2021,7 +2022,6 @@ void vfo_turn_on() {
     vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, power);
 
     //*********************
-
     // new 12/27/24: have clock 0:3 disabled state be high impedance
     i2cWrite(24, 0b10101010);
     // clk 4-7 ? shouldn't hurt..doesn't exist on si5351a 3 output
