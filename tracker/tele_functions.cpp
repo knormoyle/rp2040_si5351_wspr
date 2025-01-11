@@ -77,14 +77,12 @@ extern int TELEN2_val1;
 extern int TELEN2_val2;
 extern char _TELEN_config[5];
 
-extern char _tx_high[2];        // 1 byte
 extern char _callsign[7];       // 6 bytes
+extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
 extern char _solar_tx_power[2]; // 1 byte
 
 // FIX! update this based on solar elevation
 extern uint8_t SOLAR_SI5351_TX_POWER;
-extern char _solar_tx_power[2];
-extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
 
 extern TinyGPSPlus gps;
 extern int tx_cnt_0;
@@ -329,8 +327,18 @@ void snapForTelemetry(void) {
 
     //*********************************
     int power_int;
-    if (_tx_high[0] == '1') power_int = 7;  // legal
-    else power_int = 3;  // legal
+    if (_solar_tx_power[0] == '1') {
+        switch (SOLAR_SI5351_TX_POWER)  {
+            case 0: power_int = 3; break;
+            case 1: power_int = 7; break;
+            case 2: power_int = 10; break;
+            case 3: power_int = 13; break;
+            default: power_int = 17;
+        }
+    } else {
+        if (_tx_high[0] == '1') power_int = 13;
+        else power_int = 10;
+    }
 
     // we clamp to a legalPower when we snapForTelemetry()
     // basically we look at _tx_high[0] to decide our power level that will be used for rf
@@ -567,7 +575,8 @@ void solarElevationCalcs(double solarElevation) {
     // what about GpsInvalidAll from tracker.ino???
 
     // just need a good 2d fix?
-    bool fix_valid_all = gps.time.isValid() &&
+    bool fix_valid_all = 
+        gps.time.isValid() &&
         (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
         gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
         gps.location.isValid();

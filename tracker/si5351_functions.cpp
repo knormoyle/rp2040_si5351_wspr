@@ -115,6 +115,11 @@ extern uint32_t XMIT_FREQUENCY;
 extern bool VERBY[10];
 
 extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
+extern char _solar_tx_power[2]; // 1 byte
+
+// FIX! update this based on solar elevation
+extern uint8_t SOLAR_SI5351_TX_POWER;
+
 extern char _correction[7];  // parts per billion -3000 to 3000. default 0
 extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
 extern char _U4B_chan[4];  // string with 0-599
@@ -1992,18 +1997,27 @@ void vfo_turn_on() {
     memset(s_vfo_drive_strength, 0, 0);
     // Moved this down here ..we don't know if we'll hang earlier
     // sets state to be used later
-    if (_tx_high[0] == '0') {
-        // this also clears the "prev" state, so we know we'll reload all state in the si5351
-        // i.e. no optimization based on knowing what we had sent before!
-        // 4 dBM reduction?
-        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK01_IDRV_4MA);
-        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK01_IDRV_4MA);
+
+    //*********************
+    uint8_t power;
+    if (_solar_tx_power[0] == '1') {
+        switch (SOLAR_SI5351_TX_POWER)  {
+            case 0: power = SI5351A_CLK01_IDRV_2MA; break;
+            case 1: power = SI5351A_CLK01_IDRV_2MA; break;
+            case 2: power = SI5351A_CLK01_IDRV_4MA; break;
+            case 3: power = SI5351A_CLK01_IDRV_8MA; break;
+            default: power = SI5351A_CLK01_IDRV_8MA;
+        }
     } else {
-        // FIX! make sure this is default in config
-        // 15 dBm?
-        vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, SI5351A_CLK01_IDRV_8MA);
-        vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, SI5351A_CLK01_IDRV_8MA);
+        if (_tx_high[0] == '1') power = SI5351A_CLK01_IDRV_8MA;
+        else power = SI5351A_CLK01_IDRV_4MA;
     }
+    // this also clears the "prev" state, so we know we'll reload all state in the si5351
+    // i.e. no optimization based on knowing what we had sent before!
+    vfo_set_drive_strength(WSPR_TX_CLK_0_NUM, power);
+    vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, power);
+
+    //*********************
 
     // new 12/27/24: have clock 0:3 disabled state be high impedance
     i2cWrite(24, 0b10101010);
