@@ -492,7 +492,7 @@ int i2cWrRead(uint8_t reg, uint8_t *val) {
         V1_printf("ERROR: i2cWrRead() got bad res %d reg %02x val %02x" EOL,
             res, reg, *val);
     } else if (res == 1) {
-        V1_printf("GOOD: i2cWrRead() got good res %d reg %02x val %02x" EOL,
+        V1_printf("i2cWrRead() got good res %d reg %02x val %02x" EOL,
             res, reg, *val);
     } else {
         V1_printf("UNEXPECTED: i2cWrRead() got unexpected res %d reg %02x val %02x" EOL,

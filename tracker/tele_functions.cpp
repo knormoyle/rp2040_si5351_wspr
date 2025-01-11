@@ -586,22 +586,26 @@ void solarElevationCalcs(double solarElevation) {
     // figure how solar peak during the day
     // keep a static for the last value. make it rounded to integer. Compare to current.
     // keep the max found. When the current is less than the max, the first time, 
-    // say "solarPeak" is detected. I guess solarMorning/solarAfternoon
-    // the transition from solarMorning to solarAfternoon would be the time for solarPeak
+    // say "solarPeakPos" is detected. I guess solarRising/solarSetting
+    // the transition from solarRising to solarSetting would be the time for solarPeakPos
     // maybe save the time of the solar max also
 
     // we wouldn't get here (snapForTelemetry())
     // unless we had qualified the fix as a good 3d fix.
     // so don't need to qualify the gps info
-    static uint8_t solarElevationInt_prev = 255;
-    static uint8_t solarElevationIntMax  = 255;
-    static double solarElevation_earliest = 255;
+    static int8_t solarElevationInt_prev = 127;
+    static int8_t solarElevationIntMax  = 127;
+    static int8_t solarElevationIntMin  = 127;
+
+    static double solarElevation_earliest = 127;
     static uint64_t epochTime_earliest = 0;
 
-    bool initialCondition = solarElevation_earliest == 255;
+    bool initialCondition = solarElevation_earliest == 127;
 
-    static bool solarMorning_prev = false;
-    static bool solarPeak_prev = false;
+    static bool solarRising_prev = false;
+    static bool solarSetting_prev = false;
+    static bool solarPeakPos_sticky = false;
+    static bool solarPeakNeg_sticky = false;
 
     uint64_t epochTime = getEpochTime();
     uint64_t flightSecs = 0;
@@ -615,11 +619,17 @@ void solarElevationCalcs(double solarElevation) {
         V1_printf("GOOD: new solarElevation_earliest: %.1f epochTime %" PRIu64 EOL,
             solarElevation_earliest, epochTime);
     }
-    uint8_t solarElevationInt = (uint8_t) (solarElevation + 0.5);
+    int8_t solarElevationInt = (int8_t) (solarElevation + 0.5);
+
+    if (initialCondition || (solarElevationInt < solarElevationIntMin)) {
+        solarElevationIntMin = solarElevationInt;
+        V1_printf("GOOD: new solarElevationIntMin %d: epochTime %" PRIu64 EOL,
+            solarElevationIntMin, epochTime);
+    }
 
     if (initialCondition || (solarElevationInt > solarElevationIntMax)) {
         solarElevationIntMax = solarElevationInt;
-        V1_printf("GOOD: new solarElevationIntMax %u: epochTime %" PRIu64 EOL,
+        V1_printf("GOOD: new solarElevationIntMax %d: epochTime %" PRIu64 EOL,
             solarElevationIntMax, epochTime);
     }
 
@@ -647,43 +657,65 @@ void solarElevationCalcs(double solarElevation) {
 
     if (tx_power != SOLAR_SI5351_TX_POWER) {
         SOLAR_SI5351_TX_POWER = tx_power;
-        V1_printf("GOOD: new SOLAR_SI5351_TX_POWER %u solarElevationInt %u epochTime %" PRIu64 EOL,
+        V1_printf("GOOD: new SOLAR_SI5351_TX_POWER %u solarElevationInt %d epochTime %" PRIu64 EOL,
             SOLAR_SI5351_TX_POWER, solarElevationInt, epochTime);
     }
 
-    // FIX! could send a peak speed number (82 knots) at the solarPeak, to mark it
+    // FIX! could send a peak speed number (82 knots) at the solarPeakPos, to mark it
     // in the telemetry!
-    bool solarPeak = false;
+    bool solarPeakPos = false;
+    bool solarPeakNeg = false;
     
-    bool solarMorning = false;
-    bool solarAfternoon = false;
+    bool solarRising = false;
+    bool solarSetting = false;
+    // bool solarSame = false;
     if (initialCondition) {
-        solarPeak = false;
-        solarMorning = true; // do we want to do anything in the morning?
-        solarAfternoon = false; // do we want to do anything in the afternoon?
+        solarPeakPos = false;
+        solarPeakNeg = false;
+        // solarSame = false;
+        solarRising = true; // do we want to do anything in the morning?
+        solarSetting = false; // do we want to do anything in the afternoon?
     } else {
-        solarMorning = solarElevationInt >= solarElevationInt_prev;
-        solarAfternoon = !solarMorning;
+        // there must be someplace where we hit the int transition
+        // solarSame = solarElevationInt == solarElevationInt_prev;
+        solarRising  = solarElevationInt > solarElevationInt_prev;
+        solarSetting = solarElevationInt < solarElevationInt_prev;
         // should just happen once!
-        solarPeak = solarAfternoon && solarMorning_prev;
+        solarPeakPos = solarSetting && solarRising_prev;
+        solarPeakNeg = solarRising && solarSetting_prev;
      
-        if (solarPeak) {
+        if (solarPeakPos) {
             // should only have one of these?
-            V1_printf("GOOD: solarPeak discovered:" 
+            V1_printf("GOOD: solarPeakPos discovered:" 
                 " solarElevation %.1f epochTime %" PRIu64 EOL,
                 solarElevation, epochTime);
         }
-        if (solarPeak && solarPeak_prev) {
+        if (solarPeakPos && solarPeakPos_sticky) {
             // should only have one of these?
-            V1_printf("ERROR: multiple solarPeak discovered/set:" 
+            V1_printf("ERROR: multiple solarPeakPos discovered/set:" 
+                " solarElevation %.1f epochTime %" PRIu64 EOL,
+                solarElevation, epochTime);
+        }
+        if (solarPeakNeg) {
+            // should only have one of these?
+            V1_printf("GOOD: solarPeakNeg discovered:" 
+                " solarElevation %.1f epochTime %" PRIu64 EOL,
+                solarElevation, epochTime);
+        }
+        if (solarPeakNeg && solarPeakNeg_sticky) {
+            // should only have one of these?
+            V1_printf("ERROR: multiple solarPeakNeg discovered/set:" 
                 " solarElevation %.1f epochTime %" PRIu64 EOL,
                 solarElevation, epochTime);
         }
     }
 
     solarElevationInt_prev = solarElevation;
-    solarMorning_prev = solarMorning;
-    solarPeak_prev = solarPeak;
+    solarRising_prev = solarRising;
+    solarSetting_prev = solarSetting;
+    // sticky!
+    solarPeakPos_sticky |= solarPeakPos;
+    solarPeakNeg_sticky |= solarPeakNeg;
 
     V1_print(F("solarElevationCalcs END"));
 }
