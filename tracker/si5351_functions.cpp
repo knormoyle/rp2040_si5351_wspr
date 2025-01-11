@@ -1628,7 +1628,7 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
 
     // new: 1/10/25
     // is this a must-have for ms5351m? we have to turn clocks off, then turn them on
-    if (false)
+    if (true)
         vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
 
     // we get pll_denom to know what was used in the calc
