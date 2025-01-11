@@ -1137,7 +1137,7 @@ void setup1() {
     // the other core won't be messing with led's at this time
     // unless it goes to user config?
     Watchdog.reset();
-    blockingLongBlinkLED(4);
+    blockingLongBlinkLED(3);
     // back to non-blocking blinking
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -2320,6 +2320,9 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
                 elapsed_millisecs_2);
         }
     }
+
+    // make sure the LED is not stuck on during wspr tx
+    turnOnLED(false);
 
     //*****************************************
     Watchdog.reset();

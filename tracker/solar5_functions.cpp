@@ -17,18 +17,8 @@
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-// don't rely on math.h?
-// #define PI 3.1415926535897932384626433832795
-// #define HALF_PI 1.5707963267948966192313216916398
-// #define TWO_PI 6.283185307179586476925286766559
-
-// #define DEG_TO_RAD 0.017453292519943295769236907684886
-// #define RAD_TO_DEG 57.295779513082320876798154814105
-
 extern bool VERBY[10];
 extern TinyGPSPlus gps;
-
-// #include <cmath>
 
 #include "other_cpp/suncalc2.cpp"
 
@@ -49,7 +39,6 @@ extern TinyGPSPlus gps;
 // Return zenith and azimuth per standard api. Can change to be elevation.
 // Elevation is corrected for refraction here, before being returned as zenith (sza)
 
-
 #include <ctime>
 #include <chrono>
 
@@ -67,11 +56,9 @@ class Clock::time_point foo(int year, int month, int day, int hour, int minute, 
     return Clock::from_time_t(std::mktime(&t));
 }
 
-
 // port of suncalc. this is old though.
 // https://github.com/ypid/suncalc 
 // https://lib.haxe.org/p/suncalc
-
 
 #include <chrono>
 #include <ctime>
@@ -107,18 +94,18 @@ void solarZenithAndAzimuthAngle5(double *sza, double *saa, double longitude, dou
         using namespace std::chrono;
         typedef duration<int, ratio_multiply<hours::period, ratio<24> >::type> days;
         system_clock::time_point now = system_clock::now();
-        system_clock::duration tp = now.time_since_epoch();
-        days d = duration_cast<days>(tp);
-        tp -= d;
-        hours h = duration_cast<hours>(tp);
-        tp -= h;
-        minutes m = duration_cast<minutes>(tp);
-        tp -= m;
-        seconds s = duration_cast<seconds>(tp);
-        tp -= s;
+        system_clock::duration tp2 = now.time_since_epoch();
+        days d = duration_cast<days>(tp2);
+        tp2 -= d;
+        hours h = duration_cast<hours>(tp2);
+        tp2 -= h;
+        minutes m = duration_cast<minutes>(tp2);
+        tp2 -= m;
+        seconds s = duration_cast<seconds>(tp2);
+        tp2 -= s;
         std::cout << d.count() << "d " << h.count() << ':'
                   << m.count() << ':' << s.count();
-        std::cout << " " << tp.count() << "["
+        std::cout << " " << tp2.count() << "["
                   << system_clock::duration::period::num << '/'
                   << system_clock::duration::period::den << "]\n";
 
@@ -147,7 +134,7 @@ void solarZenithAndAzimuthAngle5(double *sza, double *saa, double longitude, dou
 //***********************************************************************
 
 void calcSolarElevation5(double *solarElevation, double *solarAzimuth, double *solarDistance) {
-    V1_print(F("calcSolarElevation4 START" EOL));
+    V1_print(F("calcSolarElevation5 START" EOL));
 
     // we check before setting rtc. assuming these are all valid ranges
     // no double-check!
@@ -261,5 +248,5 @@ void calcSolarElevation5(double *solarElevation, double *solarAzimuth, double *s
     *solarAzimuth   = solarAzimuth_here;
     *solarDistance  = solarDistance_here;
 
-    V1_print(F("calcSolarElevation4 END" EOL));
+    V1_print(F("calcSolarElevation5 END" EOL));
 }

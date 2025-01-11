@@ -1628,7 +1628,8 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
 
     // new: 1/10/25
     // is this a must-have for ms5351m? we have to turn clocks off, then turn them on
-    vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
+    if (false)
+        vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
 
     // we get pll_denom to know what was used in the calc
     // R_DIVISOR_SHIFT is hardwired constant (/4 => shift 2)
@@ -1725,14 +1726,16 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
     s_PLLA_ms_div_prev = ms_div;
     // V1_printf("vfo_set_freq_xxx END clk_num %u freq %lu" EOL, clk_num, freq);
 
-    // 1/9/25 HACK! after every frequency change? no.
+    // 1/9/25 HACK! after every frequency change? Shouldn't need except for the first
+    // is it a must-have for ms5351m?
     if (true) {
         si5351a_reset_PLLB(false);
     }
 
     // new: 1/10/25
-    // is this a must-have for ms5351m? we have to turn clocks off, then turn them on
-    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
+    // is this a must-have for ms5351m? do we need a enable here?
+    if (true)
+        vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
 }
 
 //****************************************************

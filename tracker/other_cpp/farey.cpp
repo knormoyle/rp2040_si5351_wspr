@@ -18,7 +18,7 @@
 
 // one or the other. same methods/classes so can drop in
 // if (DO_BEST_RAT) will evaluate true if 1
-#define DO_BEST_RAT 1
+#define DO_BEST_RAT 0
 #define DO_BEST_RAT_CONTINUED_FRACTIONS 0
 
 #if DO_BEST_RAT_CONTINUED_FRACTIONS == 1
@@ -234,6 +234,14 @@ void doit2(double target) {
     result.target = target;
 
     uint32_t maxdenom = 1048575;
+    // uint32_t maxdenom = 1048575 * 2;
+
+    // HACK! kbn
+    // uint32_t maxdenom = 1000000;
+    // uint32_t maxdenom = 1000;
+    // uint32_t maxdenom = 2097151; // 2**21 - 1
+    // uint32_t maxdenom = 65535; // 2**16 - 1
+
     // does continued fractions use an int here?
     long l = maxdenom;
     if (eps == -1.0) {
@@ -469,54 +477,30 @@ int main() {
         if (DO_BEST_RAT==1 || DO_BEST_RAT_CONTINUED_FRACTIONS==1) {
             targets[i] = target;
             doit2(target);
+
             nums[i]   = result.numerator;
             denoms[i] = result.denominator;
             iters[i] = result.iterations;
             // targets[i] = result.target;
             actual_reals[i] = result.actual_real;
             actual_errors[i] = result.actual_error * 1e10;
+
+            // compare
+            doit(target, false);  // not bumped
+            if ((result.numerator != retval.numerator) ||
+                (result.denominator != retval.denominator)) {
+                printf("ERROR: doit and doit2 don't agree\n");
+                printf("ERROR: target %.16f", target);
+                printf("ERROR: result.numerator %lu", result.numerator);
+                printf("ERROR: result.denominator %lu", result.denominator);
+                printf("ERROR: retval.numerator %u", retval.numerator);
+                printf("ERROR: retval.denominator %u", retval.denominator);
+            }
+                
         } else {
             // original target saved!
             targets[i] = target;
             doit(target, false);  // not bumped
-            //**********************************************************
-            if (false) {
-                // kbn enhancement for the rare cases of larger error than typical
-                // bump increment! up to 5x by 1e-14..looking to meet error goals
-                // the actual error will be the sum of the bump add, plus final error
-                double actual_error_xe10 = retval.actual_error * 1e10;
-                int tries = 0;
-                // so we don't change the original target when we save it to compute our
-                // error from the original goal
-                double new_target = target;
-                char str[40];
-                while (abs(actual_error_xe10) > 10) {
-                    tries += 1;
-                    if (tries > 5) {
-                        printf("ERROR: bump tries > 5..using target %.14f\n", target);
-                        break;
-                    }
-                    // increase the bump amount by 10**tries * 1e-14
-                    // new_target = new_target + (pow(10, tries) * 1e-14);
-
-                    switch (tries) {
-                        case(1): sprintf(str, "%.12f", new_target);
-                        case(2): sprintf(str, "%.11f", new_target);
-                        case(3): sprintf(str, "%.10f", new_target);
-                        case(4): sprintf(str, "%.9f", new_target);
-                        case(5): sprintf(str, "%.8f", new_target);
-                    }
-
-                    sscanf(str, "%lf", &new_target);
-                    printf("ERROR: actual_error_xe10 %.4f tries (%d) bump to new_target %.14f chopping off precision\n",
-                        actual_error_xe10, tries, new_target);
-                    // could try plus or minus direction randomly?
-                    printf("-> doit with new_target %.14f\n", new_target);
-                    doit(new_target, true);  // bumped
-                    actual_error_xe10 = retval.actual_error * 1e10;
-                }
-            }
-            //**********************************************************
             nums[i]   = retval.numerator;
             denoms[i] = retval.denominator;
             iters[i] = retval.iterations;

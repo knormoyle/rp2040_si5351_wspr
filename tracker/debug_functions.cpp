@@ -31,7 +31,6 @@
 // decode of _verbose 0-9
 extern bool VERBY[10];
 
-
 //***********************************
 // background on i/o
 // interesting info on tracking GPIO transitions with IRQ and callback function
@@ -214,7 +213,6 @@ void measureMyFreqs(void) {
     // FIX! need a delay after flush also? (usb can be disabled soon)
     busy_wait_ms(1000);
 }
-
 
 //***********************************
 // interesting strategies for detecting buffer sizes in linux
