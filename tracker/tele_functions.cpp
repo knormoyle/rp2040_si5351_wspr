@@ -619,7 +619,8 @@ void solarElevationCalcs(double solarElevation) {
         V1_printf("GOOD: new solarElevation_earliest: %.1f epochTime %" PRIu64 EOL,
             solarElevation_earliest, epochTime);
     }
-    int8_t solarElevationInt = (int8_t) (solarElevation + 0.5);
+    // nearest for pos and neg numbers
+    int8_t solarElevationInt = (int8_t) round(solarElevation);
 
     if (initialCondition || (solarElevationInt < solarElevationIntMin)) {
         solarElevationIntMin = solarElevationInt;
