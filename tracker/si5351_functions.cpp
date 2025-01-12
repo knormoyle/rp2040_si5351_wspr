@@ -1232,7 +1232,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
 
 //****************************************************
 // good for doing calc only, so see what changes with freq changes
-void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
+uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
     uint32_t *r_divisor, uint64_t freq_xxx, bool do_farey) {
     Watchdog.reset();
@@ -1312,154 +1312,209 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // FIX! is the compiler messing up when I have big shifts?
     // does it optimize the the two shifts and lose precision as a result
 
-    // no need to do 1e6 shift down mode here
-    uint64_t aaa = PLL_FREQ_TARGET << PLL_CALC_SHIFT;
 
-    // we're only outputting freqs up to 29Mhz, so no chance of losing bits here!
-    uint64_t bbb = freq_xxx << R_DIVISOR_SHIFT;
-
-    // does divide use these? I can't seem to call them directly though..
-    // https://lorenz-ruprecht.at/docu/pico-sdk/1.4.0/html/group__pico__divider.html
-    // divider.h
-    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_divider/include/hardware/divider.h
-
-    // The pico_divider library provides a more user friendly set of APIs over the divider
-    // (and support for 64 bit divides),
-    // You can just use C level `/` and `%` operators
-    // and gain the benefits of the fast hardware divider.
-    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__pico__divider.html
-    // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__divider.html
-    // uint64_t div_u64u64 (uint64_t a, uint64_t b)
-
-    // wrong answer case? 19 bit shift
-    // DEBUG: PLL_FREQ_TARGET shifted: aaa 209715200000000 // correct
-    // DEBUG: freq_xxx shifted: bbb 1512046592 < shift of 2884? seems like missing bits? >
-    // DEBUG: ms_div_here = aa / bbb: 138696 <correct. so is the shifted PLL_FREQ_TARGET wrong?
-    // DEBUG: bits_aaa: 47.58
-    // DEBUG: bits_bbb: 30.49
-
-    uint64_t ms_div_here = aaa / bbb;
-
+    // if we don't like, or get too big of a pll_remain for Farey, 
+    // can change the PLL_FREQ_TARGET a little, and try again.
+    // Could also look for ranges (<0.5) for Farey, since they don't seem to have error outliers
+    // in certain ranges.
+    uint8_t trial = 0;
+    double target;
+    double pll_remain;
+    uint64_t pll_remain_xxx;
+    uint64_t pll_freq_xxx;
+    uint64_t pll_mult_here;
+    uint64_t ms_div_here;
     bool DEBUG = true;
-    if (DEBUG) {
-        uint64_t bits_shifted_out = PLL_FREQ_TARGET >> (64 - PLL_CALC_SHIFT);
-        double bits_pft = log2(PLL_FREQ_TARGET);
-        double bits_aaa = log2(aaa);
-        double bits_bbb = log2(bbb);
-        V1_printf("DEBUG: PLL_FREQ_TARGET shifted: aaa %" PRIu64 EOL, aaa);
-        V1_printf("DEBUG: bits_shifted_out: %" PRIu64 EOL, bits_shifted_out);
-        V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);
-        V1_printf("DEBUG: PLL_FREQ_TARGET %" PRIu64 EOL, PLL_FREQ_TARGET);
-        V1_printf("DEBUG: freq_xxx shifted: bbb %" PRIu64 EOL, bbb);
-        V1_printf("DEBUG: ms_div_here = aa / bbb: %" PRIu64 EOL, ms_div_here);
-        V1_printf("DEBUG: bits_pft: %.2f" EOL, bits_pft);
-        V1_printf("DEBUG: bits_aaa: %.2f" EOL, bits_aaa);
-        V1_printf("DEBUG: bits_bbb: %.2f" EOL, bits_bbb);
-    }
+    uint8_t MAXTRIAL = 4;
 
-    // make it even. odd bumps up.
-    // has to be a bump up? pll freq will increase..so mult may up too?
-    if ((ms_div_here % 2) == 1) ms_div_here += 1;
-    if (DEBUG) {
-        V1_printf("DEBUG: ms_div_here post-inc?: %" PRIu64 EOL, ms_div_here);
-    }
+    uint8_t retcode = 0;
+    // will get called for all 4 symbol freqs. should redo if any fail? 
+    // (will be during calcs-only phase)
+    while (trial < MAXTRIAL) {
+        retcode = 0;
+        // the choice of 25Mhz for stepping pll target is arbitrary. 
+        // (relates to mul/div/tcxo and output freq)
+        // no need to do 1e6 shift down mode here
+        uint64_t pll_freq_target_trial = PLL_FREQ_TARGET + (25000000 * trial);
+        uint64_t aaa = pll_freq_target_trial << PLL_CALC_SHIFT;
 
-    // is 900 really the upper limiter or ?? we have 908 for 24Mhz
-    // do we need lower pll freq?
-    if (ms_div_here < 4 || ms_div_here > 900) {
-        V1_printf("ERROR: vfo_calc_div_mult_num (1) ms_div %" PRIu64, ms_div_here);
-        V1_print(F(" is out of range 4 to 900" EOL));
-        V1_print(F("ERROR: vfo_calc_div_mult_num (1) no recalc done."));
-        V1_print(F(" Should never happen! rf output is wrong" EOL));
-    }
+        // we're only outputting freqs up to 29Mhz, so no chance of losing bits here!
+        uint64_t bbb = freq_xxx << R_DIVISOR_SHIFT;
 
-    uint64_t pll_freq_xxx = (freq_xxx * ms_div_here) << R_DIVISOR_SHIFT;
-    // this is just integer. only useful for printing/rough error check
-    uint64_t int_pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
+        // does divide use these? I can't seem to call them directly though..
+        // https://lorenz-ruprecht.at/docu/pico-sdk/1.4.0/html/group__pico__divider.html
+        // divider.h
+        // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_divider/include/hardware/divider.h
 
-    // remember: floor division (integer)
-    // tcxo_freq is integer..
-    uint64_t pll_mult_here = pll_freq_xxx / tcxo_freq_xxx;
+        // The pico_divider library provides a more user friendly set of APIs over the divider
+        // (and support for 64 bit divides),
+        // You can just use C level `/` and `%` operators
+        // and gain the benefits of the fast hardware divider.
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__pico__divider.html
+        // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__divider.html
+        // uint64_t div_u64u64 (uint64_t a, uint64_t b)
 
-    //*************************************************************
-    // good info on out-of-spec behavior
-    // https://rfzero.net/documentation/rf/
-    // https://rfzero.net/tutorials/si5351a/
-    // mult has to be in the range 15 to 90
+        // wrong answer case? 19 bit shift
+        // DEBUG: PLL_FREQ_TARGET shifted: aaa 209715200000000 // correct
+        // DEBUG: freq_xxx shifted: bbb 1512046592 < shift of 2884? seems like missing bits? >
+        // DEBUG: ms_div_here = aa / bbb: 138696 <correct. so is the shifted PLL_FREQ_TARGET wrong?
+        // DEBUG: bits_aaa: 47.58
+        // DEBUG: bits_bbb: 30.49
 
-    // I was getting pll_mult of 14 for 10M when I targeted 390Mhz pll
-    // need 15 minimum
+        ms_div_here = aaa / bbb;
 
-    // FIX! not clear if this attempt to "fix" adds any value
-    // should never have this problem with good algo + pll target?
-    if (pll_mult_here < 15 || pll_mult_here > 90) {
-        V1_printf("ERROR: pll_mult %" PRIu64 " is out of range 15 to 90." EOL,
-            pll_mult_here);
-        V1_print(F("ERROR: Need to pick another arget pll freq" EOL));
-        V1_printf("int_pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL,
-            int_pll_freq_here, tcxo_freq);
+        if (DEBUG) {
+            uint64_t bits_shifted_out = pll_freq_target_trial >> (64 - PLL_CALC_SHIFT);
+            double bits_pft = log2(pll_freq_target_trial);
+            double bits_aaa = log2(aaa);
+            double bits_bbb = log2(bbb);
 
-        // Would this work. forcing the boundary cases?
-        if (pll_mult_here < 15) pll_mult_here = 15;
-        else pll_mult_here = 90;
-
-        // Have to recompute the divisor if we change pll_mult? i.e. it's forced..
-        // recompute the pll_freq based on the forced multiplier
-        // R_DIVISOR_SHIFT: possible *4 for the R0 and R1 output divider.
-
-        // 64 bit calcs so don't lose bits beyond 32-bits
-        // mult will be min or max
-        // This is no longer correct compared to creating it from the output freq
-        uint64_t pll_freq_xxx_2 = tcxo_freq_xxx * pll_mult_here;
-        // this is just integer. for printing/quick compare only!
-        int_pll_freq_here = pll_freq_xxx_2 >> PLL_CALC_SHIFT;
-
-        ms_div_here = pll_freq_xxx_2 / bbb;  // bbb from above
-        // make it even. odd bumps up.
-        if ((ms_div_here % 2) == 1) ms_div_here += 1;
-
-        V1_print(F("vfo_calc_div_mult_num pll_freq implied by new ms_div, pll_mult" EOL));
-        V1_print(F("ms_div implied by that pll_freq" EOL));
-
-        if (ms_div_here < 4 || ms_div_here > 900) {
-            V1_printf("ERROR: vfo_calc_div_mult_num (2) ms_div %" PRIu64, ms_div_here);
-            V1_print(F(" is out of range 4 to 900" EOL));
-            V1_print(F("ERROR: vfo_calc_div_mult_num (2) no recalc done."));
-            V1_print(F(" Should never happen! rf output is wrong" EOL));
+            V1_printf(EOL "DEBUG: trial %u pll_freq_target_trial %" PRIu64 EOL, 
+                trial, pll_freq_target_trial);
+            V1_printf("DEBUG: pll_freq_target_trial shifted: aaa %" PRIu64 EOL, aaa);
+            V1_printf("DEBUG: bits_shifted_out: %" PRIu64 EOL, bits_shifted_out);
+            V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);
+            V1_printf("DEBUG: freq_xxx shifted: bbb %" PRIu64 EOL, bbb);
+            V1_printf("DEBUG: ms_div_here = aa / bbb: %" PRIu64 EOL, ms_div_here);
+            V1_printf("DEBUG: bits_pft: %.2f" EOL, bits_pft);
+            V1_printf("DEBUG: bits_aaa: %.2f" EOL, bits_aaa);
+            V1_printf("DEBUG: bits_bbb: %.2f" EOL, bits_bbb);
         }
 
-        V1_printf("ERROR: Now (2) pll_mult %" PRIu64 " ms_div %" PRIu64 EOL,
-            pll_mult_here, ms_div_here);
+        // make it even. odd bumps up.
+        // has to be a bump up? pll freq will increase..so mult may up too?
+        if ((ms_div_here % 2) == 1) ms_div_here += 1;
+        if (DEBUG) {
+            V1_printf("DEBUG: ms_div_here post-inc?: %" PRIu64 EOL, ms_div_here);
+        }
+
+        // is 900 really the upper limiter or ?? we have 908 for 24Mhz
+        // do we need lower pll freq?
+        if (ms_div_here < 4 || ms_div_here > 900) {
+            V1_printf(EOL "ERROR: vfo_calc_div_mult_num (1) ms_div %" PRIu64, ms_div_here);
+            V1_print(F(" is out of range 4 to 900" EOL));
+            V1_print(F("ERROR: vfo_calc_div_mult_num (1) no recalc done."));
+            V1_print(F(" Should never happen! rf output is wrong" EOL));
+            retcode = -1;
+        }
+
+        pll_freq_xxx = (freq_xxx * ms_div_here) << R_DIVISOR_SHIFT;
+
+        // this is just integer. only useful for printing/rough error check
+        uint64_t int_pll_freq_here = pll_freq_xxx >> PLL_CALC_SHIFT;
+
+        // remember: floor division (integer)
+        // tcxo_freq is integer..
+        pll_mult_here = pll_freq_xxx / tcxo_freq_xxx;
+
+        //*************************************************************
+        // good info on out-of-spec behavior
+        // https://rfzero.net/documentation/rf/
+        // https://rfzero.net/tutorials/si5351a/
+        // mult has to be in the range 15 to 90
+
+        // I was getting pll_mult of 14 for 10M when I targeted 390Mhz pll
+        // need 15 minimum
+
+        // FIX! not clear if this attempt to "fix" adds any value
+        // should never have this problem with good algo + pll target?
+        if (pll_mult_here < 15 || pll_mult_here > 90) {
+            V1_printf(EOL "ERROR: pll_mult %" PRIu64 " is out of range 15 to 90." EOL,
+                pll_mult_here);
+            V1_print(F("ERROR: Need to pick another target pll freq" EOL));
+            V1_printf("int_pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL,
+                int_pll_freq_here, tcxo_freq);
+
+            // Would this work. forcing the boundary cases?
+            if (pll_mult_here < 15) pll_mult_here = 15;
+            else pll_mult_here = 90;
+
+            // Have to recompute the divisor if we change pll_mult? i.e. it's forced..
+            // recompute the pll_freq based on the forced multiplier
+            // R_DIVISOR_SHIFT: possible *4 for the R0 and R1 output divider.
+
+            // 64 bit calcs so don't lose bits beyond 32-bits
+            // mult will be min or max
+            // This is no longer correct compared to creating it from the output freq
+            uint64_t pll_freq_xxx_2 = tcxo_freq_xxx * pll_mult_here;
+            // this is just integer. for printing/quick compare only!
+            int_pll_freq_here = pll_freq_xxx_2 >> PLL_CALC_SHIFT;
+
+            ms_div_here = pll_freq_xxx_2 / bbb;  // bbb from above
+            // make it even. odd bumps up.
+            if ((ms_div_here % 2) == 1) ms_div_here += 1;
+
+            V1_print(F("vfo_calc_div_mult_num pll_freq implied by new ms_div, pll_mult" EOL));
+            V1_print(F("ms_div implied by that pll_freq" EOL));
+
+            if (ms_div_here < 4 || ms_div_here > 900) {
+                V1_printf(EOL "ERROR: vfo_calc_div_mult_num (2) ms_div %" PRIu64, ms_div_here);
+                V1_print(F(" is out of range 4 to 900" EOL));
+                V1_print(F("ERROR: vfo_calc_div_mult_num (2) no recalc done."));
+                V1_print(F(" Should never happen! rf output is wrong" EOL));
+                retcode = -1;
+            }
+
+            V1_printf("ERROR: Now (2) pll_mult %" PRIu64 " ms_div %" PRIu64 EOL,
+                pll_mult_here, ms_div_here);
+
+            // flag this case as bad?
+            retcode = -1;
+        }
+
+        //*************************************************************
+        // check the range of "legal" pll frequencies
+        if (false && (int_pll_freq_here < 600000000 || int_pll_freq_here > 900000000)) {
+            V1_printf("WARN: integer pll_freq %" PRIu64, int_pll_freq_here);
+            V1_print(F(" is outside datasheet legal range" EOL));
+            retcode = -1;
+        }
+        // live with it. maybe upgrade to ERROR to not miss with grep?
+        if (int_pll_freq_here < 390000000 || int_pll_freq_here > 900000000) {
+            V1_printf("WARN: integer pll_freq %" PRIu64, int_pll_freq_here);
+            V1_print(F(" is outside my 'legal' range" EOL));
+            retcode = -1;
+        }
+
+        // pll_num max 20 bits (0 to 1048575)?
+
+        // also look at https://github.com/etherkit/Si5351Arduino
+        // a new method. (greatest common divisor?)
+        // https://github.com/etherkit/Si5351Arduino/issues/79
+
+        //*******************************************************************
+        // it's interesting these are done in the non-scaled domain (not *128)
+        // since pll_freq_here is what we want to get to, shouldn't we be scaled here?
+        // FIX! we should calc this as real for Farey!
+        pll_remain_xxx = pll_freq_xxx - (pll_mult_here * tcxo_freq_xxx);
+        double bits_pll_remain_xxx = log2(pll_remain_xxx);
+
+        // this is for farey target, but is good for non-farey algo too?
+        // this cast of pll_remain_xxx can only have 52 bits of precision?
+        pll_remain = ((double) pll_remain_xxx) / pow(2, PLL_CALC_SHIFT);
+        // we want a fraction to multiple the txco_freq with
+        target = pll_remain / (double)tcxo_freq;
+
+        if (DEBUG) {
+            V1_printf("DEBUG: target: %.16f" EOL, target);
+            V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);
+            V1_printf("DEBUG: pll_remain_xxx: %" PRIu64 EOL, pll_remain_xxx);
+            V1_printf("DEBUG: bits_pll_remain_xxx: %.2f" EOL, bits_pll_remain_xxx);
+        }
+
+        // Do we have a good remainder to target?
+        // there are other known error-prone regions (small) like around 0.5
+        if ((retcode == 0) && target > 0.001 && target < 0.99) {
+            V1_printf("GOOD: trial %u found achievable target %.16f" EOL, 
+                trial, target);
+            break;
+        }
+        trial += 1;
     }
 
-    //*************************************************************
-    // check the range of "legal" pll frequencies
-    if (false && (int_pll_freq_here < 600000000 || int_pll_freq_here > 900000000)) {
-        V1_printf("WARN: integer pll_freq %" PRIu64, int_pll_freq_here);
-        V1_print(F(" is outside datasheet legal range" EOL));
-    }
-    // live with it. maybe upgrade to ERROR to not miss with grep?
-    if (int_pll_freq_here < 390000000 || int_pll_freq_here > 900000000) {
-        V1_printf("WARN: integer pll_freq %" PRIu64, int_pll_freq_here);
-        V1_print(F(" is outside my 'legal' range" EOL));
-    }
-
-    // pll_num max 20 bits (0 to 1048575)?
-
-    // also look at https://github.com/etherkit/Si5351Arduino
-    // a new method. (greatest common divisor?)
-    // https://github.com/etherkit/Si5351Arduino/issues/79
-
-    //*******************************************************************
-    // it's interesting these are done in the non-scaled domain (not *128)
-    // since pll_freq_here is what we want to get to, shouldn't we be scaled here?
-    // FIX! we should calc this as real for Farey!
-    uint64_t pll_remain_xxx = pll_freq_xxx - (pll_mult_here * tcxo_freq_xxx);
-    double bits_pll_remain_xxx = log2(pll_remain_xxx);
-    if (DEBUG) {
-        V1_printf("DEBUG: pll_remain_xxx: %" PRIu64 EOL, pll_remain_xxx);
-        V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);
-        V1_printf("DEBUG: bits_pll_remain_xxx: %.2f" EOL, bits_pll_remain_xxx);
+    if (trial>=MAXTRIAL) {
+        V1_print(F(EOL "ERROR: fatal..didn't find good pll_remain. Change PLL_TARGET_FREQ"));
+        retcode = -1;
     }
 
     //*******************************************************************
@@ -1476,8 +1531,6 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // luckily all my integer *_xxx is shifts..i.e. powers of 2!
         // so no loss of precision going back and forth
 
-        // this cast of pll_remain_xxx can only have 52 bits of precision?
-        double pll_remain = ((double) pll_remain_xxx) / pow(2, PLL_CALC_SHIFT);
 
         // lets see what farey/magnusson get with the remainder
         // we can't use this as we need to adjust the remainder to get
@@ -1487,9 +1540,6 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // and calculate their num/denom pairs.
         uint32_t maxdenom = (uint32_t)PLL_DENOM_MAX;
         // FIX! why are we limiting ourselves to the PLL_CALC_SHIFT precision on the remainder!!
-
-        // we want a fraction to multiple the txco_freq with
-        double target = pll_remain / (double)tcxo_freq;
 
         // FIX! if we zero out some of the lower digits of the mantissa, does it help reduce error?
         // with 26mhz tcxo, seems like we need 12 digits of precision
@@ -1576,12 +1626,14 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
     //*******************************************************************
     if (pll_num_here > PLL_DENOM_MAX) {  // 1048575
-        V1_printf("ERROR: pll_num %" PRIu64 " is out of range 0 to 1048575" EOL,
+        V1_printf(EOL "ERROR: pll_num %" PRIu64 " is out of range 0 to 1048575" EOL,
             pll_num_here);
+        retcode = -1;
     }
     if (pll_denom_here > PLL_DENOM_MAX) {  // 1048575
-        V1_printf("ERROR: pll_denom %" PRIu64 " is out of range 0 to 1048575" EOL,
+        V1_printf(EOL "ERROR: pll_denom %" PRIu64 " is out of range 0 to 1048575" EOL,
             pll_denom_here);
+        retcode = -1;
     }
 
     // https://rfzero.net/tutorials/si5351a/
@@ -1605,12 +1657,17 @@ void vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     *r_divisor = (uint32_t)pow(2, R_DIVISOR_SHIFT);
     *actual = actual_here;
     *actual_pll_freq = actual_pll_freq_here;
+    
+    // make the caller adjust PLL_FREQ_TARGET and redo everything for 4 symbols
+    // if we took more than one trial here
+    if (trial != 0) return -1;
+    else return retcode;
 }
 
 //****************************************************
 // freq is in 28.4 fixed point number, 0.0625Hz resolution
 // only_pll_num allows num and denom, when doing Farey
-void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, bool just_do_calcs) {
+uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, bool just_do_calcs) {
     Watchdog.reset();
     uint32_t ms_div;
     uint32_t pll_mult;
@@ -1646,17 +1703,19 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
     // let "use cache" miss. basically everything refills
     // OH: keep 5, one for the cw freq!
 
+    uint8_t retval = 0;
+    uint8_t retcode = 0;
     if (DISABLE_FAREY_CACHE || !USE_FAREY_WITH_PLL_REMAINDER) {
-        vfo_calc_div_mult_num(&actual, &actual_pll_freq,
+        retcode = vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, true);
     } else {
         // lookup. get values if in cache already!
         // don't do any prints on the lookup
-        uint8_t retval = vfo_calc_cache(&actual, &actual_pll_freq,
+        retval = vfo_calc_cache(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, 1);
         if (retval != 1) {  // cache miss?
             V1_print(F(EOL "WARN: vfo_set_freq_xxx must redo vfo_calc_div_mult_num()" EOL));
-            vfo_calc_div_mult_num(&actual, &actual_pll_freq,
+            retcode = vfo_calc_div_mult_num(&actual, &actual_pll_freq,
                 &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, true);
             // install. If we install it when already there, we'll flag the double
             // entry on lookup later
@@ -1669,7 +1728,7 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
 
     if (just_do_calcs) {
         V1_print(F("vfo_set_freq_xxx just_do_calcs" EOL));
-        return;
+        return retcode;
     }
 
     // for numerator-shift algo:
@@ -1736,6 +1795,8 @@ void vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, boo
     // is this a must-have for ms5351m? do we need a enable here?
     if (true)
         vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
+
+    return retcode;
 }
 
 //****************************************************
@@ -2234,7 +2295,7 @@ void calcSymbolFreq_xxx(uint64_t *freq_xxx, uint32_t hf_freq, uint8_t symbol) {
 }
 
 //**********************************
-void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num, bool just_do_calcs) {
+uint8_t startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num, bool just_do_calcs) {
     // Calculate the frequency for a symbol
     // Note all the shifting so integer arithmetic is used everywhere,
     // and precision is not lost.
@@ -2274,7 +2335,9 @@ void startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num, bool j
     // FIX! does this change the state of the clock output enable?
     // no..
     // changes both clk0 and clk1
-    vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM, freq_xxx_with_symbol, only_pll_num, just_do_calcs);
+    uint8_t retcode = 0;
+    retcode = vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM, freq_xxx_with_symbol, only_pll_num, just_do_calcs);
+    return retcode;
 
     // Note: Remember to do setup with the base frequency and symbol == 0,
     // so the i2c writes have seeded the si5351
@@ -2500,3 +2563,22 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
     }
     V1_println(F("set_PLL_DENOM_OPTIMIZE END"));
 }
+
+//**********************************
+// 1/11/25 NEW: set PLL_FREQ_TARGET by band
+void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band){
+    uint64_t pll_freq_target;
+    switch (atoi(band)) {
+        case 20: pll_freq_target = 425000000; break;
+        case 17: pll_freq_target = 500000000; break; // 425 didn't get uHz error
+        case 15: pll_freq_target = 425000000; break;
+        case 12: pll_freq_target = 425000000; break;
+        case 10: pll_freq_target = 425000000; break;
+        case  2: pll_freq_target = 600000000; break;
+        // default to 20M in case of error cases
+        default: pll_freq_target = 600000000;
+    }
+    *PLL_FREQ_TARGET = pll_freq_target;
+}   
+//**********************************
+

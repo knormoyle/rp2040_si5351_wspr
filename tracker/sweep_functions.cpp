@@ -163,6 +163,9 @@ void si5351a_calc_sweep_band() {
             case 4: snprintf(band, sizeof(band), "17"); break;
             case 5: snprintf(band, sizeof(band), "20"); break;
         }
+
+        init_PLL_freq_target(&PLL_FREQ_TARGET, band);
+
         // will pick the _lane we're using for the current u4b channel config
         uint8_t symbol = 0;
         char lane[2] = { 0 };  // '1', '2', '3', '4'
@@ -190,6 +193,8 @@ void si5351a_calc_sweep_band() {
     }
     // FIX! do we need this if we didn't load anything into the cache?
     vfo_calc_cache_flush();
+    // restore PLL_FREQ_TARGET to the band configuration
+    init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
     V1_print(F("si5351a_calc_sweep_band END" EOL));
 }
 //*********************************************************************************

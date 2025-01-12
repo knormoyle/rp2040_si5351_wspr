@@ -21,7 +21,7 @@
 // most accurate algo
 #include "solar4_functions.h"
 // suncal
-#include "solar5_functions.h"
+// #include "solar5_functions.h"
 
 bool SPEED_IS_SOLAR_ELEVATION_MODE = true;
 
@@ -122,8 +122,8 @@ void snapForTelemetry(void) {
     double solarElevation; // can this be negative?. decimal, integer accuracy
     double solarAzimuth; // can this be negative?. decimal, integer accuracy
     double solarDistance; // can this be negative? maybe error case. kilometers.
-    // always call, so we get prints we can use for debug, even if not used.
 
+    // always call, so we get prints we can use for debug, even if not used.
     // just in case this might blow up in flight (fp error?)
     if (!BALLOON_MODE) {
         // first one I did 
@@ -131,23 +131,27 @@ void snapForTelemetry(void) {
 
         // not working? don't use for now
         // calcSolarElevation(&solarElevation, &solarAzimuth, &solarDistance);
-        // V1_printf("calcSolarElevation solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
+        // V1_printf("Elevation solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
         //     solarElevation, solarAzimuth, solarDistance);
 
         // suncalc.js translation to cpp
         // Not working? need to debug
         V1_print(F(EOL));
-        calcSolarElevation5(&solarElevation, &solarAzimuth, &solarDistance);
-        V1_printf("calcSolarElevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
-            solarElevation, solarAzimuth, solarDistance);
+        if (false) {
+            // not working?
+            // calcSolarElevation5(&solarElevation, &solarAzimuth, &solarDistance);
+            // V1_printf("Elevation5 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
+            //     solarElevation, solarAzimuth, solarDistance);
+        }
+
         // fast algo
         calcSolarElevation2(&solarElevation, &solarAzimuth, &solarDistance);
-        V1_printf("calcSolarElevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
+        V1_printf("Elevation2 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
             solarElevation, solarAzimuth, solarDistance);
     }
     // accurate algo
     calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
-    V1_printf("calcSolarElevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
+    V1_printf("Elevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
         solarElevation, solarAzimuth, solarDistance);
     V1_print(F(EOL));
 
@@ -634,7 +638,7 @@ void solarElevationCalcs(double solarElevation) {
             solarElevationIntMax, epochTime);
     }
 
-    // FIX! could adjust the tx power output (strength) depending 
+    // could adjust the tx power output (strength) depending 
     // on solar elevation? Makes it dependent on correct gps lat/lon/utc calcs
     // for ground level power testing, wouldn't want to enable dynamic power..
     // separate config bit

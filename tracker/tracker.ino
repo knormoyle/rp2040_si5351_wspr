@@ -380,15 +380,9 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // uint64_t PLL_CALC_SHIFT = 16;
 uint64_t PLL_CALC_SHIFT = 15;
 
-// won't work well for num-shift method. works for Farey
-// phase noise creating 14MDA print on sdr?
-// uint64_t PLL_FREQ_TARGET = 400000000;
-// uint64_t PLL_FREQ_TARGET = 500000000;
-
-// got below 600. no good.
-// uint64_t PLL_FREQ_TARGET = 600000000;
-// 650 is good
-uint64_t PLL_FREQ_TARGET = 650000000;
+// 1/11/25 NEW: set PLL_FREQ_TARGET by band down below
+// overwrites this.
+uint64_t PLL_FREQ_TARGET = 425000000;
 
 // nice 10M result with this
 // symbolAbsoluteError: 0.000003 Hz
@@ -401,9 +395,6 @@ uint64_t PLL_FREQ_TARGET = 650000000;
 // could change this per band?
 // the implied mul/div for 5 bands is covered by denom choices
 // from spreadsheet for 700000000
-// uint64_t PLL_FREQ_TARGET = 900000000;
-// uint64_t PLL_FREQ_TARGET = 700000000;
-// uint64_t PLL_FREQ_TARGET = 600000000;
 
 // 15 (min multiplier) * 26Mhz = 390 Mhz
 // the other (not used PLL) will run at this freq in default config?
@@ -429,18 +420,6 @@ uint64_t PLL_FREQ_TARGET = 650000000;
 // so I won't use 390Mhz target because
 // I want the perfect symbol shift on 10M too
 //***************************
-// uint64_t PLL_FREQ_TARGET = 390000000;
-
-// 16 * 26 = 416.. so maybe that will work
-// not good
-// uint64_t PLL_FREQ_TARGET = 416000000;
-// this is good
-// in use 1/6/24 for both Fary and num-shift methods
-// uint64_t PLL_FREQ_TARGET = 500000000;
-
-// uint64_t PLL_FREQ_TARGET = 600000000;
-// try 900
-// uint64_t PLL_FREQ_TARGET = 900000000;
 
 // anything else will use PLL_DENOM_MAX
 // double check the values if the algo for div/mul in si5351_functios.cpp changes relative
@@ -592,8 +571,8 @@ uint8_t SOLAR_SI5351_TX_POWER = 0;
 // bool DISABLE_FAREY_CACHE = false;
 
 bool USE_FAREY_WITH_PLL_REMAINDER = true;
+bool USE_FAREY_CHOPPED_PRECISION = true;
 bool TEST_FAREY_WITH_PLL_REMAINDER = false;
-bool USE_FAREY_CHOPPED_PRECISION = false;
 bool DISABLE_FAREY_CACHE = false;
 
 //*****************************
@@ -1009,6 +988,9 @@ void setup1() {
     // sets minute/lane/id from chan number.
     // FIX! is it redundant at this point?..remove?
     init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+    // 1/11/25 NEW: set PLL_FREQ_TARGET by band
+    init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
+
     Watchdog.reset();
     // FIX! do we really have to read flash again. No..I don't think so!
     // keeps the read_FLASH in core1() always? no worries about "safe" access to flash
@@ -1100,6 +1082,8 @@ void setup1() {
     //***************
     // restore to know fixed values per band
     set_PLL_DENOM_OPTIMIZE(_Band);
+    init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
+
     // do this to sweep the symbols for the u4b channel in use and fill the cache for Farey results?
     // FIX! should we calc the 4 symbols?
     double symbolShiftError;
@@ -1729,15 +1713,23 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     uint8_t VCC_init_valid_cnt = vfo_calc_cache_print_and_check();
     // was getting 14MDA printed if I cycled these with RF?
     // these are just filling the cache
-    startSymbolFreq(hf_freq, 3, false, true);
-    startSymbolFreq(hf_freq, 2, false, true);
-    startSymbolFreq(hf_freq, 1, false, true);
-    startSymbolFreq(hf_freq, 0, false, false);
+
+    uint8_t retcode3 = startSymbolFreq(hf_freq, 3, false, true);
+    uint8_t retcode2 = startSymbolFreq(hf_freq, 2, false, true);
+    uint8_t retcode1 = startSymbolFreq(hf_freq, 1, false, true);
+    uint8_t retcode0 = startSymbolFreq(hf_freq, 0, false, false);
+
+    if (retcode3!=0 || retcode2!=0 || retcode1!=0 || retcode0!=0) {
+        V1_print(F(EOL "ERROR: fatal. bad retcode(s) from startSymbolFREQ" EOL));
+        V1_printf("retcode 0: %u 1: %u 2: %u 3: %u" EOL,
+            retcode0, retcode1, retcode2, retcode3);
+        V1_printf("Need to adjust PLL_FREQ_TARGET" EOL);
+    }
 
     absolute_time_t end_usecs_1 = get_absolute_time();
     int64_t elapsed_usecs_1 = absolute_time_diff_us(start_usecs_1, end_usecs_1);
     float elapsed_millisecs_1 = (float)elapsed_usecs_1 / 1000.0;
-    V1_printf("VCC cache initially had %u valid entries\n" EOL, 
+    V1_printf("VCC cache initially had %u valid entries\n" EOL,
         VCC_init_valid_cnt);
     V1_print(F("Time to calc/lookup, 4 Farey algo symbol freq si5351 reg values:"));
     V1_printf(" %.4f millisecs" EOL, elapsed_millisecs_1);
@@ -2210,8 +2202,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
         vfo_turn_off();
     } else {
         if (DO_CLK_OFF_FOR_WSPR_MODE) {
-            // FIX! if we leave RF on, should we set it to symbol 0 so every transition to 
-            // good message looks the same? But we're turning off the clock now, 
+            // FIX! if we leave RF on, should we set it to symbol 0 so every transition to
+            // good message looks the same? But we're turning off the clock now,
             // so it shouldn't matter?
             if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
                 // FIX! does this work on ms5351m. do we care?
@@ -2263,7 +2255,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     //*****************************************
     // This is the turn on of clk0/1 (and final sync) before the real wspr message
     // for debug/checking/consistency..report how long RF is on before we need it here!
-    // I guess we should always have clocks off when we hit here..even if 
+    // I guess we should always have clocks off when we hit here..even if
     // multiple wspr messages (check how we end a wspr message)
     absolute_time_t start_usecs_2;
 
@@ -2279,7 +2271,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
         // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();
         // we must have come in here rght before we're aligned
-        // so we could look at millis() being > 900 and 
+        // so we could look at millis() being > 900 and
         // we'll be 100 millis before the alignment to sec?
         // that should cover any turn-on glitch
         // just do it once!
@@ -2289,8 +2281,8 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
         if (!clk01_turned_on) {
             // if we used the PDN bit to disable the clocks, we'd need a pll reset.
             // to stay in phase
-            // FIX! how fast or slow is this? 
-            // are we glitching our RF at the start of sending? 
+            // FIX! how fast or slow is this?
+            // are we glitching our RF at the start of sending?
             // (hans mentioned 2ms garbage due to the pll reset)
             if (DO_CLK_OFF_FOR_WSPR_MODE) {
                 if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
@@ -2316,7 +2308,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
             absolute_time_t end_usecs_2 = get_absolute_time();
             uint64_t elapsed_usecs_2 = absolute_time_diff_us(start_usecs_2, end_usecs_2);
             float elapsed_millisecs_2 = (float)elapsed_usecs_2 / 1000.0;
-            V1_printf("syncAndSendWspr rf is on for %.3f millisecs before real wspr msg" EOL, 
+            V1_printf("syncAndSendWspr rf is on for %.3f millisecs before real wspr msg" EOL,
                 elapsed_millisecs_2);
         }
     }
@@ -2417,13 +2409,13 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     // Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT
     if (false) {
         V1_print(F("Before jtencode.wspr_encode() freeMem()" EOL));
-        freeMem(); 
-    }           
+        freeMem();
+    }
     jtencode.wspr_encode(hf_callsign, hf_grid4, power, hf_tx_buffer);
     if (false) {
         V1_print(F("After jtencode.wspr_encode() freeMem()" EOL));
-        freeMem(); 
-    }           
+        freeMem();
+    }
 
     // maybe useful python for testing wspr encoding
     // https://github.com/robertostling/wspr-tools/blob/master/README.md
@@ -2465,6 +2457,7 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
     V1_println(F("initPicoClock END"));
     return 0;
 }
+
 
 //**********************************
 void freeMem() {
@@ -2511,7 +2504,7 @@ void freeMem() {
 
 
 //**********************
-// will just use c style string. 
+// will just use c style string.
 // stored in array of characters terminated by null: '\0'
 // char e[] = "geeks";
 // char el[] = {'g', 'f', 'g', '10'}'

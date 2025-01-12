@@ -120,8 +120,12 @@ rational_t rational_approximation(double target, uint32_t maxdenom)
         ac = c;
         bd = d;
       }
-      printf("break 1\n");
-      break;
+      if (true) {
+        // kbn doesn't help
+        // if (ii > maxIter) {
+        printf("break 1\n");
+        break;
+      }
     }
     mediant = ac/(double)bd;
     if(target < mediant) {
@@ -341,8 +345,8 @@ int main() {
     uint32_t maxerr_iter = 0;
     uint32_t maxerr_i = 0;
 
-    double lower_bound = 0;
-    double upper_bound = 1.0;
+    double lower_bound = 0.55;
+    double upper_bound = 0.57;
 
     // Seed the random number engine using the current time
     unsigned seed1 = std::chrono::system_clock::now().time_since_epoch().count();
@@ -387,11 +391,24 @@ int main() {
     double center = unif1(generator1);
     lower_bound = center - 1e-6;
     upper_bound = center + 1e-6;
+
+    // interesting straight lines
+    lower_bound = 0.50000014911;
+    upper_bound = 0.50000044911;
+
+    lower_bound = 0.50000004000;
+    upper_bound = 0.50000050000;
+
+    lower_bound = 0.50000000500;
+    upper_bound = 0.50000050000;
+
+    lower_bound = 0.50000000000;
+    upper_bound = 0.50000050000;
     printf("lower_bound %.16f\n", lower_bound);
     printf("upper_bound %.16f\n", upper_bound);
 
-    lower_bound = 0+1e-16;
-    upper_bound = 1-1e-16;
+    // lower_bound = 0+1e-16;
+    // upper_bound = 1-1e-16;
     // Seed the random number engine using the current time
     unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
     // don't do this again?:
