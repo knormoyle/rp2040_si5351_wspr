@@ -1497,7 +1497,6 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
         if (DEBUG) {
             V1_printf("DEBUG: target: %.16f" EOL, target);
-            V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);
             V1_printf("DEBUG: pll_remain_xxx: %" PRIu64 EOL, pll_remain_xxx);
             V1_printf("DEBUG: bits_pll_remain_xxx: %.2f" EOL, bits_pll_remain_xxx);
         }

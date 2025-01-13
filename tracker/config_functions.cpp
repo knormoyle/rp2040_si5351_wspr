@@ -968,7 +968,7 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     if (callsignBad) {
-        V0_printf(EOL "_callsign %s is not supported/legal, initting to AB1CDE" EOL, _callsign);
+        V0_printf(EOL "ERROR: _callsign %s is not supported/legal, initting to AB1CDE" EOL, _callsign);
         snprintf(_callsign, sizeof(_callsign), "AB1CDE");
         write_FLASH();
         result = -1;
@@ -977,7 +977,7 @@ int check_data_validity_and_set_defaults(void) {
     //*****************
     // change to strcpy for null terminate
     if (_verbose[0] == 0 || _verbose[0] < '0' || _verbose[0] > '9') {
-        V0_printf(EOL "_verbose %s is not supported/legal, initting to 1" EOL, _verbose);
+        V0_printf(EOL "ERROR: _verbose %s is not supported/legal, initting to 1" EOL, _verbose);
         snprintf(_verbose, sizeof(_verbose), "1");
         write_FLASH();
         result = -1;
@@ -995,7 +995,7 @@ int check_data_validity_and_set_defaults(void) {
         }
     }
     if (bad) {
-        V0_printf(EOL "_TELEN_config %s is not supported/legal, initting to ----" EOL,
+        V0_printf(EOL "ERROR: _TELEN_config %s is not supported/legal, initting to ----" EOL,
             _TELEN_config);
         snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
         write_FLASH();
@@ -1024,7 +1024,7 @@ int check_data_validity_and_set_defaults(void) {
     } else {
         for (int i = 0; i <= 2; i++) {
             if (_clock_speed[i] < '0' && _clock_speed[i] > '9') {
-                V0_printf(EOL "check_data_validity...(): (1) illegal _clock_speed: %s" EOL, _clock_speed);
+                V0_printf(EOL "ERROR: check_data_validity...(): (1) illegal _clock_speed: %s" EOL, _clock_speed);
                 clock_speedBad = true;
             }
         }
@@ -1032,19 +1032,19 @@ int check_data_validity_and_set_defaults(void) {
     if (!clock_speedBad) {
         PLL_SYS_MHZ = atoi(_clock_speed);
         if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 18 || PLL_SYS_MHZ > 250) {
-            V0_printf(EOL "check_data_validity...(): (2) illegal _clock_speed: %s" EOL, _clock_speed);
+            V0_printf(EOL "ERROR: check_data_validity...(): (2) illegal _clock_speed: %s" EOL, _clock_speed);
             clock_speedBad = true;
         }
 
         if (!set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, false)) {
             // http://jhshi.me/2014/07/11/print-uint64-t-properly-in-c/index.html
-            V0_printf(EOL "check_data_validity...(): RP2040 can't change clock to %lu Mhz" EOL, PLL_SYS_MHZ);
+            V0_printf(EOL "ERROR: check_data_validity...(): RP2040 can't change clock to %lu Mhz" EOL, PLL_SYS_MHZ);
             clock_speedBad = true;
         }
     }
 
     if (clock_speedBad) {
-        V0_printf(EOL "_clock_speed %s is not legal, initting to %lu" EOL, _clock_speed, DEFAULT_PLL_SYS_MHZ);
+        V0_printf(EOL "ERROR: _clock_speed %s is not legal, initting to %lu" EOL, _clock_speed, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
         // recalc
 
@@ -1060,7 +1060,7 @@ int check_data_validity_and_set_defaults(void) {
     //*****************
     // be sure to null terminate
     if (_U4B_chan[0] == 0 || atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
-        V0_printf(EOL "_U4B_chan %s is not supported/legal, initting to 599" EOL, _U4B_chan);
+        V0_printf(EOL "ERROR: _U4B_chan %s is not supported/legal, initting to 599" EOL, _U4B_chan);
         snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
         write_FLASH();
         // this will set _lane, _id13, _start_minute
@@ -1078,7 +1078,7 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            V0_printf("_Band %s is not supported/legal, initting to 20" EOL, _Band);
+            V0_printf("ERROR: _Band %s is not supported/legal, initting to 20" EOL, _Band);
             snprintf(_Band, sizeof(_Band), "20");
             write_FLASH();
             // figure out the XMIT_FREQUENCY for new band
@@ -1097,7 +1097,7 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            V0_printf("_Band_cw %s is not supported/legal, initting to 20" EOL, _Band);
+            V0_printf("ERROR: _Band_cw %s is not supported/legal, initting to 20" EOL, _Band);
             snprintf(_Band_cw, sizeof(_Band_cw), "20");
             write_FLASH();
             result = -1;
@@ -1105,14 +1105,14 @@ int check_data_validity_and_set_defaults(void) {
     }
     //*****************
     if (_tx_high[0] != '0' && _tx_high[0] != '1') {
-        V0_printf(EOL "_tx_high %s is not supported/legal, initting to 1" EOL, _tx_high);
+        V0_printf(EOL "ERROR: _tx_high %s is not supported/legal, initting to 1" EOL, _tx_high);
         snprintf(_tx_high, sizeof(_tx_high), "1");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (_testmode[0] != '0' && _testmode[0] != '1') {
-        V0_printf(EOL "_testmode %s is not supported/legal, initting to 0" EOL, _testmode);
+        V0_printf(EOL "ERROR: _testmode %s is not supported/legal, initting to 0" EOL, _testmode);
         snprintf(_testmode, sizeof(_testmode), "0");
         write_FLASH();
         result = -1;
@@ -1122,40 +1122,40 @@ int check_data_validity_and_set_defaults(void) {
     // detect that case to get ascii 0 in there
     if (_correction[0] == 0 || atoi(_correction) < -30000 || atoi(_correction) > 30000) {
         // left room for 6 bytes
-        V0_printf(EOL "_correction %s is not supported/legal, initting to 0" EOL, _correction);
+        V0_printf(EOL "ERROR: _correction %s is not supported/legal, initting to 0" EOL, _correction);
         snprintf(_correction, sizeof(_correction), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (_go_when_rdy[0] != '0' && _go_when_rdy[0] != '1') {
-        V0_printf(EOL "_go_when_rdy %s is not supported/legal, initting to 0" EOL, _go_when_rdy);
+        V0_printf(EOL "ERROR: _go_when_rdy %s is not supported/legal, initting to 0" EOL, _go_when_rdy);
         snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (_use_sim65m[0] != '0' && _use_sim65m[0] != '1') {
-        V0_printf(EOL "_use_sim65m %s is not supported/legal, initting to 0" EOL, _use_sim65m);
+        V0_printf(EOL "ERROR: _use_sim65m %s is not supported/legal, initting to 0" EOL, _use_sim65m);
         snprintf(_use_sim65m, sizeof(_use_sim65m), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (_factory_reset_done[0] != '0' && _factory_reset_done[0] != '1') {
-        V0_printf(EOL "_factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, _factory_reset_done);
+        V0_printf(EOL "ERROR: _factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, _factory_reset_done);
         doFactoryReset();  // no return, reboots
     }
     //*****************
     if (_morse_also[0] != '0' && _morse_also[0] != '1') {
-        V0_printf(EOL "_morse_also %s is not supported/legal, initting to 0" EOL, _morse_also);
+        V0_printf(EOL "ERROR: _morse_also %s is not supported/legal, initting to 0" EOL, _morse_also);
         snprintf(_morse_also, sizeof(_morse_also), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (_solar_tx_power[0] != '0' && _solar_tx_power[0] != '1') {
-        V0_printf(EOL "_solar_tx_power %s is not supported/legal, initting to 0" EOL, _solar_tx_power);
+        V0_printf(EOL "ERROR: _solar_tx_power %s is not supported/legal, initting to 0" EOL, _solar_tx_power);
         snprintf(_solar_tx_power, sizeof(_solar_tx_power), "0");
         write_FLASH();
         result = -1;

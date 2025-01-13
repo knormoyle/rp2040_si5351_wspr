@@ -208,15 +208,9 @@ void doit(double target, bool bumped) {
     retval.actual_real = actual_real;
     retval.actual_error = actual_error;
 
-    printf("\n");
-    if (bumped) {
-        printf("bumped target %.16f\n", target);
-        printf("bumped numerator %u\n", retval.numerator);
-        printf("bumped denominator %u\n", retval.denominator);
-        printf("bumped iterations %u\n", retval.iterations);
-        printf("bumped actual_real %.16f\n", actual_real);
-        printf("bumped actual_error %.16e\n", actual_error);
-    } else {
+    // don't print small error cases
+    if (retval.actual_error >= 20e-10) {
+        printf("\n");
         printf("target %.16f\n", target);
         printf("numerator %u\n", retval.numerator);
         printf("denominator %u\n", retval.denominator);
@@ -326,27 +320,30 @@ void histo_reals(double* data, int num_data) {
     printf("\n");
 }
 //*************************************************************
-// #define NUM_TO_DO 100000
-#define NUM_TO_DO 200000
+// will fail if we try to save more than this?
+#define ARRAY_SIZE 200000
+    
+// globals so we can loop
+double maxerr_actual_error = 0.0;
+double maxerr_actual_real = 0.0;
+double maxerr_target = 0.0;
+uint32_t maxerr_num = 0;
+uint32_t maxerr_denom = 0;
+uint32_t maxerr_iter = 0;
+uint32_t maxerr_i = 0;
 
-int main() {
-    uint32_t nums[NUM_TO_DO] = { 0 };
-    uint32_t denoms[NUM_TO_DO] = { 0 };
-    uint32_t iters[NUM_TO_DO] = { 0 };
-    double targets[NUM_TO_DO] = { 0.0 };
-    double actual_reals[NUM_TO_DO] = { 0.0 };
-    double actual_errors[NUM_TO_DO] = { 0.0 };
+int main30() {
+    uint32_t nums[ARRAY_SIZE] = { 0 };
+    uint32_t denoms[ARRAY_SIZE] = { 0 };
+    uint32_t iters[ARRAY_SIZE] = { 0 };
+    double targets[ARRAY_SIZE] = { 0.0 };
+    double actual_reals[ARRAY_SIZE] = { 0.0 };
+    double actual_errors[ARRAY_SIZE] = { 0.0 };
 
-    double maxerr_actual_error = 0.0;
-    double maxerr_actual_real = 0.0;
-    double maxerr_target = 0.0;
-    uint32_t maxerr_num = 0;
-    uint32_t maxerr_denom = 0;
-    uint32_t maxerr_iter = 0;
-    uint32_t maxerr_i = 0;
+    double lower_bound = 0.0 + 1e13;
+    double upper_bound = 1.0 - 1e13;
 
-    double lower_bound = 0.55;
-    double upper_bound = 0.57;
+    bool DO_RANDOM_CENTER = false;
 
     // Seed the random number engine using the current time
     unsigned seed1 = std::chrono::system_clock::now().time_since_epoch().count();
@@ -363,72 +360,111 @@ int main() {
     // depending on the divisor we need a bigger shift in pll freq.
     // larger and we need more. smaller and we need less
 
-    lower_bound = 0.14484461538462 - 1e-7;
-    upper_bound = 0.14484698377404 + 1e-7;
+    if (false) {
+        lower_bound = 0.55;
+        upper_bound = 0.57;
+        lower_bound = 0.14484461538462 - 1e-7;
+        upper_bound = 0.14484698377404 + 1e-7;
 
-    lower_bound = 0.14484000000000;
-    upper_bound = 0.14484999900000;
+        lower_bound = 0.14484000000000;
+        upper_bound = 0.14484999900000;
 
-    lower_bound = 0.10004000000000;
-    upper_bound = 0.10004999900000;
+        lower_bound = 0.10004000000000;
+        upper_bound = 0.10004999900000;
 
-    lower_bound = 0.14000000000000;
-    upper_bound = 0.14000010000000;
+        lower_bound = 0.14000000000000;
+        upper_bound = 0.14000010000000;
 
-    lower_bound = 0.54000000000000;
-    upper_bound = 0.54000010000000;
+        lower_bound = 0.54000000000000;
+        upper_bound = 0.54000010000000;
 
-    lower_bound = 0.1;
-    upper_bound = 0.9;
+        lower_bound = 0.1;
+        upper_bound = 0.9;
 
-    lower_bound = 0.4;
-    upper_bound = 0.7;
+        lower_bound = 0.4;
+        upper_bound = 0.7;
 
-    // a random center
-    lower_bound = 0 + 1e-6;
-    upper_bound = 1.0 - 1e-6;
+        // a random center
+        lower_bound = 0 + 1e-6;
+        upper_bound = 1.0 - 1e-6;
 
-    double center = unif1(generator1);
-    lower_bound = center - 1e-6;
-    upper_bound = center + 1e-6;
+        if (DO_RANDOM_CENTER) {
+            double center = unif1(generator1);
+            lower_bound = center - 1e-6;
+            upper_bound = center + 1e-6;
+        }
 
-    // interesting straight lines
-    lower_bound = 0.50000014911;
-    upper_bound = 0.50000044911;
+        // interesting straight lines
+        lower_bound = 0.50000014911;
+        upper_bound = 0.50000044911;
 
-    lower_bound = 0.50000004000;
-    upper_bound = 0.50000050000;
+        lower_bound = 0.50000004000;
+        upper_bound = 0.50000050000;
 
-    lower_bound = 0.50000000500;
-    upper_bound = 0.50000050000;
+        lower_bound = 0.50000000500;
+        upper_bound = 0.50000050000;
+    }
 
-    lower_bound = 0.50000000000;
-    upper_bound = 0.50000050000;
-    printf("lower_bound %.16f\n", lower_bound);
-    printf("upper_bound %.16f\n", upper_bound);
+    if (false) {
+        lower_bound = 0.50000000000;
+        upper_bound = 0.50000050000;
+    }
 
-    // lower_bound = 0+1e-16;
-    // upper_bound = 1-1e-16;
-    // Seed the random number engine using the current time
-    unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
-    // don't do this again?:
-    std::default_random_engine generator(seed);
-    std::uniform_real_distribution<double> unif(lower_bound, upper_bound);
+    if (false) {
+        // Expected shift 0 to 1: 1.464844 Hz
+        // Expected shift 0 to 2: 2.929688 Hz
+        // Expected shift 0 to 3: 4.394531 Hz
+     
+        // what about using the interpolative divider for glitchless frequency shift?
+        // it's a percentage of the target output freq
+        lower_bound = 1.464844 / 29e6;
+        upper_bound = 4.394531 / 29e6;
+    }
+
+    bool DO_FULL_INTERVAL = false;
+    if (DO_FULL_INTERVAL) {
+        lower_bound = 0 + 1e-16;
+        upper_bound = 1 - 1e-16;
+
+        printf("lower_bound %.16f\n", lower_bound);
+        printf("upper_bound %.16f\n", upper_bound);
+
+        // lower_bound = 0+1e-16;
+        // upper_bound = 1-1e-16;
+        // Seed the random number engine using the current time
+        unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+        // don't do this again?:
+        std::default_random_engine generator(seed);
+        std::uniform_real_distribution<double> unif(lower_bound, upper_bound);
+    }
 
     // Seed the random number generator
     // https://linux.die.net/man/3/random
     // srand(time(NULL));
-    srandom(time(NULL));
+    // srandom(time(NULL));
 
     // our 393mhz 10M mul/div choices have reals  (including CW freq)
-    struct real_freqs_t { double f; };
-    real_freqs_t real_freqs[] = {
-        {0.14484461538462},
-        {0.14484540625000},
-        {0.14484619290865},
-        {0.14484698377404},
-        {0.10390000000000}
-    };
+    //     struct real_freqs_t { double f; };
+    //     real_freqs_t real_freqs[] = {
+    //         {0.14484461538462},
+    //         {0.14484540625000},
+    //         {0.14484619290865},
+    //         {0.14484698377404},
+    //         {0.10390000000000}
+    //     };
+
+    bool STEP_REAL = true;
+
+    double STEP_INTERVAL;
+    uint64_t NUM_TO_DO;
+    if (STEP_REAL) {
+        NUM_TO_DO = 1e10 - 2;
+        NUM_TO_DO = 1e6;
+        STEP_INTERVAL = 1.0 / 1e10;
+    }
+
+    // don't start at 0, because we inc first
+    static double multiplier_fraction = 0.0;
 
     for (uint32_t i = 0; i < NUM_TO_DO; i++) {
         // Generate a random double between 0 and 1
@@ -438,12 +474,15 @@ int main() {
         // only > 0.5?
         // had a bad case at 0.46
 
-        double multiplier_fraction;
-        if (false) {
-            int j = i % 5;
-            multiplier_fraction = real_freqs[j].f;
+        if (STEP_REAL) {
+            multiplier_fraction += STEP_INTERVAL; // doesn't start with 0.0
         } else {
-            multiplier_fraction = unif(generator);
+            if (false) {
+                int j = i % 5;
+                // multiplier_fraction = real_freqs[j].f;
+            } else {
+                // multiplier_fraction = unif(generator);
+            }
         }
 
         // multiplier_fraction = (double)random() / (double)RAND_MAX;
@@ -492,9 +531,9 @@ int main() {
         // target = 0.285714341919480;
 
         if (DO_BEST_RAT==1 || DO_BEST_RAT_CONTINUED_FRACTIONS==1) {
-            targets[i] = target;
             doit2(target);
 
+            targets[i] = target;
             nums[i]   = result.numerator;
             denoms[i] = result.denominator;
             iters[i] = result.iterations;
@@ -516,8 +555,13 @@ int main() {
                 
         } else {
             // original target saved!
-            targets[i] = target;
             doit(target, false);  // not bumped
+
+            // don't print out the low error cases
+            if (retval.actual_error < 20e-10) {
+                continue;
+            }
+            targets[i] = target;
             nums[i]   = retval.numerator;
             denoms[i] = retval.denominator;
             iters[i] = retval.iterations;
@@ -553,8 +597,13 @@ int main() {
     printf("maxerr_iter %u\n", maxerr_iter);
     printf("maxerr_i %u\n", maxerr_i);
     printf("\n");
-    printf("\nhisto_reals(actual_errors, NUM_TO_DO)\n");
-    histo_reals(actual_errors, NUM_TO_DO);
+    if (!STEP_REAL) {
+        printf("\nhisto_reals(actual_errors, NUM_TO_DO)\n");
+        histo_reals(actual_errors, NUM_TO_DO);
+    }
+
+    return 0;
+}
 
 /*
 why big error?
@@ -674,7 +723,6 @@ maxerr_i 25792
 */
 
 
-
 /*
     multiplier_fraction = 0.61663664871234;
     doit();
@@ -685,4 +733,17 @@ maxerr_i 25792
     multiplier_fraction = 0.6166420573;
     doit();
 */
+
+
+int main() {
+    for (int iterations = 0; iterations < 2000; iterations++) {
+        maxerr_num = 0;
+        maxerr_denom = 0;
+        maxerr_iter = 0;
+        maxerr_i = 0;
+
+        main30();
+        // if (maxerr_actual_error > 500) break;
+    }
+    return 0;
 }
