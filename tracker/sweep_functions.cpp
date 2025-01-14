@@ -25,6 +25,7 @@ extern uint64_t PLL_CALC_SHIFT;
 extern uint64_t PLL_FREQ_TARGET;
 
 extern uint32_t PLL_DENOM_OPTIMIZE;
+extern uint32_t PLL_DENOM_OPTIMIZE_calced;
 
 void si5351a_calc_sweep(void) {
     V1_print(F("si5351a_calc_sweep START" EOL));
@@ -77,7 +78,7 @@ void si5351a_calc_sweep(void) {
         // everything is 32 bit in and out of this, but 64-bit calcs inside it.
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor,
-            freq_xxx, true); // FIX! do_farey for now
+            freq_xxx, false); // don't use PLL_DENOM_OPTIMIZE, calc it if not farey
 
         V1_printf("actual %.6f actual_pll_freq %.6f", actual, actual_pll_freq);
         V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu",
@@ -154,7 +155,7 @@ void si5351a_calc_sweep_band() {
 
     // FIX! do we need this?
     vfo_calc_cache_flush();
-    for (uint8_t i = 0; i <= 4 ; i++) {
+    for (uint8_t i = 0; i <= 5 ; i++) {
         switch (i) {
             case 0: snprintf(band, sizeof(band), "2"); break;
             case 1: snprintf(band, sizeof(band), "10"); break;
@@ -171,14 +172,16 @@ void si5351a_calc_sweep_band() {
         char lane[2] = { 0 };  // '1', '2', '3', '4'
         lane[0] = '1';  // first freq bin
 
+        // FIX! does this not matter any more because we're going to calc 
+        // the pll_denom?
         set_PLL_DENOM_OPTIMIZE(band);
         uint32_t xmit_freq;
         init_rf_freq(&xmit_freq, band, lane);
         calcSymbolFreq_xxx(&freq_xxx, xmit_freq, symbol);
-        // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
+        // This used to use the current PLL_DENOM_OPTIMIZE, now calcs 
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor,
-            freq_xxx, true); // FIX! do_farey for now
+            freq_xxx, false); // don't use PLL_DENOM_OPTIMIZE, calc it if not farey
 
         V1_print(F(EOL));
         V1_printf("sweep band %s xmit_freq %lu PLL_FREQ_TARGET %" PRIu64 " r_divisor %lu" EOL,
@@ -199,7 +202,7 @@ void si5351a_calc_sweep_band() {
 }
 //*********************************************************************************
 void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError,
-    uint32_t *pll_num, bool print) {
+    uint32_t *pll_num, uint32_t *pll_denom, bool print) {
     V1_print(F(EOL "si5351a_calc_optimize START" EOL));
     // don't flush the VCC cache here, so we keep the results for the 4 symbols
 
@@ -212,7 +215,7 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     uint32_t ms_div;
     uint32_t pll_mult;
     uint32_t pll_num_here;
-    uint32_t pll_denom;
+    uint32_t pll_denom_here;
     uint32_t r_divisor;
 
     // stuff that's input to vfo_calc_div_mult_num()
@@ -265,17 +268,17 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     double symbol3actual;
     for (uint8_t symbol = 0; symbol <= 3; symbol++) {
         calcSymbolFreq_xxx(&freq_xxx, xmit_freq, symbol);
-        // This will use the current PLL_DENOM_OPTIMIZE now in its calcs?
-        // or will use Farey if that's enabled
+        // This used to use the current PLL_DENOM_OPTIMIZE now in its calcs?
+        // will now calc pll_denom or will use Farey if that's enabled
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor,
-            freq_xxx, true);
+            &ms_div, &pll_mult, &pll_num_here, &pll_denom_here, &r_divisor,
+            freq_xxx, true); // use PLL_DENOM_OPTIMIZE if not Farey
 
         if (print) {
             V1_printf("channel %s symbol %u", _U4B_chan, symbol);
             V1_printf(" actual %.6f actual_pll_freq %.6f", actual, actual_pll_freq);
             V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
-                pll_mult, pll_num_here, pll_denom, ms_div, r_divisor);
+                pll_mult, pll_num_here, pll_denom_here, ms_div, r_divisor);
         }
         switch (symbol) {
             case 0: symbol0actual = actual; break;
@@ -336,6 +339,7 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     *symbolShiftError = symbolShiftError_here;
     *symbolAbsoluteError = symbolAbsoluteError_here;
     *pll_num = pll_num_here;
+    *pll_denom = pll_denom_here;
 
     if (print) {
         V1_print(F(EOL));
@@ -360,6 +364,7 @@ void si5351a_denom_optimize_search() {
         double last_symbolAbsoluteError = 1e6;
         uint32_t last_PLL_DENOM_OPTIMIZE;
         uint32_t pll_num;
+        uint32_t pll_denom;
         uint32_t STEP;
         int sse;
 
@@ -368,8 +373,8 @@ void si5351a_denom_optimize_search() {
         set_PLL_DENOM_OPTIMIZE(_Band);
         // print
         uint32_t default_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
-        si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, true);
-        V1_printf("SEED values: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
+        si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, &pll_denom, true);
+        V1_printf("pll_denom %lu pll_num %lu", pll_denom, pll_num);
         V1_printf(" symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
             symbolAbsoluteError, symbolShiftError);
         // check 4 digits of precision
@@ -406,7 +411,7 @@ void si5351a_denom_optimize_search() {
             V1_printf(" try PLL_DENOM_OPTIMIZE_pos %lu with pos STEP %lu", PLL_DENOM_OPTIMIZE_pos, STEP);
             V1_print(F(" ***********************" EOL));
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_pos;
-            si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, false);  // don't print
+            si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, &pll_denom, false);  // don't print
             V1_printf("best pll_num %lu for pll_denom %lu -> symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
                 pll_num, PLL_DENOM_OPTIMIZE, symbolAbsoluteError, symbolShiftError);
 
@@ -423,7 +428,7 @@ void si5351a_denom_optimize_search() {
             V1_printf(" try PLL_DENOM_OPTIMIZE_neg %lu with neg STEP %lu", PLL_DENOM_OPTIMIZE_neg, STEP);
             V1_print(F(" ***********************" EOL));
             PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE_neg;
-            si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, false);  // don't print
+            si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, &pll_denom, false);  // don't print
             V1_printf("best pll_num %lu for pll_denom %lu -> symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
                 pll_num, PLL_DENOM_OPTIMIZE, symbolAbsoluteError, symbolShiftError);
             // both should improve
@@ -458,7 +463,7 @@ void si5351a_denom_optimize_search() {
         PLL_DENOM_OPTIMIZE = last_PLL_DENOM_OPTIMIZE;
         V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE: %lu", PLL_DENOM_OPTIMIZE);
         V1_print(F(" ***********************" EOL));
-        si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, true);  // print
+        si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, &pll_denom, true);  // print
         V1_printf("BEST FOUND: PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
         V1_printf(" symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
             symbolAbsoluteError, symbolShiftError);

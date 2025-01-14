@@ -7,7 +7,7 @@
 #define SWEEP_FUNCTIONS_H
 #include <stdint.h>
 
-void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, bool print);
+void si5351a_calc_optimize(double *sumShiftError, double *sumAbsoluteError, uint32_t *pll_num, uint32_t *pll_denom, bool print);
 void si5351a_calc_sweep(void);
 void si5351a_calc_sweep_band(void);
 void si5351a_denom_optimize_search();

@@ -92,10 +92,12 @@ extern uint64_t PLL_FREQ_TARGET;
 extern bool USE_FAREY_WITH_PLL_REMAINDER;
 extern bool USE_FAREY_CHOPPED_PRECISION;
 extern bool TEST_FAREY_WITH_PLL_REMAINDER;
-extern bool DISABLE_FAREY_CACHE;
+extern bool DISABLE_VFO_CALC_CACHE;
 extern uint64_t PLL_CALC_SHIFT;
 extern bool USE_SI5351A_CLK_POWERDOWN_MODE;
 extern bool USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE;
+
+extern bool USE_MFSK16_SHIFT;
 
 // from tracker.ino
 extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
@@ -110,6 +112,8 @@ extern const int VFO_I2C0_SCL_HZ;
 
 // starts with the max;
 extern uint32_t PLL_DENOM_OPTIMIZE;
+extern uint32_t PLL_DENOM_OPTIMIZE_calced;
+
 extern uint32_t XMIT_FREQUENCY;
 // decode of _verbose 0-9
 extern bool VERBY[10];
@@ -1180,7 +1184,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                     pll_denom_here = cache_pll_denom[i];
                     r_divisor_here = cache_r_divisor[i];
                     freq_xxx_here = cache_freq_xxx[i];
-                    V1_print(F("DEBUG:"));
+                    V1_print(F("FAREY:"));
                     V1_printf(" vfo_calc_cache valid i %u freq_xxx %" PRIu64,
                         i, freq_xxx_here);
                     V1_printf(" actual %.6f actual_pll_freq %.6f",
@@ -1234,7 +1238,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
 // good for doing calc only, so see what changes with freq changes
 uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
-    uint32_t *r_divisor, uint64_t freq_xxx, bool do_farey) {
+    uint32_t *r_divisor, uint64_t freq_xxx, bool use_PLL_DENOM_OPTIMIZE) {
     Watchdog.reset();
 
     if ((PLL_FREQ_TARGET % 1000000) != 0) {
@@ -1267,12 +1271,6 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // set from either optimize algo, or known best (per band) in tracker.ino
     // either by set_PLL_DENOM_OPTIMIZE() or by si5351a_calc_optimize() which can be
     // overwritten by the former
-    uint64_t PLL_DENOM = PLL_DENOM_OPTIMIZE;
-
-    // search algo may have gone out of bounds?
-    // should never negative
-    if (PLL_DENOM > PLL_DENOM_MAX) PLL_DENOM = PLL_DENOM_MAX;
-    uint64_t PLL_DENOM_xxx = PLL_DENOM << PLL_CALC_SHIFT;
 
     uint64_t tcxo_freq = (uint64_t) SI5351_TCXO_FREQ;  // 26 mhz?
     uint64_t tcxo_freq_xxx = tcxo_freq << PLL_CALC_SHIFT;
@@ -1325,7 +1323,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint64_t pll_mult_here;
     uint64_t ms_div_here;
     bool DEBUG = true;
-    uint8_t MAXTRIAL = 4;
+    uint8_t MAXTRIAL = 5; // might have to go up 100Mhz?
 
     uint8_t retcode = 0;
     // will get called for all 4 symbol freqs. should redo if any fail? 
@@ -1489,6 +1487,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         pll_remain_xxx = pll_freq_xxx - (pll_mult_here * tcxo_freq_xxx);
         double bits_pll_remain_xxx = log2(pll_remain_xxx);
 
+
         // this is for farey target, but is good for non-farey algo too?
         // this cast of pll_remain_xxx can only have 52 bits of precision?
         pll_remain = ((double) pll_remain_xxx) / pow(2, PLL_CALC_SHIFT);
@@ -1512,7 +1511,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     }
 
     if (trial>=MAXTRIAL) {
-        V1_print(F(EOL "ERROR: fatal..didn't find good pll_remain. Change PLL_TARGET_FREQ"));
+        V1_print(F(EOL "ERROR: fatal..didn't find good pll_remain. Change PLL_TARGET_FREQ" EOL));
         retcode = -1;
     }
 
@@ -1609,28 +1608,79 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     }
 
     //*******************************************************************
-    uint64_t pll_num_here;
-    uint64_t pll_denom_here;
-    if (USE_FAREY_WITH_PLL_REMAINDER) {
-        pll_num_here = (uint64_t)retval.numerator;
-        pll_denom_here = (uint64_t)retval.denominator;
-    } else {
-        uint64_t pnh_xxx = (pll_remain_xxx * PLL_DENOM_xxx) / tcxo_freq_xxx;
-        // got rid of adding 0.5 in the scaled domain, for round up
-        // the r divisor reduces
-        uint64_t pll_num_xxx = pnh_xxx + (1 << (PLL_CALC_SHIFT - 1));
-        pll_num_here = pll_num_xxx >> PLL_CALC_SHIFT;
-        pll_denom_here = PLL_DENOM;
+    uint64_t pll_denom_to_use = 0;
+
+    if (!use_PLL_DENOM_OPTIMIZE && !USE_FAREY_WITH_PLL_REMAINDER) {
+        // new: calculate the optimum denominator for numerator-shift-by-1
+        uint64_t wspr_shift_xxx = (12000L << PLL_CALC_SHIFT) / 8192L;
+        // 15.625 Hz is 15625/1000 or 125 / 8
+        uint64_t mfsk16_shift_xxx = (15L << PLL_CALC_SHIFT) / 8L;
+        uint64_t shift_xxx;
+        if (USE_MFSK16_SHIFT) {
+            shift_xxx = mfsk16_shift_xxx;
+            V1_printf(EOL "Numerator-Shift algo using mfsk16 shift %" PRIu64 EOL, shift_xxx);
+        } else {
+            shift_xxx = wspr_shift_xxx;
+            V1_printf(EOL "Numerator-Shift algo using wspr shift %" PRIu64 EOL, shift_xxx);
+        }
+
+        // also divide by the r divisor
+        // we will lose some bits here, depending on how big the PLL_CALC_SHIFT was
+        // optimal denom = (tcxo / (divider * wspr shift)
+        // add 0.5 shifted, to get rounding effect on the floor divide
+        // could shift some more here, to see if it's exact or not, but don't care
+        // this is a floor, not a round ..hmmm
+        // shift tcxo_freq_xxx left 1, add 1, then shift right 1?
+        pll_denom_to_use = ((tcxo_freq_xxx / ms_div_here) / shift_xxx) >> R_DIVISOR_SHIFT;
+
+        V1_printf(EOL "Numerator-Shift algo pll_denom_to_use %" PRIu64 EOL, 
+            pll_denom_to_use);
+
+        // this denom might not be exact.
+
+        // FIX! no benefit to 2x or 3x the denom if it doesn't exceed max
     }
 
     //*******************************************************************
-    if (pll_num_here > PLL_DENOM_MAX) {  // 1048575
-        V1_printf(EOL "ERROR: pll_num %" PRIu64 " is out of range 0 to 1048575" EOL,
+    uint64_t pll_num_here;
+    uint64_t pll_denom_here;
+
+    if (USE_FAREY_WITH_PLL_REMAINDER) {
+        pll_num_here = (uint64_t)retval.numerator;
+        pll_denom_here = (uint64_t)retval.denominator;
+    } else if (use_PLL_DENOM_OPTIMIZE) {
+        // old hardwired, per-band, constant. assume these are correct (not too big
+        pll_denom_here = PLL_DENOM_OPTIMIZE;
+    } else {
+        // we can multiply it by 2 or 3, if the result is < PLL_DENOM_MAX
+        // will this be better for absolute error/round off issues?
+        // don't go right up to the edge!
+        // the pll_num will be calculated below and be correct for 
+        // these choices
+        if ((pll_denom_here * 3) < (PLL_DENOM_MAX - 100)) 
+            pll_denom_here = 3 * pll_denom_to_use;
+        else if ((pll_denom_here * 2) < (PLL_DENOM_MAX - 100)) 
+            pll_denom_here = 2 * pll_denom_to_use;
+        else 
+            pll_denom_here = pll_denom_to_use;
+    }
+
+    // should never be negative
+    if (pll_denom_here > PLL_DENOM_MAX) pll_denom_here = PLL_DENOM_MAX;
+
+    // FIX! the R divisor needs to be in here somehow. but it's always one 
+    // for us, so no problem for now
+    pll_num_here = (pll_remain_xxx * pll_denom_here) / tcxo_freq_xxx;
+    V1_printf(EOL "Numerator-Shift algo calcs pll_num %" PRIu64 EOL, pll_num_here);
+
+    //*******************************************************************
+    if (pll_num_here == 0 || pll_num_here >= PLL_DENOM_MAX) {  // 1048575
+        V1_printf(EOL "ERROR: pll_num %" PRIu64 " is out of range 1 to 1048575-1" EOL,
             pll_num_here);
         retcode = -1;
     }
-    if (pll_denom_here > PLL_DENOM_MAX) {  // 1048575
-        V1_printf(EOL "ERROR: pll_denom %" PRIu64 " is out of range 0 to 1048575" EOL,
+    if (pll_denom_here == 0 || pll_denom_here >= PLL_DENOM_MAX) {  // 1048575
+        V1_printf(EOL "ERROR: pll_denom %" PRIu64 " is out of range 1 to 1048575-1" EOL,
             pll_denom_here);
         retcode = -1;
     }
@@ -1647,6 +1697,9 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     // note we return a double here...only for printing
     double actual_here = actual_pll_freq_here /
         (double)(ms_div_here << R_DIVISOR_SHIFT);
+
+    // for use by some of the sweep functions?
+    PLL_DENOM_OPTIMIZE_calced = pll_denom_here;
 
     // output so we can print or use
     *ms_div    = (uint32_t)ms_div_here;  // these uint64_t turn into uint32_t here
@@ -1704,9 +1757,9 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
 
     uint8_t retval = 0;
     uint8_t retcode = 0;
-    if (DISABLE_FAREY_CACHE || !USE_FAREY_WITH_PLL_REMAINDER) {
+    if (DISABLE_VFO_CALC_CACHE) {
         retcode = vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, true);
+            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, false);
     } else {
         // lookup. get values if in cache already!
         // don't do any prints on the lookup
@@ -1715,7 +1768,7 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
         if (retval != 1) {  // cache miss?
             V1_print(F(EOL "WARN: vfo_set_freq_xxx must redo vfo_calc_div_mult_num()" EOL));
             retcode = vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-                &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, true);
+                &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor, freq_xxx, false);
             // install. If we install it when already there, we'll flag the double
             // entry on lookup later
             vfo_calc_cache(&actual, &actual_pll_freq,
@@ -2496,60 +2549,59 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
     V1_println(F("set_PLL_DENOM_OPTIMIZE START"));
     // FIX! hack! we should have fixed values per band? do they vary by freq bin?
     uint32_t PLL_DENOM_MAX = 1048575;
-    V1_print(F("WARN: leave PLL_DENOM_OPTIMIZE with optimal values so far" EOL));
+    V1_print(F("Sets PLL_DENOM_OPTIMIZE with hard-wired values. May not be used." EOL));
     // this is the target PLL freq when making muliplier/divider initial
     // calculations set in tracker.ino
-    // from 900 history
-    // goal seek result
-    // case 17: PLL_DENOM_OPTIMIZE = 1048575; break; // can't do better?
-    // goal seek result
-    // case 20: PLL_DENOM_OPTIMIZE = 277333; break;
-    // wspr_calc_direct_shift.xlsx result
+    // NOTE: this is only if we don't calc the Numerator-Shift algo
+    // i.e. this is old spreadsheet data. The denom is calculated now (if not Farey)
+    // so should be no reason to use these. They are rounded up when necessary though (better)
+    // since the spreadsheet did fp math, not scaled integer
     int b = atoi(band);
     switch (PLL_FREQ_TARGET) {
-        case 90000000:
+        case 900000000:
             switch (b) {
-                case 10: PLL_DENOM_OPTIMIZE = 554667; break;
-                case 12: PLL_DENOM_OPTIMIZE = 986074; break;
-                case 15: PLL_DENOM_OPTIMIZE = 845206; break;
-                case 17: PLL_DENOM_OPTIMIZE = 709973; break;
-                case 20: PLL_DENOM_OPTIMIZE = 832000; break;
-                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+                case 10: PLL_DENOM_OPTIMIZE = 522039; break; // div 34 mul 36
+                case 12: PLL_DENOM_OPTIMIZE = 493037; break; // div 36 mul 34
+                case 15: PLL_DENOM_OPTIMIZE = 422603; break; // div 42 mul 34
+                case 17: PLL_DENOM_OPTIMIZE = 328691; break; // div 54 mul 37
+                case 20: PLL_DENOM_OPTIMIZE = 253562; break; // div 70 mul 37
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; // 2m? (no)
             }
             break;
         case 700000000:
             switch (b) {
-                case 10: PLL_DENOM_OPTIMIZE = 739556; break;
-                case 12: PLL_DENOM_OPTIMIZE = 633905; break;
-                case 15: PLL_DENOM_OPTIMIZE = 1044078; break;
-                case 17: PLL_DENOM_OPTIMIZE = 934175; break;
-                case 20: PLL_DENOM_OPTIMIZE = 709973; break;
-                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+                case 10: PLL_DENOM_OPTIMIZE = 739556; break; // div 24 mul 25
+                case 12: PLL_DENOM_OPTIMIZE = 633905; break; // div 28 mul 26
+                case 15: PLL_DENOM_OPTIMIZE = 522039; break; // div 34 mul 27
+                case 17: PLL_DENOM_OPTIMIZE = 467088; break; // div 38 mul 26
+                case 20: PLL_DENOM_OPTIMIZE = 354987; break; // div 50 mul 27
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; // 2m? (no)
             }
             break;
         case 600000000:
             switch (b) {
-                case 10: PLL_DENOM_OPTIMIZE = 806788; break;
-                case 12: PLL_DENOM_OPTIMIZE = 739556; break;
-                case 15: PLL_DENOM_OPTIMIZE = 633905; break;
-                case 17: PLL_DENOM_OPTIMIZE = 522039; break;
-                case 20: PLL_DENOM_OPTIMIZE = 845206; break;
-                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+                case 10: PLL_DENOM_OPTIMIZE = 806788; break; // div 22 mul 23
+                case 12: PLL_DENOM_OPTIMIZE = 739556; break; // div 24 mul 23
+                case 15: PLL_DENOM_OPTIMIZE = 633905; break; // div 28 mul 22
+                case 17: PLL_DENOM_OPTIMIZE = 522039; break; // div 34 mul 23
+                case 20: PLL_DENOM_OPTIMIZE = 422603; break; // div 42 mul 22
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; // 2m? (no)
             }
             break;
         case 500000000:
             switch (b) {
-                case 10: PLL_DENOM_OPTIMIZE = 986074; break;
-                case 12: PLL_DENOM_OPTIMIZE = 887467; break;
-                case 15: PLL_DENOM_OPTIMIZE = 739556; break;
-                case 17: PLL_DENOM_OPTIMIZE = 633905; break;
-                case 20: PLL_DENOM_OPTIMIZE = 986074; break;
-                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
+                case 10: PLL_DENOM_OPTIMIZE = 986074; break; // div 18 mul 19
+                case 12: PLL_DENOM_OPTIMIZE = 887467; break; // div 20 mul 19
+                case 15: PLL_DENOM_OPTIMIZE = 739556; break; // div 24 mul 19
+                case 17: PLL_DENOM_OPTIMIZE = 633905; break; // div 28 mul 19
+                case 20: PLL_DENOM_OPTIMIZE = 493037; break; // div 36 mul 19
+                default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; // this algo can't do 2m
             }
             break;
         default:
             if (!USE_FAREY_WITH_PLL_REMAINDER) {
-                V1_printf("ERROR: using unoptimized PLL_DENOM_OPTIMIZE: %d" PRIu64 EOL, b);
+                V1_print(F("ERROR: using unoptimized PLL_DENOM_OPTIMIZE for"));
+                V1_printf(" PLL_FREQ_TARGET %" PRIu64 EOL, PLL_FREQ_TARGET);
             }
             switch (b) {
                 case 10: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
@@ -2565,17 +2617,30 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
 
 //**********************************
 // 1/11/25 NEW: set PLL_FREQ_TARGET by band
-void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band){
+void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band) {
     uint64_t pll_freq_target;
-    switch (atoi(band)) {
-        case 20: pll_freq_target = 425000000; break;
-        case 17: pll_freq_target = 500000000; break; // 425 didn't get uHz error
-        case 15: pll_freq_target = 425000000; break;
-        case 12: pll_freq_target = 425000000; break;
-        case 10: pll_freq_target = 425000000; break;
-        case  2: pll_freq_target = 600000000; break;
-        // default to 20M in case of error cases
-        default: pll_freq_target = 600000000;
+    if (USE_FAREY_WITH_PLL_REMAINDER) {
+        switch (atoi(band)) {
+            case 20: pll_freq_target = 425000000; break;
+            case 17: pll_freq_target = 500000000; break; // 425 didn't get uHz error
+            case 15: pll_freq_target = 425000000; break;
+            case 12: pll_freq_target = 425000000; break;
+            case 10: pll_freq_target = 425000000; break;
+            case  2: pll_freq_target = 600000000; break;
+            // default to 20M in case of error cases
+            default: pll_freq_target = 600000000;
+        }
+    } else {
+        switch (atoi(band)) {
+            case 20: pll_freq_target = 500000000; break;
+            case 17: pll_freq_target = 500000000; break;
+            case 15: pll_freq_target = 500000000; break;
+            case 12: pll_freq_target = 500000000; break;
+            case 10: pll_freq_target = 500000000; break;
+            case  2: pll_freq_target = 900000000; break;
+            // default to 20M in case of error cases
+            default: pll_freq_target = 600000000;
+        }
     }
     *PLL_FREQ_TARGET = pll_freq_target;
 }   

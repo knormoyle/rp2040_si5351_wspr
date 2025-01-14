@@ -561,6 +561,10 @@ uint32_t SI5351_TCXO_FREQ = 26000000;
 uint32_t XMIT_FREQUENCY;
 // optimized?
 uint32_t PLL_DENOM_OPTIMIZE = 1048575;
+// now we're going to calc it and not use the hardwired values
+// will just use this instead? Doesn't work for when we do band sweep 
+// (currently disabled test)
+uint32_t PLL_DENOM_OPTIMIZE_calced = 1048575;
 
 // can be 0 1 2 or 3
 uint8_t SOLAR_SI5351_TX_POWER = 0;
@@ -568,12 +572,13 @@ uint8_t SOLAR_SI5351_TX_POWER = 0;
 // bool USE_FAREY_WITH_PLL_REMAINDER = true;
 // bool TEST_FAREY_WITH_PLL_REMAINDER = true;
 // bool USE_FAREY_CHOPPED_PRECISION = true;
-// bool DISABLE_FAREY_CACHE = false;
+// bool DISABLE_VFO_CALC_CACHE = false;
 
-bool USE_FAREY_WITH_PLL_REMAINDER = true;
+bool USE_FAREY_WITH_PLL_REMAINDER = false;
 bool USE_FAREY_CHOPPED_PRECISION = true;
 bool TEST_FAREY_WITH_PLL_REMAINDER = false;
-bool DISABLE_FAREY_CACHE = false;
+bool DISABLE_VFO_CALC_CACHE = false;
+bool USE_MFSK16_SHIFT = false;
 
 //*****************************
 bool BALLOON_MODE = true;
@@ -1089,17 +1094,18 @@ void setup1() {
     double symbolShiftError;
     double symbolAbsoluteError;
     uint32_t pll_num;
+    uint32_t pll_denom;
     // this walks thru the 4 symbols we're going to use
-    si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, true);
+    si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, &pll_denom, true);
     if (USE_FAREY_WITH_PLL_REMAINDER) {
-        V1_printf("Using Farey? symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
-        symbolAbsoluteError, symbolShiftError);
+        V1_print(F("Using Farey:"));
     } else {
-        V1_print(F("SEED for num-shift algo:"));
-        V1_printf(" PLL_DENOM_OPTIMIZE %lu pll_num %lu", PLL_DENOM_OPTIMIZE, pll_num);
-        V1_printf(" symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
-        symbolAbsoluteError, symbolShiftError);
+        V1_print(F("Using Numerator-Shift with hard-wired denom:" EOL));
     }
+
+    V1_printf(" pll_denom %lu pll_num %lu", pll_denom, pll_num);
+    V1_printf(" symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
+        symbolAbsoluteError, symbolShiftError);
 
     int sse_1e6 = roundf(1e6 * symbolShiftError);
     int sse_1e5 = roundf(1e5 * symbolShiftError);
@@ -2457,7 +2463,6 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
     V1_println(F("initPicoClock END"));
     return 0;
 }
-
 
 //**********************************
 void freeMem() {
