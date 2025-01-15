@@ -156,6 +156,7 @@ static uint8_t s_CLK2_control_prev = { 0 };
 static uint8_t s_PLLB_regs_prev[8] = { 0 };
 static uint32_t s_PLLB_ms_div_prev = 0;
 static uint32_t s_PLLB_pll_mult_prev = 0;
+static uint32_t s_PLLB_pll_denom_prev = 0;
 
 // only used because we set PLLA the same as PLLB, so it can lock?
 // FIX! but if we set it up, does that cause it to be on when it was off before?
@@ -163,6 +164,7 @@ static uint32_t s_PLLB_pll_mult_prev = 0;
 static uint8_t s_PLLA_regs_prev[8] = { 0 };
 static uint32_t s_PLLA_ms_div_prev = 0;
 static uint32_t s_PLLA_pll_mult_prev = 0;
+static uint32_t s_PLLA_pll_denom_prev = 0;
 
 //****************************************************
 // https://wellys.com/posts/rp2040_arduino_i2c/
@@ -1000,241 +1002,6 @@ void si5351a_reset_PLLA(bool print) {
 }
 
 //****************************************************
-// vfo_calc_cache operation (VCC)
-// 0: flush cache
-// 1: lookup cache and return data (ptrs) and true if match, false if not
-// 2: install into cache at stack ptr and increment ptr modulo 4 (cache size)
-// 3: print current cache contents
-
-// cache size is fixed at 5 (four wspr freqs plus 1 cw freq, for configured band/ u4b channel
-// if any constants like PLL_FREQ_TARGET/R_DIVISOR are changed, there are hardwired constants
-// so no issue in flushing the cache. We do band sweeps and freq sweeps, but
-// the freq should be enough to managing cache validity.
-// cache is only used to save Farey results? could save fixed PLL_DENOM_OPTIMIZE results also?
-// we'll recompute acut and actual_pll_freq wherever this is used
-void vfo_calc_cache_flush() {
-    uint32_t junku[1] = { 0 };
-    double junkd[1] = { 0 };
-    vfo_calc_cache(junkd, junkd, junku, junku, junku, junku, junku, junku[0], 0);
-}
-
-// this will do a print of current valid entries
-// will force a reboot if any valid entry has any values that are 0
-uint8_t vfo_calc_cache_print_and_check() {
-    uint32_t junku[1] = { 0 };
-    double junkd[1] = { 0 };
-    uint8_t retval = vfo_calc_cache(junkd, junkd, junku, junku, junku, junku, junku, junku[0], 3);
-    return retval;
-}
-
-// actual and actual_pll_freq are just saved, so we can total bypass the normal vfo_calc* routine
-// and reproduce it's data. simplest.
-// FIX! for testing, can change this to other sizes and you'll see that normal wspr
-// starts doing Farney algo
-const uint8_t VCC_SIZE = 5;
-uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
-    uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
-    uint32_t *r_divisor, uint64_t freq_xxx, uint8_t operation) {
-
-    // no prints on the lookup
-    if (operation != 1) {
-        V1_print(F("vfo_calc_cache START" EOL));
-    }
-
-    static bool cache_valid[VCC_SIZE] = { 0 };
-    static double cache_actual[VCC_SIZE] = { 0 };
-    static double cache_actual_pll_freq[VCC_SIZE] = { 0 };
-    static uint32_t cache_ms_div[VCC_SIZE] = { 0 };
-    static uint32_t cache_pll_mult[VCC_SIZE] = { 0 };
-    static uint32_t cache_pll_num[VCC_SIZE] = { 0 };
-    static uint32_t cache_pll_denom[VCC_SIZE] = { 0 };
-    static uint32_t cache_r_divisor[VCC_SIZE] = { 0 };
-    static uint64_t cache_freq_xxx[VCC_SIZE] = { 0 };
-
-    static uint8_t ptr = 0;
-
-    double actual_here = 0.0;
-    double actual_pll_freq_here = 0.0;
-    uint32_t ms_div_here = 0;
-    uint32_t pll_mult_here = 0;
-    uint32_t pll_num_here = 0;
-    uint32_t pll_denom_here = 0;
-    uint32_t r_divisor_here = 0;
-    uint64_t freq_xxx_here = 0;
-
-    bool found = false;
-    uint8_t retval = 0;
-    uint8_t found_i = 0;
-    switch (operation) {
-        case 0: {   // invalidate cache
-            // just valid clear should be fine, but all for safety/bug finding! no stale uses!
-            memset(cache_valid, 0, sizeof(cache_valid));
-            memset(cache_actual, 0, sizeof(cache_actual));
-            memset(cache_actual_pll_freq, 0, sizeof(cache_actual_pll_freq));
-            memset(cache_ms_div, 0, sizeof(cache_ms_div));
-            memset(cache_pll_mult, 0, sizeof(cache_pll_mult));
-            memset(cache_pll_num, 0, sizeof(cache_pll_num));
-            memset(cache_pll_denom, 0, sizeof(cache_pll_denom));
-            memset(cache_r_divisor, 0, sizeof(cache_r_divisor));
-            memset(cache_freq_xxx, 0, sizeof(cache_freq_xxx));
-            retval = 1;
-            break;
-        }
-        case 1:  {  // search in cache
-            for (uint8_t i = 0; i < VCC_SIZE; i++) {
-                freq_xxx_here = cache_freq_xxx[i];
-                if (cache_valid[i] && (freq_xxx_here == freq_xxx)) {
-                    actual_here = cache_actual[i];
-                    actual_pll_freq_here = cache_actual_pll_freq[i];
-                    ms_div_here = cache_ms_div[i];
-                    pll_mult_here = cache_pll_mult[i];
-                    pll_num_here = cache_pll_num[i];
-                    pll_denom_here = cache_pll_denom[i];
-                    r_divisor_here = cache_r_divisor[i];
-                    // shouldn't >1 hit? will use last if so
-                    if (found) {
-                        V1_printf("ERROR: vfo_calc_cache multi hits: i %u prior found_i %u" EOL,
-                            i, found_i);
-                        V1_print(F("MULTI HIT: "));
-                        V1_printf(" vfo_calc_cache hit on i %u freq_xxx %" PRIu64,
-                            i, freq_xxx_here);
-                        V1_printf(" actual %.6f actual_pll_freq %.6f",
-                            actual_here, actual_pll_freq_here);
-                        V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu",
-                            pll_mult_here, pll_num_here, pll_denom_here);
-                        V1_printf(" ms_div %lu r_divisor %lu" EOL,
-                            ms_div_here, r_divisor_here);
-                    }
-
-                    bool badCache =
-                        (actual_here == 0.0) ||
-                        (actual_pll_freq_here == 0.0) ||
-                        (ms_div_here == 0) ||
-                        (pll_mult_here == 0) ||
-                        (pll_num_here == 0) ||    // should never happen? very unlikely
-                        (pll_denom_here == 0) ||
-                        (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
-                        (freq_xxx_here == 0);    // we should never lookup freq_xxx
-
-                        // is 900 really the upper limiter or ?? we have 908 for 24Mhz
-                        // do we need lower pll freq?
-                        if (ms_div_here < 4 || ms_div_here > 900) {
-                            V1_printf("ERROR: cached ms_div %lu is out of range 4 to 900" EOL,
-                                ms_div_here);
-                            // FIX! how should we recalc
-                            badCache = true;
-                        }
-                        if (pll_mult_here < 15 || pll_mult_here > 90) {
-                            V1_printf("ERROR: cached pll_mult %lu is out of range 15 to 90." EOL,
-                                pll_mult_here);
-                            badCache = true;
-                        }
-                        if (freq_xxx_here == 0) {
-                            V1_printf("ERROR: cached freq_xxx %" PRIu64 " is 0." EOL,
-                                freq_xxx_here);
-                            badCache = true;
-                        }
-                        // FIX! we could check the num/denum for range also?
-
-                    if (badCache) {
-                        V1_println(F("ERROR: fatal. valid cache entry had 0 or freq_xxx 0."));
-                        V1_println(F("ERROR: won't use anything from this cache entry"));
-                        found = false;
-                    } else {
-                        found = true;
-                        found_i = i;
-                        retval = 1;
-                        *actual = actual_here;
-                        *actual_pll_freq = actual_pll_freq_here;
-                        *ms_div = ms_div_here;
-                        *pll_mult = pll_mult_here;
-                        *pll_num = pll_num_here;
-                        *pll_denom = pll_denom_here;
-                        *r_divisor = r_divisor_here;
-                    }
-                }
-            }
-            break;
-        }
-        case 2: {  // write to cache and make valid
-            cache_valid[ptr] = true;
-            cache_actual[ptr] = *actual;
-            cache_actual_pll_freq[ptr] = *actual_pll_freq;
-            cache_ms_div[ptr] = *ms_div;
-            cache_pll_mult[ptr] = *pll_mult;
-            cache_pll_num[ptr] = *pll_num;
-            cache_pll_denom[ptr] = *pll_denom;
-            cache_r_divisor[ptr] = *r_divisor;
-            cache_freq_xxx[ptr] = freq_xxx;
-            ptr = ((ptr+1) % VCC_SIZE);
-            retval = 1;
-            break;
-        }
-        case 3: {  // print valid cache contents for debug
-            // we can print and validate the cache every tracker.ino loop?
-            uint8_t VCC_valid_cnt = 0;
-            for (uint8_t i = 0; i < VCC_SIZE; i++) {
-                if (cache_valid[i]) {
-                    VCC_valid_cnt += 1;
-                    actual_here = cache_actual[i];
-                    actual_pll_freq_here = cache_actual_pll_freq[i];
-                    ms_div_here = cache_ms_div[i];
-                    pll_mult_here = cache_pll_mult[i];
-                    pll_num_here = cache_pll_num[i];
-                    pll_denom_here = cache_pll_denom[i];
-                    r_divisor_here = cache_r_divisor[i];
-                    freq_xxx_here = cache_freq_xxx[i];
-                    V1_print(F("FAREY:"));
-                    V1_printf(" vfo_calc_cache valid i %u freq_xxx %" PRIu64,
-                        i, freq_xxx_here);
-                    V1_printf(" actual %.6f actual_pll_freq %.6f",
-                        actual_here, actual_pll_freq_here);
-                    V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu",
-                        pll_mult_here, pll_num_here, pll_denom_here);
-                    V1_printf(" ms_div %lu r_divisor %lu" EOL,
-                        ms_div_here, r_divisor_here);
-
-                    bool badCache =
-                        (actual_here == 0.0) ||
-                        (actual_pll_freq_here == 0.0) ||
-                        (ms_div_here == 0) ||
-                        (pll_mult_here == 0) ||
-                        (pll_num_here == 0) ||    // should never happen? very unlikely
-                        (pll_denom_here == 0) ||
-                        (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
-                        (freq_xxx_here == 0);    // we should never lookup freq_xxx
-
-                    if (badCache) {
-                        V0_println(F("ERROR: fatal, reboot. valid cache had 0 or freq_xxx 0." EOL));
-                        V0_flush();
-                        Watchdog.enable(5000);  // milliseconds
-                        while (true) tight_loop_contents();
-                    }
-                }
-            }
-            retval = VCC_valid_cnt;
-            break;
-        }
-
-        default: {
-            V1_printf("ERROR: illegal vfo_cache_cache operation %u" EOL, operation);
-            retval = 1;
-        }
-    }
-
-    // count the current valid entries (after any update)
-    uint8_t totalValid = 0;
-    for (uint8_t i = 0; i < VCC_SIZE; i++) {
-        if (cache_valid[i]) totalValid += 1;
-    }
-// no print on lookup
-    if (operation != 1) {
-        V1_printf("vfo_calc_cache END totalValid %u" EOL, totalValid);
-    }
-    return retval;
-}
-
-//****************************************************
 // good for doing calc only, so see what changes with freq changes
 uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
@@ -1651,28 +1418,33 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     } else if (use_PLL_DENOM_OPTIMIZE) {
         // old hardwired, per-band, constant. assume these are correct (not too big
         pll_denom_here = PLL_DENOM_OPTIMIZE;
+        V1_printf(EOL "Numerator-Shift algo using PLL_DENOM_OPTIMIZE, pll_denom_here %" PRIu64 EOL, 
+            pll_denom_here);
     } else {
         // we can multiply it by 2 or 3, if the result is < PLL_DENOM_MAX
         // will this be better for absolute error/round off issues?
         // don't go right up to the edge!
         // the pll_num will be calculated below and be correct for 
         // these choices
-        if ((pll_denom_here * 3) < (PLL_DENOM_MAX - 100)) 
+        if ((pll_denom_to_use * 3) < (PLL_DENOM_MAX - 100)) 
             pll_denom_here = 3 * pll_denom_to_use;
-        else if ((pll_denom_here * 2) < (PLL_DENOM_MAX - 100)) 
+        else if ((pll_denom_to_use * 2) < (PLL_DENOM_MAX - 100)) 
             pll_denom_here = 2 * pll_denom_to_use;
         else 
             pll_denom_here = pll_denom_to_use;
+        V1_printf(EOL "Numerator-Shift algo after multiplying, pll_denom_here %" PRIu64 EOL, 
+            pll_denom_here);
+
+        // should never be negative
+        // shouldn't need this comparision here?
+        // if (pll_denom_here > PLL_DENOM_MAX) pll_denom_here = PLL_DENOM_MAX;
+
+        // FIX! the R divisor needs to be in here somehow. but it's always one 
+        // for us, so no problem for now
+        pll_num_here = (pll_remain_xxx * pll_denom_here) / tcxo_freq_xxx;
+        V1_printf(EOL "Numerator-Shift algo calcs pll_num %" PRIu64 EOL, pll_num_here);
+
     }
-
-    // should never be negative
-    if (pll_denom_here > PLL_DENOM_MAX) pll_denom_here = PLL_DENOM_MAX;
-
-    // FIX! the R divisor needs to be in here somehow. but it's always one 
-    // for us, so no problem for now
-    pll_num_here = (pll_remain_xxx * pll_denom_here) / tcxo_freq_xxx;
-    V1_printf(EOL "Numerator-Shift algo calcs pll_num %" PRIu64 EOL, pll_num_here);
-
     //*******************************************************************
     if (pll_num_here == 0 || pll_num_here >= PLL_DENOM_MAX) {  // 1048575
         V1_printf(EOL "ERROR: pll_num %" PRIu64 " is out of range 1 to 1048575-1" EOL,
@@ -1735,10 +1507,6 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
         // note we only have one s_PLLB_ms_div_prev copy state also
     }
 
-    // new: 1/10/25
-    // is this a must-have for ms5351m? we have to turn clocks off, then turn them on
-    if (true)
-        vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
 
     // we get pll_denom to know what was used in the calc
     // R_DIVISOR_SHIFT is hardwired constant (/4 => shift 2)
@@ -1783,6 +1551,14 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
         return retcode;
     }
 
+    //*****************************************************
+    // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
+    bool do_pll_reset = (pll_denom != s_PLLB_pll_denom_prev); 
+
+    // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
+    if (do_pll_reset)
+        vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
+
     // for numerator-shift algo:
     // calcs were done to show that only pll_num needs to change for symbols 0 to 3
     // we always do an early turn-on with symbol 0 that gets all other state right
@@ -1799,6 +1575,7 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     }
 
     // we don't check if the pll_mult has changed
+    // FIX! should we OR these cases into do_pll_reset ??
     if (pll_mult != s_PLLB_pll_mult_prev) {
         if (only_pll_num) {
             V1_print(F("ERROR: only_pll_num true"));
@@ -1807,9 +1584,6 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
             V1_print(F(" need to do si5351a_reset_PLLB() after this?" EOL));
         }
     }
-    s_PLLB_pll_mult_prev = pll_mult;
-    s_PLLA_pll_mult_prev = pll_mult;
-
     if (ms_div != s_PLLB_ms_div_prev) {
         // s_PLLB_ms_div_prev is global
         // only reset pll if ms_div changed?
@@ -1831,22 +1605,22 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
         // I guess when we first turn change ms_div, we'll do a reset_PLLB (elsewhere)
         // si5351a_reset_PLLB(true);
 
-        // static global? for comparison next time
-        s_PLLB_ms_div_prev = ms_div;
     }
-    s_PLLA_ms_div_prev = ms_div;
     // V1_printf("vfo_set_freq_xxx END clk_num %u freq %lu" EOL, clk_num, freq);
 
-    // 1/9/25 HACK! after every frequency change? Shouldn't need except for the first
-    // is it a must-have for ms5351m?
-    if (true) {
+    // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
+    if (do_pll_reset)
         si5351a_reset_PLLB(false);
-    }
-
-    // new: 1/10/25
-    // is this a must-have for ms5351m? do we need a enable here?
-    if (true)
         vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
+
+    s_PLLB_pll_mult_prev = pll_mult;
+    s_PLLA_pll_mult_prev = pll_mult;
+
+    s_PLLB_ms_div_prev = ms_div;
+    s_PLLA_ms_div_prev = ms_div;
+
+    s_PLLB_pll_denom_prev = pll_denom;
+    s_PLLA_pll_denom_prev = pll_denom;
 
     return retcode;
 }
@@ -2615,7 +2389,7 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
     V1_println(F("set_PLL_DENOM_OPTIMIZE END"));
 }
 
-//**********************************
+//****************************************************
 // 1/11/25 NEW: set PLL_FREQ_TARGET by band
 void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band) {
     uint64_t pll_freq_target;
@@ -2644,5 +2418,239 @@ void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band) {
     }
     *PLL_FREQ_TARGET = pll_freq_target;
 }   
-//**********************************
+
+//****************************************************
+// vfo_calc_cache operation (VCC)
+// 0: flush cache
+// 1: lookup cache and return data (ptrs) and true if match, false if not
+// 2: install into cache at stack ptr and increment ptr modulo 4 (cache size)
+// 3: print current cache contents
+
+// cache size is fixed at 5 (four wspr freqs plus 1 cw freq, for configured band/ u4b channel
+// if any constants like PLL_FREQ_TARGET/R_DIVISOR are changed, there are hardwired constants
+// so no issue in flushing the cache. We do band sweeps and freq sweeps, but
+// the freq should be enough to managing cache validity.
+// cache is only used to save Farey results? could save fixed PLL_DENOM_OPTIMIZE results also?
+// we'll recompute acut and actual_pll_freq wherever this is used
+void vfo_calc_cache_flush() {
+    uint32_t junku[1] = { 0 };
+    double junkd[1] = { 0 };
+    vfo_calc_cache(junkd, junkd, junku, junku, junku, junku, junku, junku[0], 0);
+}
+
+// this will do a print of current valid entries
+// will force a reboot if any valid entry has any values that are 0
+uint8_t vfo_calc_cache_print_and_check() {
+    uint32_t junku[1] = { 0 };
+    double junkd[1] = { 0 };
+    uint8_t retval = vfo_calc_cache(junkd, junkd, junku, junku, junku, junku, junku, junku[0], 3);
+    return retval;
+}
+
+// actual and actual_pll_freq are just saved, so we can total bypass the normal vfo_calc* routine
+// and reproduce it's data. simplest.
+// FIX! for testing, can change this to other sizes and you'll see that normal wspr
+// starts doing Farney algo
+const uint8_t VCC_SIZE = 5;
+uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
+    uint32_t *ms_div, uint32_t *pll_mult, uint32_t *pll_num, uint32_t *pll_denom,
+    uint32_t *r_divisor, uint64_t freq_xxx, uint8_t operation) {
+
+    // no prints on the lookup
+    if (operation != 1) {
+        V1_print(F("vfo_calc_cache START" EOL));
+    }
+
+    static bool cache_valid[VCC_SIZE] = { 0 };
+    static double cache_actual[VCC_SIZE] = { 0 };
+    static double cache_actual_pll_freq[VCC_SIZE] = { 0 };
+    static uint32_t cache_ms_div[VCC_SIZE] = { 0 };
+    static uint32_t cache_pll_mult[VCC_SIZE] = { 0 };
+    static uint32_t cache_pll_num[VCC_SIZE] = { 0 };
+    static uint32_t cache_pll_denom[VCC_SIZE] = { 0 };
+    static uint32_t cache_r_divisor[VCC_SIZE] = { 0 };
+    static uint64_t cache_freq_xxx[VCC_SIZE] = { 0 };
+
+    static uint8_t ptr = 0;
+
+    double actual_here = 0.0;
+    double actual_pll_freq_here = 0.0;
+    uint32_t ms_div_here = 0;
+    uint32_t pll_mult_here = 0;
+    uint32_t pll_num_here = 0;
+    uint32_t pll_denom_here = 0;
+    uint32_t r_divisor_here = 0;
+    uint64_t freq_xxx_here = 0;
+
+    bool found = false;
+    uint8_t retval = 0;
+    uint8_t found_i = 0;
+    switch (operation) {
+        case 0: {   // invalidate cache
+            // just valid clear should be fine, but all for safety/bug finding! no stale uses!
+            memset(cache_valid, 0, sizeof(cache_valid));
+            memset(cache_actual, 0, sizeof(cache_actual));
+            memset(cache_actual_pll_freq, 0, sizeof(cache_actual_pll_freq));
+            memset(cache_ms_div, 0, sizeof(cache_ms_div));
+            memset(cache_pll_mult, 0, sizeof(cache_pll_mult));
+            memset(cache_pll_num, 0, sizeof(cache_pll_num));
+            memset(cache_pll_denom, 0, sizeof(cache_pll_denom));
+            memset(cache_r_divisor, 0, sizeof(cache_r_divisor));
+            memset(cache_freq_xxx, 0, sizeof(cache_freq_xxx));
+            retval = 1;
+            break;
+        }
+        case 1:  {  // search in cache
+            for (uint8_t i = 0; i < VCC_SIZE; i++) {
+                freq_xxx_here = cache_freq_xxx[i];
+                if (cache_valid[i] && (freq_xxx_here == freq_xxx)) {
+                    actual_here = cache_actual[i];
+                    actual_pll_freq_here = cache_actual_pll_freq[i];
+                    ms_div_here = cache_ms_div[i];
+                    pll_mult_here = cache_pll_mult[i];
+                    pll_num_here = cache_pll_num[i];
+                    pll_denom_here = cache_pll_denom[i];
+                    r_divisor_here = cache_r_divisor[i];
+                    // shouldn't >1 hit? will use last if so
+                    if (found) {
+                        V1_printf("ERROR: vfo_calc_cache multi hits: i %u prior found_i %u" EOL,
+                            i, found_i);
+                        V1_print(F("MULTI HIT: "));
+                        V1_printf(" vfo_calc_cache hit on i %u freq_xxx %" PRIu64,
+                            i, freq_xxx_here);
+                        V1_printf(" actual %.6f actual_pll_freq %.6f",
+                            actual_here, actual_pll_freq_here);
+                        V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu",
+                            pll_mult_here, pll_num_here, pll_denom_here);
+                        V1_printf(" ms_div %lu r_divisor %lu" EOL,
+                            ms_div_here, r_divisor_here);
+                    }
+
+                    bool badCache =
+                        (actual_here == 0.0) ||
+                        (actual_pll_freq_here == 0.0) ||
+                        (ms_div_here == 0) ||
+                        (pll_mult_here == 0) ||
+                        (pll_num_here == 0) ||    // should never happen? very unlikely
+                        (pll_denom_here == 0) ||
+                        (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
+                        (freq_xxx_here == 0);    // we should never lookup freq_xxx
+
+                        // is 900 really the upper limiter or ?? we have 908 for 24Mhz
+                        // do we need lower pll freq?
+                        if (ms_div_here < 4 || ms_div_here > 900) {
+                            V1_printf("ERROR: cached ms_div %lu is out of range 4 to 900" EOL,
+                                ms_div_here);
+                            // FIX! how should we recalc
+                            badCache = true;
+                        }
+                        if (pll_mult_here < 15 || pll_mult_here > 90) {
+                            V1_printf("ERROR: cached pll_mult %lu is out of range 15 to 90." EOL,
+                                pll_mult_here);
+                            badCache = true;
+                        }
+                        if (freq_xxx_here == 0) {
+                            V1_printf("ERROR: cached freq_xxx %" PRIu64 " is 0." EOL,
+                                freq_xxx_here);
+                            badCache = true;
+                        }
+                        // FIX! we could check the num/denum for range also?
+
+                    if (badCache) {
+                        V1_println(F("ERROR: fatal. valid cache entry had 0 or freq_xxx 0."));
+                        V1_println(F("ERROR: won't use anything from this cache entry"));
+                        found = false;
+                    } else {
+                        found = true;
+                        found_i = i;
+                        retval = 1;
+                        *actual = actual_here;
+                        *actual_pll_freq = actual_pll_freq_here;
+                        *ms_div = ms_div_here;
+                        *pll_mult = pll_mult_here;
+                        *pll_num = pll_num_here;
+                        *pll_denom = pll_denom_here;
+                        *r_divisor = r_divisor_here;
+                    }
+                }
+            }
+            break;
+        }
+        case 2: {  // write to cache and make valid
+            cache_valid[ptr] = true;
+            cache_actual[ptr] = *actual;
+            cache_actual_pll_freq[ptr] = *actual_pll_freq;
+            cache_ms_div[ptr] = *ms_div;
+            cache_pll_mult[ptr] = *pll_mult;
+            cache_pll_num[ptr] = *pll_num;
+            cache_pll_denom[ptr] = *pll_denom;
+            cache_r_divisor[ptr] = *r_divisor;
+            cache_freq_xxx[ptr] = freq_xxx;
+            ptr = ((ptr+1) % VCC_SIZE);
+            retval = 1;
+            break;
+        }
+        case 3: {  // print valid cache contents for debug
+            // we can print and validate the cache every tracker.ino loop?
+            uint8_t VCC_valid_cnt = 0;
+            for (uint8_t i = 0; i < VCC_SIZE; i++) {
+                if (cache_valid[i]) {
+                    VCC_valid_cnt += 1;
+                    actual_here = cache_actual[i];
+                    actual_pll_freq_here = cache_actual_pll_freq[i];
+                    ms_div_here = cache_ms_div[i];
+                    pll_mult_here = cache_pll_mult[i];
+                    pll_num_here = cache_pll_num[i];
+                    pll_denom_here = cache_pll_denom[i];
+                    r_divisor_here = cache_r_divisor[i];
+                    freq_xxx_here = cache_freq_xxx[i];
+                    V1_print(F("FAREY:"));
+                    V1_printf(" vfo_calc_cache valid i %u freq_xxx %" PRIu64,
+                        i, freq_xxx_here);
+                    V1_printf(" actual %.6f actual_pll_freq %.6f",
+                        actual_here, actual_pll_freq_here);
+                    V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu",
+                        pll_mult_here, pll_num_here, pll_denom_here);
+                    V1_printf(" ms_div %lu r_divisor %lu" EOL,
+                        ms_div_here, r_divisor_here);
+
+                    bool badCache =
+                        (actual_here == 0.0) ||
+                        (actual_pll_freq_here == 0.0) ||
+                        (ms_div_here == 0) ||
+                        (pll_mult_here == 0) ||
+                        (pll_num_here == 0) ||    // should never happen? very unlikely
+                        (pll_denom_here == 0) ||
+                        (r_divisor_here == 0) ||  // if the encode is 0, then this is a 1
+                        (freq_xxx_here == 0);    // we should never lookup freq_xxx
+
+                    if (badCache) {
+                        V0_println(F("ERROR: fatal, reboot. valid cache had 0 or freq_xxx 0." EOL));
+                        V0_flush();
+                        Watchdog.enable(5000);  // milliseconds
+                        while (true) tight_loop_contents();
+                    }
+                }
+            }
+            retval = VCC_valid_cnt;
+            break;
+        }
+
+        default: {
+            V1_printf("ERROR: illegal vfo_cache_cache operation %u" EOL, operation);
+            retval = 1;
+        }
+    }
+
+    // count the current valid entries (after any update)
+    uint8_t totalValid = 0;
+    for (uint8_t i = 0; i < VCC_SIZE; i++) {
+        if (cache_valid[i]) totalValid += 1;
+    }
+// no print on lookup
+    if (operation != 1) {
+        V1_printf("vfo_calc_cache END totalValid %u" EOL, totalValid);
+    }
+    return retval;
+}
 
