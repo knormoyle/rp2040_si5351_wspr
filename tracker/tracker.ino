@@ -1775,7 +1775,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_flush();
     // init to all zeroes just so we know what the encode is doing, when
     // if we get bad symbols when we send the symbols
-    syncAndSendWspr(hf_freq, 0, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
+    bool vfoOffWhenDone = false;
+    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
     tx_cnt_0 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
     if (VERBY[1]) {
@@ -1802,7 +1803,10 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_print(F(EOL));
     V1_flush();
 
-    syncAndSendWspr(hf_freq, 1, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
+    vfoOffWhenDone =
+        _TELEN_config[0] == '-' && _TELEN_config[1] == '-' && 
+        _TELEN_config[2] == '-' && _TELEN_config[3] == '-';
+    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
     if (VERBY[1]) {
@@ -1828,7 +1832,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("hf_power %s" EOL, hf_power);
         V1_print(F(EOL));
         V1_flush();
-        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, false);
+        vfoOffWhenDone = _TELEN_config[2] == '-' && _TELEN_config[3] == '-';
+        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
         tx_cnt_2 += 1;
         if (VERBY[1]) {
             StampPrintf("WSPR telen1 Tx sent. minute: %d second: %d" EOL, minute(), second());
@@ -1851,7 +1856,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("hf_power %s" EOL, hf_power);
         V1_print(F(EOL));
         V1_flush();
-        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, true);
+        vfoOffWhenDone = true;
+        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
         tx_cnt_3 += 1;
         // we have 10 secs or so at the end of WSPR to get this off?
         if (VERBY[1]) {
