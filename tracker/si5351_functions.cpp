@@ -1385,10 +1385,10 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         uint64_t shift_xxx;
         if (USE_MFSK16_SHIFT) {
             shift_xxx = mfsk16_shift_xxx;
-            V1_printf(EOL "Numerator-Shift algo using mfsk16 shift %" PRIu64 EOL, shift_xxx);
+            V1_printf(EOL "Numerator-Shift algo using mfsk16 shift_xxx %" PRIu64 EOL, shift_xxx);
         } else {
             shift_xxx = wspr_shift_xxx;
-            V1_printf(EOL "Numerator-Shift algo using wspr shift %" PRIu64 EOL, shift_xxx);
+            V1_printf(EOL "Numerator-Shift algo using wspr shift_xxx %" PRIu64 EOL, shift_xxx);
         }
 
         // also divide by the r divisor
@@ -1409,31 +1409,33 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     }
 
     //*******************************************************************
-    uint64_t pll_num_here;
-    uint64_t pll_denom_here;
+    uint64_t pll_num_here = 0;
+    uint64_t pll_denom_here = 0;
 
     if (USE_FAREY_WITH_PLL_REMAINDER) {
         pll_num_here = (uint64_t)retval.numerator;
         pll_denom_here = (uint64_t)retval.denominator;
-    } else if (use_PLL_DENOM_OPTIMIZE) {
-        // old hardwired, per-band, constant. assume these are correct (not too big
-        pll_denom_here = PLL_DENOM_OPTIMIZE;
-        V1_printf(EOL "Numerator-Shift algo using PLL_DENOM_OPTIMIZE, pll_denom_here %" PRIu64 EOL, 
-            pll_denom_here);
     } else {
-        // we can multiply it by 2 or 3, if the result is < PLL_DENOM_MAX
-        // will this be better for absolute error/round off issues?
-        // don't go right up to the edge!
-        // the pll_num will be calculated below and be correct for 
-        // these choices
-        if ((pll_denom_to_use * 3) < (PLL_DENOM_MAX - 100)) 
-            pll_denom_here = 3 * pll_denom_to_use;
-        else if ((pll_denom_to_use * 2) < (PLL_DENOM_MAX - 100)) 
-            pll_denom_here = 2 * pll_denom_to_use;
-        else 
-            pll_denom_here = pll_denom_to_use;
-        V1_printf(EOL "Numerator-Shift algo after multiplying, pll_denom_here %" PRIu64 EOL, 
-            pll_denom_here);
+        if (use_PLL_DENOM_OPTIMIZE) {
+            // old hardwired, per-band, constant. assume these are correct (not too big
+            pll_denom_here = PLL_DENOM_OPTIMIZE;
+            V1_printf(EOL "Numerator-Shift algo using PLL_DENOM_OPTIMIZE, pll_denom_here %" PRIu64 EOL, 
+                pll_denom_here);
+        } else {
+            // we can multiply it by 2 or 3, if the result is < PLL_DENOM_MAX
+            // will this be better for absolute error/round off issues?
+            // don't go right up to the edge!
+            // the pll_num will be calculated below and be correct for 
+            // these choices
+            if ((pll_denom_to_use * 3) < (PLL_DENOM_MAX - 100)) 
+                pll_denom_here = 3 * pll_denom_to_use;
+            else if ((pll_denom_to_use * 2) < (PLL_DENOM_MAX - 100)) 
+                pll_denom_here = 2 * pll_denom_to_use;
+            else 
+                pll_denom_here = pll_denom_to_use;
+            V1_printf(EOL "Numerator-Shift algo after multiplying, pll_denom_here %" PRIu64 EOL, 
+                pll_denom_here);
+        }
 
         // should never be negative
         // shouldn't need this comparision here?
@@ -1552,15 +1554,15 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     }
 
     //*****************************************************
-    // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
+    // hmm. does ms5351m need this when both numerator and denominator change a lot?
     // do we always need it when we do the Farey num/denom? why?
-    bool do_pll_reset = (pll_denom != s_PLLB_pll_denom_prev) || 
-        USE_FAREY_WITH_PLL_REMAINDER;
+    // HACK temp disable
+    // bool do_pll_reset = ((pll_denom != s_PLLB_pll_denom_prev) || USE_FAREY_WITH_PLL_REMAINDER);
 
-
-    // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
-    if (do_pll_reset)
+    // hmm. does ms5351m need this when both numerator and denominator change a lot?
+    if (true) {
         vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
+    }
 
     // for numerator-shift algo:
     // calcs were done to show that only pll_num needs to change for symbols 0 to 3
@@ -1614,9 +1616,10 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
     // if (do_pll_reset)
     // FIX! do we always need this? why?
-    if (true)
+    if (true) {
         si5351a_reset_PLLB(false);
         vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
+    }
 
     s_PLLB_pll_mult_prev = pll_mult;
     s_PLLA_pll_mult_prev = pll_mult;
@@ -1648,7 +1651,9 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
         disable_bits |= 1 << 1;
         // don't do anything if no bits change
         // note the use of bitwise inversion ~
-        if ((si5351bx_clken & ~disable_bits) != si5351bx_clken) {  // 0 is enabled
+        // if ((si5351bx_clken & ~disable_bits) != si5351bx_clken) {  // 0 is enabled
+        // FIX! always do it?
+        if (true) {
             si5351bx_clken &= ~disable_bits;
             if (print) {
                 V1_printf("vfo_turn_on_clk_out si5351bx_clken %02x" EOL,
@@ -1686,7 +1691,9 @@ void vfo_turn_off_clk_out(uint8_t clk_num, bool print) {
             EOL, clk_num);
     } else {
         disable_bits |= 1 << 1;
-        if ((si5351bx_clken | disable_bits) != si5351bx_clken) {  // 0 is enabled
+        // if ((si5351bx_clken | disable_bits) != si5351bx_clken) {  // 0 is enabled
+        // FIX! always do it?
+        if (true) {
             si5351bx_clken |= disable_bits;  // 1 is disable
             // if si5351a power is off we'll get ERROR: res -1 after i2cWrite 3
             if (print) {
@@ -2400,22 +2407,22 @@ void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band) {
     uint64_t pll_freq_target;
     if (USE_FAREY_WITH_PLL_REMAINDER) {
         switch (atoi(band)) {
-            case 20: pll_freq_target = 425000000; break;
-            case 17: pll_freq_target = 500000000; break; // 425 didn't get uHz error
-            case 15: pll_freq_target = 425000000; break;
-            case 12: pll_freq_target = 425000000; break;
-            case 10: pll_freq_target = 425000000; break;
+            case 20: pll_freq_target = 600000000; break;
+            case 17: pll_freq_target = 600000000; break; // 425 didn't get uHz error
+            case 15: pll_freq_target = 600000000; break;
+            case 12: pll_freq_target = 600000000; break;
+            case 10: pll_freq_target = 600000000; break;
             case  2: pll_freq_target = 600000000; break;
             // default to 20M in case of error cases
             default: pll_freq_target = 600000000;
         }
     } else {
         switch (atoi(band)) {
-            case 20: pll_freq_target = 500000000; break;
-            case 17: pll_freq_target = 500000000; break;
-            case 15: pll_freq_target = 500000000; break;
-            case 12: pll_freq_target = 500000000; break;
-            case 10: pll_freq_target = 500000000; break;
+            case 20: pll_freq_target = 600000000; break;
+            case 17: pll_freq_target = 600000000; break;
+            case 15: pll_freq_target = 600000000; break;
+            case 12: pll_freq_target = 600000000; break;
+            case 10: pll_freq_target = 600000000; break;
             case  2: pll_freq_target = 900000000; break;
             // default to 20M in case of error cases
             default: pll_freq_target = 600000000;

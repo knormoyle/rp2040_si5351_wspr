@@ -87,26 +87,22 @@ void wsprSleepForMillis(int n) {
     // This method attempts to perform a lower power sleep (using WFE) as much as possible.
     // ms the number of milliseconds to sleep
 
-    if (false) {
-        // I guess we don't want to use this, because the led isn't update
-        // so that 3 short led, start looking like 3 long (longs are config/error cases)
-        sleep_ms(n);
-    } else {
-        int milliDiv = n / 10;
-        // sleep approx. n millisecs
-        for (int i = 0; i < milliDiv ; i++) {
-            // https://docs.arduino.cc/language-reference/en/functions/time/delay/
-            // check for update every 10 milliseconds
-            if ((milliDiv % 10) == 0) {
-                // no prints in this
-                updateStatusLED();
-                Watchdog.reset();
-            }
-
-            // faster recovery with delay?
-            // could we get some variation that affects our symbol to symbol time?
-            sleep_ms(10);
+    int milliDiv = n / 10;
+    // sleep approx. n millisecs
+    for (int i = 0; i < milliDiv ; i++) {
+        // https://docs.arduino.cc/language-reference/en/functions/time/delay/
+        // check for update every 10 milliseconds
+        if ((milliDiv % 10) == 0) {
+            // no prints in this
+            updateStatusLED();
+            Watchdog.reset();
         }
+
+        // faster recovery with delay?
+        // could we get some variation that affects our symbol to symbol time?
+        // FIX! was this causing a problem?
+        sleep_ms(10);
+        // busy_wait_ms(10);
     }
 }
 

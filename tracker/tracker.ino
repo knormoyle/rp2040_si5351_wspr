@@ -382,7 +382,7 @@ uint64_t PLL_CALC_SHIFT = 15;
 
 // 1/11/25 NEW: set PLL_FREQ_TARGET by band down below
 // overwrites this.
-uint64_t PLL_FREQ_TARGET = 425000000;
+uint64_t PLL_FREQ_TARGET = 600000000;
 
 // nice 10M result with this
 // symbolAbsoluteError: 0.000003 Hz
@@ -574,8 +574,8 @@ uint8_t SOLAR_SI5351_TX_POWER = 0;
 // bool USE_FAREY_CHOPPED_PRECISION = true;
 // bool DISABLE_VFO_CALC_CACHE = false;
 
-bool USE_FAREY_WITH_PLL_REMAINDER = true;
-bool USE_FAREY_CHOPPED_PRECISION = true;
+bool USE_FAREY_WITH_PLL_REMAINDER = false;
+bool USE_FAREY_CHOPPED_PRECISION = false;
 bool TEST_FAREY_WITH_PLL_REMAINDER = false;
 bool DISABLE_VFO_CALC_CACHE = false;
 bool USE_MFSK16_SHIFT = false;
@@ -1737,7 +1737,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     float elapsed_millisecs_1 = (float)elapsed_usecs_1 / 1000.0;
     V1_printf("VCC cache initially had %u valid entries\n" EOL,
         VCC_init_valid_cnt);
-    V1_print(F("Time to calc/lookup, 4 Farey algo symbol freq si5351 reg values:"));
+    V1_print(F("Time to calc/lookup, 4 symbol freq si5351 reg values:"));
     V1_printf(" %.4f millisecs" EOL, elapsed_millisecs_1);
 
     //**************************

@@ -120,6 +120,7 @@ extern char _lane[2];
 //**************************************
 // decodes from _Band _U4B_chan
 extern uint32_t XMIT_FREQUENCY;
+extern uint64_t PLL_FREQ_TARGET;
 extern const uint32_t DEFAULT_PLL_SYS_MHZ;
 extern uint32_t PLL_SYS_MHZ;  // decode of _clock_speed
 
@@ -347,6 +348,29 @@ void show_TELEN_msg() {
 void do_i2c_tests(void) {
     // quick and dirty way to execute some different tests
     if (true) {
+        V1_print(F("Cycle thru the 4 wspr symbol frequencies. 15 secs each"));
+        GpsOFF(true);  // keep TinyGPS state
+        init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+        init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
+        vfo_turn_on();
+        sleep_ms(1000);
+
+        uint32_t hf_freq = XMIT_FREQUENCY;
+        Watchdog.reset();
+        while (true)  {
+            for (int symbol = 0; symbol < 4; symbol++) {
+                V1_printf(EOL "symbol %d" EOL, symbol);
+                startSymbolFreq(hf_freq, symbol, false, false); 
+                for (int i = 0; i < 15; i++) {
+                    sleep_ms(1000);
+                    Watchdog.reset();
+                }
+            }
+            V1_print(F(EOL "<enter> within 2 secs to abort wspr test loop, otherwise repeats" EOL));
+            char c_char = getOneChar(2000);  // 2 secs
+            if (c_char != 0) break;
+        }
+    } else if (true) {
         // picks a good HF freq for the config'ed _Band. 
         // uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
