@@ -1653,7 +1653,6 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
         }
     }
 
-    // FIX! this should always have a pll reset after it?
     if (print) {
         V1_println(F("vfo_turn_on_clk_out END"));
         V1_flush();
@@ -1661,10 +1660,10 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
 }
 
 //****************************************************
-// FIX! hans says we need pll reset whenever we turn clocks off/on
+// hans used to say we need pll reset whenever we turn clocks off/on
 // to retain 180 degree phase relationship (CLK0/CLK1)
-// Suppose we don't do this without a pll reset for some reason
-// when clocks are turned back on
+// I think it's just if the power down bit is used. I can't 
+// seem to disable the clk with this anyhow?
 
 // Hmm. this is never used now?
 void vfo_turn_off_clk_out(uint8_t clk_num, bool print) {

@@ -129,7 +129,7 @@ extern bool BALLOON_MODE;
 //************************************************
 // false and true work here
 // sort power on for gps cold reset only
-bool PWM_COLD_GPS_POWER_ON_MODE = true;
+bool PWM_GPS_POWER_ON_MODE = true;
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 // causing intermittent fails if true?
 bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false;
@@ -1242,7 +1242,7 @@ void GpsFullColdReset(void) {
 
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
-    V1_println(F("GpsFullColdReset START"));
+    V1_println(F(EOL "GpsFullColdReset START"));
     Watchdog.reset();
 
     GpsIsOn_state = false;
@@ -1275,7 +1275,8 @@ void GpsFullColdReset(void) {
     digitalWrite(GPS_NRESET_PIN, LOW);  // assert
     digitalWrite(GpsPwr, HIGH);  // deassert
     Serial2.end();
-    gpsSleepForMillis(500, false);
+    // full 2 secs off?
+    gpsSleepForMillis(2000, false);
 
     //******************
     // Cold Start. doesn't clear any system/user configs
@@ -1309,7 +1310,7 @@ void GpsFullColdReset(void) {
     // seems like the gps backs up on the serial data?
 
     // we still have usb pll on, and default clock frequency at this point?
-    if (PWM_COLD_GPS_POWER_ON_MODE) {
+    if (PWM_GPS_POWER_ON_MODE) {
         // this is probably at least 2 secs. let's measure
         uint64_t start_millis = millis();
         pwmGpsPwrOn();
@@ -1318,7 +1319,6 @@ void GpsFullColdReset(void) {
         // soft power-on for GpsPwr (assert low, controls mosfet)
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
-        // digitalWrite(GpsPwr, LOW);  // assert to mosfet
     } else {
         digitalWrite(GpsPwr, LOW);  // assert to mosfet
         gpsSleepForMillis(500, false);
@@ -1393,7 +1393,7 @@ void GpsFullColdReset(void) {
     // https://forums.raspberrypi.com/viewtopic.php?t=342156
 
     busy_wait_ms(500);
-    // remember not to touch Serial if in BALOON_MODE!!
+    // remember not to touch Serial if in BALLOON_MODE!!
     if (!BALLOON_MODE) {
         Serial.flush();
         Serial.end();
@@ -1517,21 +1517,21 @@ void GpsFullColdReset(void) {
     if (USE_SIM65M) {
         // it either comes up in desiredBaud from some memory, or comes up in 115200?
         Serial2.begin(115200);
-        setGpsBaud(desiredBaud);
         // since Serial2 was reset by setGpsBaud()..
         // could try it again. might aid recovery
         // setGpsBaud(desiredBaud);
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         Serial2.begin(9600);
-        setGpsBaud(desiredBaud);
         // since Serial2 was reset by setGpsBaud()..could try it again.
         // might aid recovery
         // setGpsBaud(desiredBaud);
     }
+    // then up the speed to desired (both gps chip and then Serial2
+    setGpsBaud(desiredBaud);
 
     gpsSleepForMillis(1000, false);  // 1 sec
-    V1_println(F("Should get some output at 9600 after reset?"));
+    V1_println(F("Should get some gps output after reset?"));
     // we'll see if it's wrong baud rate or not, at this point
     drainInitialGpsOutput();
 
@@ -1584,10 +1584,10 @@ void GpsFullColdReset(void) {
     if (USE_SIM65M) setGnssOn_SIM65M();
 
     drainInitialGpsOutput();
-    GpsIsOn_state = true;
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
     // a big fix_age
     invalidateTinyGpsState();
+    GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
     V1_println(F("GpsFullColdReset END"));
 }
@@ -1604,29 +1604,46 @@ void GpsWarmReset(void) {
     // turn it off first. may be off or on currently
     // turn off the serial
     V1_flush();
-    Serial2.end();
 
     // don't assert reset during power off
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
     V1_println(F("Doing Gps WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
     // NOTE: should we start with NRESET_PIN low also until powered (latchup?)?
-    digitalWrite(GPS_NRESET_PIN, HIGH);
     // NOTE: do we need to start low until powered to avoid latchup of LNA?
-    digitalWrite(GPS_ON_PIN, LOW);
-    digitalWrite(GpsPwr, HIGH);
-    gpsSleepForMillis(1000, false);
 
-    // now power on with reset still off
-    // digitalWrite(GPS_NRESET_PIN, HIGH);
-    // digitalWrite(GPS_ON_PIN, HIGH);
-    digitalWrite(GpsPwr, LOW);
-    gpsSleepForMillis(2000, false);
+    // reorganized to match GpsFullColdReset()
+    digitalWrite(GPS_ON_PIN, LOW);
+    digitalWrite(GPS_NRESET_PIN, HIGH);
+    digitalWrite(GpsPwr, HIGH);
+    Serial2.end();
+    // 2 secs off?
+    gpsSleepForMillis(2000, false); // no early out
+
+    // match the pwm that's done for cold reset
+    if (PWM_GPS_POWER_ON_MODE) {
+        // this is probably at least 2 secs. let's measure
+        uint64_t start_millis = millis();
+        pwmGpsPwrOn();
+        uint64_t duration_millis = millis() - start_millis;
+        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 " millisecs" EOL, duration_millis);
+        // soft power-on for GpsPwr (assert low, controls mosfet)
+        // note that vbat doesn't have mosfet control, so it will be high right away
+        // with availability of power
+    } else {
+        digitalWrite(GpsPwr, LOW);  // assert to mosfet
+        gpsSleepForMillis(500, false);
+    }
+
+    gpsSleepForMillis(2000, false); // no early out
 
     // now assert the on/off pin
     digitalWrite(GPS_ON_PIN, HIGH);
-    gpsSleepForMillis(2000, false);
-    GpsIsOn_state = true;
-    GpsStartTime = get_absolute_time();  // usecs
+    gpsSleepForMillis(1000, false); // no early out
+    // new: 1/17/25 to see if we get some output right away
+    drainInitialGpsOutput();
+    gpsSleepForMillis(1000, false); // no early out
+    // new: 1/17/25 to see if we get some output right away
+    drainInitialGpsOutput();
 
     //****************************
     // ATGM336H:
@@ -1645,11 +1662,22 @@ void GpsWarmReset(void) {
     int desiredBaud = checkGpsBaudRate(BAUD_RATE);
 
     //****************************
-    // SIM65M poweron restarts at 115200 always or ??
-    // ATGM366H restarts at whatever baud rate we set it to last?
-    // remember that the *BAUD_RATE values are static, so usedBaud will reflect last
-    if (USE_SIM65M) Serial2.begin(115200);
-    else Serial2.begin(desiredBaud);
+    // FIX! does SIM65M sometimes come up in 115200 and
+    // sometimes in the last BAUD_RATE set?
+    // do both?
+    if (USE_SIM65M) {
+        // it either comes up in desiredBaud from some memory, or comes up in 115200?
+        Serial2.begin(115200);
+        // since Serial2 was reset by setGpsBaud()..
+        // could try it again. might aid recovery
+        // setGpsBaud(desiredBaud);
+    } else {
+        // it either comes up in desiredBaud from some memory, or comes up in 9600?
+        Serial2.begin(9600);
+        // since Serial2 was reset by setGpsBaud()..could try it again.
+        // might aid recovery
+        // setGpsBaud(desiredBaud);
+    }
 
     // then up the speed to desired (both gps chip and then Serial2
     setGpsBaud(desiredBaud);
@@ -1671,6 +1699,8 @@ void GpsWarmReset(void) {
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
     // a big fix_age
     invalidateTinyGpsState();
+    GpsIsOn_state = true;
+    GpsStartTime = get_absolute_time();  // usecs
     V1_println(F("GpsWarmReset END"));
 }
 
@@ -2065,7 +2095,6 @@ void updateGpsDataAndTime(int ms) {
         else timeSinceLastChar_millis = current_millis - last_serial2_millis;
 
         // FIX! should the two delays used be dependent on baud rate?
-        // was 25 trying 50 10 for 4800 baud
         if (timeSinceLastChar_millis >= 12) {
             // FIX! could the LED blinking have gotten delayed?
             // we don't check in the available loop above.
@@ -2081,12 +2110,6 @@ void updateGpsDataAndTime(int ms) {
         }
         // V1_println(F("debug6"));
 
-        // sleep for 50 milliseconds? will we get buffer overflow?
-        // 32 symbols at 9600 baud = 33 milliseconds?
-        // shouldn't sleep here..faster to just delay
-        // I guess here we're trying to sync with a burst? but how long to wait?
-        // if we just completed a burst, we should wait for 1 sec - total burst delay?
-        // was 25 trying 50 10 for 4800 baud
         gpsSleepForMillis(12, true);  // stop the wait early if symbols arrive
         // setup for loop iteration
         getChar();
@@ -2562,6 +2585,7 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
         tusb_init();
         Serial.begin(115200);
         busy_wait_ms(500);
+        V1_print(F("Restored USB pll to 48Mhz, and did Serial.begin()" EOL));
     }
 
     V1_print(F("After long sleep,"));
@@ -2571,7 +2595,6 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
         V1_printf(" Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
     }
 
-    V1_print(F("Restored USB pll to 48Mhz, and did Serial.begin()" EOL));
 
     // I guess printing should work now? (if not BALLOON_MODE)
     V1_println(F("kazuClocksRestore END" EOL));
