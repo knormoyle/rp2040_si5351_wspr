@@ -2277,7 +2277,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
         updateStatusLED();
         sleep_ms(20);
     }
-    while (!clk01_turned_on || !(alignMinute(0) && (second() == 0))) {
+    while (!clk01_turned_on || !(alignMinute(i) && (second() == 0))) {
         Watchdog.reset();
         // delay(1);
         // whenever we have spin loops we need to updateStatusLED()

@@ -337,7 +337,7 @@ void snapForTelemetry(void) {
             case 1: power_int = 7; break;
             case 2: power_int = 10; break;
             case 3: power_int = 13; break;
-            default: power_int = 17;
+            default: power_int = 17; // so we'll know about illegal case?
         }
     } else {
         if (_tx_high[0] == '1') power_int = 13;
