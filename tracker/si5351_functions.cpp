@@ -1617,7 +1617,7 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     // if (do_pll_reset)
     // FIX! do we always need this? why?
     if (true) {
-        si5351a_reset_PLLB(false);
+        // si5351a_reset_PLLB(false);
         vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
     }
 
