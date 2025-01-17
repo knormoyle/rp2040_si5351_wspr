@@ -1554,8 +1554,8 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     //*****************************************************
     // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
     // do we always need it when we do the Farey num/denom? why?
-    bool do_pll_reset = (pll_denom != s_PLLB_pll_denom_prev || 
-        USE_FAREY_WITH_PLL_REMAINDER = true;
+    bool do_pll_reset = (pll_denom != s_PLLB_pll_denom_prev) || 
+        USE_FAREY_WITH_PLL_REMAINDER;
 
 
     // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
