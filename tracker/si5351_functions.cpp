@@ -1509,22 +1509,7 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
         // note we only have one s_PLLB_ms_div_prev copy state also
     }
 
-
-    // we get pll_denom to know what was used in the calc
-    // R_DIVISOR_SHIFT is hardwired constant (/4 => shift 2)
-
-    // in here is where we need to cache values for freq_xxx
-    // at least 4 (4 last symbols?)
-    // the mode to use Farey is not a config, so that won't change
-    // relative to the other algo and this cache.
-    // same with r_divisor
-    // I guess same with PLL_FREQ_TARGET..no side configurable state
-    // needs to flush a cache of 4 results? (ASSUMING WE REDID THE 4 SYMBOLS
-    // after the denom search sweep? Should have a ash flush mechanism
-    // (rather than the print, it should be a "use cache" or "flush cache"
-    // let "use cache" miss. basically everything refills
-    // OH: keep 5, one for the cw freq!
-
+    // lookup in cache, if not there, compute/fill it
     uint8_t retval = 0;
     uint8_t retcode = 0;
     if (DISABLE_VFO_CALC_CACHE) {
@@ -1556,11 +1541,11 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     //*****************************************************
     // hmm. does ms5351m need this when both numerator and denominator change a lot?
     // do we always need it when we do the Farey num/denom? why?
-    // HACK temp disable
     // bool do_pll_reset = ((pll_denom != s_PLLB_pll_denom_prev) || USE_FAREY_WITH_PLL_REMAINDER);
 
-    // hmm. does ms5351m need this when both numerator and denominator change a lot?
-    if (true) {
+    // don't need to turn off?
+    // actually better not to, no popping?
+    if (false) {
         vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
     }
 
@@ -1617,8 +1602,13 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     // if (do_pll_reset)
     // FIX! do we always need this? why?
     if (true) {
-        // si5351a_reset_PLLB(false);
+        // we might need this if doing Farey with numerator plus denominator change
+
+        if (false && USE_FAREY_WITH_PLL_REMAINDER) si5351a_reset_PLLB(false);
+        // apparently don't need to write this if on and just changing numerator?
+        // it's weird that I seem to need clk turn on, but turn off doesn't always disable?
         vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
+        
     }
 
     s_PLLB_pll_mult_prev = pll_mult;
@@ -1651,9 +1641,9 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
         disable_bits |= 1 << 1;
         // don't do anything if no bits change
         // note the use of bitwise inversion ~
-        // if ((si5351bx_clken & ~disable_bits) != si5351bx_clken) {  // 0 is enabled
-        // FIX! always do it?
-        if (true) {
+        if ((si5351bx_clken & ~disable_bits) != si5351bx_clken) {  // 0 is enabled
+        // HACK: always do it?
+        // if (true) {
             si5351bx_clken &= ~disable_bits;
             if (print) {
                 V1_printf("vfo_turn_on_clk_out si5351bx_clken %02x" EOL,
@@ -2017,24 +2007,22 @@ void vfo_turn_on() {
     uint32_t hf_freq = XMIT_FREQUENCY;
     uint64_t freq_xxx_with_symbol;
     calcSymbolFreq_xxx(&freq_xxx_with_symbol, hf_freq, 0);
-    vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM,  freq_xxx_with_symbol, false, false);
-
-    // the final state is clk0/clk1 running and clk outputs on?
-    // this doesn't cause a reset_PLLB.
-    // vfo_turn_on_clk_out(clk_num, true);  // print
-
-    // could have clocks off with this, but we're going to get the clks
-    // rf'ing soon anyhow.
-    // si5351a_power_down_clk01();
-
-    // it was done in vfo_set_freq_xxx if we didn't have initial state
-    // or didn't change initial state?
-    // could there be two that overlap ?
+    vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM, freq_xxx_with_symbol, false, false);
 
     // does PLLA matter? these print the lock status by doing i2c reads
     if (false) si5351a_reset_PLLA(true);
 
     si5351a_reset_PLLB(true);
+
+    // the final state is clk0/clk1 running and clk outputs on?
+    // don't need this if it was done in vfo_set_freq_xx (at end)
+    // if it wasn't, the clocks won't be on until you get one of these?
+    // vfo_turn_on_clk_out(clk_num, true);  // print
+
+    // could get clocks off with this, but we're going to get the clks
+    // rf'ing soon anyhow.
+    // si5351a_power_down_clk01();
+
     vfo_turn_on_completed = true;
     V1_print(F("vfo_turn_on END" EOL));
 }
@@ -2616,8 +2604,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                     pll_denom_here = cache_pll_denom[i];
                     r_divisor_here = cache_r_divisor[i];
                     freq_xxx_here = cache_freq_xxx[i];
-                    V1_print(F("FAREY:"));
-                    V1_printf(" vfo_calc_cache valid i %u freq_xxx %" PRIu64,
+                    V1_printf("vfo_calc_cache valid i %u freq_xxx %" PRIu64,
                         i, freq_xxx_here);
                     V1_printf(" actual %.6f actual_pll_freq %.6f",
                         actual_here, actual_pll_freq_here);
