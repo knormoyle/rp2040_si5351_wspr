@@ -303,12 +303,15 @@ void drainInitialGpsOutput(void) {
     V1_println(F("drainInitialGpsOutput START"));
 
     // FIX! rely on watchdog reset in case we stay here  forever?
-    V1_println(F("drain any Serial2 garbage first"));
-    // drain any initial garbage
-    while (Serial2.available()) {
-        Serial2.read();
+    if (false) {
+        V1_println(F("drain any Serial2 garbage first"));
+        // drain any initial garbage
+        while (Serial2.available()) {
+            Serial2.read();
+        }
     }
-    V1_println(F("now look for some Serial2 bytes"));
+
+    V1_println(F("Look for some Serial2 bytes"));
     int i;
     char incomingChar = { 0 };
     // we drain during the GpsINIT now, oh. we should leave gps on so we get chars
