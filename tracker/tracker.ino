@@ -1365,8 +1365,9 @@ void loop1() {
             else
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
-            // FIX! this is loop iterations? could be 60 * 30 secs per loop (30 minutes)
-            if (GpsWatchdogCnt > 60) {
+            // FIX! this is loop iterations? could be 20 * 60 secs per loop (20 minutes)
+            // or as long as 5 minutes per loop? (100 minutes)
+            if (GpsWatchdogCnt > 20) {
                 // here's a case, where TinyGps++ said gps valid, but the altitude was wrong
                 // Note HDOP was very large, and sat count was 0.
                 // Fix Age is in milliseconds
@@ -1411,7 +1412,7 @@ void loop1() {
                 // gps.sentencesWithFix()
                 // gps.failedChecksum()
 
-                V1_println(F("ERROR: loop1() GpsWatchdogCnt > 60 ..gps full cold reset"));
+                V1_println(F("ERROR: loop1() GpsWatchdogCnt > 20 ..gps full cold reset"));
                 // FIX! have to send cold gps reset, in case ephemeris is corrupted?
                 // since vbat is always there.. otherwise this is a warm reset?
                 GpsOFF(false);  // don't keep TinyGPS state

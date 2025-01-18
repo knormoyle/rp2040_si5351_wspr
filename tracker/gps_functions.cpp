@@ -1780,9 +1780,9 @@ void GpsON(bool GpsColdReset) {
     // no print if no cold reset request.
     // So I can grep on GpsColdReset as a special case only
     if (!GpsColdReset) {
-        V1_printf("GpsON START GpsIsOn_state %u" EOL, GpsIsOn_state);
+        V1_printf(EOL "GpsON START GpsIsOn_state %u" EOL, GpsIsOn_state);
     } else {
-        V1_printf("GpsON START GpsIsOn_state %u GpsColdReset %u" EOL,
+        V1_printf(EOL "GpsON START GpsIsOn_state %u GpsColdReset %u" EOL,
             GpsIsOn_state, GpsColdReset);
     }
 
@@ -1796,9 +1796,9 @@ void GpsON(bool GpsColdReset) {
     else if (!GpsIsOn()) GpsWarmReset();
 
     if (!GpsColdReset) {
-        V1_printf("GpsON END GpsIsOn_state %u" EOL, GpsIsOn_state);
+        V1_printf("GpsON END GpsIsOn_state %u" EOL EOL, GpsIsOn_state);
     } else {
-        V1_printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL,
+        V1_printf("GpsON END GpsIsOn_state %u GpsColdReset %u" EOL EOL,
             GpsIsOn_state, GpsColdReset);
     }
 
@@ -2012,8 +2012,6 @@ void updateGpsDataAndTime(int ms) {
             printable = isprint(incomingChar);
             switch (incomingChar) {
                 case '$':  sentenceStartCnt++; stopPrint = false; break;
-                // 1/6/24 was:
-                // case '*':  sentenceEndCnt++; stopPrint = false; break;
                 case '*':  sentenceEndCnt++; break;
                 case '\n': stopPrint = true; break;
                 case '\r': stopPrint = true; break;

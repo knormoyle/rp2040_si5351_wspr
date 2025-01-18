@@ -2041,10 +2041,10 @@ uint32_t doCorrection(uint32_t freq) {
 //****************************************************
 void vfo_turn_off(void) {
     V1_println(F(EOL "vfo_turn_off START"));
-    // V1_println(F("NEVER TURNING VFO OFF (DEBU)"));
-    // return;
-    // already off successfully?
-    if (vfo_is_off()) return;
+    if (vfo_is_off()) { 
+        V1_println(F("vfo_turn_off END already off"));
+        return;
+    }
     vfo_turn_on_completed = false;
     vfo_turn_off_completed = false;
 
