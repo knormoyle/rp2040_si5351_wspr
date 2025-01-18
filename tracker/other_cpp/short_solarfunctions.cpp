@@ -18,9 +18,7 @@
  * limitations under the License.
  */
 
-
 #include "Arduino.h"
-
 #define VERSION 1.0
 
 // moved here from the short_functions.h
@@ -35,10 +33,10 @@ constexpr double MINUTES_PER_DAY = 1440.0;
 constexpr double SECONDS_PER_HOUR = 3600.0d;
 constexpr double MINUTES_PER_HOUR = 60.0d;
 constexpr double SECONDS_PER_MINUTE = 60.0d;
-constexpr double MINUTES_PER_DEGREE_LONGITUDE = 4.0d; // 1 degree of Earth rotation per 4 Minutes
-constexpr double DEGREES_LONGITUDE_PER_HOUR = 15.0d; // 15 degrees of Earth rotation per hour
-constexpr double UNIX_EPOCH_JD = 2440587.5d; // 2020-01-01 12:00
-constexpr double Y2K_JULIAN_DATE = 2451545.0d; // 2020-01-01 12:00
+constexpr double MINUTES_PER_DEGREE_LONGITUDE = 4.0d;  // 1 degree of Earth rotation per 4 Minutes
+constexpr double DEGREES_LONGITUDE_PER_HOUR = 15.0d;  // 15 degrees of Earth rotation per hour
+constexpr double UNIX_EPOCH_JD = 2440587.5d;  // 2020-01-01 12:00
+constexpr double Y2K_JULIAN_DATE = 2451545.0d;  // 2020-01-01 12:00
 constexpr double SOLAR_ANOMALY_AT_EPOCH = 357.5291092d;
 constexpr double SOLAR_ANOMALY_RATE = 35999.05029d;
 constexpr double SOLAR_ANOMALY_CORRECTION = -0.0001537d;
@@ -102,12 +100,12 @@ double normalizeRadians2Pi(double angle) {
 }
 
 // Convert a Unix timestamp to Julian Date.
-double calculateJulianDate(long timestamp_utc) {
+double calculateJulianDate(uint64_t timestamp_utc) {
     return (double) timestamp_utc / (double) SECONDS_PER_DAY + UNIX_EPOCH_JD;
 }
 
 // Calculate Julian Century from a given UTC time, with 2000-01-01 noon as starting point.
-double calculateJulianCenturyNumber(long timestamp_utc) {
+double calculateJulianCenturyNumber(uint64_t timestamp_utc) {
     return (calculateJulianDate(timestamp_utc) - Y2K_JULIAN_DATE) / 36525.0d;
 }
 
@@ -121,12 +119,12 @@ double calculateObliquity(double julianCenturyNumber) {
     return MEAN_OBLIQUITY_AT_EPOCH - julianCenturyNumber * (OBLIQUITY_RATE1 + julianCenturyNumber * (OBLIQUITY_RATE2 - OBLIQUITY_RATE3 * julianCenturyNumber));
 }
 
-// Correct the mean obliquity with the longitude of the ascending lunar node.
+// Correct the mean obliquity with the uint64_titude of the ascending lunar node.
 double calculateCorrectedObliquity(double julianCenturyNumber) {
     return calculateCorrectedObliquity(calculateObliquity(julianCenturyNumber), calculateOmega(julianCenturyNumber));
 }
 
-// Correct the mean obliquity with longitude of the ascending lunar node (based on a pre-calculated Omega).
+// Correct the mean obliquity with uint64_titude of the ascending lunar node (based on a pre-calculated Omega).
 double calculateCorrectedObliquity(double obliquity, double omega) {
     return obliquity + OBLIQUITY_CORRECTION_FACTOR * cos(degToRad(omega));
 }
@@ -146,28 +144,28 @@ double calculateSunMeanAnomaly(double julianCenturyNumber) {
 // to account for elliptical orbit effects.
 double calculateSolarEquationOfCenter(double julianCenturyNumber, double meanAnomaly) {
     return (SOLAR_EQ_CENTER_COEFF1
-		- julianCenturyNumber * (SOLAR_EQ_CENTER_COEFF2 + SOLAR_EQ_CENTER_COEFF3 * julianCenturyNumber)) * sin(degToRad(meanAnomaly))
-		+ (SOLAR_EQ_CENTER_COEFF4 - SOLAR_EQ_CENTER_COEFF5 * julianCenturyNumber) * sin(degToRad(2 * meanAnomaly))
-		+ SOLAR_EQ_CENTER_COEFF6 * sin(degToRad(3 * meanAnomaly));
+        - julianCenturyNumber * (SOLAR_EQ_CENTER_COEFF2 + SOLAR_EQ_CENTER_COEFF3 * julianCenturyNumber)) * sin(degToRad(meanAnomaly))
+        + (SOLAR_EQ_CENTER_COEFF4 - SOLAR_EQ_CENTER_COEFF5 * julianCenturyNumber) * sin(degToRad(2 * meanAnomaly))
+        + SOLAR_EQ_CENTER_COEFF6 * sin(degToRad(3 * meanAnomaly));
 }
 
-// The Sun’s mean longitude.
+// The Sun’s mean uint64_titude.
 double calculateSunMeanLongitude(double julianCenturyNumber) {
     double meanLongitude = MEAN_LONGITUDE_SUN_AT_EPOCH + julianCenturyNumber * (MEAN_LONGITUDE_SUN_RATE + julianCenturyNumber * MEAN_LONGITUDE_SUN_CORRECTION);
     return normalizeDegrees360(meanLongitude);
 }
 
-// Calculate the Sun's true longitude by adding the equation of center.
+// Calculate the Sun's true uint64_titude by adding the equation of center.
 double calculateSunTrueLongitude(double julianCenturyNumber) {
     return calculateSunMeanLongitude(julianCenturyNumber) + calculateSolarEquationOfCenter(julianCenturyNumber, calculateSunMeanAnomaly(julianCenturyNumber));
 }
 
-// Calculate the Sun's apparent longitude, considering nutation effects.
+// Calculate the Sun's apparent uint64_titude, considering nutation effects.
 double calculateSunApparentLongitude(double trueLongitude, double julianCenturyNumber) {
     return trueLongitude - APPARENT_LONGITUDE_CORRECTION_1 - APPARENT_LONGITUDE_CORRECTION_2 * sin(degToRad(calculateOmega(julianCenturyNumber)));
 }
 
-// The Sun's declination in degrees based on the Julian century, 
+// The Sun's declination in degrees based on the Julian century,
 // which is the angular distance north or south of the celestial equator.
 double calculateDeclination(double julianCenturyNumber) {
     double trueLongitude = calculateSunTrueLongitude(julianCenturyNumber);
@@ -175,7 +173,7 @@ double calculateDeclination(double julianCenturyNumber) {
     double epsilon = calculateCorrectedObliquity(julianCenturyNumber);
     return radToDeg(asin(sin(degToRad(epsilon)) * sin(degToRad(lambda))));
 }
-  
+
 
 // Equation of time in minutes.
 double calculateEquationOfTime(double julianCenturyNumber) {
@@ -190,11 +188,11 @@ double calculateEquationOfTime(double julianCenturyNumber) {
     return 4 * radToDeg(var_y * sin(2 * L0_rad) - 2 * e * sin(M_rad) + 4 * e * var_y * sin(M_rad) * cos(2 * L0_rad) - 0.5 * var_y * var_y * sin(4 * L0_rad) - 1.25 * e * e * sin(2 * M_rad));
 }
 
-// Convert UTC time to local solar time, considering longitude and equation of time.
-double calculateLocalSolarTime(long timestamp_utc, double equationOfTime, double longitude) {
-    long secondsOfTheDay = timestamp_utc % (int) SECONDS_PER_DAY; // type conversion necessary for modulo operation
+// Convert UTC time to local solar time, considering uint64_titude and equation of time.
+double calculateLocalSolarTime(uint64_t timestamp_utc, double equationOfTime, double uint64_titude) {
+    uint64_t secondsOfTheDay = timestamp_utc % (int) SECONDS_PER_DAY;  // type conversion necessary for modulo operation
     double totalMinutes_utc = secondsOfTheDay / (double) SECONDS_PER_MINUTE;
-    double timeOffset = longitude * MINUTES_PER_DEGREE_LONGITUDE;
+    double timeOffset = uint64_titude * MINUTES_PER_DEGREE_LONGITUDE;
     double localSolarTime = totalMinutes_utc + timeOffset + equationOfTime;
     // normalize to [0, 1440) if the calculated time is negative or exceeds 24 hours (1440 minutes).
     if (localSolarTime < 0) {
@@ -232,24 +230,24 @@ double calculateSolarAzimuth(double hourAngle, double declination, double elevat
             azimuth = INVALID_VALUE;
         }
     } else {
-	double latitude_rad = degToRad(latitude);
-	double declination_rad = degToRad(declination);
-	double zenith_rad = degToRad(calculateSolarZenithAngle(elevation));
-	double cosAzimuth = (sin(latitude_rad) * cos(zenith_rad) - sin(declination_rad)) / (cos(latitude_rad) * sin(zenith_rad));
-	// Limit cos to values of [-1, 1]
-	if (cosAzimuth < -1.0) {
-		cosAzimuth = -1.0;
-	} else if (cosAzimuth > 1.0) {
-		cosAzimuth = 1.0;
-	}
-	azimuth = radToDeg(acos(cosAzimuth));
-	
-	// normalize azimuth based on the hour angle
-	if (hourAngle > 0) {
-		azimuth = fmod(azimuth + 180.0, 360.0);
-	} else {
-		azimuth = fmod(540.0 - azimuth, 360.0);
-	}
+        double latitude_rad = degToRad(latitude);
+        double declination_rad = degToRad(declination);
+        double zenith_rad = degToRad(calculateSolarZenithAngle(elevation));
+        double cosAzimuth = (sin(latitude_rad) * cos(zenith_rad) - sin(declination_rad)) / (cos(latitude_rad) * sin(zenith_rad));
+        // Limit cos to values of [-1, 1]
+        if (cosAzimuth < -1.0) {
+            cosAzimuth = -1.0;
+        } else if (cosAzimuth > 1.0) {
+            cosAzimuth = 1.0;
+        }
+        azimuth = radToDeg(acos(cosAzimuth));
+
+        // normalize azimuth based on the hour angle
+        if (hourAngle > 0) {
+            azimuth = fmod(azimuth + 180.0, 360.0);
+        } else {
+            azimuth = fmod(540.0 - azimuth, 360.0);
+        }
     }
     return azimuth;
 }
@@ -269,7 +267,8 @@ double calculateCorrectedSolarElevation(double elevation) {
 double calculateApproximateAtmosphericRefraction(double elevation) {
     double elevation_rad = degToRad(elevation);
     double refraction = 0.0;
-    // different refraction formulae for different elevation ranges - refraction gets smaller with increasing elevation.
+    // different refraction formulae for different elevation ranges
+    // refraction gets smaller with increasing elevation.
     if (elevation > 85.0) {
         refraction = 0.0;
     } else if (elevation > 5.0) {
