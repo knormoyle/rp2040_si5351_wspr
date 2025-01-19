@@ -273,7 +273,6 @@ void printInt(uint64_t val, bool valid, int len) {
     // complete list of types and formats
     // https://en.cppreference.com/w/cpp/types/integer
     char sz[32] = "*****************";
-    // new way. 
     int lenm1 = len - 1;
     // https://cplusplus.com/reference/cstdio/printf/
     if (!valid) {
@@ -281,8 +280,7 @@ void printInt(uint64_t val, bool valid, int len) {
         Serial.print(sz);
         // add a space on the right
         Serial.print(F(" "));
-    }
-    else {
+    } else {
         // variable in format. right justified is the default
         // https://www.geeksforgeeks.org/using-variable-format-specifier-c/
         // add a space on the right
@@ -293,15 +291,22 @@ void printInt(uint64_t val, bool valid, int len) {
     updateStatusLED();
 }
 
-// no valid on printStr?
-void printStr(const char *str, int len) {
+// added valid for printStr too
+void printStr(const char *str, bool valid, int len) {
     if (!VERBY[1]) return;
+    char sz[32] = "*****************";
     int lenm1 = len - 1;
-    // new way. 
-    // variable printf in format. right justified is the default
-    // https://www.geeksforgeeks.org/using-variable-format-specifier-c/
-    // add a space on the right
-    Serial.printf("%*s ", lenm1, str);
+    if (!valid) {
+        sz[lenm1] = 0; // terminator placed for len
+        Serial.print(sz);
+        // add a space on the right
+        Serial.print(F(" "));
+    } else {
+        // variable printf in format. right justified is the default
+        // https://www.geeksforgeeks.org/using-variable-format-specifier-c/
+        // add a space on the right
+        Serial.printf("%*s ", lenm1, str);
+    }
 
     // whenever something might have taken a long time like printing
     updateStatusLED();

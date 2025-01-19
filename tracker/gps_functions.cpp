@@ -2346,23 +2346,22 @@ void gpsDebug() {
     V1_printf("gps valids: %u %u %u %u %u %u %u" EOL,
         !GpsInvalidAll, validA, validB, validC, validD, validE, validF);
 
-    // new way
-    printStr("Sats", 5);
-    printStr("HDOP", 5);
-    printStr("Latitude", 12);
-    printStr("Longitude", 12);
-    printStr("FixAge", 7);
+    printStr("Sats", true, 5);
+    printStr("HDOP", true, 5);
+    printStr("Latitude", true, 12);
+    printStr("Longitude", true, 12);
+    printStr("FixAge", true, 7);
     // 2025-01-04 21:46:31
-    printStr("Date", 11);
-    printStr("Time", 9);
-    printStr("DTAge", 6);
-    printStr("Alt", 8);
-    printStr("Course", 7);
-    printStr("Degs.", 6);
-    printStr("Speed", 6);
-    printStr("ChrsRx", 10);
-    printStr("SentsWfix", 10);
-    printStr("failCksum", 10);
+    printStr("Date", true, 11);
+    printStr("Time", true, 9);
+    printStr("DTAge", true, 6);
+    printStr("Alt", true, 8);
+    printStr("Course", true, 7);
+    printStr("Degs.", true, 6);
+    printStr("Speed", true, 6);
+    printStr("ChrsRx", true, 10);
+    printStr("SentsWfix", true, 10);
+    printStr("failCksum", true, 10);
     V1_print(F(EOL));
 
     // am I getting problems with constant strings in ram??
@@ -2380,7 +2379,7 @@ void gpsDebug() {
         printFloat(gps.altitude.meters(), validD, 8, 2);
         printFloat(gps.course.deg(), validE, 7, 2);
         printFloat(gps.speed.kmph(), validF, 6, 2);
-        printStr(validE ? TinyGPSPlus::cardinal(gps.course.value()) : "*****", 6);
+        printStr(TinyGPSPlus::cardinal(gps.course.value()), validE, 6);
         // FIX! does this just wrap wround if it's more than 6 digits?
         printInt(gps.charsProcessed(), true, 10);
         // FIX! does this just wrap wround if it's more than 10 digits?

@@ -200,6 +200,7 @@ TinyGPSPlus gps;
 #include "led_functions.h"
 #include "keyboard_functions.h"
 #include "gps_functions.h"
+#include "tinygps_functions.h"
 #include "cw_functions.h"
 #include "sweep_functions.h"
 
