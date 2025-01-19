@@ -964,6 +964,7 @@ void setup1() {
     // does a full gps cold reset now?
     // 12/7/24. the GpsINIT covers GpsON() now?
     GpsINIT();
+    tinyGpsCustomInit();
 
     // usb power means vbat is always on. so a hot reset!
     // we already did a cold reset in the GpsINIT() ..don't do it again!
@@ -1316,6 +1317,7 @@ void loop1() {
         // NMEA checksum will handle that? okay if we have overrun?
         updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
         gpsDebug();
+        tinyGpsCustom();
 
         // this just handles led for time/fix and gps reboot check/execution
         uint32_t fix_age = gps.location.age();
@@ -2354,7 +2356,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
 
 //**********************************
 void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
-    char *hf_callsign, char *hf_grid4, uint8_t power) {
+    char *hf_callsign, char *hf_grid4, uint8_t hf_power) {
 
     V1_println(F("set_hf_tx_buffer START"));
     // Clear out the transmit buffer
@@ -2385,7 +2387,7 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     }
 
     //******************
-    // no checks on power uint8_t
+    // no checks on hf_power uint8_t
     //******************
     l = strlen(hf_grid4);
     V1_printf("length check: hf_grid4 %s before jtencode was strlen %d" EOL,
@@ -2424,7 +2426,7 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
         V1_print(F("Before jtencode.wspr_encode() freeMem()" EOL));
         freeMem();
     }
-    jtencode.wspr_encode(hf_callsign, hf_grid4, power, hf_tx_buffer);
+    jtencode.wspr_encode(hf_callsign, hf_grid4, hf_power, hf_tx_buffer);
     if (false) {
         V1_print(F("After jtencode.wspr_encode() freeMem()" EOL));
         freeMem();

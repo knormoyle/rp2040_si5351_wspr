@@ -2,6 +2,13 @@
 // Arduino IDE main: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker
 // Arduino IDE libraries: https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/libraries
 
+// Incorporates work by: Doug Malnati KD2KDD. Thank you.
+// https://github.com/traquito/WsprEncoded
+// Simplifies implementation of u4b-protocol-compatible telemetry, both encode and decode,
+// and dramatically increases telmetry capabilities with Extended Telemetry protocol extensions.
+// And also thanks for all Doug's great work at https://traquito.github.io supporting 
+// modern, user-friendly, flight visualization/reporting from wsprlive database extraction. 
+
 // Incorporates work by: Kazuhisa "Kazu" Terasaki AG6NS. Thank you.
 // https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1
 // https://github.com/kaduhi/LightAPRS-W-2.0/tree/port_to_ag6ns_rp2040_picoballoon_tracker

@@ -35,4 +35,5 @@ void setGpsBaud(int desiredBaud);
 void kazuClocksSlow(void);
 void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore);
 
-#endif
+#endif // GPS_FUNCTIONS_H
+

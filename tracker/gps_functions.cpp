@@ -2202,7 +2202,7 @@ void updateGpsDataAndTime(int ms) {
         // so we could be off by +- 0.5 sec + code delay?
         // (300 millisecs + ?)
         uint8_t gps_hundredths;
-        gps_hundredths = 0;
+        gps_hundredths = gps.time.centisecond();
         // FIX! we could also look at TimeLib timeStatus() to help qualify?
         // https://github.com/PaulStoffregen/Time?tab=readme-ov-file
         // enum is timeNotSet or timeSet
@@ -2223,7 +2223,7 @@ void updateGpsDataAndTime(int ms) {
             // use hundredths from the gps, to busy_wait_usecs
             // until we're more likely aligned to the second exactly.
             if (gps_hundredths > 99) {
-                V1_printf("ERROR: TinyGPS gps_hundredths %u > 99. using 100"
+                V1_printf("ERROR: TinyGPS gps_hundredths %u > 99. using 0"
                     EOL, gps_hundredths);
                 gps_hundredths = 0;
             }
