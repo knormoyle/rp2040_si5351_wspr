@@ -51,7 +51,7 @@ extern TinyGPSPlus gps;
 // Elevation is corrected for refraction here, before being returned as zenith (sza)
 
 void solarZenithAndAzimuthAngle4(double *sza, double *saa, double longitude, double latitude, time_t timestamp) {
-    long timestamp_utc = timestamp;
+    uint64_t timestamp_utc = timestamp;
     double julianCenturyNumber = calculateJulianCenturyNumber(timestamp_utc);
     double declination = calculateDeclination(julianCenturyNumber);
     double eot = calculateEquationOfTime(julianCenturyNumber);

@@ -88,7 +88,7 @@ this is the arduino-pico core docs for the install
 top level is here. you can peruse that to see ALL the stuff this layer gives you
 [arduino-pico](https://arduino-pico.readthedocs.io/en/latest/)
 
-### 2. Configure Board
+### 3. Configure Board
 
 Earle says above at the arduino-pico github how to get the arduino-pico stuff in the Arduino IDE. Open up the Arduino IDE and go to File->Preferences. In the dialog that pops up, enter the following URL in the "Additional Boards Manager URLs" field:
 
@@ -131,7 +131,10 @@ Here's another step-by-step
   - Upload Method: "Default (UF2)"
   - USB Stack: "Pico SDK"
 
-### 3. Copy Libraries & Compile Source Code 
+
+you should be able to see "Raspberry Pi Pico" in the top left white box when you have a connected board
+
+### 4. Copy Libraries 
 
 - First download the repository to your computer using the green "[clone or download]" button.
 - There are only one Arduino projects rp2040_si5351_wspr/tracker folder.
@@ -140,12 +143,23 @@ Here's another step-by-step
 - **Mac** : /Users/\<username\>/Documents/Arduino/libraries/
 - **Ubuntu** : /Users/\<username\>/Arduino/libraries/
 
+
 **IMPORTANT :** If you already have folders that have same name, you still need to overwrite them. Otherwise you get a compile error.
 
-- Then open the tracker.ino file with Arduino IDE
-- Click **Verify** (If you get compile errors, check the steps above)
+### 5. Use Library Manager to get Doug Malnati's WsprEncode library
+Instead of copying this library, I'm trying to use with the IDE's Library Manager. Go to Tools, Manage Libraries at the top of the IDE. Type WsprEncoded into the search box under "LIBRARY MANAGER". You'll get Doug's library as a search result. Should be version 4.2.2. Hit Install.
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/library_manager.png"/>
 
+The black screen should say:
 
+```
+Downloading WsprEncoded@4.2.2
+WsprEncoded@4.2.2
+Installing WsprEncoded@4.2.2
+Installed WsprEncoded@4.2.2
+```
+
+### 6. Check the library files are where you expect
 To give an example of where the files should be and the libraries issue:
 
 You have to have a Arduino dir for libraries. I copied Kazu notes on where the Arduino dir is on different systems in my readme
@@ -231,10 +245,13 @@ drwxrwxr-x 4 kevin kevin 4096 Nov 22 18:41 Time
 ```
 
 
+### 7. Now you're ready to compile tracker.ino
 
-you should be able to see "Raspberry Pi Pico" in the top left white box when you have a connected board
+- Then open the tracker.ino file with Arduino IDE
+- Click **Verify** (If you get compile errors, check the steps above)
 
-### 4. Upload
+
+### 8. Compile and Upload
 
 - First attach a GPS antenna and a short HF antenna (6" dipole wires?) to the AG6NS 0.4 pcb with new kbn BOM/CPL files, assembled by jlcpcb.com
 - Connect board to your computer with a micro USB cable, then you should see a COM port under **Tools->Port** menu item. Select that port. (e.g. "/dev/cu.usbmodem141101")
@@ -251,7 +268,7 @@ Here's the usb cable with on/off switch I ordered. I think it will be very usefu
   - While shorting the H5 (two thru-hole next to the USB connector, maybe with pins or tweezers), connect the USB cable
   - After your PC recognized the board, release the shorting
   - 
-### 5. Setup putty to have a session that is config'ed to log to putty.log
+### 9. Setup putty to have a session that is config'ed to log to putty.log
 I set up a session with these configurations and save to a session named putty_config_for_ad6z_tracker. Remember to enter the name of the config you want to save: 'putty_config_for_ad6z_tracker' and click save to save it.  On Ubuntu (linux) the usb serial port should always be created as /dev/ttyACM0. If you plug in multiple usb serial devices, or unplug and replug too quickly, it might use /dev/ttyACM1, etc. 
 
 If using Windows, or maybe Mac, you probably have different usb serial ports. I expect you've dealt with this before, so do the right thing!
@@ -301,7 +318,7 @@ This is why I just have short 10-15 sec timeouts on things, to enter BALLOON_MOD
 It might be maddening at first to see how the putty window closes on reboot, but that's safest for propagating configuration changes. They are just written to flash, and then the tracker reboots (after timeout or when you give teh command 'X'.. Then the new config is used on reboot, just like normal!
 
 
-### 6. More detail on compile/upload and getting to a serial window for keyboard input and print output
+### 10. More detail on compile/upload and getting to a serial window for keyboard input and print output
 Forgive the wild descriptions here, will improve this shortly. Excerpts from late night email with a collaborator here:
 
 I went hog wild playing with clock speeds and turning usb pll off and sys pll off.

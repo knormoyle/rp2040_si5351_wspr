@@ -84,7 +84,8 @@ void solarZenithAndAzimuthAngle5(double *sza, double *saa, double longitude, dou
     V1_print("rtc time (utc)"); 
     V1_printf(" year %d month %d day %d hour %d minute %d second %d epoch_now %" PRIu64 EOL,
         rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second, epoch_now);
-    auto tp = foo(rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second);
+    // not used now?
+    // auto tp = foo(rtc_year, rtc_month, rtc_day, rtc_hour, rtc_minute, rtc_second);
 
     //**********************************************************************
     if (VERBY[1]) {
