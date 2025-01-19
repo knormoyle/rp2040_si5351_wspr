@@ -147,17 +147,18 @@ you should be able to see "Raspberry Pi Pico" in the top left white box when you
 **IMPORTANT :** If you already have folders that have same name, you still need to overwrite them. Otherwise you get a compile error.
 
 ### 5. Use Library Manager to get Doug Malnati's WsprEncode library
-Instead of copying this library, I'm trying to use with the IDE's Library Manager. Go to Tools, Manage Libraries at the top of the IDE. Type WsprEncoded into the search box under "LIBRARY MANAGER". You'll get Doug's library as a search result. Should be version 4.2.2. Hit Install.
+Instead of copying this library, I'm trying to use with the IDE's Library Manager. Go to Tools, Manage Libraries at the top of the IDE. Type WsprEncoded into the search box under "LIBRARY MANAGER". You'll get Doug's library as a search result. Should be version 4.2.3. Hit Install.
 <img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/library_manager.png"/>
 
 The black screen should say:
 
 ```
-Downloading WsprEncoded@4.2.2
-WsprEncoded@4.2.2
-Installing WsprEncoded@4.2.2
-Installed WsprEncoded@4.2.2
+Downloading WsprEncoded@4.2.3
+WsprEncoded@4.2.3
+Installing WsprEncoded@4.2.3
+Installed WsprEncoded@4.2.3
 ```
+I believe the IDE will notify you when a new version of the library is available and should be installed.
 
 ### 6. Check the library files are where you expect
 To give an example of where the files should be and the libraries issue:
