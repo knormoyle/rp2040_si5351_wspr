@@ -6,7 +6,7 @@
 #ifndef DEBUG_FUNCTIONS_H
 #define DEBUG_FUNCTIONS_H
 #include <stdint.h>
-
+#include <MemoryFree.h>  // https://github.com/maniacbug/MemoryFree
 #include <TinyGPS++.h>
 
 // buffering that emptys with DoLogPrint()
@@ -19,5 +19,7 @@ void realPrintFlush(char *debugMsg, bool print);
 void printStr(const char *str, bool valid, int len);
 void printFloat(double val, bool valid, int len, int prec);
 void printInt(uint64_t val, bool valid, int len);
+
+void freeMem(void);
 
 #endif

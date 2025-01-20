@@ -89,8 +89,9 @@ void tinyGpsCustom() {
     // 12-15= Information about third SV, same as field 4-7
     // 16-19= Information about fourth SV, same as field 4-7
     // Every time anything is updated, print everything.
-    if (gps.altitude.isUpdated() || gps.satellites.isUpdated() ||
-        gp_pdop.isUpdated() || bd_hdop.isUpdated() || gl_vdop.isUpdated()) {
+    // if (gps.altitude.isUpdated() || gps.satellites.isUpdated() ||
+    //    gp_pdop.isUpdated() || bd_hdop.isUpdated() || gl_vdop.isUpdated()) {
+    if (true) {
         V1_print(F(EOL));
         V1_print(F(EOL));
 
@@ -102,6 +103,11 @@ void tinyGpsCustom() {
         bool validC = gps.location.isValid() && !GpsInvalidAll;
         bool validD = gps.altitude.isValid() && !GpsInvalidAll;
 
+        // hack to always be true?
+        validB_gp = true;
+        validB_bd = true;
+        validB_gl = true;
+
         V1_printf("gps valids: %u %u %u %u %u %u %u %u" EOL,
             !GpsInvalidAll, validA, validB, validB_gp, validB_bd, validB_gl, validC, validD);
 
@@ -111,8 +117,6 @@ void tinyGpsCustom() {
 
         printStr("sats", true, 8);
         printStr("hdop", true, 8);
-        printStr("vdop", true, 8);
-        printStr("pdop", true, 8);
 
         printStr("gp_sats", true, 8);
         printStr("gp_hdop", true, 8);

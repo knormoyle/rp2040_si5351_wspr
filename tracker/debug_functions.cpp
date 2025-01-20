@@ -334,3 +334,46 @@ void printFloat(double val, bool valid, int len, int prec) {
     Serial.flush();
     updateStatusLED();
 }
+
+//**********************************
+void freeMem() {
+    V1_print(F("freeMem START" EOL));
+    if (!VERBY[1]) return;
+    // Nice to use F() for strings that are constant
+    // compiled string stays in flash.
+    // does not get copied to SRAM during the C++ initialization
+    // string it has the PROGMEM property and runs from flash.
+    V1_print(F("Free RAM: "));
+    V1_print(freeMemory(), DEC);
+    V1_println(F(" byte. Why is this < 0?. Is it's calc wrong?"));
+
+    V1_print(F("Free Heap: "));
+    V1_print(rp2040.getFreeHeap(), DEC);
+    V1_println(F(" byte"));
+
+    V1_print(F("Used Heap: "));
+    V1_print(rp2040.getUsedHeap(), DEC);
+    V1_println(F(" byte"));
+
+    V1_print(F("Total Heap: "));
+    V1_print(rp2040.getTotalHeap(), DEC);
+    V1_println(F(" byte"));
+
+    // https://forum.arduino.cc/t/trying-to-make-sense-of-ram-usage/622666
+    // char __stack = 0;
+
+    // V1_print(F("__brkval="));
+    // V1_println((unsigned int)__brkval);
+    // V1_print(F("__malloc_heap_start="));
+    // V1_println((unsigned int)__malloc_heap_start);
+    // V1_print("__flp=");
+    // V1_println((unsigned int)__flp);
+    // V1_print("__stack=");
+    // V1_println((unsigned int)&__stack);
+    // V1_print("stack size=");
+    // V1_println(RAM_end - (unsigned int)&__stack);
+    // V1_print("Heap size=");
+    // V1_println((unsigned int)__brkval - RAM_start);
+
+    V1_print(F("freeMem END" EOL));
+}

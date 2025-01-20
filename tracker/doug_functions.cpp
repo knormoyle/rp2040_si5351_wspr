@@ -56,9 +56,8 @@ void encodeBasicTele(const char *id13, const char *grid56, uint32_t altitudeMete
 
 //***************************************************************
 WsprMessageTelemetryExtendedUserDefined<5> codecGpsMsg;
-void defineExtendedUserTele(uint8_t slot) {
-    V1_print(F("defineExtendedUserTele() START" EOL));
-
+void define_codecGpsMsg() {
+    V1_print(F("define_codecGpsMsg() START" EOL));
 
     // Create User-Defined Telemetry object for the number of
     // fields you want, maximum of 29 1-bit fields possible.
@@ -78,15 +77,13 @@ void defineExtendedUserTele(uint8_t slot) {
     codecGpsMsg.DefineField("LockTimeSecs", 0, 180, 1);
     codecGpsMsg.DefineField("LockTimeSecsAvg", 0, 180, 1);
 
-
-    V1_print(F("defineExtendedUserTele() END" EOL));
+    V1_print(F("define_codecGpsMsg() END" EOL));
 }
 
 //***************************************************************
-// FIX! have to add parameters to encode?
-void encodeExtendedUserTele(char *hf_callsign, char *hf_grid4, uint8_t *hf_power, uint8_t slot) {
-
-    V1_print(F("encodeExtendedUserTele() START" EOL));
+// FIX! have to add parameters to encode or will it grab from global TinyGps state?
+void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
+    V1_print(F("encode_codecGpsMsg START" EOL));
     switch(slot) {
         case 0: {;}
         case 2: {;}
@@ -94,7 +91,7 @@ void encodeExtendedUserTele(char *hf_callsign, char *hf_grid4, uint8_t *hf_power
         case 6: {;}
         case 8: break;
         default:
-            V1_printf("ERROR: encodeExtendedUserTele illegal slot %u ..using 4" EOL, slot);
+            V1_printf("ERROR: encode_codecGpsMsg illegal slot %u ..using 4" EOL, slot);
             slot = 4;
     }
 
@@ -113,13 +110,11 @@ void encodeExtendedUserTele(char *hf_callsign, char *hf_grid4, uint8_t *hf_power
     // Note which transmission slot you will send in
     codecGpsMsg.SetHdrSlot(slot);
 
-    if (true) {
-        codecGpsMsg.Set("SatCountUSA", 12);
-        codecGpsMsg.Set("SatCountChina", 10);
-        codecGpsMsg.Set("SatCountRussia", 0);
-        codecGpsMsg.Set("LockTimeSecs", 10.74);
-        codecGpsMsg.Set("LockTimeSecsAvg", 12.76);
-    }
+    codecGpsMsg.Set("SatCountUSA", 12);
+    codecGpsMsg.Set("SatCountChina", 10);
+    codecGpsMsg.Set("SatCountRussia", 0);
+    codecGpsMsg.Set("LockTimeSecs", 10.74);
+    codecGpsMsg.Set("LockTimeSecsAvg", 12.76);
 
     codecGpsMsg.Encode();
 
@@ -135,7 +130,13 @@ void encodeExtendedUserTele(char *hf_callsign, char *hf_grid4, uint8_t *hf_power
 
     strncpy(hf_callsign, GetCallsign, sizeof(hf_callsign) - 1);
     strncpy(hf_grid4, GetGrid4, sizeof(hf_grid4) - 1);
-    *hf_power = GetPowerDbm;
 
-    V1_print(F("encodeExtendedUserTele() END" EOL));
+    // instead: remove the const char* ?
+    // https://stackoverflow.com/questions/77869711/returning-a-char-pointer-when-the-argument-is-a-constant-char-pointer
+ 
+    // *hf_power = GetPowerDbm;
+    // wants to be char array instead of uint8_t?
+    snprintf(hf_power, 3, "%u", GetPowerDbm);
+
+    V1_print(F("encode_codecGpsMsg END" EOL));
 }
