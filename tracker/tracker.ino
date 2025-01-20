@@ -1141,6 +1141,11 @@ void setup1() {
 
 //*************************************************************************
 uint64_t GpsTimeToLastFix = 0;  // milliseconds
+uint64_t GpsTimeToLastFixMin = 999999;  // milliseconds
+uint64_t GpsTimeToLastFixMax = 0;  // milliseconds
+uint64_t GpsTimeToLastFixAvg = 0;  // milliseconds
+uint64_t GpsTimeToLastFixSum = 0;  // Sum and Cnt are for computing the incremntal Avg
+uint64_t GpsTimeToLastFixCnt = 0;
 
 // these are used as globals
 // FIX! right now, where are they set?
@@ -1494,17 +1499,41 @@ void loop1() {
             // Should this is also cleared when we turn gps off? no?
             // GpsStartTime is set by gps_functions.cpp
 
-            // FIX! odd case. Did the GPS get turned off, but TinyGPS++ says it still has valid fix?
-            // until I figure out why, set GpsTimeToLastFix to 0 for this case
             if (GpsStartTime == 0) {
+                // FIX! odd case. Did the GPS get turned off, 
+                // but TinyGPS++ says it still has valid fix?
+                // until I figure out why, set GpsTimeToLastFix to 0 for this case
+                V1_printf("loopCnt %" PRIu64, loopCnt);
+                V1_print(F(" odd case: GpsTimeToLastFix likely wrong, GpsStartTime was 0"));
                 GpsTimeToLastFix = 0;
             } else {
                 GpsTimeToLastFix = (
                     absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
+                V1_printf("loopCnt %" PRIu64, loopCnt);
+                V1_print(F(" first Gps Fix, after off->on!"));
+                V1_printf(" GpsTimeToLastFix %" PRIu64 " ms" EOL,   
+                    GpsTimeToLastFix);
+
+                if (GpsTimeToLastFix < GpsTimeToLastFixMin) {
+                    GpsTimeToLastFixMin = GpsTimeToLastFix;
+                    V1_printf("loopCnt %" PRIu64, loopCnt);
+                    V1_printf(" New GpsTimeToLastFixMin %" PRIu64 " ms" EOL, 
+                        GpsTimeToLastFixMin);
+                }
+                if (GpsTimeToLastFix > GpsTimeToLastFixMax) {
+                    GpsTimeToLastFixMax = GpsTimeToLastFix;
+                    V1_printf("loopCnt %" PRIu64, loopCnt);
+                    V1_printf(" New GpsTimeToLastFixMax %" PRIu64 " ms" EOL, 
+                        GpsTimeToLastFixMax);
+                }
+                GpsTimeToLastFixSum += GpsTimeToLastFix;
+                GpsTimeToLastFixCnt += 1;
+                GpsTimeToLastFixAvg = GpsTimeToLastFixSum / GpsTimeToLastFixCnt;
+                V1_printf("loopCnt %" PRIu64, loopCnt);
+                V1_printf(" New GpsTimeToLastFixAvg %" PRIu64 " ms" EOL, 
+                    GpsTimeToLastFixAvg);
             }
 
-            V1_printf("loopCnt %" PRIu64 " first Gps Fix, after off->on! "
-                PRIu64 " GpsTimeToLastFix %" PRIu64 EOL, loopCnt, GpsTimeToLastFix);
 
             // sets all the t_* strings above
             // voltage is captured when we write the buff? So it's before GPS is turned off?
