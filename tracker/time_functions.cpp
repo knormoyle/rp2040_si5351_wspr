@@ -14,7 +14,7 @@ extern bool VERBY[10];
 
 // why was this static
 // with arduino, can't we just use printf to stdout rather than V1_print() ?
-void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t) {
+void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t, bool printAge) {
     if (!VERBY[1]) return;
     char sz[32];
     if (d.isValid()) {
@@ -31,7 +31,7 @@ void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t) {
         V1_print(F("******** "));
     }
 
-    printInt(d.age(), d.isValid(), 6);
+    if (printAge) printInt(d.age(), d.isValid(), 6);
     // whenever something might have taken a long time like printing
     updateStatusLED();
 }

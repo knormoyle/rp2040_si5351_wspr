@@ -21,5 +21,6 @@ void printFloat(double val, bool valid, int len, int prec);
 void printInt(uint64_t val, bool valid, int len);
 
 void freeMem(void);
+void gpsResetTest();
 
 #endif

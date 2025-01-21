@@ -323,7 +323,9 @@ void drainInitialGpsOutput(void) {
             while (Serial2.available()) {
                 incomingChar = Serial2.read();
                 // buffer it up like we do normally below, so we can see sentences
-                nmeaBufferAndPrint(incomingChar, true);  // print if full
+                // skip any non-printable, as we won't be able to dos2unix the putty.log if in there
+                bool printable = isprint(incomingChar);
+                if (printable) nmeaBufferAndPrint(incomingChar, true);  // print if full
             }
         }
         gpsSleepForMillis(1000, true);  // return early if Serial2.available()
@@ -2375,7 +2377,7 @@ void gpsDebug() {
         printFloat(gps.location.lat(), validC, 12, 6);
         printFloat(gps.location.lng(), validC, 12, 6);
         printInt(gps.location.age(), validC, 7);
-        printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
+        printGpsDateTime(gps.date, gps.time, true);  // printAge 
         printFloat(gps.altitude.meters(), validD, 8, 2);
         printFloat(gps.course.deg(), validE, 7, 2);
         printFloat(gps.speed.kmph(), validF, 6, 2);

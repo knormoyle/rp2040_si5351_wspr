@@ -21,12 +21,14 @@
 #include "led_functions.h"
 #include "u4b_functions.h"
 #include "keyboard_functions.h"
-// just so we can do some tests?
-#include "si5351_functions.h"
 #include "wspr_functions.h"
 #include "i2c_functions.h"
 #include "config_functions.h"
 #include "cw_functions.h"
+
+// just so we can do some tests? 
+#include "debug_functions.h"
+#include "si5351_functions.h"
 
 //*****************************************************
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
@@ -340,15 +342,31 @@ void show_TELEN_msg() {
     V0_print(F("A: custom: OneWire temperature sensor 1 hourly low/high" EOL));
     V0_print(F("B-Z: reserved for future I2C devices etc" EOL));
     V0_print(F(EOL "(ADC values are in units of mV)" EOL));
-    V0_print(F("See the Wiki for more info.n" EOL));
 }
 
 //********************************************
+// 'Y' command causes this to execute
+void do_gpsResetTest() {
+    // FIX! currently don't have cold reset test
+    
+    V0_print(F(EOL "do_gpsResetTest START" EOL));
+    Watchdog.reset();
+    while (true)  {
+        gpsResetTest();
+        V0_print(F(EOL "<enter> within 2 secs to abort test loop, otherwise repeats" EOL));
+        char c_char = getOneChar(2000);  // 2 secs
+        if (c_char != 0) break;
+    }
+    Watchdog.reset();
+    V0_print(F("do_gpsResetTest END" EOL));
+}
+//********************************************
 // 'Z' command causes this to execute
-void do_i2c_tests(void) {
+void do_someTest(void) {
+    V0_print(F(EOL "do_someTest START"));
     // quick and dirty way to execute some different tests
     if (true) {
-        V1_print(F("Cycle thru the 4 wspr symbol frequencies. 15 secs each"));
+        V0_print(F("Cycle thru the 4 wspr symbol frequencies. 15 secs each"));
         GpsOFF(true);  // keep TinyGPS state
         init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
         init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
@@ -359,14 +377,14 @@ void do_i2c_tests(void) {
         Watchdog.reset();
         while (true)  {
             for (int symbol = 0; symbol < 4; symbol++) {
-                V1_printf(EOL "symbol %d" EOL, symbol);
+                V0_printf(EOL "symbol %d" EOL, symbol);
                 startSymbolFreq(hf_freq, symbol, false, false); 
                 for (int i = 0; i < 15; i++) {
                     sleep_ms(1000);
                     Watchdog.reset();
                 }
             }
-            V1_print(F(EOL "<enter> within 2 secs to abort wspr test loop, otherwise repeats" EOL));
+            V0_print(F(EOL "<enter> within 2 secs to abort wspr test loop, otherwise repeats" EOL));
             char c_char = getOneChar(2000);  // 2 secs
             if (c_char != 0) break;
         }
@@ -375,9 +393,9 @@ void do_i2c_tests(void) {
         // uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
         while (true)  {
-            V1_print(F(EOL "cw_send_message() with current _Band/_callsign/grid6/altitude" EOL));
+            V0_print(F(EOL "cw_send_message() with current _Band/_callsign/grid6/altitude" EOL));
             cw_send_message();
-            V1_print(F(EOL "<enter> within 2 secs to abort cw test loop, otherwise repeats" EOL));
+            V0_print(F(EOL "<enter> within 2 secs to abort cw test loop, otherwise repeats" EOL));
             char c_char = getOneChar(2000);  // 2 secs
             if (c_char != 0) break;
         }
@@ -412,6 +430,7 @@ void do_i2c_tests(void) {
         V0_println(F(EOL "SI5351A read reg 0x00"));
         i2cWrRead(0, 0x00);  // Device Status. D7 should be 1
     }
+    V1_print(F("do_someTest END" EOL));
 }
 
 //***************************************
@@ -452,8 +471,11 @@ void user_interface(void) {
         char confirm[2] = { 0 };
         switch ( c_char ) {
             case 'Z':
-                V0_print(F("Will run test" EOL));
-                do_i2c_tests();
+                do_someTest();
+                break;
+
+            case 'Y':
+                do_gpsResetTest();
                 break;
 
             case '@':
@@ -1237,7 +1259,8 @@ void show_commands(void) {
     V0_println(F("/: reboot to drag/drop new .uf2 (not implemented)"));
     V0_println(F("@: write current gps config, no broadcast, 1 constellation to GPS Flash (for boot)"));
     V0_println(F("*: factory reset all config values"));
-    V0_println(F("Z: run i2c test or scan: which, currently?"));
+    V0_println(F("Z: run wspr 4 tone freq test loop"));
+    V0_println(F("Y: run gps warm rest test loop"));
     V0_println(F("C: change Callsign (6 char max)"));
     V0_println(F("U: change U4b channel # (0-599)"));
     V0_println(F("A: change band (2,10,12,15,17,20 default 20)"));

@@ -9,7 +9,7 @@
 #include <TinyGPS++.h>
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 
-void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t);
+void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t, bool printAge);
 time_t getEpochTime();
 
 #endif

@@ -1264,14 +1264,14 @@ uint16_t  BATT_WAIT = 1;  // secs
 // lets go 5 minutes! can travel 10 miles in that time though? 2 subsquares?
 // we'll be getting long back to back when we do "Extended Telemetry".
 // so maybe big max age is needed?
-const uint32_t GPS_LOCATION_AGE_MAX = 30000;
+extern const uint32_t GPS_LOCATION_AGE_MAX = 30000;
 
 // FIX! since we break out of the sleepSeconds when gps data starts
 // with Serial2.available(), we could make this bigger?
 // needs to be at least 1 sec (a little more) since it
 // wants to grab a full burst, and we don't know where we are in the repeating
 // burst behavior when we start (idle or in the middle of a burst?)
-const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
+extern const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
 
 //*************************************************************************
 void loop1() {

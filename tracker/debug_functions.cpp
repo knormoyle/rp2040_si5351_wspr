@@ -23,6 +23,7 @@
 #include "print_functions.h"
 #include "debug_functions.h"
 #include "led_functions.h"
+#include "gps_functions.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 // for TinyGPSDate definition
@@ -30,6 +31,8 @@
 
 // decode of _verbose 0-9
 extern bool VERBY[10];
+extern bool GpsInvalidAll;
+extern TinyGPSPlus gps;
 
 //***********************************
 // background on i/o
@@ -377,3 +380,74 @@ void freeMem() {
 
     V1_print(F("freeMem END" EOL));
 }
+
+//**********************************
+extern const int GPS_WAIT_FOR_NMEA_BURST_MAX; 
+void gpsResetTest() {
+    static uint32_t count = 0;
+    // FIX! currently don't have cold reset support
+    V0_print(F("do_gpsResetTest START" EOL));
+
+    if (count == 0) {
+        V0_print(F("need gps init and cold reset once to fully setup gps"));
+        GpsINIT();
+        GpsOFF(false);  // don't keep TinyGPS state
+        GpsON(false);   // no gps cold reset
+        GpsOFF(false);  // don't keep TinyGPS state
+        count += 1;
+        V0_print(F("do_gpsResetTest END"));
+        V0_flush();
+        return;
+    }
+
+    bool fix_valid_all = false;
+    uint32_t tries = 0;
+    uint64_t duration_millis = 0;
+    uint64_t start_millis = millis();
+    while (!fix_valid_all) {
+        Watchdog.reset();
+        tries += 1;
+        updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
+        fix_valid_all = !GpsInvalidAll &&
+            gps.time.isValid() &&
+            (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
+            gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
+            gps.hdop.isValid() &&
+            gps.altitude.isValid() &&
+            gps.location.isValid() &&
+            gps.speed.isValid() &&
+            gps.course.isValid();
+
+        duration_millis = millis() - start_millis;
+        if (duration_millis > 240000) {  // 4 * 60 = 240 secs
+            V0_printf("ERROR: gpsResetTest %lu: no fix after %" PRIu64 " millisecs" EOL, 
+                count, duration_millis);
+            break;
+        }
+        // by not sleeping, we should get better timing accuracy?
+        // maybe check that at least 1 sec has elapsed for each loop iteration
+        V0_flush();
+        Watchdog.reset();
+        // could be negative
+        int64_t wait_millis =  1000 - (int64_t) duration_millis;
+        V0_printf("wait_millis %" PRIu64 EOL, wait_millis);
+        if (wait_millis > 0) sleep_ms(wait_millis);
+    }
+
+    if (fix_valid_all) {
+        if (duration_millis < 60000) { // 60 secs
+            V0_printf("GOOD: gpsResetTest %lu: fix took %" PRIu64 " millisecs" EOL, 
+                count, duration_millis);
+        } else {
+            V0_printf("ERROR: gpsResetTest %lu: fix (too slow) took %" PRIu64 " millisecs" EOL, 
+                count, duration_millis);
+        }
+        // prints out the summary info
+        gpsDebug();
+    }
+    GpsOFF(false);  // don't keep TinyGPS state
+    count += 1;
+    V0_print(F("do_gpsResetTest END"));
+    V0_flush();
+}
+

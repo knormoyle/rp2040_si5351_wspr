@@ -30,7 +30,8 @@ void show_TELEN_msg(void);
 void get_user_input(const char *prompt, char *input_variable, int max_length);
 
 void convertToUpperCase(char *str);
-void do_i2c_tests(void);
+void do_someTest(void);
+void do_gpsResetTest();
 void doFactoryReset();
 
 #endif

@@ -103,17 +103,17 @@ void tinyGpsCustom() {
         bool validC = gps.location.isValid() && !GpsInvalidAll;
         bool validD = gps.altitude.isValid() && !GpsInvalidAll;
 
+        V1_printf("gps valids (before force): %u %u %u %u %u %u %u %u" EOL,
+            !GpsInvalidAll, validA, validB, validB_gp, validB_bd, validB_gl, validC, validD);
+
         // hack to always be true?
         validB_gp = true;
         validB_bd = true;
         validB_gl = true;
 
-        V1_printf("gps valids: %u %u %u %u %u %u %u %u" EOL,
-            !GpsInvalidAll, validA, validB, validB_gp, validB_bd, validB_gl, validC, validD);
-
-        printStr("Date", true, 11);
-        printStr("Time", true, 9);
-        printStr("Alt", true, 8);
+        printStr("date", true, 11);
+        printStr("time", true, 9);
+        printStr("altm", true, 8);
 
         printStr("sats", true, 8);
         printStr("hdop", true, 8);
@@ -139,7 +139,7 @@ void tinyGpsCustom() {
         // realPrintFlush(debugMsg1, false);  // no print
 
         if (VERBY[1]) {
-            printGpsDateTime(gps.date, gps.time);  // gps.time.age() exists?
+            printGpsDateTime(gps.date, gps.time, false);   // don't printAge 
             printFloat(gps.altitude.meters(), validD, 8, 2);
 
             printInt(gps.satellites.value(), validA, 8);
