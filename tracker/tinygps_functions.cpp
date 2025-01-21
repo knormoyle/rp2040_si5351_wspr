@@ -13,6 +13,22 @@
 // object for TinyGPSPlus state
 extern TinyGPSPlus gps;
 
+// FIX! why do we have to declare in tracker.ino and extern here?
+extern TinyGPSCustom gp_sats;
+extern TinyGPSCustom gp_pdop;
+extern TinyGPSCustom gp_hdop;
+extern TinyGPSCustom gp_vdop;
+
+extern TinyGPSCustom bd_sats;
+extern TinyGPSCustom bd_pdop;
+extern TinyGPSCustom bd_hdop;
+extern TinyGPSCustom bd_vdop;
+
+extern TinyGPSCustom gl_sats;
+extern TinyGPSCustom gl_pdop;
+extern TinyGPSCustom gl_hdop;
+extern TinyGPSCustom gl_vdop;
+
 extern bool VERBY[10];
 extern bool BALLOON_MODE;
 
@@ -45,31 +61,38 @@ extern bool GpsInvalidAll;
 // i.e. $GPGSA.  see http://aprs.gids.nl/nmea  and gps chip docs.
 
 
-// FIX! is everything a string when saved?
-TinyGPSCustom gp_sats(gps, "GPGSV", 3);
-TinyGPSCustom gp_pdop(gps, "GPGSA", 15);  // 15th element
-TinyGPSCustom gp_hdop(gps, "GPGSA", 16);
-TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
-
-TinyGPSCustom bd_sats(gps, "BDGSV", 3);
-TinyGPSCustom bd_pdop(gps, "BDGSA", 15);
-TinyGPSCustom bd_hdop(gps, "BDGSA", 16);
-TinyGPSCustom bd_vdop(gps, "BDGSA", 17);
-
-TinyGPSCustom gl_sats(gps, "GLGSV", 3);
-TinyGPSCustom gl_pdop(gps, "GLGSA", 15);
-TinyGPSCustom gl_hdop(gps, "GLGSA", 16);
-TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
-
 //************************************************
 void tinyGpsCustomInit() {
-    // V1_println(F("tinyGpsCustomInit START"));
-    // V1_println(F("tinyGpsCustomInit End"));
+    V1_println(F("tinyGpsCustomInit START"));
+    if (false) {
+        V1_println(F("tinyGpsCustomInit END do nothing"));
+        return;
+    }
+    // FIX! is everything a string when saved?
+    // TinyGPSCustom gp_sats(gps, "GPGSV", 3);
+    // TinyGPSCustom gp_pdop(gps, "GPGSA", 15);  // 15th element
+    // TinyGPSCustom gp_hdop(gps, "GPGSA", 16);
+    // TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
+
+    // TinyGPSCustom bd_sats(gps, "BDGSV", 3);
+    // TinyGPSCustom bd_pdop(gps, "BDGSA", 15);
+    // TinyGPSCustom bd_hdop(gps, "BDGSA", 16);
+    // TinyGPSCustom bd_vdop(gps, "BDGSA", 17);
+
+    // TinyGPSCustom gl_sats(gps, "GLGSV", 3);
+    // TinyGPSCustom gl_pdop(gps, "GLGSA", 15);
+    // TinyGPSCustom gl_hdop(gps, "GLGSA", 16);
+    // TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
+    V1_println(F("tinyGpsCustomInit END"));
 }
 
 //************************************************
 void tinyGpsCustom() {
     V1_println(F("tinyGpsCustom START"));
+    if (false) {
+        V1_println(F("tinyGpsCustom END do nothing"));
+        return;
+    }
     // From http://aprs.gids.nl/nmea/:
     // $GPGSV
     // GPS Satellites in view
@@ -107,9 +130,9 @@ void tinyGpsCustom() {
             !GpsInvalidAll, validA, validB, validB_gp, validB_bd, validB_gl, validC, validD);
 
         // hack to always be true?
-        validB_gp = true;
-        validB_bd = true;
-        validB_gl = true;
+        // validB_gp = true;
+        // validB_bd = true;
+        // validB_gl = true;
 
         printStr("date", true, 11);
         printStr("time", true, 9);
@@ -135,8 +158,8 @@ void tinyGpsCustom() {
 
         V1_print(F(EOL));
 
-        // char debugMsg1[] = "Before printInt/Float/String tinyGpsCustom prints";
-        // realPrintFlush(debugMsg1, false);  // no print
+        char debugMsg1[] = "Before printInt/Float/String tinyGpsCustom prints";
+        realPrintFlush(debugMsg1, false);  // no print
 
         if (VERBY[1]) {
             printGpsDateTime(gps.date, gps.time, false);   // don't printAge 
@@ -166,8 +189,8 @@ void tinyGpsCustom() {
         V1_print(F(EOL));
         V1_print(F(EOL));
 
-        // char debugMsg1[] = "After printInt/Float/String tinyGpsCustom prints";
-        // realPrintFlush(debugMsg1, false);  // no print
+        char debugMsg2[] = "After printInt/Float/String tinyGpsCustom prints";
+        realPrintFlush(debugMsg2, false);  // no print
     }
     V1_println(F("tinyGpsCustom END"));
 }

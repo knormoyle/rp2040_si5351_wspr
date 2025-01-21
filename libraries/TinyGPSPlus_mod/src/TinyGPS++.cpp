@@ -21,6 +21,10 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+
+// HACK so I can print?
+#include <Arduino.h>
+
 #include "TinyGPS++.h"
 
 #include <string.h>
@@ -204,8 +208,17 @@ bool TinyGPSPlus::endOfTermHandler()
       }
 
       // Commit all custom listeners of this sentence type
-      for (TinyGPSCustom *p = customCandidates; p != NULL && strcmp(p->sentenceName, customCandidates->sentenceName) == 0; p = p->next)
+      // for (TinyGPSCustom *p = customCandidates; p != NULL && strcmp(p->sentenceName, customCandidates->sentenceName) == 0; p = p->next) {
+      // for (TinyGPSCustom *p = customCandidates; p != NULL; p = p->next) {
+      //   Serial.printf("ERROR: DEBUG (1): customCandidates->sentenceName %s\r\n", customCandidates->sentenceName);
+      //   Serial.printf("ERROR: DEBUG (1): p->sentenceName %s\r\n", p->sentenceName);
+      // }
+
+      for (TinyGPSCustom *p = customCandidates; p != NULL && strcmp(p->sentenceName, customCandidates->sentenceName) == 0; p = p->next) {
+        // HACK remove before flight
+        // Serial.printf("ERROR: DEBUG (2): customCandidates->sentenceName %s\r\n", customCandidates->sentenceName);
          p->commit();
+      }
       return true;
     }
 

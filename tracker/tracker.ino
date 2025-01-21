@@ -187,6 +187,25 @@ uint32_t GpsWatchdogCnt = 0;
 // gps_functions.cpp refers to this
 TinyGPSPlus gps;
 
+// FIX! why can't we do this in tinygps_functions.cpp ? 
+// somehow this has to be a global, that TinyGPS and tinygps_functions.cpp can see
+// correctly?
+TinyGPSCustom gp_sats(gps, "GPGSV", 3);
+TinyGPSCustom gp_pdop(gps, "GPGSA", 15);
+TinyGPSCustom gp_hdop(gps, "GPGSA", 16);
+TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
+
+TinyGPSCustom bd_sats(gps, "BDGSV", 3);
+TinyGPSCustom bd_pdop(gps, "BDGSA", 15);
+TinyGPSCustom bd_hdop(gps, "BDGSA", 16);
+TinyGPSCustom bd_vdop(gps, "BDGSA", 17);
+
+TinyGPSCustom gl_sats(gps, "GLGSV", 3);
+TinyGPSCustom gl_pdop(gps, "GLGSA", 15);
+TinyGPSCustom gl_hdop(gps, "GLGSA", 16);
+TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
+
+
 #include "print_functions.h"
 #include "debug_functions.h"
 #include "config_functions.h"

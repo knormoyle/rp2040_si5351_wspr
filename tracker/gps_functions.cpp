@@ -1961,6 +1961,8 @@ void updateGpsDataAndTime(int ms) {
     // V1_println(F("debug1"));
     getChar();
     // V1_println(F("debug2"));
+    // V1_flush();
+
     // fast drain if necessary ..throw away any uart buffered broken sentence at start
     // (since we're unaligned initially)
     // hmm shouldn't get '0' but I guess it would drain that too
@@ -1974,14 +1976,12 @@ void updateGpsDataAndTime(int ms) {
     // $BDGSV,2,2,06,29,65,316,,30,54,126,*65
     // I suppose only worry about this special 'fast draining' when we first get here
     // we might totally drain without finding a '$'
-    // V1_println(F("debug3"));
     // note this could empty with a sentence in the 32 deep fifo, just fitting
     // UPDATE: maybe keep draining until we know we have enough room so not almost full!
     // too much messaging if we're dancing around the buffer close to full, below
     while (charsAvailable > 8 || (charsAvailable && incomingChar != '$')) {
         getChar();
     }
-    // V1_println(F("debug4"));
 
     // incomingChar will be '0' if charsAvailable is 0 at this point
     // incomingChar could have a valid char if charsAvailable was nonzero.
@@ -2003,10 +2003,13 @@ void updateGpsDataAndTime(int ms) {
                     StampPrintf("WARN: was NMEA almost full. uart rx was %d)" EOL,
                         (int) charsAvailable);
             }
-            // V1_println(F("debug5a"));
             // always send everything to TinyGPS++ ??
             // does it expect the CR LF ?
+            // V1_printf("debug3 incomingChar '%c'" EOL, incomingChar);
+            // V1_flush();
             gps.encode(incomingChar);
+            // V1_println(F("debug4"));
+            V1_flush();
             // we count all chars, even CR LF etc
             incomingCharCnt++;
             // do we get any null chars?
