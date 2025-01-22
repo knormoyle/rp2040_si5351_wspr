@@ -19,15 +19,17 @@ extern TinyGPSCustom gp_pdop;
 extern TinyGPSCustom gp_hdop;
 extern TinyGPSCustom gp_vdop;
 
-extern TinyGPSCustom bd_sats;
-extern TinyGPSCustom bd_pdop;
-extern TinyGPSCustom bd_hdop;
-extern TinyGPSCustom bd_vdop;
+extern TinyGPSCustom gb_sats;
+extern TinyGPSCustom gb_pdop;
+extern TinyGPSCustom gb_hdop;
+extern TinyGPSCustom gb_vdop;
 
 extern TinyGPSCustom gl_sats;
 extern TinyGPSCustom gl_pdop;
 extern TinyGPSCustom gl_hdop;
 extern TinyGPSCustom gl_vdop;
+
+extern TinyGPSCustom ga_sats;
 
 extern bool VERBY[10];
 extern bool BALLOON_MODE;
@@ -68,21 +70,6 @@ void tinyGpsCustomInit() {
         V1_println(F("tinyGpsCustomInit END do nothing"));
         return;
     }
-    // FIX! is everything a string when saved?
-    // TinyGPSCustom gp_sats(gps, "GPGSV", 3);
-    // TinyGPSCustom gp_pdop(gps, "GPGSA", 15);  // 15th element
-    // TinyGPSCustom gp_hdop(gps, "GPGSA", 16);
-    // TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
-
-    // TinyGPSCustom bd_sats(gps, "BDGSV", 3);
-    // TinyGPSCustom bd_pdop(gps, "BDGSA", 15);
-    // TinyGPSCustom bd_hdop(gps, "BDGSA", 16);
-    // TinyGPSCustom bd_vdop(gps, "BDGSA", 17);
-
-    // TinyGPSCustom gl_sats(gps, "GLGSV", 3);
-    // TinyGPSCustom gl_pdop(gps, "GLGSA", 15);
-    // TinyGPSCustom gl_hdop(gps, "GLGSA", 16);
-    // TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
     V1_println(F("tinyGpsCustomInit END"));
 }
 
@@ -120,19 +107,21 @@ void tinyGpsCustom() {
 
         bool validA = gps.satellites.isValid() && !GpsInvalidAll;
         bool validB = gps.hdop.isValid() && !GpsInvalidAll;
-        bool validB_gp = gp_hdop.isValid() && !GpsInvalidAll;
-        bool validB_bd = bd_hdop.isValid() && !GpsInvalidAll;
-        bool validB_gl = gl_hdop.isValid() && !GpsInvalidAll;
+        bool validB_gp = gp_sats.isValid() && !GpsInvalidAll;
+        bool validB_gb = gb_sats.isValid() && !GpsInvalidAll;
+        bool validB_gl = gl_sats.isValid() && !GpsInvalidAll;
+        bool validB_ga = ga_sats.isValid() && !GpsInvalidAll;
         bool validC = gps.location.isValid() && !GpsInvalidAll;
         bool validD = gps.altitude.isValid() && !GpsInvalidAll;
 
         V1_printf("gps valids (before force): %u %u %u %u %u %u %u %u" EOL,
-            !GpsInvalidAll, validA, validB, validB_gp, validB_bd, validB_gl, validC, validD);
+            !GpsInvalidAll, validA, validB, validB_gp, validB_gb, validB_gl, validC, validD);
 
         // hack to always be true?
-        // validB_gp = true;
-        // validB_bd = true;
-        // validB_gl = true;
+        validB_gp = true;
+        validB_gb = true;
+        validB_gl = true;
+        validB_ga = true;
 
         printStr("date", true, 11);
         printStr("time", true, 9);
@@ -140,21 +129,24 @@ void tinyGpsCustom() {
 
         printStr("sats", true, 8);
         printStr("hdop", true, 8);
-
         printStr("gp_sats", true, 8);
+        printStr("gb_sats", true, 8);
+        printStr("gl_sats", true, 8);
+        // SIM65M
+        printStr("ga_sats", true, 8);
+
         printStr("gp_hdop", true, 8);
         printStr("gp_vdop", true, 8);
         printStr("gp_pdop", true, 8);
 
-        printStr("bd_sats", true, 8);
-        printStr("bd_hdop", true, 8);
-        printStr("bd_vdop", true, 8);
-        printStr("bd_pdop", true, 8);
+        printStr("gb_hdop", true, 8);
+        printStr("gb_vdop", true, 8);
+        printStr("gb_pdop", true, 8);
 
-        printStr("gl_sats", true, 8);
         printStr("gl_hdop", true, 8);
         printStr("gl_vdop", true, 8);
         printStr("gl_pdop", true, 8);
+
 
         V1_print(F(EOL));
 
@@ -170,21 +162,24 @@ void tinyGpsCustom() {
             printInt(gps.hdop.value(), validB, 8);
 
             // apparently all the custom stuff is saved as strings?
-            // if it's empty, it will be blank
             printStr(gp_sats.value(), validB_gp, 8);
+            printStr(gb_sats.value(), validB_gb, 8);
+            printStr(gl_sats.value(), validB_gl, 8);
+            printStr(ga_sats.value(), validB_ga, 8);
+
+            // if it's empty, it will be blank
             printStr(gp_hdop.value(), validB_gp, 8);
             printStr(gp_vdop.value(), validB_gp, 8);
             printStr(gp_pdop.value(), validB_gp, 8);
 
-            printStr(bd_sats.value(), validB_bd, 8);
-            printStr(bd_hdop.value(), validB_bd, 8);
-            printStr(bd_vdop.value(), validB_bd, 8);
-            printStr(bd_pdop.value(), validB_bd, 8);
+            printStr(gb_hdop.value(), validB_gb, 8);
+            printStr(gb_vdop.value(), validB_gb, 8);
+            printStr(gb_pdop.value(), validB_gb, 8);
 
-            printStr(gl_sats.value(), validB_gl, 8);
             printStr(gl_hdop.value(), validB_gl, 8);
             printStr(gl_vdop.value(), validB_gl, 8);
             printStr(gl_pdop.value(), validB_gl, 8);
+
         }
         V1_print(F(EOL));
         V1_print(F(EOL));

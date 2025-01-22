@@ -50,21 +50,6 @@ extern TinyGPSPlus gps;
 // Return zenith and azimuth per standard api. Can change to be elevation.
 // Elevation is corrected for refraction here, before being returned as zenith (sza)
 
-void solarZenithAndAzimuthAngle4(double *sza, double *saa, double longitude, double latitude, time_t timestamp) {
-    uint64_t timestamp_utc = timestamp;
-    double julianCenturyNumber = calculateJulianCenturyNumber(timestamp_utc);
-    double declination = calculateDeclination(julianCenturyNumber);
-    double eot = calculateEquationOfTime(julianCenturyNumber);
-    double localSolarTime = calculateLocalSolarTime(timestamp_utc, eot, longitude);
-    double hourAngle = calculateHourAngle(localSolarTime);
-    double elevation = calculateSolarElevation(hourAngle, declination, latitude);
-    double azimuth = calculateSolarAzimuth(hourAngle, declination, elevation, latitude);
-
-    // calculate corrected elevation
-    double corrSolarElev = calculateCorrectedSolarElevation(elevation);
-    *sza = 90 - corrSolarElev;
-    *saa = azimuth;
-}
 
 //***********************************************************************
 
@@ -153,7 +138,8 @@ void calcSolarElevation4(double *solarElevation, double *solarAzimuth, double *s
 
     // lat lon are double. epochTime is time_t (uint64_t)
     // epochTime is the number of seconds since the Unix epoch (January 1, 1970, 00:00:00 UTC).
-    solarZenithAndAzimuthAngle4(&sza, &saa, lon, lat, epochTime);
+    // solarZenithAndAzimuthAngle4 just do solar4Position directly (other_cpp/short_solarfunctions.cpp)
+    solar4Position(&sza, &saa, lon, lat, epochTime);
     // The solar zenith angle is the zenith angle of the sun, 
     // i.e., the angle between the sun's rays and the vertical direction. 
     // It is the complement to the solar altitude or solar elevation, 

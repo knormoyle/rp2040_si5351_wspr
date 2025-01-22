@@ -190,17 +190,34 @@ TinyGPSPlus gps;
 // FIX! why can't we do this in tinygps_functions.cpp ? 
 // somehow this has to be a global, that TinyGPS and tinygps_functions.cpp can see
 // correctly?
+bool USE_SIM65M = false;
+
 TinyGPSCustom gp_sats(gps, "GPGSV", 3);
+// FIX! do we only get GNGSA ?? ?? don't need?
 TinyGPSCustom gp_pdop(gps, "GPGSA", 15);
 TinyGPSCustom gp_hdop(gps, "GPGSA", 16);
 TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
 
-TinyGPSCustom bd_sats(gps, "BDGSV", 3);
-TinyGPSCustom bd_pdop(gps, "BDGSA", 15);
-TinyGPSCustom bd_hdop(gps, "BDGSA", 16);
-TinyGPSCustom bd_vdop(gps, "BDGSA", 17);
+// $GAGSV,1,1,03,10,61,127,30,25,48,313,41,05,10,227,,7*4D
+// $GBGSV,1,1,03,35,74,049,36,44,54,226,42,45,23,137,40,1*48
+
+// USE_SIM65M
+TinyGPSCustom ga_sats(gps, "GAGSV", 3); // Galileo
+
+// ATGM336H
+TinyGPSCustom gb_sats(gps, "GBGSV", 3); // BeiDou
+
+// FIX! do we only get GNGSA ?? ?? don't need?
+// no..was getting. on ATGM336H?
+// eventually replaced by $GNGSA, maybe?
+// $BDGSA,A,3,21,22,44,,,,,,,,,,3.8,1.9,3.3*23
+// $GPGSA,A,3,10,18,27,32,,,,,,,,,3.8,1.9,3.3*3D
+TinyGPSCustom gb_pdop(gps, "BDGSA", 15); 
+TinyGPSCustom gb_hdop(gps, "BDGSA", 16);
+TinyGPSCustom gb_vdop(gps, "BDGSA", 17);
 
 TinyGPSCustom gl_sats(gps, "GLGSV", 3);
+// FIX! do we only get GNGSA ?? ?? don't need?
 TinyGPSCustom gl_pdop(gps, "GLGSA", 15);
 TinyGPSCustom gl_hdop(gps, "GLGSA", 16);
 TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
@@ -608,7 +625,6 @@ bool CORE1_PROCEED = false;
 bool TESTMODE = false;
 // decode of _verbose 0-9
 bool VERBY[10] = { false };
-bool USE_SIM65M = false;
 
 //*****************************
 // t_power is clamped to string versions of these. use 0 if illegal

@@ -280,3 +280,23 @@ double calculateApproximateAtmosphericRefraction(double elevation) {
     }
     return refraction /= 3600.0;    // arc seconds to degrees
 }
+
+
+void solar4Position(double *sza, double *saa, double longitude, double latitude, time_t timestamp) {
+    uint64_t timestamp_utc = timestamp; // epoch time
+
+    double julianCenturyNumber = calculateJulianCenturyNumber(timestamp_utc);
+    double declination = calculateDeclination(julianCenturyNumber);
+    double eot = calculateEquationOfTime(julianCenturyNumber);
+    double localSolarTime = calculateLocalSolarTime(timestamp_utc, eot, longitude);
+    double hourAngle = calculateHourAngle(localSolarTime);
+    double elevation = calculateSolarElevation(hourAngle, declination, latitude);
+    double azimuth = calculateSolarAzimuth(hourAngle, declination, elevation, latitude);
+
+    // calculate corrected elevation
+    double corrSolarElev = calculateCorrectedSolarElevation(elevation);
+    *sza = 90 - corrSolarElev;
+    *saa = azimuth;
+}
+
+
