@@ -7,18 +7,20 @@
 #define LED_FUNCTIONS_H
 #include <stdint.h>
 
+//*********************************
 extern const int STATUS_LED_PIN;
 
-extern const int LED_STATUS_NO_GPS;
-extern const int LED_STATUS_GPS_TIME;
-extern const int LED_STATUS_GPS_FIX;
-extern const int LED_STATUS_TX_WSPR;
-extern const int LED_STATUS_TX_TELEMETRY;
-extern const int LED_STATUS_TX_TELEN1;
-extern const int LED_STATUS_TX_TELEN2;
-extern const int LED_STATUS_TX_CW;
-extern const int LED_STATUS_REBOOT_NO_SERIAL;
-extern const int LED_STATUS_USER_CONFIG;
+// these are the short blinks or long blinks, depending on value
+const int LED_STATUS_NO_GPS = 1;        // 1 short
+const int LED_STATUS_GPS_TIME = 2;      // 2 short
+const int LED_STATUS_GPS_FIX = 3;       // 3 short
+const int LED_STATUS_TX_WSPR = 4;       // 4 short
+const int LED_STATUS_TX_TELEMETRY = 5;  // 1 long
+const int LED_STATUS_TX_TELEN1 = 6;     // 2 long
+const int LED_STATUS_TX_TELEN2 = 7;     // 3 long
+const int LED_STATUS_TX_CW = 8;         // 4 long
+const int LED_STATUS_REBOOT_NO_SERIAL = 8;  // 5 long
+const int LED_STATUS_USER_CONFIG = 9;   // 6 long
 
 void initStatusLED(void);
 void setStatusLEDBlinkCount(int cnt);

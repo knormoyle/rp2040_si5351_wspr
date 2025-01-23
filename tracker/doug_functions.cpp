@@ -20,7 +20,8 @@ WsprMessageTelemetryBasic msg;
 
 // FIX! currently not using
 void encodeBasicTele(const char *id13, const char *grid56,
-    uint32_t altitudeMeters, int8_t temperatureCelsius, double voltageVolts, uint8_t speedKnots, bool gpsIsValid) {
+    uint32_t altitudeMeters, int8_t temperatureCelsius,
+    double voltageVolts, uint8_t speedKnots, bool gpsIsValid) {
 
     V1_print(F("encodeBasicTele START" EOL));
 
@@ -147,6 +148,8 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
 
     // *hf_power = GetPowerDbm;
     // wants to be char array instead of uint8_t?
+    // shouldn't be bigger than 60
+    if (GetPowerDbm > 60) GetPowerDbm = 60;
     snprintf(hf_power, 3, "%u", GetPowerDbm);
 
     V1_print(F("encode_codecGpsMsg END" EOL));

@@ -187,7 +187,7 @@ uint32_t GpsWatchdogCnt = 0;
 // gps_functions.cpp refers to this
 TinyGPSPlus gps;
 
-// FIX! why can't we do this in tinygps_functions.cpp ? 
+// FIX! why can't we do this in tinygps_functions.cpp ?
 // somehow this has to be a global, that TinyGPS and tinygps_functions.cpp can see
 // correctly?
 bool USE_SIM65M = false;
@@ -212,7 +212,7 @@ TinyGPSCustom gb_sats(gps, "GBGSV", 3); // BeiDou
 // eventually replaced by $GNGSA, maybe?
 // $BDGSA,A,3,21,22,44,,,,,,,,,,3.8,1.9,3.3*23
 // $GPGSA,A,3,10,18,27,32,,,,,,,,,3.8,1.9,3.3*3D
-TinyGPSCustom gb_pdop(gps, "BDGSA", 15); 
+TinyGPSCustom gb_pdop(gps, "BDGSA", 15);
 TinyGPSCustom gb_hdop(gps, "BDGSA", 16);
 TinyGPSCustom gb_vdop(gps, "BDGSA", 17);
 
@@ -221,7 +221,6 @@ TinyGPSCustom gl_sats(gps, "GLGSV", 3);
 TinyGPSCustom gl_pdop(gps, "GLGSA", 15);
 TinyGPSCustom gl_hdop(gps, "GLGSA", 16);
 TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
-
 
 #include "print_functions.h"
 #include "debug_functions.h"
@@ -255,17 +254,6 @@ JTEncode jtencode;
 // the linker will will fail on these global constants unless labelled
 // extern here also (like in the other files that reference this)
 extern const int STATUS_LED_PIN = 25;
-// these are the short blinks or long blinks, depending on value
-extern const int LED_STATUS_NO_GPS = 1;        // 1 short
-extern const int LED_STATUS_GPS_TIME = 2;      // 2 short
-extern const int LED_STATUS_GPS_FIX = 3;       // 3 short
-extern const int LED_STATUS_TX_WSPR = 4;       // 4 short
-extern const int LED_STATUS_TX_TELEMETRY = 5;  // 1 long
-extern const int LED_STATUS_TX_TELEN1 = 6;     // 2 long
-extern const int LED_STATUS_TX_TELEN2 = 7;     // 3 long
-extern const int LED_STATUS_TX_CW = 8;         // 4 long
-extern const int LED_STATUS_REBOOT_NO_SERIAL = 8;  // 5 long
-extern const int LED_STATUS_USER_CONFIG = 9;   // 6 long
 
 //*********************************
 // some stuff on using namespace
@@ -305,7 +293,6 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // also don't want large delay on flush!
 // leave it as default
 #define SERIAL_TX_BUFFER_SIZE 256
-
 
 //*********************************************
 // extern const int SIM65M_BAUD_RATE = 4800;
@@ -525,7 +512,7 @@ uint32_t XMIT_FREQUENCY;
 // optimized?
 uint32_t PLL_DENOM_OPTIMIZE = 1048575;
 // now we're going to calc it and not use the hardwired values
-// will just use this instead? Doesn't work for when we do band sweep 
+// will just use this instead? Doesn't work for when we do band sweep
 // (currently disabled test)
 uint32_t PLL_DENOM_OPTIMIZE_calced = 1048575;
 
@@ -919,7 +906,6 @@ void setup1() {
 
     // our ISC0 for the Si5351 is SDA 12, SCL 13))
     // our ISC1 for the BMP    is SDA 2,  SCL 3))
-
     Watchdog.reset();
 
     // also turns on and checks for output
@@ -971,7 +957,8 @@ void setup1() {
         read_FLASH_result1, read_FLASH_result2);
     show_values();
 
-    // This gets undone if we have kazu slow clocks in gps_functions.cpp (during cold reset)
+    // This gets undone if we have kazu slow clocks in gps_functions.cpp
+    // (during cold reset)
     initPicoClock(PLL_SYS_MHZ);
     // figure out tcxo correction once. here.
     // Remember we reboot after any config change ..i.e. correction..
@@ -1046,7 +1033,6 @@ void setup1() {
     }
     if (false && VERBY[1]) {
         vfo_calc_cache_flush();
-        // FIX! is this needed? do we look in the cache or install it during this search?
         si5351a_denom_optimize_search();
         vfo_calc_cache_flush();
     }
@@ -1056,7 +1042,8 @@ void setup1() {
     set_PLL_DENOM_OPTIMIZE(cc._Band);
     init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
 
-    // do this to sweep the symbols for the u4b channel in use and fill the cache for Farey results?
+    // do this to sweep the symbols for the u4b channel in use and
+    // /fill the cache for Farey results?
     // FIX! should we calc the 4 symbols?
     double symbolShiftError;
     double symbolAbsoluteError;
@@ -1109,7 +1096,8 @@ uint64_t GpsTimeToLastFix = 0;  // milliseconds
 uint64_t GpsTimeToLastFixMin = 999999;  // milliseconds
 uint64_t GpsTimeToLastFixMax = 0;  // milliseconds
 uint64_t GpsTimeToLastFixAvg = 0;  // milliseconds
-uint64_t GpsTimeToLastFixSum = 0;  // Sum and Cnt are for computing the incremntal Avg
+// Sum and Cnt are for computing the incremntal Avg
+uint64_t GpsTimeToLastFixSum = 0;
 uint64_t GpsTimeToLastFixCnt = 0;
 
 // FIX! right now, where are they set?
@@ -1126,19 +1114,24 @@ int tx_cnt_4 = 0;
 
 //*************************************************************************
 // GPS NMEA bursts: The thinking behind how we deal with it
-// LightAPRS only looked for GPS NMEA data when it needed a fix. Not all the time.
+// LightAPRS only looked for GPS NMEA data when it needed a fix.
+// Not all the time.
 
-// TinyGPS++ is not running as a separate task. Only does work when we call it.
-// we call it with every new char, and to get data it creates from a history
-// of NMEA sentences in those chars.
+// TinyGPS++ is not running as a separate task.
+// Only does work when we call it.
+// we call it with every new char, and to get data it creates from
+// a history of NMEA sentences in those chars.
 
 // NMEA sentence come in bursts at 1Hz ..
-// And the pi pico only has 32 byte receive bufffer on the UART that talks to ATGM336H-51
+// And the pi pico only has 32 byte receive buffer on the UART
+// that talks to ATGM336H-51
 
-// Maybe not aligned to a second, but the burst is less than one full second of data.
-// and burst intervals are at 1 sec. Data is not spread out over the full second.
+// Maybe not aligned to a second, but the burst is less than
+// one full second of data. And burst intervals are at 1 sec.
+// Data is not spread out over the full second.
 
-// Order of each NMEA sentence is not random either. Order stays the same for each burst.
+// Order of each NMEA sentence is not random either.
+// Order stays the same for each burst.
 // Just a interesting note
 
 // we can handle each char at about 300 usec avg.
@@ -1158,16 +1151,20 @@ int tx_cnt_4 = 0;
 // Plenty..probably even if more processingsometimes by TinyGPS++.
 // We can even allow faster baud rate for increased effective chars/sec
 
-// we don't have to locally buffer chars to allow for backpressure from TinyGPS++
-// (we could create a local fifo, to effectively absorb more than the 32 deep uart rx fifo)
-// If we created a secondary RX buffer to hold 600 plus chars (the entire burst of multiple
-// NMEA sentences, per second, for the default enabled sentences (US and Baidu satellites)
-// Then if we could absorb/empty it at least every second, we'd never lose anything.
+// Don't have to locally buffer chars to allow for backpressure from TinyGPS++
+// Could create a local fifo,
+// to effectively absorb more than the 32 deep uart rx fifo)
+// If we created a secondary RX buffer to hold 600 plus chars
+// (the entire burst of multiple NMEA sentences, per second,
+// for the default enabled sentences (US and Baidu satellites)
+// Then if we could absorb/empty it at least every second,
+// we'd never lose anything.
 
 // Less processing/power if we only absorb GPS data when we need it.
 // Allows us to sleep when  we don't need a fix update.
 
-// Key that TinyGPS++ absorbs our char send at bounded delays (per NMEA sentence).
+// Key that TinyGPS++ absorbs our char send at bounded delays
+// (per NMEA sentence).
 // end of NMEA sentence has longer delay.
 // Apparently the CR LF is needed as a 'boundary' post checksum?
 // FIX! do we need both CR and LF or is one enough? Shouldn't matter.
@@ -1176,26 +1173,31 @@ int tx_cnt_4 = 0;
 // Now about sleepSeconds() for next beacon (HF or VHF).
 // https://arduiniana.org/libraries/tinygps/
 
-// If the $GPRMC sentence reports a validity of “V” (void) instead of “A” (active),
-// or if the $GPGGA sentence reports fix type “0” (no fix) then those sentences are discarded.
+// If the $GPRMC sentence reports a validity of “V” (void)
+// instead of “A” (active),
+// or if the $GPGGA sentence reports fix type “0” (no fix)
+// then those sentences are discarded.
 
 // TinyGPS::GPS_INVALID_AGE is the value when you never got a valid fix.
 
 
 // FIX! should this be exactly a minute, so all the other things
-// bump by seconds will end up being in the same offset in a minute, the next minute?
+// bump by seconds will end up being in the same offset in a minute,
+// the next minute?
 uint16_t  BEACON_WAIT = 60;  // secs
 // seconds sleep if super capacitors/batteries are below BattMin
 uint16_t  BATT_WAIT = 1;  // secs
 
 // GPS_LOCATION_AGE_MAX should a bit greater than GPS_WAIT_FOR_NMEA_BURST_MAX
-// We could live with data that is more 'stale' but theoretically no older than this?
+// We could live with data that is more 'stale'
+// but theoretically no older than this?
 // how stale can it get? we might be waiting for a new hot fix?
 // and the old one is in there and usable
 
 // maybe make an old fix good for up to 5 secs?
 // if we did a quick gps power off/on we won't get new
-// one for maybe 5 secs. but maybe that says we don't want anything older than 1-2 secs?
+// one for maybe 5 secs.
+// but maybe that says we don't want anything older than 1-2 secs?
 // but who knows how tinyGPS++ creates the .age ??
 // maybe it needs to be hot fix max time? (allow 5 secs?)
 // worse would be if it only updates
@@ -1212,7 +1214,9 @@ uint16_t  BATT_WAIT = 1;  // secs
 // FIX! if we have a good fix, and good age, should we turn gps off
 // and only turn it on again when the age is bad?
 // was getting fix_age violations around 299824 millisecs max with 700000 here
-// 5 minutes? could be due to the go_when_rdy testing...back to back, no room for gps
+// 5 minutes? could be due to the go_when_rdy testing...
+// back to back, no room for gps
+
 // const uint32_t GPS_LOCATION_AGE_MAX = 70000;
 // lets go 5 minutes! can travel 10 miles in that time though? 2 subsquares?
 // we'll be getting long back to back when we do "Extended Telemetry".
@@ -1237,16 +1241,20 @@ void loop1() {
     // I count that down during loop1() iterations and ignore all gps
     // until it's zero. TinyGPS++ state should have transitioned by then
     // based on new NMEA sentences. (should transition cleanly within 2 secs?)
-    // if we were ready to go but not aligned, this is a computed delay into the next
-    // minute to align better (not so good if we're only tx starting every 10 minutes
+    // if we were ready to go but not aligned,
+    // this is a computed delay into the next minute to align better
+    // (not so good if we're only tx starting every 10 minutes
     // but good for test mode cc._go_when_ready that disables
     // channel starting minute requirement.
 
     int SMART_WAIT;
 
-    // FIX! should change baud back to 9600 (lower power?) only gettin 1800 baud during 300-400ms
-    // when looking for data for slight >1 sec time period (all broadcasts are at 1 sec intervals)
-    // they all go in a burst together? so all within one sec, and actually a tighter burst.
+    // FIX! should change baud back to 9600 (lower power?)
+    // only getting 1800 baud during 300-400ms
+    // when looking for data for slight >1 sec time period
+    // (all broadcasts are at 1 sec intervals)
+    // they all go in a burst together? so all within one sec,
+    // and actually a tighter burst.
     loopCnt++;
     Watchdog.reset();
     V1_printf(EOL "loopCnt %" PRIu64 " loop1() START" EOL, loopCnt);
@@ -1257,7 +1265,8 @@ void loop1() {
 
     // always make sure tx is off when we're expecting to be doing Gps fix.
     // does nothing if already off
-    // FIX! why are we turning off. Is this just a double-check in case of bugs?
+    // FIX! why are we turning off.
+    // Is this just a double-check in case of bugs?
     vfo_turn_off();
 
     // Gps may already be on
@@ -1341,12 +1350,6 @@ void loop1() {
                 // Here's an interesting tidbit about deciding whether a "fix" is good,
                 // using TinyGPS++ arduino libray
 
-                // I noticed in some code I'm using that they qualify the idea of a "fix" with
-                // whether the satellite count is 3.
-                // I wonder if I should also quality it with the relevant isValid() bit
-                // for the altitude also, or maybe all of the isValid() bits below..
-                // that might be best..i.e. could even include course and speed valid,
-                //
                 // Interestingly, I saw that there are cases where you would think
                 // you have a fix, but HDOP is high and satellite count is 0.
                 // So either qualifying the notion of "fix" as to having 3 or more sats,
@@ -1422,17 +1425,18 @@ void loop1() {
                 }
                 V1_print(F(EOL));
             }
-            // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
+            // Be sure vfo is off (rf noise?), and flush TinyGPS++ state.
+            // Then make sure gps is on.
             vfo_turn_off();
             invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
             sleepSeconds(BEACON_WAIT);
 
-        } else if (fix_sat_cnt <= 3) {  // implied also 'not the first if clause' .. i.e good fix
-            // FIX! should we have separate led count for 2d fix and 3d fix?
-            V1_printf("loopCnt %" PRIu64 " WARN: GPS fix issue: only %lu sats ..2d fix only" EOL,
-                loopCnt, fix_sat_cnt);
-            // Be sure vfo is off (rf noise?), and flush TinyGPS++ state. Then make sure gps is on.
+        } else if (fix_sat_cnt <= 3) {
+            V1_printf("loopCnt %" PRIu64, loopCnt);
+            V1_printf(" WARN: GPS fix issue: only %lu sats ..2d fix only" EOL, fix_sat_cnt);
+            // Be sure vfo is off (rf noise?), and flush TinyGPS++ state.
+            // Then make sure gps is on.
             vfo_turn_off();
             invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
@@ -1453,37 +1457,37 @@ void loop1() {
             // GpsStartTime is set by gps_functions.cpp
 
             if (GpsStartTime == 0) {
-                // FIX! odd case. Did the GPS get turned off, 
+                // FIX! odd case. Did the GPS get turned off,
                 // but TinyGPS++ says it still has valid fix?
                 // until I figure out why, set GpsTimeToLastFix to 0 for this case
                 V1_printf("loopCnt %" PRIu64, loopCnt);
                 V1_print(F(" odd case: GpsTimeToLastFix likely wrong, GpsStartTime was 0"));
                 GpsTimeToLastFix = 0;
-            } else if (GpsTimeToLastFix == 0) { // don't set again until we clear it
+            } else if (GpsTimeToLastFix == 0) {  // don't set again until we clear it
                 GpsTimeToLastFix = (
                     absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
                 V1_printf("loopCnt %" PRIu64, loopCnt);
                 V1_print(F(" first Gps Fix, after off->on!"));
-                V1_printf(" GpsTimeToLastFix %" PRIu64 " ms" EOL,   
+                V1_printf(" GpsTimeToLastFix %" PRIu64 " ms" EOL,
                     GpsTimeToLastFix);
 
                 if (GpsTimeToLastFix < GpsTimeToLastFixMin) {
                     GpsTimeToLastFixMin = GpsTimeToLastFix;
                     V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_printf(" New GpsTimeToLastFixMin %" PRIu64 " ms" EOL, 
+                    V1_printf(" New GpsTimeToLastFixMin %" PRIu64 " ms" EOL,
                         GpsTimeToLastFixMin);
                 }
                 if (GpsTimeToLastFix > GpsTimeToLastFixMax) {
                     GpsTimeToLastFixMax = GpsTimeToLastFix;
                     V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_printf(" New GpsTimeToLastFixMax %" PRIu64 " ms" EOL, 
+                    V1_printf(" New GpsTimeToLastFixMax %" PRIu64 " ms" EOL,
                         GpsTimeToLastFixMax);
                 }
                 GpsTimeToLastFixSum += GpsTimeToLastFix;
                 GpsTimeToLastFixCnt += 1;
                 GpsTimeToLastFixAvg = GpsTimeToLastFixSum / GpsTimeToLastFixCnt;
                 V1_printf("loopCnt %" PRIu64, loopCnt);
-                V1_printf(" New GpsTimeToLastFixAvg %" PRIu64 " ms" EOL, 
+                V1_printf(" New GpsTimeToLastFixAvg %" PRIu64 " ms" EOL,
                     GpsTimeToLastFixAvg);
             }
 
@@ -1609,10 +1613,6 @@ void loop1() {
     // floor divide to get milliseconds
     int64_t loop_ms_elapsed = loop_us_elapsed / 1000ULL;
 
-    // maybe show GpsWatchdogCnt also? how old are they
-    // FIX! StampPrintf doesn't seem to be printing correctly with this format string?
-    // oh I had the wrong formats for the variables. V1_printf exposed that.
-    // StampPrintf didn't.
     V1_println(F(EOL));
     V1_printf(
         "loopCnt %" PRIu64 " "
@@ -1699,10 +1699,6 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     }
 
     //**************************
-    // New 1/6/24
-    // Quickly cycle thru all 4 symbols to see the cache with the Farey algo results
-    // to avoid adding latency due to the iterations when the symbol is first used and cache
-    // End with symbol 0
     absolute_time_t start_usecs_1 = get_absolute_time();
 
     // will print programming if false, since we have time
@@ -1711,12 +1707,15 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     // was getting 14MDA printed if I cycled these with RF?
     // these are just filling the cache
 
+    // Quickly cycle thru all 4 symbols to see the cache with the Farey algo results
+    // to avoid adding latency due to the iterations when the symbol is first used
+    // End with symbol 0
     uint8_t retcode3 = startSymbolFreq(hf_freq, 3, false, true);
     uint8_t retcode2 = startSymbolFreq(hf_freq, 2, false, true);
     uint8_t retcode1 = startSymbolFreq(hf_freq, 1, false, true);
     uint8_t retcode0 = startSymbolFreq(hf_freq, 0, false, false);
 
-    if (retcode3!=0 || retcode2!=0 || retcode1!=0 || retcode0!=0) {
+    if (retcode3 != 0 || retcode2 != 0 || retcode1 != 0 || retcode0 != 0) {
         V1_print(F(EOL "ERROR: fatal. bad retcode(s) from startSymbolFREQ" EOL));
         V1_printf("retcode 0: %u 1: %u 2: %u 3: %u" EOL,
             retcode0, retcode1, retcode2, retcode3);
@@ -1766,8 +1765,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_flush();
     // init to all zeroes just so we know what the encode is doing, when
     // if we get bad symbols when we send the symbols
-    bool vfoOffWhenDone = false;
-    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
+    bool vfoOffAtEnd = false;
+    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
     tx_cnt_0 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
     if (VERBY[1]) {
@@ -1794,10 +1793,10 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_print(F(EOL));
     V1_flush();
 
-    vfoOffWhenDone =
-        cc._TELEN_config[0] == '-' && cc._TELEN_config[1] == '-' && 
+    vfoOffAtEnd =
+        cc._TELEN_config[0] == '-' && cc._TELEN_config[1] == '-' &&
         cc._TELEN_config[2] == '-' && cc._TELEN_config[3] == '-';
-    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
+    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
     if (VERBY[1]) {
@@ -1815,8 +1814,9 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_flush();
 
         // all the hf_* is a char array
-        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false, cc._id13);
-        uint8_t slot = 4; 
+        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
+        //     TELEN1_val1, TELEN1_val2, false, cc._id13);
+        uint8_t slot = 4;
         switch (cc._TELEN_config[0]) {
             case '0':
             default:
@@ -1830,8 +1830,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("hf_power %s" EOL, hf_power);
         V1_print(F(EOL));
         V1_flush();
-        vfoOffWhenDone = cc._TELEN_config[2] == '-' && cc._TELEN_config[3] == '-';
-        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
+        vfoOffAtEnd = cc._TELEN_config[2] == '-' && cc._TELEN_config[3] == '-';
+        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
         tx_cnt_2 += 1;
         if (VERBY[1]) {
             StampPrintf("WSPR telen1 Tx sent. minute: %d second: %d" EOL, minute(), second());
@@ -1848,14 +1848,14 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_flush();
 
         // all the hf_* is a char array
-        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false, cc._id13);
-        uint8_t slot = 6; 
+        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
+        //     TELEN1_val1, TELEN1_val2, false, cc._id13);
+        uint8_t slot = 6;
         switch (cc._TELEN_config[1]) {
             case '0':
             default:
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
         }
-            
 
         V1_print(F(EOL));
         V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
@@ -1864,8 +1864,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("hf_power %s" EOL, hf_power);
         V1_print(F(EOL));
         V1_flush();
-        vfoOffWhenDone = true;
-        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
+        vfoOffAtEnd = true;
+        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
         tx_cnt_3 += 1;
         // we have 10 secs or so at the end of WSPR to get this off?
         if (VERBY[1]) {
@@ -1932,7 +1932,7 @@ void sleepSeconds(int secs) {
         updateStatusLED();
         if (GpsIsOn()) {
             // does this have a updateStatusLED() ??
-            // long enough to be sure to catch all NMEA during the broadcast interval of 1 sec
+            // long enough to catch all NMEA during the broadcast interval of 1 sec
             // 1050: was this causing rx buffer overrun (21 to 32)
             // 1500 was good for 9600 and up
             // not long enough for 4800?
@@ -2030,7 +2030,7 @@ bool alignMinute(int offset) {
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3, or 4 for cw
 
-void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhenDone) {
+void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtEnd) {
     // currently don't do this, but good strategy?
     // Instead of delaying in for 1 sec: we can wait for PROCEED here.
     // If we wait for 2 PROCEEDs, it's okay if the first is short
@@ -2218,7 +2218,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
     disablePwmInterrupts();
 
     // FIX! leave on if we're going to do more telemetry?  or always turn off?
-    if (vfoOffWhenDone) {
+    if (vfoOffAtEnd) {
         vfo_turn_off();
     } else {
         if (DO_CLK_OFF_FOR_WSPR_MODE) {
@@ -2230,7 +2230,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
                 si5351a_power_down_clk01(true);  // print. this does a pllb reset too
             } else {
                 // print. clk0/1 both affected
-                vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true); // print. clk0/1 both affected.
+                vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true);  // print. clk0/1 both affected.
             }
         }
     }
@@ -2241,7 +2241,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffWhe
 
 //**********************************
 void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
-    char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffWhenDone) {
+    char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffAtEnd) {
     V1_printf("syncAndSendWSPR START now: minute: %d second: %d" EOL, minute(), second());
     if (txNum < 0 || txNum > 3) {
         V1_printf("syncAndSendWSPR() bad txNum %d, using 0" EOL, txNum);
@@ -2269,7 +2269,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     int i = 2 * txNum;  // 0, 2, 4, 6
     // FIX! in debug, why aren't we aligning to any even minute?
     V1_printf("waiting for alignMinute(%d) && second()==0)" EOL, i);
-    V1_flush(); // so we'll have room in tx buffer going forward.
+    V1_flush();  // so we'll have room in tx buffer going forward.
 
     bool clk01_turned_on = false;
     //*****************************************
@@ -2307,7 +2307,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
             if (DO_CLK_OFF_FOR_WSPR_MODE) {
                 if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
                     // this doesn't work on ms5351m? clocks always on?
-                    si5351a_power_up_clk01(true); // print. does pll reset
+                    si5351a_power_up_clk01(true);  // print. does pll reset
                 } else {
                     // don't print. does pll reset
                     vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, true);
@@ -2355,7 +2355,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // the usecs (or millis() we can read is not aligned to realtime gps time.
     // those are "since program started running"
 
-    sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffWhenDone);
+    sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffAtEnd);
     V1_println(F("syncAndSendWSPR END"));
 }
 
