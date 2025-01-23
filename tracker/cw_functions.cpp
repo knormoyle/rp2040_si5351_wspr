@@ -123,26 +123,19 @@ const uint8_t test_to_do = SEND_BALLOON;
 #include "led_functions.h"
 #include "gps_functions.h"
 #include "cw_functions.h"
+#include "global_structs.h"
 
 //********************************
 extern uint32_t XMIT_FREQUENCY;
 extern bool VERBY[10];
 extern uint32_t PLL_SYS_MHZ;
 
-extern char t_altitude[7];
-extern char t_grid6[7];
-extern char t_callsign[7];
-extern char t_grid6[7];
-
-extern char _Band_cw[3];  // string with 2, 10, 12, 15, 17, 20 legal. null at end
-
+extern TeleStruct tt;
+extern ConfigStruct cc;
 
 // can be 0 1 2 or 3
 // should I modify power using these
 extern uint8_t SOLAR_SI5351_TX_POWER;
-extern char _solar_tx_power[2];
-extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
-
 
 //********************************
 // stay in first 91 khz of each cw band for rbn?
@@ -337,7 +330,7 @@ void cw_tx_state(tx_state_e s) {
             vfo_turn_off();
             KEYING_DELAY(1000);
 
-            uint32_t hf_freq = get_cw_freq(_Band_cw);
+            uint32_t hf_freq = get_cw_freq(cc._Band_cw);
             XMIT_FREQUENCY = hf_freq;
             // uses XMIT_FREQUENCY
 
@@ -504,11 +497,8 @@ void cw_high_drive_strength() {
     // void vfo_set_drive_strength(uint8_t clk_num, uint8_t strength);
     // can be 0 1 2 or 3
 
-    // FIX! should I modify power using these:
-    // extern uint8_t SOLAR_SI531_TX_POWER;
-    // extern char _solar_tx_power[2];
-    // extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
 
+    // FIX! should this follow the dynamic solar power or config?
     vfo_set_drive_strength(CW_CLK_NUM, SI5351A_CLK01_IDRV_8MA);
     V1_print("cw_high_drive_strength END" EOL);
 }
@@ -574,13 +564,13 @@ void cw_send_message() {
             break;
         default:  // SEND_BALLOON
             // if we didn't get a gps snapForTelemetry() the t_* will be blank
-            if (t_callsign[0] == 0 || t_grid6[0] == 0 || t_altitude[0] == 0) {
+            if (tt.callsign[0] == 0 || tt.grid6[0] == 0 || tt.altitude[0] == 0) {
                 V1_print(F("No gps snapForTelemetry() before test? t_* is blank" EOL));
                 V1_print(F("Wait for a successful wspr tx before switching to 'Z' test" EOL));
                 V1_print(F("snapForTelemetry() will have happened then" EOL));
             }
             snprintf(cw_msg, sizeof(cw_msg), "CQ CQ CQ DE %s %s BALLOON %s %s %s %s K",
-                t_callsign, t_callsign, t_grid6, t_grid6, t_altitude, t_altitude);
+                tt.callsign, tt.callsign, tt.grid6, tt.grid6, tt.altitude, tt.altitude);
     }
 
     // cw_msg can't be empty here

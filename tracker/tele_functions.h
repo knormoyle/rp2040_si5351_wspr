@@ -15,5 +15,4 @@ void doTelemetrySweepFloat (char *t_string, uint8_t t_sizeof, float t_min, float
 void telemetrySweepAllForTest(void);
 void solarElevationCalcs(double solarElevation);
 
-
 #endif

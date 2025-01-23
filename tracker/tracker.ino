@@ -240,6 +240,7 @@ TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
 #include "cw_functions.h"
 #include "sweep_functions.h"
 #include "doug_functions.h"
+#include "global_structs.h"
 
 //*********************************
 // extern so it links okay
@@ -470,24 +471,24 @@ extern const int VFO_I2C0_SCL_PIN = 13;
 
 // extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
 // maybe go lower frequency?
-
-// FIX! is this wrong with lower frequency sys clk??
-// 1/9/25 was 100
 extern const int VFO_I2C0_SCL_HZ = (100 * 1000);
 extern const int BMP_I2C1_SCL_HZ = (100 * 1000);
+extern const int BMP_I2C1_SDA_PIN = 2;
+extern const int BMP_I2C1_SCL_PIN = 3;
+
 // FIX! used in i2c_functions for test of both i2c0 and i2c1
 // pullup resistors are different on each i2c bus on the pcb
 extern const int PICO_I2C_CLK_HZ = (100 * 1000);
 
-extern const int BMP_I2C1_SDA_PIN = 2;
-extern const int BMP_I2C1_SCL_PIN = 3;
-
 // FIX! are the pcb pullups less aggressive on BMP i2c?
 // maybe have to stay slower on speed?
 
-
 // The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR, which is 0x60
 extern const int SI5351A_I2C_ADDR = 0x60;
+
+// config and telemetry (snapped) structs
+ConfigStruct cc = { 0 };
+TeleStruct tt = { 0 };
 
 //**********************************
 // IMPORTANT: GLOBALS and MULTICORE ACCESS
@@ -508,83 +509,7 @@ extern const int SI5351A_I2C_ADDR = 0x60;
 // since the config stuff is read in core0, then used in core1, it should be volatile
 //**********************************
 
-// essentially t_* stuff is a telemetry data buffer/structure
-// all can be extern'ed by a function
-// init to 0 is just in case. Should always be set to something valid before use
-// empty string is not valid
-// not sure what will happen if used while empty.. I suppose it can print ok
-// always positive. clamp to 0 I guess
-char t_course[4] = { 0 };      // 3 bytes + null term (like all here
-// always positive? 0-250 knots. clamp to 0 I guess
-char t_speed[4] = { 0 };       // 3 bytes
-// allow 60000 meters. plus 1 in case negative?
-char t_altitude[7] = { 0 };    // 6 bytes
-// 24 * 30 per hour = 720 per day if every two minutes
-// reboot once per day? (starts at 0)
-char t_tx_count_0[4] = { 0 };  // 3 bytes
-char t_temp[7] = { 0 };        // 6 bytes
-char t_pressure[8] = { 0 };    // 7 bytes
-char t_temp_ext[8] = { 0 };    // 7 bytes
-char t_humidity[8] = { 0 };    // 7 bytes
-char t_voltage[6] = { 0 };     // 5 bytes
-char t_sat_count[3] = { 0 };   // 2 bytes
-// lat/lon precision: How much to store
-// https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
-// 6 decimal places represent accuracy for ~ 10 cm
-// 7 decimal places for ~ 1 cm
-// The use of 6 digits should be enough. +/- is 1 more.
-// decimal is one more. 0-180 is 3 more.
-// so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
-char t_lat[13] = { 0 };            // 12 bytes
-char t_lon[13] = { 0 };            // 12 bytes
-char t_callsign[7] = { 0 };
-char t_grid6[7] = { 0 };           // 6 bytes
-char t_power[3] = { 0 };           // 2 bytes
-char t_hdop[4] = { 0 };            // 3 bytes;
-char t_solarElevation[5] = { 0 };  // 3 bytes -90 to 90?
-char t_solarAzimuth[7] = { 0 };    // 4 bytes -180 to 180?
-char t_solarDistance[8] = { 0 };   // 3 bytes 145 to 150 km ?
-
-int t_snap_cnt = 0;
-
-//***********************************************************
-// config strings: all can be extern'ed by a function
-// but there is also decode of them to another global that is used instead.
-// see config_functions.cpp
-// these get set via terminal, and then from NVRAM on boot
-// init with all null
-
-// hmmm. can't declare these arrays 'volatile'
-char _callsign[7] = { 0 };
-char _suffix[2] = { 0 };
-char _verbose[2] = { 0 };
-char _TELEN_config[5] = { 0 };
-// FIX! why is this a compiler problem if volatile? an snprintf() fails
-// https://forum.arduino.cc/t/invalid-conversion-from-volatile-char-to-const-char-fpermissive/949522
-char _clock_speed[4] = { 0 };
-char _U4B_chan[4] = { 0 };
-// FIX! why is this a compiler problem if volatile? parameter to function fails
-// error: invalid convesion fro 'volatile char*' to 'char*'
-char _Band[3] = { 0 };  // string with 2, 10, 12, 15, 17, 20 legal. null at end
-char _Band_cw[3] = { 0 };  // string with 2, 10, 12, 15, 17, 20 legal. null at end
-char _tx_high[2] = { 0 };  // 0 is 4mA si5351. 1 is 8mA si5351
-char _testmode[2] = { 0 };
-char _correction[7] = { 0 };
-char _go_when_rdy[2] = { 0 };
-char _factory_reset_done[2] = { 0 };
-char _use_sim65m[2] = { 0 };
-char _morse_also[2] = { 0 };
-char _solar_tx_power[2] = { 0 };
-
-
-// decoded stuff from config strings: all can be extern'ed by a function
-// decodes from _Band _U4B_chan
-// 0 should never happen for XMIT_FREQUENCY
-char _id13[3] = { 0 };
-char _start_minute[2] = { 0 };
-char _lane[2] = { 0 };
-
-// decode of _clock_speed
+// decode of cc._clock_speed
 // extern const uint32_t DEFAULT_PLL_SYS_MHZ = 125;
 // this seems to work fine even with VERBY[3] doing a little more output during wspr
 // be nice if I could get Serial2 working with pll_sys off,
@@ -621,13 +546,13 @@ bool USE_MFSK16_SHIFT = false;
 //*****************************
 bool BALLOON_MODE = true;
 bool CORE1_PROCEED = false;
-// decode of _testmode
+// decode of cc._testmode
 bool TESTMODE = false;
-// decode of _verbose 0-9
+// decode of cc._verbose 0-9
 bool VERBY[10] = { false };
 
 //*****************************
-// t_power is clamped to string versions of these. use 0 if illegal
+// tt.power is clamped to string versions of these. use 0 if illegal
 // int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60}
 // will differentiate from u4b (10) and traquito (13) by
 // using 3 or 7 in normal callsign tx 3 for low power, 7 for high power
@@ -1034,9 +959,9 @@ void setup1() {
     Watchdog.reset();
     // sets minute/lane/id from chan number.
     // FIX! is it redundant at this point?..remove?
-    init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+    init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
     // 1/11/25 NEW: set PLL_FREQ_TARGET by band
-    init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
+    init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
 
     Watchdog.reset();
     // FIX! do we really have to read flash again. No..I don't think so!
@@ -1050,7 +975,7 @@ void setup1() {
     initPicoClock(PLL_SYS_MHZ);
     // figure out tcxo correction once. here.
     // Remember we reboot after any config change ..i.e. correction..
-    // so don't have to worry about the propagation when _correction changes
+    // so don't have to worry about the propagation when cc._correction changes
     SI5351_TCXO_FREQ = doCorrection(SI5351_TCXO_FREQ);
 
     //***************
@@ -1107,7 +1032,7 @@ void setup1() {
     //***************
     // varies by band PLL_FREQ_TARGET
     if (false && VERBY[1]) {
-        set_PLL_DENOM_OPTIMIZE(_Band);
+        set_PLL_DENOM_OPTIMIZE(cc._Band);
         // FIX! is this needed? do we look in the cache or install it during sweep?
         vfo_calc_cache_flush();
         si5351a_calc_sweep();
@@ -1128,8 +1053,8 @@ void setup1() {
 
     //***************
     // restore to know fixed values per band
-    set_PLL_DENOM_OPTIMIZE(_Band);
-    init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
+    set_PLL_DENOM_OPTIMIZE(cc._Band);
+    init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
 
     // do this to sweep the symbols for the u4b channel in use and fill the cache for Farey results?
     // FIX! should we calc the 4 symbols?
@@ -1187,18 +1112,11 @@ uint64_t GpsTimeToLastFixAvg = 0;  // milliseconds
 uint64_t GpsTimeToLastFixSum = 0;  // Sum and Cnt are for computing the incremntal Avg
 uint64_t GpsTimeToLastFixCnt = 0;
 
-// these are used as globals
 // FIX! right now, where are they set?
 int TELEN1_val1 = 0;
 int TELEN1_val2 = 0;
 int TELEN2_val1 = 0;
 int TELEN2_val2 = 0;
-
-// FIX! we should probably snap them for consistency in snapForTelemetry!
-int t_TELEN1_val1 = 0;
-int t_TELEN1_val2 = 0;
-int t_TELEN2_val1 = 0;
-int t_TELEN2_val2 = 0;
 
 int tx_cnt_0 = 0;
 int tx_cnt_1 = 0;
@@ -1321,7 +1239,7 @@ void loop1() {
     // based on new NMEA sentences. (should transition cleanly within 2 secs?)
     // if we were ready to go but not aligned, this is a computed delay into the next
     // minute to align better (not so good if we're only tx starting every 10 minutes
-    // but good for test mode _go_when_ready that disables
+    // but good for test mode cc._go_when_ready that disables
     // channel starting minute requirement.
 
     int SMART_WAIT;
@@ -1525,14 +1443,9 @@ void loop1() {
             // GpsWatchdog doesn't get cleared unti we got a 3d fix here!
             // so we can get a gps cold reset if we never get here!
             GpsWatchdogCnt = 0;
-            // snapForTelemetry (all the t_* state) right before we do all the WSPRing
+            // snapForTelemetry (all thett.* state) right before we do all the WSPRing
             // we can update the telemetry buffer any minute we're not tx'ing
 
-            // we know we have a good 3d fix at this point
-            // we don't check the valid bits again? they could have changed
-            // at any time (async) ..so can't really be an atomic grab anyhow?
-            // keep the snap close to the valid checks above
-            snapForTelemetry();
 
             // GpsStartTime is reset every time we turn the gps on
             // cleared every time we turn it off (don't care)
@@ -1546,7 +1459,7 @@ void loop1() {
                 V1_printf("loopCnt %" PRIu64, loopCnt);
                 V1_print(F(" odd case: GpsTimeToLastFix likely wrong, GpsStartTime was 0"));
                 GpsTimeToLastFix = 0;
-            } else {
+            } else if (GpsTimeToLastFix == 0) { // don't set again until we clear it
                 GpsTimeToLastFix = (
                     absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
                 V1_printf("loopCnt %" PRIu64, loopCnt);
@@ -1574,8 +1487,13 @@ void loop1() {
                     GpsTimeToLastFixAvg);
             }
 
+            // we know we have a good 3d fix at this point
+            // we don't check the valid bits again? they could have changed
+            // at any time (async) ..so can't really be an atomic grab anyhow?
+            // keep the snap close to the valid checks above
+            snapForTelemetry();
 
-            // sets all the t_* strings above
+            // sets all thett.* strings above
             // voltage is captured when we write the buff? So it's before GPS is turned off?
             // should we look at the live voltage instead?
             V1_printf("loopCnt %" PRIu64, loopCnt);
@@ -1676,7 +1594,7 @@ void loop1() {
     // should be 4 if just sending wspr. 5 if sending cw too
     // won't get any until first wspr tx goes out
     if (tx_cnt_0 > 0)  {
-        if (_morse_also[0] == '1') {
+        if (cc._morse_also[0] == '1') {
             if (VCC_valid_cnt != 5)
                 V1_printf("WARN: loop1() VCC_valid_cnt %u != 5" EOL, VCC_valid_cnt);
         } else {
@@ -1708,8 +1626,8 @@ void loop1() {
         "t_sat_count: %s "
         "GpsTimeToLastFix %" PRIu64 " "
         "GpsWatchdogCnt %lu" EOL,
-        loopCnt, t_tx_count_0, t_callsign, t_temp, t_voltage,
-        t_altitude, t_grid6, t_power, t_sat_count,
+        loopCnt, tt.tx_count_0, tt.callsign, tt.temp, tt.voltage,
+        tt.altitude, tt.grid6, tt.power, tt.sat_count,
         GpsTimeToLastFix, GpsWatchdogCnt);
 
     V1_println(F(EOL));
@@ -1720,7 +1638,7 @@ void loop1() {
         "loop_ms_elapsed: %" PRIu64 " millisecs "
         "loop_us_start: %llu microsecs "
         "loop_us_end: %llu microsecs" EOL,
-        loopCnt, t_tx_count_0, _Band, loop_ms_elapsed, loop_us_start, loop_us_end);
+        loopCnt, tt.tx_count_0, cc._Band, loop_ms_elapsed, loop_us_start, loop_us_end);
 
     updateStatusLED();
 
@@ -1818,12 +1736,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
     // GPS will stay off for all
     char hf_callsign[7] = {0};
-    snprintf(hf_callsign, sizeof(hf_callsign), "%s", t_callsign);
+    snprintf(hf_callsign, sizeof(hf_callsign), "%s", tt.callsign);
     // same declared size, so could just strncpy
-    // strncpy(hf_callsign, t_callsign, 6);
+    // strncpy(hf_callsign, tt.callsign, 6);
 
-    double lat_double = atof(t_lat);
-    double lon_double = atof(t_lon);
+    double lat_double = atof(tt.lat);
+    double lon_double = atof(tt.lon);
 
     // get_mh_6 users the first arg as pointer to a char array for the return data
     char hf_grid6[7] = { 0 };
@@ -1834,7 +1752,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     hf_grid4[4] = 0;
 
     char hf_power[3] = { 0 };
-    snprintf(hf_power, sizeof(hf_power), "%s", t_power);
+    snprintf(hf_power, sizeof(hf_power), "%s", tt.power);
     Watchdog.reset();
 
     // will sync up to the right minute and second == 0
@@ -1867,7 +1785,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_flush();
 
     u4b_encode_std(hf_callsign, hf_grid4, hf_power,
-        t_grid6, t_altitude, t_temp, t_voltage, t_speed, _id13);
+        tt.grid6, tt.altitude, tt.temp, tt.voltage, tt.speed, cc._id13);
     V1_print(F(EOL));
     V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
     V1_printf("hf_callsign %-6s" EOL, hf_callsign);
@@ -1877,8 +1795,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_flush();
 
     vfoOffWhenDone =
-        _TELEN_config[0] == '-' && _TELEN_config[1] == '-' && 
-        _TELEN_config[2] == '-' && _TELEN_config[3] == '-';
+        cc._TELEN_config[0] == '-' && cc._TELEN_config[1] == '-' && 
+        cc._TELEN_config[2] == '-' && cc._TELEN_config[3] == '-';
     syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
@@ -1888,8 +1806,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     }
 
     // have to send this if telen1 or telen2 is enabled
-    if ( (_TELEN_config[0] != '-' || _TELEN_config[1] != '-') ||
-         (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
+    if ( (cc._TELEN_config[0] != '-' || cc._TELEN_config[1] != '-') ||
+         (cc._TELEN_config[2] != '-' || cc._TELEN_config[3] != '-') ) {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEN1);
 
         txNum = 2;
@@ -1897,9 +1815,9 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_flush();
 
         // all the hf_* is a char array
-        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false, _id13);
+        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false, cc._id13);
         uint8_t slot = 4; 
-        switch (_TELEN_config[0]) {
+        switch (cc._TELEN_config[0]) {
             case '0':
             default:
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
@@ -1912,7 +1830,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("hf_power %s" EOL, hf_power);
         V1_print(F(EOL));
         V1_flush();
-        vfoOffWhenDone = _TELEN_config[2] == '-' && _TELEN_config[3] == '-';
+        vfoOffWhenDone = cc._TELEN_config[2] == '-' && cc._TELEN_config[3] == '-';
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffWhenDone);
         tx_cnt_2 += 1;
         if (VERBY[1]) {
@@ -1921,7 +1839,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         }
     }
     // have to send this if telen2 is enabled
-    if ( (_TELEN_config[2] != '-' || _TELEN_config[3] != '-') ) {
+    if ( (cc._TELEN_config[2] != '-' || cc._TELEN_config[3] != '-') ) {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEN2);
         // output: modifies globals: hf_callsign, hf_grid4, hf_power
         // input: TELEN2_val1/2 are ints?
@@ -1930,9 +1848,9 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_flush();
 
         // all the hf_* is a char array
-        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false, _id13);
+        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power, TELEN1_val1, TELEN1_val2, false, cc._id13);
         uint8_t slot = 6; 
-        switch (_TELEN_config[1]) {
+        switch (cc._TELEN_config[1]) {
             case '0':
             default:
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
@@ -1956,19 +1874,19 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         }
     }
 
-    if (_morse_also[0] == '1') {
+    if (cc._morse_also[0] == '1') {
         setStatusLEDBlinkCount(LED_STATUS_TX_CW);
         txNum = 4;
         V1_printf("CW txNum %d using cw_send_message().." EOL, txNum);
         V1_flush();
-        // picks a good HF freq for the config'ed _Band.
-        // uses t_callsign a and t_grid6 in the message
+        // picks a good HF freq for the config'ed cc._Band.
+        // usestt.callsign a andtt.grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
         cw_send_message();
         // restore the wspr XMIT_FREQUENCY since cw changed it
         // sets minute/lane/id from chan number.
         // FIX! is it redundant at this point?..remove?
-        init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+        init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
         tx_cnt_4 += 1;
         if (VERBY[1]) {
             StampPrintf("CW Tx sent. minute: %d second: %d" EOL, minute(), second());
@@ -2079,7 +1997,7 @@ bool alignMinute(int offset) {
     // we only use offsets -1, 0, 2, 4, 6
     // the telemetry and other prep is al done during -1.
     // the u4b channel minutes should all be
-    int align_minute = atoi(_start_minute);
+    int align_minute = atoi(cc._start_minute);
     switch (align_minute) {
         case 0: {;}
         case 2: {;}
@@ -2095,8 +2013,8 @@ bool alignMinute(int offset) {
             align_minute = 0;
     }
 
-    // WARN: make sure _go_when_rdy is cleared before real balloon flight!
-    if (_go_when_rdy[0] == '1') {
+    // WARN: make sure cc._go_when_rdy is cleared before real balloon flight!
+    if (cc._go_when_rdy[0] == '1') {
         // add 2 to cover the wrap of 0 to -1 with offset -1 (goes to 1)
         align_minute = (2 + offset) % 2;
         aligned = (minute() % 2) == align_minute;
@@ -2539,7 +2457,7 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
         V1_printf("ERROR: setup1(): can't change clock to %lu Mhz. Using %lu instead" EOL,
             PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
-        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+        snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", PLL_SYS_MHZ);
         // FIX! hmm. this guy could try to write flash, while the other guy is reading?
         // write_FLASH();
         // check the default?
@@ -2547,7 +2465,7 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
         if (!set_sys_clock_khz(clk_khz, false)) {
             V1_println("ERROR: setup1() DEFAULT_SYS_MHZ not legal either. Will use 125");
             PLL_SYS_MHZ = 125;
-            snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+            snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", PLL_SYS_MHZ);
             // write_FLASH();
         }
     }

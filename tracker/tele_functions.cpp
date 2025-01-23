@@ -12,6 +12,7 @@
 #include "mh_functions.h"
 #include "adc_functions.h"
 #include "tele_functions.h"
+#include "global_structs.h"
 
 // to calc solar elevations
 // first one I did
@@ -31,60 +32,36 @@ bool SPEED_IS_SOLAR_ELEVATION_MODE = true;
 extern uint64_t GpsTimeToLastFix;  // milliseconds
 
 extern bool BALLOON_MODE;
-
-extern char t_course[4];      // 3 bytes
-extern char t_speed[4];       // 3 bytes
-extern char t_altitude[7];    // 6 bytes
-extern char t_tx_count_0[4];  // 3 bytes
-extern char t_temp[7];        // 6 bytes
-extern char t_pressure[8];    // 7 bytes
-extern char t_temp_ext[8];    // 7 bytes
-extern char t_humidity[8];    // 7 bytes
-extern char t_voltage[6];     // 5 bytes
-extern char t_sat_count[3];   // 2 bytes
-extern char t_hdop[4];        // 3 bytes
-
-extern char t_solarElevation[5];  // 3 bytes -90.0 to 90.0? 
-extern char t_solarAzimuth[7];    // 4 bytes -180.0 to 180.0?
-extern char t_solarDistance[8];   // 3 bytes 145000 to 150000 km ? (negative error?)
-
-extern int t_TELEN1_val1;
-extern int t_TELEN1_val2;
-extern int t_TELEN2_val1;
-extern int t_TELEN2_val2;
-
 extern bool TESTMODE;
 
-// lat/lon precision: How much to store
-// https://stackoverflow.com/questions/1947481/how-many-significant-digits-should-i-store-in-my-database-for-a-gps-coordinate
-// 6 decimal places represent accuracy for ~ 10 cm
-// 7 decimal places for ~ 1 cm
-// The use of 6 digits should be enough. +/- is 1 more. decimal is one more. 0-180 is 3 more.
-// so 7 + 5 = 12 bytes should enough, with 1 more rounding digit?
-extern char t_lat[12];        // 12 bytes
-extern char t_lon[12];        // 12 bytes
-extern char t_grid6[7];       // 6 bytes
-extern char t_callsign[7];    // 6 bytes
-extern char t_power[3];       // 2 bytes
+extern bool GpsInvalidAll;
+extern uint64_t GpsTimeToLastFix;  // milliseconds
+extern uint64_t GpsTimeToLastFixMin;
+extern uint64_t GpsTimeToLastFixMax;
+extern uint64_t GpsTimeToLastFixAvg;
 
-// clamped to 0 if not in this list of legal
-// legalPower = [0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60]
-extern char t_power[3];       // 2 bytes
+extern TinyGPSCustom gp_sats;
+extern TinyGPSCustom gb_sats;
+extern TinyGPSCustom gl_sats;
+extern TinyGPSCustom ga_sats;
+// FIX! do we only get GNGSA ?? ?? don't need?
+extern TinyGPSCustom gp_pdop;
+extern TinyGPSCustom gp_hdop;
+extern TinyGPSCustom gp_vdop;
+
 
 extern int TELEN1_val1;
 extern int TELEN1_val2;
 extern int TELEN2_val1;
 extern int TELEN2_val2;
-extern char _TELEN_config[5];
-
-extern char _callsign[7];       // 6 bytes
-extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
-extern char _solar_tx_power[2]; // 1 byte
 
 // FIX! update this based on solar elevation
 extern uint8_t SOLAR_SI5351_TX_POWER;
 
+extern TeleStruct tt;
+extern ConfigStruct cc;
 extern TinyGPSPlus gps;
+
 extern int tx_cnt_0;
 // decode of _verbose 0-9
 extern bool VERBY[10];
@@ -93,9 +70,28 @@ extern bool VERBY[10];
 int legalPower[] = {0,3,7,10,13,17,20,23,27,30,33,37,40,43,47,50,53,57,60};
 int legalPowerSize = 19;
 
+uint64_t clamp_uint64_t(uint64_t v, uint64_t minv, uint64_t maxv) {
+    return min(maxv, max(minv, v));
+}
+uint32_t clamp_uint32_t(uint32_t v, uint32_t minv, uint32_t maxv) {
+    return min(maxv, max(minv, v));
+}
+uint8_t clamp_uint8_t(uint8_t v, uint8_t minv, uint8_t maxv) {
+    return min(maxv, max(minv, v));
+}
+int clamp_int(int v, int minv, int maxv) {
+    return min(maxv, max(minv, v));
+}
+float clamp_float(float v, float minv, float maxv) {
+    return min(maxv, max(minv, v));
+}
+double clamp_double(double v, double minv, double maxv) {
+    return min(maxv, max(minv, v));
+}
 
 //****************************************************
-void snapForTelemetry(void) {
+// https://www.google.com/search?q=c+modify+elements+of+struct+passed+to+function&oq=c+modify+elements+of+struct+passed+to+function&gs_lcrp=EgZjaHJvbWUyBggAEEUYOdIBCDg1NTlqMGo3qAIAsAIA&sourceid=chrome&ie=UTF-8
+void snapForTelemetry() {
     V1_println(F("snapForTelemetry START"));
     Watchdog.reset();
     if (TESTMODE) {
@@ -113,9 +109,8 @@ void snapForTelemetry(void) {
     // else if (gps.satellites.value() <= 3) return;
 
     int course = gps.course.isValid() ? gps.course.deg() : 0;
-    if (course < 0)   course = 0;
-    if (course > 360) course = 360;
-    snprintf(t_course, sizeof(t_course), "%d", course);
+    course = clamp_int(course, 0, 360);
+    snprintf(tt.course, sizeof(tt.course), "%d", course);
 
     //****************************************************
     // returns degrees, not radians. I guess it's decimal integer here
@@ -126,7 +121,7 @@ void snapForTelemetry(void) {
     // always call, so we get prints we can use for debug, even if not used.
     // just in case this might blow up in flight (fp error?)
     if (!BALLOON_MODE) {
-        // first one I did 
+        // first one I did
         // https://github.com/KenWillmott/SolarPosition/blob/master/SolarPosition.cpp
 
         // not working? don't use for now
@@ -151,24 +146,29 @@ void snapForTelemetry(void) {
     }
     // accurate algo
     calcSolarElevation4(&solarElevation, &solarAzimuth, &solarDistance);
+
     V1_printf("Elevation4 solarElevation %.7f solarAzimuth %.7f solarDistance %.1f" EOL,
         solarElevation, solarAzimuth, solarDistance);
     V1_print(F(EOL));
 
-    
+
     solarElevationCalcs(solarElevation);
-   
+
+    solarElevation = clamp_double(solarElevation, -90.0, 90.0);
+    solarAzimuth = clamp_double(solarAzimuth, -360, 360);
+    solarDistance = clamp_double(solarDistance, 0, 180000);
+
     // -90.0 to 90.0?
-    snprintf(t_solarElevation, sizeof(t_solarElevation), "%.1f", solarElevation); 
+    snprintf(tt.solarElevation, sizeof(tt.solarElevation), "%.1f", solarElevation);
     // -180.0 to 180.0
-    snprintf(t_solarAzimuth, sizeof(t_solarAzimuth), "%.1f", solarAzimuth);
+    snprintf(tt.solarAzimuth, sizeof(tt.solarAzimuth), "%.1f", solarAzimuth);
     // 145 to 150 (km) ?
-    snprintf(t_solarDistance, sizeof(t_solarDistance), "%.0f", solarDistance); 
+    snprintf(tt.solarDistance, sizeof(tt.solarDistance), "%.0f", solarDistance);
 
     int speed;
-    if (SPEED_IS_SOLAR_ELEVATION_MODE) 
+    if (SPEED_IS_SOLAR_ELEVATION_MODE)
         speed = solarElevation; // 0 if bad?
-    else 
+    else
         speed = gps.speed.isValid() ? gps.speed.knots() : 0;
 
     //****************************************************
@@ -176,15 +176,13 @@ void snapForTelemetry(void) {
     // FIX! I guess if SPEED_IS_SOLAR_ELEVATION_MODE
     // this means any negative solar elevation angles will clamp at 0
     // only an issue if someone is doing vertical solar arrays?
-    if (speed < 0)   speed = 0;
-    if (speed > 999) speed = 999;
-    snprintf(t_speed, sizeof(t_speed), "%d", speed);
+    speed = clamp_int(speed, 0, 999);
+    snprintf(tt.speed, sizeof(tt.speed), "%d", speed);
 
     // fixing negative altitude values
     int altitude = (int) gps.altitude.meters();
-    if (altitude < 0) altitude = 0;
-    if (altitude > 999999) altitude = 999999;
-    snprintf(t_altitude, sizeof(t_altitude), "%d", altitude);
+    altitude = clamp_int(altitude, 0, 999999);
+    snprintf(tt.altitude, sizeof(tt.altitude), "%d", altitude);
 
     //*********************************
     // FIX! remove. this result is bogus. does it not work for temp? does temp have a /3 divider
@@ -234,11 +232,10 @@ void snapForTelemetry(void) {
     float tempC = tempC_b;
 
     // turn floats into strings
-    // dtostrf(float_value, min_width, num_digits_after_decimal, where_to_store_string);
+    // dtostrf(floatt.value, min_width, num_digits_after_decimal, where_to_store_string);
 
-    if (tempC < -999.9) tempC = -999.9;
-    if (tempC > 999.9) tempC = 999.9;
-    snprintf(t_temp, sizeof(t_temp), "%.1f", tempC);
+    tempC = clamp_float(tempC, -999.9, 999.9);
+    snprintf(tt.temp, sizeof(tt.temp), "%.1f", tempC);
 
     //*********************************
     // examples
@@ -249,49 +246,43 @@ void snapForTelemetry(void) {
     // FIX! do we read hPA
 
     float pressure = bmp_read_pressure();
-    if (pressure < 0) pressure = 0;
-    if (pressure > 999.99) pressure = 999.99;
-    snprintf(t_pressure, sizeof(t_pressure), "%.2f", pressure);
+    pressure = clamp_float(pressure, -999.9, 999.9);
+    snprintf(tt.pressure, sizeof(tt.pressure), "%.2f", pressure);
 
     float temp_ext = bmp_read_temperature();
-    if (temp_ext < 0) temp_ext = 0;
-    if (temp_ext > 999.99) temp_ext = 999.99;
-    snprintf(t_temp_ext, sizeof(t_temp_ext), "%.2f", temp_ext);
+    temp_ext = clamp_float(temp_ext, -999.9, 999.9);
+    snprintf(tt.temp_ext, sizeof(tt.temp_ext), "%.2f", temp_ext);
 
     float humidity = bmp_read_humidity();
-    if (humidity < 0) humidity = 0;
-    if (humidity > 999.99) humidity = 999.99;
-    snprintf(t_humidity, sizeof(t_humidity), "%.2f", humidity);
+    humidity = clamp_float(humidity, -999.9, 999.9);
+    snprintf(tt.humidity, sizeof(tt.humidity), "%.2f", humidity);
 
     float voltage = readVoltage();
-    if (voltage < 0) voltage = 0;
-    if (voltage > 99.99) voltage = 99.99;
-    snprintf(t_voltage, sizeof(t_voltage), "%.2f", voltage);
+    voltage = clamp_float(voltage, 0, 99.99);
+    snprintf(tt.voltage, sizeof(tt.voltage), "%.2f", voltage);
 
     // FIX! could use this for some TELEN telemetry?
     int hdop = gps.hdop.isValid() ? (int) gps.hdop.value() : 0;
-    if (hdop < 0) hdop = 0;  // hundredths. <100 is very good
-    if (hdop > 999) hdop = 999;  // can get >999 from the gps, but we don't tx it (usually?)
-    snprintf(t_hdop, sizeof(t_hdop), "%3d", hdop);
+    // hundredths. <100 is very good
+    // can get >999 from the gps, but we don't tx it (usually?)
+    hdop = clamp_int(hdop, 0, 999);
+    snprintf(tt.hdop, sizeof(tt.hdop), "%d", hdop);
 
     // FIX! could use this for some TELEN telemetry?
     int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
-    if (sat_count < 0) sat_count = 0;
-    if (sat_count > 99) sat_count = 99;
-    snprintf(t_sat_count, sizeof(t_sat_count), "%d", sat_count);
+    sat_count = clamp_int(sat_count, 0, 99);
+    snprintf(tt.sat_count, sizeof(tt.sat_count), "%d", sat_count);
 
     double lat = gps.location.lat();
     // FIX! is both 90 and -90 legal for maidenhead translate?
-    if (lat < -90) lat = -90;
-    if (lat > 90) lat = 90;
+    lat = clamp_double(lat, -90.0000000, 90.0000000);
     // 12 bytes max with - and . counted
-    snprintf(t_lat, sizeof(t_lat), "%.7f", lat);
+    snprintf(tt.lat, sizeof(tt.lat), "%.7f", lat);
 
     double lon = gps.location.lng();
     // FIX! is both 180 and -180 legal for maidenhead translate?
-    if (lon < -180) lon = -180;
-    if (lon > 180) lon = 180;
-    snprintf(t_lon, sizeof(t_lon), "%.7f", lon);
+    lon = clamp_double(lon, -180.0000000, 180.0000000);
+    snprintf(tt.lon, sizeof(tt.lon), "%.7f", lon);
 
     //*********************************
     char grid6[7] = { 0 };
@@ -321,17 +312,17 @@ void snapForTelemetry(void) {
         // can't use sizeof(grid6) here because it's a pointer
         snprintf(grid6, 7, "%6s", "AA00AA");
 
-    snprintf(t_grid6, sizeof(t_grid6), "%s", grid6);
+    snprintf(tt.grid6, sizeof(tt.grid6), "%s", grid6);
 
     //*********************************
     // snap callsign just for consistency with everything else
     // we should never tx callsign or telemetry if we didn't get a fix
-    // so okay if t_callsign is blank until we get a fix?
-    snprintf(t_callsign, sizeof(t_callsign), "%s", _callsign);
+    // so okay if tt.callsign is blank until we get a fix?
+    snprintf(tt.callsign, sizeof(tt.callsign), "%s", cc._callsign);
 
     //*********************************
     int power_int;
-    if (_solar_tx_power[0] == '1') {
+    if (cc._solar_tx_power[0] == '1') {
         switch (SOLAR_SI5351_TX_POWER)  {
             case 0: power_int = 3; break;
             case 1: power_int = 7; break;
@@ -340,12 +331,12 @@ void snapForTelemetry(void) {
             default: power_int = 17; // so we'll know about illegal case?
         }
     } else {
-        if (_tx_high[0] == '1') power_int = 13;
+        if (cc._tx_high[0] == '1') power_int = 13;
         else power_int = 10;
     }
 
     // we clamp to a legalPower when we snapForTelemetry()
-    // basically we look at _tx_high[0] to decide our power level that will be used for rf
+    // basically we look at cc._tx_high[0] to decide our power level that will be used for rf
     // we could use values that are unique for this tracker,
     // for easy differentiation from u4b/traquito!!
     // like 3 and 7!
@@ -359,44 +350,109 @@ void snapForTelemetry(void) {
         }
     }
     if (!found) power_int = 0;
-    snprintf(t_power, sizeof(t_power), "%d", power_int);
+    snprintf(tt.power, sizeof(tt.power), "%d", power_int);
 
     //*********************************
     int tx_cnt_0_val = tx_cnt_0;
     if (tx_cnt_0 < 0) tx_cnt_0_val = 0;
     // do we need to count more than 99 in a day?
-    if (tx_cnt_0 > 99) tx_cnt_0_val = 99;
+    tx_cnt_0_val = clamp_int(tx_cnt_0_val, 0, 999);
     // we have room for 999
-    snprintf(t_tx_count_0, sizeof(t_tx_count_0), "%d", tx_cnt_0_val);
+    snprintf(tt.tx_count_0, sizeof(tt.tx_count_0), "%d", tx_cnt_0_val);
 
     //*********************************
     // snap for consistency with everything else (all at one instant in time)
-    t_TELEN1_val1 = TELEN1_val1;
-    t_TELEN1_val2 = TELEN1_val2;
-    t_TELEN2_val1 = TELEN2_val1;
-    t_TELEN2_val2 = TELEN2_val2;
+    tt.TELEN1_val1 = TELEN1_val1;
+    tt.TELEN1_val2 = TELEN1_val2;
+    tt.TELEN2_val1 = TELEN2_val1;
+    tt.TELEN2_val2 = TELEN2_val2;
+
+    bool validA = gps.satellites.isValid() && !GpsInvalidAll;
+    // bool validB = gps.hdop.isValid() && !GpsInvalidAll;
+    bool validB_gp = gp_sats.isValid() && !GpsInvalidAll;
+    bool validB_gb = gb_sats.isValid() && !GpsInvalidAll;
+    bool validB_gl = gl_sats.isValid() && !GpsInvalidAll;
+    bool validB_ga = ga_sats.isValid() && !GpsInvalidAll;
+    // bool validC = gps.location.isValid() && !GpsInvalidAll;
+    // bool validD = gps.altitude.isValid() && !GpsInvalidAll;
+    uint8_t s;
+    // FIX! not range checking these?
+    if (validA) s = gps.satellites.value();
+    else s = 0;
+    s = clamp_uint8_t(s, 0, 99);
+    snprintf(tt.sats, sizeof(tt.sats), "%u", s);
+
+    // what if it's blank?
+    if (validB_gp) s = atoi(gp_sats.value());
+    else s = 0;
+    s = clamp_uint8_t(s, 0, 99);
+    snprintf(tt.gp_sats, sizeof(tt.gp_sats), "%u", s);
+
+    if (validB_gb) s = atoi(gb_sats.value());
+    else s = 0;
+    s = clamp_uint8_t(s, 0, 99);
+    snprintf(tt.gb_sats, sizeof(tt.gb_sats), "%u", s);
+
+    if (validB_gl) s = atoi(gl_sats.value());
+    else s = 0;
+    s = clamp_uint8_t(s, 0, 99);
+    snprintf(tt.gl_sats, sizeof(tt.gl_sats), "%u", s);
+
+    if (validB_ga) s = atoi(ga_sats.value());
+    else s = 0;
+    s = clamp_uint8_t(s, 0, 99);
+    snprintf(tt.ga_sats, sizeof(tt.ga_sats), "%u", s);
+    // FIX! add to all the prints
+
+    // milliseconds
+    s = GpsTimeToLastFix / 1000;
+    s = clamp_uint64_t(s, 0, 999);
+    snprintf(tt.gpsLockSecs,    sizeof(tt.gpsLockSecs),    "%u", s);
+    s = GpsTimeToLastFixMin / 1000;
+    s = clamp_uint64_t(s, 0, 999);
+    snprintf(tt.gpsLockSecsMin, sizeof(tt.gpsLockSecsMin), "%u", s);
+    s = GpsTimeToLastFixMax / 1000;
+    s = clamp_uint64_t(s, 0, 999);
+    snprintf(tt.gpsLockSecsMax, sizeof(tt.gpsLockSecsMax), "%u", s);
+    s = GpsTimeToLastFixAvg / 1000;
+    s = clamp_uint64_t(s, 0, 999);
+    snprintf(tt.gpsLockSecsAvg, sizeof(tt.gpsLockSecsAvg), "%u", s);
 
     //*********************************
-    V1_printf("t_************" EOL);
-    V1_printf("t_tx_count_0 %3s " EOL, t_tx_count_0);
-    V1_printf("t_callsign %6s" EOL, t_callsign);
-    V1_printf("t_grid6 %6s" EOL, t_grid6);
-    V1_printf("t_power %2s" EOL, t_power);
-    V1_printf("t_sat_count %2s " EOL, t_sat_count);
-    V1_printf("t_lat %12s " EOL, t_lat);
-    V1_printf("t_lon %12s " EOL, t_lon);
-    V1_printf("t_altitude %6s " EOL, t_altitude);
-    V1_printf("t_voltage %5s " EOL, t_voltage);
-    V1_printf("t_temp %6s" EOL, t_temp);
-    V1_printf("t_course %3s " EOL, t_course);
-    V1_printf("t_speed %3s " EOL, t_speed);
-    V1_printf("t_temp_ext %7s" EOL, t_temp);
-    V1_printf("t_pressure %7s " EOL, t_pressure);
-    V1_printf("t_TELEN1_val1 %d " EOL, t_TELEN1_val1);
-    V1_printf("t_TELEN1_val2 %d " EOL, t_TELEN1_val2);
-    V1_printf("t_TELEN2_val1 %d " EOL, t_TELEN2_val1);
-    V1_printf("t_TELEN2_val2 %d " EOL, t_TELEN2_val2);
-    V1_printf("t_************" EOL);
+    V1_printf("************" EOL);
+    V1_printf("tt.tx_count_0 %s " EOL, tt.tx_count_0);
+    V1_printf("tt.callsign %s" EOL, tt.callsign);
+    V1_printf("tt.grid6 %s" EOL, tt.grid6);
+    V1_printf("tt.power %s" EOL, tt.power);
+    V1_printf("tt.sat_count %s " EOL, tt.sat_count);
+    V1_printf("tt.lat %s " EOL, tt.lat);
+    V1_printf("tt.lon %s " EOL, tt.lon);
+    V1_printf("tt.altitude %s " EOL, tt.altitude);
+    V1_printf("tt.voltage %s " EOL, tt.voltage);
+    V1_printf("tt.temp %s" EOL, tt.temp);
+    V1_printf("tt.course %s " EOL, tt.course);
+    V1_printf("tt.speed %s " EOL, tt.speed);
+
+    V1_printf("tt.solarElevation %s " EOL, tt.solarElevation);
+    V1_printf("tt.solarAzimuth %s " EOL, tt.solarAzimuth);
+
+    V1_printf("tt.temp_ext %s" EOL, tt.temp);
+    V1_printf("tt.pressure %s " EOL, tt.pressure);
+
+    // V1_printf("tt.TELEN1_val1 %d " EOL, tt.TELEN1_val1);
+    // V1_printf("tt.TELEN1_val2 %d " EOL, tt.TELEN1_val2);
+    // V1_printf("tt.TELEN2_val1 %d " EOL, tt.TELEN2_val1);
+    // V1_printf("tt.TELEN2_val2 %d " EOL, tt.TELEN2_val2);
+
+    V1_printf("tt.gp_sats %s " EOL, tt.gp_sats);
+    V1_printf("tt.gb_sats %s " EOL, tt.gb_sats);
+    V1_printf("tt.gl_sats %s " EOL, tt.gl_sats);
+    V1_printf("tt.ga_sats %s " EOL, tt.ga_sats);
+    V1_printf("tt.gpsLockSecs %s " EOL, tt.gpsLockSecs);
+    V1_printf("tt.gpsLockSecsMin %s " EOL, tt.gpsLockSecsMin);
+    V1_printf("tt.gpsLockSecsMax %s " EOL, tt.gpsLockSecsMax);
+    V1_printf("tt.gpsLockSecsAvg %s " EOL, tt.gpsLockSecsAvg);
+    V1_printf("************" EOL);
 
     V1_println(F("snapForTelemetry END"));
 }
@@ -419,7 +475,7 @@ void process_TELEN_data(void) {
     int telen_values[4] = { 0 };
     uint32_t timeSinceBoot_secs = millis() / 1000UL;  // seconds
     for (int i=0; i < 4; i++) {
-        switch (_TELEN_config[i]) {
+        switch (cc._TELEN_config[i]) {
             case '-':  break;  // do nothing, telen chan is disabled
             case '0':
                 telen_values[i] = round((float)analogRead(0) * conversionFactor);
@@ -444,17 +500,17 @@ void process_TELEN_data(void) {
                 telen_values[i] = tx_cnt_0;
                 break;
             case '7':
-                telen_values[i] = atoi(t_sat_count);
+                telen_values[i] = atoi(tt.sat_count);
                 break;
             case '8':
-                telen_values[i] = atoi(t_hdop);  // hundredths
+                telen_values[i] = atoi(tt.hdop);  // hundredths
                 break;
             case '9': { ; }
                 // FIX! what are these onewire_values?
-                if (onewire_values[_TELEN_config[i]-'6'] > 0)
-                    telen_values[i] = onewire_values[_TELEN_config[i] -'6'] * 100;
+                if (onewire_values[cc._TELEN_config[i]-'6'] > 0)
+                    telen_values[i] = onewire_values[cc._TELEN_config[i] -'6'] * 100;
                 else
-                    telen_values[i] = 20000 + (-1 * onewire_values[_TELEN_config[i] - '6']) * 100;
+                    telen_values[i] = 20000 + (-1 * onewire_values[cc._TELEN_config[i] - '6']) * 100;
                 break;
         }
     }
@@ -518,23 +574,24 @@ void telemetrySweepAllForTest(void) {
     V1_println(F("telemetrySweepAllForTest START"));
 
     // Force these to static values. used during normal callsign tx
-    snprintf(t_grid6, sizeof(t_grid6), "%s", "AA00AA");
-    snprintf(t_callsign, sizeof(t_callsign), "%s", "TES999");
-    snprintf(t_power, sizeof(t_power), "%d", 0);
+    snprintf(tt.grid6, sizeof(tt.grid6), "%s", "AA00AA");
+    snprintf(tt.callsign, sizeof(tt.callsign), "%s", "TES999");
+    snprintf(tt.power, sizeof(tt.power), "%d", 0);
 
-    // the t_* stuff are ascii chars
+    // the tt.* stuff are ascii chars
     // walk them thru their range. wrap at boundary
-    doTelemetrySweepInteger(t_course, 3, 0, 361, 1);            // 3 bytes (not counting null term)
-    doTelemetrySweepInteger(t_speed, 3, 0, 300, 1);             // 3 bytes
-    doTelemetrySweepInteger(t_altitude, 6, 0, 99999, 1);        // 6 bytes
-    doTelemetrySweepInteger(t_tx_count_0, 3, 0, 999, 1);        // 3 bytes
-    doTelemetrySweepFloat(t_temp, 6, -100.1, 200.4, 1.0);       // 6 bytes (float)
-    doTelemetrySweepFloat(t_pressure, 7, -20.10, 100.10, 1.0);  // 7 bytes (float)
-    doTelemetrySweepFloat(t_temp_ext, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
-    doTelemetrySweepFloat(t_humidity, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
-    doTelemetrySweepFloat(t_voltage, 5, 0,  6.00, 6.0);         // 5 bytes (float)
-    doTelemetrySweepInteger(t_sat_count, 2, 0, 99, 1);          // 2 bytes
-    doTelemetrySweepInteger(t_hdop, 3, 0, 999, 1);              // 3 bytes
+    // https://stackoverflow.com/questions/17928123/how-to-pass-a-struct-member-as-a-pointer-in-a-function
+    doTelemetrySweepInteger(tt.course, 3, 0, 361, 1);            // 3 bytes (not counting null term)
+    doTelemetrySweepInteger(tt.speed, 3, 0, 300, 1);             // 3 bytes
+    doTelemetrySweepInteger(tt.altitude, 6, 0, 99999, 1);        // 6 bytes
+    doTelemetrySweepInteger(tt.tx_count_0, 3, 0, 999, 1);       // 3 bytes
+    doTelemetrySweepFloat(tt.temp, 6, -100.1, 200.4, 1.0);       // 6 bytes (float)
+    doTelemetrySweepFloat(tt.pressure, 7, -20.10, 100.10, 1.0);  // 7 bytes (float)
+    doTelemetrySweepFloat(tt.temp_ext, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
+    doTelemetrySweepFloat(tt.humidity, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
+    doTelemetrySweepFloat(tt.voltage, 5, 0,  6.00, 6.0);         // 5 bytes (float)
+    doTelemetrySweepInteger(tt.sat_count, 2, 0, 99, 1);          // 2 bytes
+    doTelemetrySweepInteger(tt.hdop, 3, 0, 999, 1);              // 3 bytes
 
     // not sure of what the range is (max for the integer allowed?)
     static char telen1_str1[25] = { 0 };
@@ -547,39 +604,39 @@ void telemetrySweepAllForTest(void) {
     doTelemetrySweepInteger(telen2_str1, 24, 0, 999, 1);  // 3 bytes
     doTelemetrySweepInteger(telen2_str2, 24, 0, 999, 1);  // 3 bytes
 
-    t_TELEN1_val1 = atoi(telen1_str1);  // int
-    t_TELEN1_val2 = atoi(telen1_str2);  // int
-    t_TELEN2_val1 = atoi(telen2_str1);  // int
-    t_TELEN2_val2 = atoi(telen2_str2);  // int
+    tt.TELEN1_val1 = atoi(telen1_str1);  // int
+    tt.TELEN1_val2 = atoi(telen1_str2);  // int
+    tt.TELEN2_val1 = atoi(telen2_str1);  // int
+    tt.TELEN2_val2 = atoi(telen2_str2);  // int
 
-    V1_printf("TESTMODE t_course: %s" EOL, t_course);
-    V1_printf("TESTMODE t_speed: %s" EOL, t_speed);
-    V1_printf("TESTMODE t_altitude: %s" EOL, t_altitude);
-    V1_printf("TESTMODE t_tx_count_0: %s" EOL, t_tx_count_0);
-    V1_printf("TESTMODE t_temp: %s" EOL, t_temp);
-    V1_printf("TESTMODE t_pressure: %s" EOL, t_pressure);
-    V1_printf("TESTMODE t_temp_ext: %s" EOL, t_temp_ext);
-    V1_printf("TESTMODE t_humidity: %s" EOL, t_humidity);
-    V1_printf("TESTMODE t_voltage: %s" EOL, t_voltage);
-    V1_printf("TESTMODE t_sat_count: %s" EOL, t_sat_count);
-    V1_printf("TESTMODE t_hdop: %s" EOL, t_hdop);
+    V1_printf("TESTMODE tt.course: %s" EOL, tt.course);
+    V1_printf("TESTMODE tt.speed: %s" EOL, tt.speed);
+    V1_printf("TESTMODE tt.altitude: %s" EOL, tt.altitude);
+    V1_printf("TESTMODE tt.tx_count_0: %s" EOL, tt.tx_count_0);
+    V1_printf("TESTMODE tt.temp: %s" EOL, tt.temp);
+    V1_printf("TESTMODE tt.pressure: %s" EOL, tt.pressure);
+    V1_printf("TESTMODE tt.temp_ext: %s" EOL, tt.temp_ext);
+    V1_printf("TESTMODE tt.humidity: %s" EOL, tt.humidity);
+    V1_printf("TESTMODE tt.voltage: %s" EOL, tt.voltage);
+    V1_printf("TESTMODE tt.sat_count: %s" EOL, tt.sat_count);
+    V1_printf("TESTMODE tt.hdop: %s" EOL, tt.hdop);
 
-    V1_printf("TESTMODE t_TELEN1_val1: %x" EOL, t_TELEN1_val1);
-    V1_printf("TESTMODE t_TELEN1_val2: %x" EOL, t_TELEN1_val2);
-    V1_printf("TESTMODE t_TELEN2_val1: %x" EOL, t_TELEN2_val1);
-    V1_printf("TESTMODE t_TELEN2_val2: %x" EOL, t_TELEN2_val2);
+    V1_printf("TESTMODE tt.TELEN1_val1: %x" EOL, tt.TELEN1_val1);
+    V1_printf("TESTMODE tt.TELEN1_val2: %x" EOL, tt.TELEN1_val2);
+    V1_printf("TESTMODE tt.TELEN2_val1: %x" EOL, tt.TELEN2_val1);
+    V1_printf("TESTMODE tt.TELEN2_val2: %x" EOL, tt.TELEN2_val2);
 
     V1_println(F("telemetrySweepAllForTest END"));
 }
-//****************************************************
 
+//****************************************************
 void solarElevationCalcs(double solarElevation) {
     V1_print(F("solarElevationCalcs START"));
     // Do nothing if the gps data isn't good
     // what about GpsInvalidAll from tracker.ino???
 
     // just need a good 2d fix?
-    bool fix_valid_all = 
+    bool fix_valid_all =
         gps.time.isValid() &&
         (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
         gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
@@ -589,7 +646,7 @@ void solarElevationCalcs(double solarElevation) {
 
     // figure how solar peak during the day
     // keep a static for the last value. make it rounded to integer. Compare to current.
-    // keep the max found. When the current is less than the max, the first time, 
+    // keep the max found. When the current is less than the max, the first time,
     // say "solarPeakPos" is detected. I guess solarRising/solarSetting
     // the transition from solarRising to solarSetting would be the time for solarPeakPos
     // maybe save the time of the solar max also
@@ -638,7 +695,7 @@ void solarElevationCalcs(double solarElevation) {
             solarElevationIntMax, epochTime);
     }
 
-    // could adjust the tx power output (strength) depending 
+    // could adjust the tx power output (strength) depending
     // on solar elevation? Makes it dependent on correct gps lat/lon/utc calcs
     // for ground level power testing, wouldn't want to enable dynamic power..
     // separate config bit
@@ -648,9 +705,6 @@ void solarElevationCalcs(double solarElevation) {
     // FIX! update this based on solar elevation
     // extern uint8_t SOLAR_SI5351_TX_POWER;
 
-    // doesn't matter what these do..they control how prior is uesd.
-    // extern char _solar_tx_power[2];
-    // extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
     uint8_t tx_power = 3;
     if (solarElevationInt < 10) {
         tx_power = 0;
@@ -670,7 +724,7 @@ void solarElevationCalcs(double solarElevation) {
     // in the telemetry!
     bool solarPeakPos = false;
     bool solarPeakNeg = false;
-    
+
     bool solarRising = false;
     bool solarSetting = false;
     bool solarSame = false;
@@ -692,28 +746,28 @@ void solarElevationCalcs(double solarElevation) {
         solarPeakNeg = solarRising && solarSetting_prev;
         V1_printf("solarRising %u solarSetting %u solarSame %u %" PRIu64 EOL,
             solarRising, solarSetting, solarSame, epochTime);
-     
+
         if (solarPeakPos) {
             // should only have one of these?
-            V1_printf("GOOD: solarPeakPos discovered:" 
+            V1_printf("GOOD: solarPeakPos discovered:"
                 " solarElevation %.1f epochTime %" PRIu64 EOL,
                 solarElevation, epochTime);
         }
         if (solarPeakPos && solarPeakPos_sticky) {
             // should only have one of these?
-            V1_printf("ERROR: multiple solarPeakPos discovered/set:" 
+            V1_printf("ERROR: multiple solarPeakPos discovered/set:"
                 " solarElevation %.1f epochTime %" PRIu64 EOL,
                 solarElevation, epochTime);
         }
         if (solarPeakNeg) {
             // should only have one of these?
-            V1_printf("GOOD: solarPeakNeg discovered:" 
+            V1_printf("GOOD: solarPeakNeg discovered:"
                 " solarElevation %.1f epochTime %" PRIu64 EOL,
                 solarElevation, epochTime);
         }
         if (solarPeakNeg && solarPeakNeg_sticky) {
             // should only have one of these?
-            V1_printf("ERROR: multiple solarPeakNeg discovered/set:" 
+            V1_printf("ERROR: multiple solarPeakNeg discovered/set:"
                 " solarElevation %.1f epochTime %" PRIu64 EOL,
                 solarElevation, epochTime);
         }

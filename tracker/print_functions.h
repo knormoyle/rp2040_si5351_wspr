@@ -86,4 +86,4 @@ void yPrintln(const char* pformat, ...);
 #define V4_print if (VERBY[4]) Serial.print
 #define V4_flush if (VERBY[4]) Serial.flush
 
-#endif
+#endif // PRINT_FUNCTIONS_H

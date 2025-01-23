@@ -109,7 +109,6 @@ extern const int SIM65M_BAUD_RATE;
 // for tracking gps fix time. we only power gps on/off..we don't send it gps reset commands
 extern absolute_time_t GpsStartTime;  // usecs
 
-// extern char _verbose[2];
 // decode of verbose 0-9
 extern bool VERBY[10];
 

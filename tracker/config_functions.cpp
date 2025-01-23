@@ -29,6 +29,7 @@
 // just so we can do some tests? 
 #include "debug_functions.h"
 #include "si5351_functions.h"
+#include "global_structs.h"
 
 //*****************************************************
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
@@ -81,50 +82,13 @@
 // #define FLASH_PAGE_SIZE 256
 
 //**************************************
-extern char _callsign[7];
-extern char _verbose[2];   // 0 is used to disable all. 1 is all printing for now. 2:9 same
-extern char _TELEN_config[5];
-extern char _clock_speed[4];
-extern char _U4B_chan[4];  // 1 to 3 digits?
-extern char _Band[3];      // string with 2, 10, 12, 15, 17, 20 legal. null at end
-extern char _Band_cw[3];   // string with 2, 10, 12, 15, 17, 20 legal. null at end
-// https://rfzero.net/documentation/rf/
-// The table below shows the typical output power vs. current in the output stages 
-// running in push-pull with a T1 transformer
-// Current [mA] 
-// 137 kHz    1 MHz     10 MHz    30 MHz    50 MHz    200 MHz
-// 8 9,5 dBm  14,2 dBm  14,5 dBm  15,0 dBm  14,5 dBm  13,3 dBm
-// 6 9,2 dBm  12,8 dBm  13,3 dBm  13,7 dBm  13,0 dBm  11,8 dBm
-// 4 8,3 dBm  10,3 dBm  10,7 dBm  11,0 dBm  10,5 dBm   9,7 dBm
-// 2 5,2 dBm   4,7 dBm   5,0 dBm   5,5 dBm   5,0 dBm   4,5 dBm
+extern ConfigStruct cc;
 
-// Note running at 4ma output is just 4 dBm reduction. so maybe that should be our low power?
-extern char _tx_high[2];   // 0 is 4mA si5351. 1 is 8mA si5351
-extern char _testmode[2];  // currently: sweep telemetry
-
-// don't allow more than approx. 43 hz "correction" on a band. leave room for 6 chars
-extern char _correction[7];  // parts per billion -30000 to 30000. default 0
-// traquito: 500 correction does  ~7 hz lower on 20M (14095.600 base freq)
-// traquito: 500 correction does ~14 hz lower on 10M (28124.600 base freq)
-
-// test only: 1 means you don't wait for starting minute from _U4B_chan
-// does wait for any 2 minute alignment though
-extern char _go_when_rdy[2];
-extern char _factory_reset_done[2];
-extern char _use_sim65m[2];
-extern char _morse_also[2];   
-extern char _solar_tx_power[2];
-
-extern char _id13[3];
-extern char _start_minute[2];
-extern char _lane[2];
-
-//**************************************
-// decodes from _Band _U4B_chan
+// decodes from cc._Band cc._U4B_chan
 extern uint32_t XMIT_FREQUENCY;
 extern uint64_t PLL_FREQ_TARGET;
 extern const uint32_t DEFAULT_PLL_SYS_MHZ;
-extern uint32_t PLL_SYS_MHZ;  // decode of _clock_speed
+extern uint32_t PLL_SYS_MHZ;  // decode of cc._clock_speed
 
 // PWM stuff gets recalc'ed if PLL_SYS_MHZ changes
 extern uint32_t PWM_DIV;
@@ -132,7 +96,7 @@ extern uint32_t PWM_WRAP_CNT;
 // this is fixed
 extern const uint32_t INTERRUPTS_PER_SYMBOL;
 
-extern bool TESTMODE;  // decode of _testmode
+extern bool TESTMODE;  // decode of cc._testmode
 extern bool VERBY[10];  // decode of verbose 0-9. disabled if BALLOON_MODE
 extern bool BALLOON_MODE;  // this is set by setup() when it detects no USB/Serial
 extern bool USE_SIM65M;  // ATGM3365N-31 if false
@@ -151,41 +115,6 @@ void convertToUpperCase(char *str) {
     while (*str) {
         *str = toupper((unsigned char)*str);
         str++;
-    }
-}
-
-//***************************************
-// HACK for debug (force config)
-void forceHACK(void) {
-    static bool HACK = false;
-
-    if (false) {
-        // apparently 12-17Mhz illegal.
-        // 18-19Mhz legal
-        // 20-48Mhz legal (and more above that).
-        // Has to do with divisors and such for the sys pll
-        V1_println(F("Check some legal/illegal low frequencies for possible use with pll_sys later" EOL));
-        for (uint32_t i = 12; i <= 48; i++)  {
-            uint32_t freq_khz = i * 1000UL;
-            if (set_sys_clock_khz(freq_khz, false)) {
-                V1_printf("GOOD: set_sys_clock_khz() can change clock to %lu Mhz. legal" EOL, i);
-            } else {
-                V1_printf("ERROR: set_sys_clock_khz() can not change clock to %lu Mhz. illegal" EOL, i);
-            }
-        }
-    }
-
-    if (HACK && !BALLOON_MODE) {
-        // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
-        // recommends to always snprintf(buffer, sizeof(buffer), "%s", string);
-
-        // HACK FIX! always 1 now for debug
-        V1_println(F("Forcing _verbose to 1 (always for now)"));
-        snprintf(_verbose, sizeof(_verbose), "1");
-        decodeVERBY();
-
-        V1_println(F("Forcing _go_when_rdy to 1 (always for now)"));
-        snprintf(_go_when_rdy, sizeof(_go_when_rdy), "1");
     }
 }
 
@@ -281,12 +210,12 @@ void config_intro(void) {
     V0_println("tracker: AD6Z firmware, AG6NS 0.04 pcb, JLCPCB with *kbn* or *kbn2* bom/cpl mod");
     V0_println("https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker");
     V0_println("https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/tree/main/pcb/tracker/v0.4_kbn");
-    V0_println("tracker.ino firmware version: " __DATE__ " "  __TIME__);
+    V0_println("tracker.ino firmware version: " __DATE__ " " __TIME__);
     V0_println("support: knormoyle@gmail.com or https://groups.io/g/picoballoon");
     // V0_print(F(NORMAL));
 
     //***************
-    // get all the _* config state set and fix any bad values (to defaults)
+    // get all the cc._* config state set and fix any bad values (to defaults)
     // normally we only read it during setup() so we might not see prints from it in putty.log
     int result = read_FLASH();
     // if anything got fixed to defaults, no read again
@@ -368,8 +297,8 @@ void do_someTest(void) {
     if (true) {
         V0_print(F("Cycle thru the 4 wspr symbol frequencies. 15 secs each"));
         GpsOFF(true);  // keep TinyGPS state
-        init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
-        init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
+        init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
+        init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
         vfo_turn_on();
         sleep_ms(1000);
 
@@ -389,11 +318,11 @@ void do_someTest(void) {
             if (c_char != 0) break;
         }
     } else if (true) {
-        // picks a good HF freq for the config'ed _Band. 
+        // picks a good HF freq for the config'ed cc._Band
         // uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
         while (true)  {
-            V0_print(F(EOL "cw_send_message() with current _Band/_callsign/grid6/altitude" EOL));
+            V0_print(F(EOL "cw_send_message() with current cc._Band/_callsign/grid6/altitude" EOL));
             cw_send_message();
             V0_print(F(EOL "<enter> within 2 secs to abort cw test loop, otherwise repeats" EOL));
             char c_char = getOneChar(2000);  // 2 secs
@@ -534,98 +463,98 @@ void user_interface(void) {
             case 'C':
                 // FIX! will 1 char send wspr?
                 get_user_input("Enter callsign: (3 to 6 chars: 1 to 3 [A-Z0-9] + 0 to 3 [A-Z]" EOL,
-                    _callsign, sizeof(_callsign));
-                convertToUpperCase(_callsign);
+                    cc._callsign, sizeof(cc._callsign));
+                convertToUpperCase(cc._callsign);
                 write_FLASH();
                 break;
             case 'U':
-                get_user_input("Enter U4B channel (0-599): " EOL, _U4B_chan, sizeof(_U4B_chan));
-                init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+                get_user_input("Enter U4B channel (0-599): " EOL, cc._U4B_chan, sizeof(cc._U4B_chan));
+                init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
 
                 write_FLASH();
                 break;
             case 'V':
-                get_user_input("Enter Verbosity level (0-9): " EOL, _verbose, sizeof(_verbose));
+                get_user_input("Enter Verbosity level (0-9): " EOL, cc._verbose, sizeof(cc._verbose));
                 write_FLASH();
                 break;
             case 'T':
                 show_TELEN_msg();
-                get_user_input("Enter TELEN config: " EOL, _TELEN_config, sizeof(_TELEN_config));
-                convertToUpperCase(_TELEN_config);
+                get_user_input("Enter TELEN config: " EOL, cc._TELEN_config, sizeof(cc._TELEN_config));
+                convertToUpperCase(cc._TELEN_config);
                 write_FLASH();
                 break;
             case 'K':
-                get_user_input("Enter clock speed (18, 20-48, 49-250 (not all)): " EOL, _clock_speed, sizeof(_clock_speed));
+                get_user_input("Enter clock speed (18, 20-48, 49-250 (not all)): " EOL, cc._clock_speed, sizeof(cc._clock_speed));
                 write_FLASH();
-                PLL_SYS_MHZ = atoi(_clock_speed);
+                PLL_SYS_MHZ = atoi(cc._clock_speed);
                 // frequencies like 205 mhz will PANIC,
                 // System clock of 205000 kHz cannot be exactly achieved
                 // should detect the failure and change the nvram, otherwise we're stuck even on reboot
                 // this is the only config where we don't let something bad get into flash
                 // don't change the pll, just check. change it on reboot
                 if (PLL_SYS_MHZ < 18 || PLL_SYS_MHZ > 250) {
-                    V0_printf("user_interface: _clock_speed %lu illegal. Using %lu instead" EOL,
+                    V0_printf("user_interface: cc._clock_speed %lu illegal. Using %lu instead" EOL,
                         PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
 
                     // https://stackoverflow.com/questions/2606539/snprintf-vs-strcpy-etc-in-c
                     // recommends to always
                     // snprintf(buffer, sizeof(buffer), "%s", string);
                     PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
-                    snprintf(_clock_speed, sizeof(_clock_speed), "%lu",  PLL_SYS_MHZ);
+                    snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu",  PLL_SYS_MHZ);
                     write_FLASH();
                 }
                 makeSureClockIsGood();
 
                 break;
             case 'A':
-                get_user_input("Enter Band (2,10,12,15,17,20):" EOL, _Band, sizeof(_Band));
+                get_user_input("Enter Band (2,10,12,15,17,20):" EOL, cc._Band, sizeof(cc._Band));
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
                 write_FLASH();
-                init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+                init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
                 break;
             case 'B':
-                get_user_input("Enter CW Band (2,10,12,15,17,20):" EOL, _Band_cw, sizeof(_Band));
+                get_user_input("Enter CW Band (2,10,12,15,17,20):" EOL, cc._Band_cw, sizeof(cc._Band));
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
                 write_FLASH();
                 break;
             case 'P':
-                get_user_input("Enter Tx high: (0 or 1)" EOL, _tx_high, sizeof(_tx_high));
+                get_user_input("Enter Tx high: (0 or 1)" EOL, cc._tx_high, sizeof(cc._tx_high));
                 write_FLASH();
                 break;
             case 'D':
                 get_user_input("Enter TESTMODE (currently affects nothing): (0 or 1)" EOL,
-                    _testmode, sizeof(_testmode));
+                   cc._testmode, sizeof(cc._testmode));
                 write_FLASH();
                 break;
             case 'R':
                 V0_print(F("Don't cause more than approx. 43 hz 'correction' on a band." EOL));
                 V0_print(F("effect varies per band?" EOL));
                 get_user_input("Enter ppb Correction to si5351: (-30000 to 30000)" EOL,
-                    _correction, sizeof(_correction));
+                   cc._correction, sizeof(cc._correction));
                 write_FLASH();
                 break;
             case 'G':
-                V0_print(F("test only: 1 Don't wait for starting minute from _U4B_chan" EOL));
+                V0_print(F("test only: 1 Don't wait for starting minute fromcc._U4B_chan" EOL));
                 V0_print(F("does wait for any 2 minute alignment though" EOL));
                 V0_print(F("ZERO THIS BEFORE BALLOON FLIGHT!! ignores BALLOON_MODE" EOL));
                 get_user_input("Enter go_when_rdy for faster test..any 2 minute start: (0 or 1):",
-                    _go_when_rdy, sizeof(_go_when_rdy));
+                   cc._go_when_rdy, sizeof(cc._go_when_rdy));
                 write_FLASH();
                 break;
             case 'S':
                 get_user_input("Enter use_sim65m: 1 if gps chip is SIM65, 0 if ATGM3365N-31:",
-                    _use_sim65m, sizeof(_use_sim65m));
+                   cc._use_sim65m, sizeof(cc._use_sim65m));
                 write_FLASH();
                 break;
             case 'M':
-                get_user_input("Send morse also? 0 or 1: " EOL, _morse_also, sizeof(_morse_also));
+                get_user_input("Send morse also? 0 or 1: " EOL, cc._morse_also, sizeof(cc._morse_also));
                 write_FLASH();
                 break;
             case 'L':
                 get_user_input("Dynamic solar elevation tx power? 0 or 1: " EOL, 
-                    _solar_tx_power, sizeof(_solar_tx_power));
+                   cc._solar_tx_power, sizeof(cc._solar_tx_power));
                 write_FLASH();
                 break;
             case 13:  break;
@@ -689,14 +618,14 @@ void makeSureClockIsGood(void) {
         V0_printf(" ERROR: RP2040 can't change clock to %lu Mhz.", PLL_SYS_MHZ);
         V0_printf(" Using %lu instead" EOL, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
-        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+        snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", PLL_SYS_MHZ);
         write_FLASH();
         // check this default?
         freq_khz = PLL_SYS_MHZ * 1000UL;
         if (!set_sys_clock_khz(freq_khz, false)) {
             V1_println("user_interface: ERROR: The DEFAULT_SYS_MHZ is not legal either. will use 125");
             PLL_SYS_MHZ = 125;
-            snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+            snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", PLL_SYS_MHZ);
             write_FLASH();
         }
     }
@@ -772,35 +701,35 @@ int read_FLASH(void) {
     }
     // BE SURE YOU ONLY USE ONE PAGE: i.e. 256 bytes total
     // FIX! should we just use snprintf?
-    strncpy(_callsign,     flash_target_contents + 0,  6); _callsign[6] = 0;
-    strncpy(_verbose,      flash_target_contents + 6,  1); _verbose[1] = 0;
-    strncpy(_TELEN_config, flash_target_contents + 7,  4); _TELEN_config[4] = 0;
-    strncpy(_clock_speed,  flash_target_contents + 11, 3); _clock_speed[3] = 0;
-    strncpy(_U4B_chan,     flash_target_contents + 14, 3); _U4B_chan[3] = 0;
-    // FIX! change to _band everywhere?
-    strncpy(_Band,         flash_target_contents + 17, 2); _Band[2] = 0;
-    strncpy(_tx_high,      flash_target_contents + 19, 1); _tx_high[1] = 0;
-    strncpy(_testmode,     flash_target_contents + 20, 1); _testmode[1] = 0;
-    strncpy(_correction,   flash_target_contents + 21, 6); _correction[6] = 0;
-    strncpy(_go_when_rdy,  flash_target_contents + 27, 1); _go_when_rdy[1] = 0;
-    strncpy(_factory_reset_done,  flash_target_contents + 28, 1); _factory_reset_done[1] = 0;
-    strncpy(_use_sim65m,   flash_target_contents + 29, 1); _use_sim65m[1] = 0;
-    strncpy(_morse_also,   flash_target_contents + 30,  1); _morse_also[1] = 0;
-    strncpy(_Band_cw,      flash_target_contents + 31,  2); _Band_cw[2] = 0;
-    strncpy(_solar_tx_power,  flash_target_contents + 33,  1); _solar_tx_power[1] = 0;
+    strncpy(cc._callsign,        flash_target_contents + 0,  6);cc._callsign[6] = 0;
+    strncpy(cc._verbose,         flash_target_contents + 6,  1);cc._verbose[1] = 0;
+    strncpy(cc._TELEN_config,    flash_target_contents + 7,  4);cc._TELEN_config[4] = 0;
+    strncpy(cc._clock_speed,     flash_target_contents + 11, 3);cc._clock_speed[3] = 0;
+    strncpy(cc._U4B_chan,        flash_target_contents + 14, 3);cc._U4B_chan[3] = 0;
+    // FIX! change tocc._band everywhere?
+    strncpy(cc._Band,            flash_target_contents + 17, 2);cc._Band[2] = 0;
+    strncpy(cc._tx_high,         flash_target_contents + 19, 1);cc._tx_high[1] = 0;
+    strncpy(cc._testmode,        flash_target_contents + 20, 1);cc._testmode[1] = 0;
+    strncpy(cc._correction,      flash_target_contents + 21, 6);cc._correction[6] = 0;
+    strncpy(cc._go_when_rdy,     flash_target_contents + 27, 1);cc._go_when_rdy[1] = 0;
+    strncpy(cc._factory_reset_done,  flash_target_contents + 28, 1);cc._factory_reset_done[1] = 0;
+    strncpy(cc._use_sim65m,      flash_target_contents + 29, 1);cc._use_sim65m[1] = 0;
+    strncpy(cc._morse_also,      flash_target_contents + 30,  1);cc._morse_also[1] = 0;
+    strncpy(cc._Band_cw,         flash_target_contents + 31,  2);cc._Band_cw[2] = 0;
+    strncpy(cc._solar_tx_power,  flash_target_contents + 33,  1);cc._solar_tx_power[1] = 0;
 
-    PLL_SYS_MHZ = atoi(_clock_speed);
+    PLL_SYS_MHZ = atoi(cc._clock_speed);
     // recalc
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
 
-    // FIX! we should decode the _Band/_U4B_chan and set any ancillary decode vars?
+    // FIX! we should decode thecc._Band/_U4B_chan and set any ancillary decode vars?
     // any XMIT_FREQUENCY ?
-    process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
+    process_chan_num(cc._id13, cc._start_minute, cc._lane, cc._Band, cc._U4B_chan);
 
     // FIX! define this as extern?
-    init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+    init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
 
-    // fix anything bad! both in _* variables and FLASH (defaults)
+    // fix anything bad! both incc._* variables and FLASH (defaults)
     // -1 if anything got fixed
     int result = check_data_validity_and_set_defaults();
     if (result == -1) {
@@ -810,9 +739,9 @@ int read_FLASH(void) {
 
     // forceHACK();
 
-    if (_testmode[0] == '1') TESTMODE = true;
+    if (cc._testmode[0] == '1') TESTMODE = true;
     else TESTMODE = false;
-    if (_use_sim65m[0] == '1') USE_SIM65M = true;
+    if (cc._use_sim65m[0] == '1') USE_SIM65M = true;
     else USE_SIM65M = false;
 
     decodeVERBY();
@@ -836,13 +765,13 @@ void decodeVERBY(void) {
     // can see the config output
     VERBY[0] = true;
 
-    // if _verbose is currently illegal (haven't updated NVRAM?, set everything
-    if (_verbose[0] < '0' && _verbose[0] > '9') {
+    // if cc._verbose is currently illegal (haven't updated NVRAM?, set everything
+    if (cc._verbose[0] < '0' &&cc._verbose[0] > '9') {
         // set everything if it's illegal ascii
         for (int i = 0; i < 10 ; i++) VERBY[i] = true;
         return;
     }
-    int j = _verbose[0] - '0';  // '0' is 48
+    int j = cc._verbose[0] - '0';  // '0' is 48
     // j and everything below
     // 0 is ascii 48
     // decode '1' to '9' to thermometer code VERBY
@@ -853,7 +782,7 @@ void decodeVERBY(void) {
         else VERBY[i] = false;
     }
 
-    // V1_printf("decoded _verbose %s to VERBY[9:0]" EOL, _verbose);
+    // V1_printf("decodedcc._verbose %s to VERBY[9:0]" EOL, cc._verbose);
     if (false) {
         for (int i = 0; i < 10 ; i++) {
             V0_printf("VERBY[%d] %x" EOL, i, VERBY[i]);
@@ -891,22 +820,22 @@ void write_FLASH(void) {
     char data_chunk[FLASH_BYTES_USED] = { 0 };  // enough to cover what we use here
     uint8_t udata_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
 
-    // don't take the extra null term (but _callsign might be short!)
-    strncpy(data_chunk + 0,  _callsign, 6);
-    strncpy(data_chunk + 6,  _verbose, 1);
-    strncpy(data_chunk + 7,  _TELEN_config, 4);
-    strncpy(data_chunk + 11, _clock_speed, 3);
-    strncpy(data_chunk + 14, _U4B_chan, 3);
-    strncpy(data_chunk + 17, _Band, 2);
-    strncpy(data_chunk + 19, _tx_high, 1);
-    strncpy(data_chunk + 20, _testmode, 1);
-    strncpy(data_chunk + 21, _correction, 6);
-    strncpy(data_chunk + 27, _go_when_rdy, 1);
-    strncpy(data_chunk + 28, _factory_reset_done, 1);
-    strncpy(data_chunk + 29, _use_sim65m, 1);
-    strncpy(data_chunk + 30, _morse_also, 1);
-    strncpy(data_chunk + 31, _Band_cw, 2);
-    strncpy(data_chunk + 33, _solar_tx_power, 1);
+    // don't take the extra null term (butcc._callsign might be short!)
+    strncpy(data_chunk + 0, cc._callsign, 6);
+    strncpy(data_chunk + 6, cc._verbose, 1);
+    strncpy(data_chunk + 7, cc._TELEN_config, 4);
+    strncpy(data_chunk + 11, cc._clock_speed, 3);
+    strncpy(data_chunk + 14, cc._U4B_chan, 3);
+    strncpy(data_chunk + 17, cc._Band, 2);
+    strncpy(data_chunk + 19, cc._tx_high, 1);
+    strncpy(data_chunk + 20, cc._testmode, 1);
+    strncpy(data_chunk + 21, cc._correction, 6);
+    strncpy(data_chunk + 27, cc._go_when_rdy, 1);
+    strncpy(data_chunk + 28, cc._factory_reset_done, 1);
+    strncpy(data_chunk + 29, cc._use_sim65m, 1);
+    strncpy(data_chunk + 30, cc._morse_also, 1);
+    strncpy(data_chunk + 31, cc._Band_cw, 2);
+    strncpy(data_chunk + 33, cc._solar_tx_power, 1);
 
     // alternative for casting the array to uint8_t
     // https://stackoverflow.com/questions/40579902/how-to-turn-a-character-array-into-uint8-t
@@ -991,7 +920,7 @@ int check_data_validity_and_set_defaults(void) {
     // work from the back until you find the first number
     // don't allow <space> to be legal anywhere
     // ignore extra trailing nulls
-    int clength = strlen(_callsign);
+    int clength = strlen(cc._callsign);
     bool callsignBad = false;
     // this also covers the null case (strlen 0)
     if (clength < 3) {
@@ -1000,56 +929,56 @@ int check_data_validity_and_set_defaults(void) {
         callsignBad = true;
     } else if (clength >= 3) {
         for (int i = 0; i <= 2; i++) {
-            if ((_callsign[i] < 'A' && _callsign[i] > 'Z') &&
-                (_callsign[i] < '0' && _callsign[i] > '9')) {
+            if ((cc._callsign[i] < 'A' &&cc._callsign[i] > 'Z') &&
+                (cc._callsign[i] < '0' &&cc._callsign[i] > '9')) {
                 callsignBad = true;
             }
         }
     } else if (clength >= 4) {
-        if (_callsign[3] < 'A' || _callsign[3] > 'Z') callsignBad = true;
+        if (cc._callsign[3] < 'A' ||cc._callsign[3] > 'Z') callsignBad = true;
     } else if (clength >= 5) {
-        if (_callsign[4] < 'A' || _callsign[4] > 'Z') callsignBad = true;
+        if (cc._callsign[4] < 'A' ||cc._callsign[4] > 'Z') callsignBad = true;
     } else if (clength == 6) {
-        if (_callsign[5] < 'A' || _callsign[5] > 'Z') callsignBad = true;
+        if (cc._callsign[5] < 'A' ||cc._callsign[5] > 'Z') callsignBad = true;
     }
 
     if (callsignBad) {
-        V0_printf(EOL "ERROR: _callsign %s is not supported/legal, initting to AB1CDE" EOL, _callsign);
-        snprintf(_callsign, sizeof(_callsign), "AB1CDE");
+        V0_printf(EOL "ERROR: cc._callsign %s is not supported/legal, initting to AB1CDE" EOL, cc._callsign);
+        snprintf(cc._callsign, sizeof(cc._callsign), "AB1CDE");
         write_FLASH();
         result = -1;
     }
 
     //*****************
     // change to strcpy for null terminate
-    if (_verbose[0] == 0 || _verbose[0] < '0' || _verbose[0] > '9') {
-        V0_printf(EOL "ERROR: _verbose %s is not supported/legal, initting to 1" EOL, _verbose);
-        snprintf(_verbose, sizeof(_verbose), "1");
+    if (cc._verbose[0] == 0 ||cc._verbose[0] < '0' ||cc._verbose[0] > '9') {
+        V0_printf(EOL "ERROR: cc._verbose %s is not supported/legal, initting to 1" EOL, cc._verbose);
+        snprintf(cc._verbose, sizeof(cc._verbose), "1");
         write_FLASH();
         result = -1;
     }
 
     //*****************
-    // 0-9 and - are legal. _
+    // 0-9 and - are legal.cc._
     // make sure to null terminate
     bool bad = false;
-    if (_TELEN_config[0] == 0) {
+    if (cc._TELEN_config[0] == 0) {
         bad = true;
     } else {
         for (int i = 0; i <= 3; i++) {
-            if ((_TELEN_config[i] < '0' || _TELEN_config[i] > '9') && _TELEN_config[i] != '-') bad = true;
+            if ((cc._TELEN_config[i] < '0' ||cc._TELEN_config[i] > '9') &&cc._TELEN_config[i] != '-') bad = true;
         }
     }
     if (bad) {
-        V0_printf(EOL "ERROR: _TELEN_config %s is not supported/legal, initting to ----" EOL,
-            _TELEN_config);
-        snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
+        V0_printf(EOL "ERROR: cc._TELEN_config %s is not supported/legal, initting to ----" EOL,
+           cc._TELEN_config);
+        snprintf(cc._TELEN_config, sizeof(cc._TELEN_config), "----");
         write_FLASH();
         result = -1;
     }
 
     //*****************
-    // _clock_speed
+    //cc._clock_speed
     // keep the upper limit at 250 to avoid nvram getting
     // a freq that won't work. will have to load flash nuke uf2 to clear nram
     // if that happens, so that default clock will return?
@@ -1062,23 +991,23 @@ int check_data_validity_and_set_defaults(void) {
     // hmm. I suppose we could call this routine to fix nvram at the beginning, so if the
     // clock gets fixed, then the defaults will get fixed (where errors exist)
     // be sure to null terminate
-    clength = strlen(_clock_speed);
+    clength = strlen(cc._clock_speed);
     bool clock_speedBad = false;
     // this also covers the null case (strlen 0)
     if (clength > 3) {
         clock_speedBad = true;
     } else {
         for (int i = 0; i <= 2; i++) {
-            if (_clock_speed[i] < '0' && _clock_speed[i] > '9') {
-                V0_printf(EOL "ERROR: check_data_validity...(): (1) illegal _clock_speed: %s" EOL, _clock_speed);
+            if (cc._clock_speed[i] < '0' &&cc._clock_speed[i] > '9') {
+                V0_printf(EOL "ERROR: check_data_validity...(): (1) illegalcc._clock_speed: %s" EOL, cc._clock_speed);
                 clock_speedBad = true;
             }
         }
     }
     if (!clock_speedBad) {
-        PLL_SYS_MHZ = atoi(_clock_speed);
+        PLL_SYS_MHZ = atoi(cc._clock_speed);
         if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 18 || PLL_SYS_MHZ > 250) {
-            V0_printf(EOL "ERROR: check_data_validity...(): (2) illegal _clock_speed: %s" EOL, _clock_speed);
+            V0_printf(EOL "ERROR: check_data_validity...(): (2) illegalcc._clock_speed: %s" EOL, cc._clock_speed);
             clock_speedBad = true;
         }
 
@@ -1090,11 +1019,11 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     if (clock_speedBad) {
-        V0_printf(EOL "ERROR: _clock_speed %s is not legal, initting to %lu" EOL, _clock_speed, DEFAULT_PLL_SYS_MHZ);
+        V0_printf(EOL "ERROR: cc._clock_speed %s is not legal, initting to %lu" EOL, cc._clock_speed, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
         // recalc
 
-        snprintf(_clock_speed, sizeof(_clock_speed), "%lu", PLL_SYS_MHZ);
+        snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", PLL_SYS_MHZ);
         write_FLASH();
         result = -1;
     }
@@ -1105,18 +1034,18 @@ int check_data_validity_and_set_defaults(void) {
 
     //*****************
     // be sure to null terminate
-    if (_U4B_chan[0] == 0 || atoi(_U4B_chan) < 0 || atoi(_U4B_chan) > 599) {
-        V0_printf(EOL "ERROR: _U4B_chan %s is not supported/legal, initting to 599" EOL, _U4B_chan);
-        snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599");
+    if (cc._U4B_chan[0] == 0 || atoi(cc._U4B_chan) < 0 || atoi(cc._U4B_chan) > 599) {
+        V0_printf(EOL "ERROR: cc._U4B_chan %s is not supported/legal, initting to 599" EOL, cc._U4B_chan);
+        snprintf(cc._U4B_chan, sizeof(cc._U4B_chan), "%s", "599");
         write_FLASH();
-        // this will set _lane, _id13, _start_minute
-        process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
-        init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+        // this will setcc._lane, cc._id13, cc._start_minute
+        process_chan_num(cc._id13, cc._start_minute, cc._lane, cc._Band, cc._U4B_chan);
+        init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
         result = -1;
     }
     //*****************
     // null returns 0
-    switch (atoi(_Band)) {
+    switch (atoi(cc._Band)) {
         case 2: break;
         case 10: break;
         case 12: break;
@@ -1124,18 +1053,18 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            V0_printf("ERROR: _Band %s is not supported/legal, initting to 20" EOL, _Band);
-            snprintf(_Band, sizeof(_Band), "20");
+            V0_printf("ERROR: cc._Band %s is not supported/legal, initting to 20" EOL, cc._Band);
+            snprintf(cc._Band, sizeof(cc._Band), "20");
             write_FLASH();
             // figure out the XMIT_FREQUENCY for new band
-            process_chan_num(_id13, _start_minute, _lane, _Band, _U4B_chan);
-            init_rf_freq(&XMIT_FREQUENCY, _Band, _lane);
+            process_chan_num(cc._id13, cc._start_minute, cc._lane, cc._Band, cc._U4B_chan);
+            init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
             result = -1;
             break;
     }
     //*****************
     // null returns 0
-    switch (atoi(_Band_cw)) {
+    switch (atoi(cc._Band_cw)) {
         case 2: break;
         case 10: break;
         case 12: break;
@@ -1143,66 +1072,66 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            V0_printf("ERROR: _Band_cw %s is not supported/legal, initting to 20" EOL, _Band);
-            snprintf(_Band_cw, sizeof(_Band_cw), "20");
+            V0_printf("ERROR: cc._Band_cw %s is not supported/legal, initting to 20" EOL, cc._Band);
+            snprintf(cc._Band_cw, sizeof(cc._Band_cw), "20");
             write_FLASH();
             result = -1;
             break;
     }
     //*****************
-    if (_tx_high[0] != '0' && _tx_high[0] != '1') {
-        V0_printf(EOL "ERROR: _tx_high %s is not supported/legal, initting to 1" EOL, _tx_high);
-        snprintf(_tx_high, sizeof(_tx_high), "1");
+    if (cc._tx_high[0] != '0' &&cc._tx_high[0] != '1') {
+        V0_printf(EOL "ERROR: cc._tx_high %s is not supported/legal, initting to 1" EOL, cc._tx_high);
+        snprintf(cc._tx_high, sizeof(cc._tx_high), "1");
         write_FLASH();
         result = -1;
     }
     //*****************
-    if (_testmode[0] != '0' && _testmode[0] != '1') {
-        V0_printf(EOL "ERROR: _testmode %s is not supported/legal, initting to 0" EOL, _testmode);
-        snprintf(_testmode, sizeof(_testmode), "0");
+    if (cc._testmode[0] != '0' &&cc._testmode[0] != '1') {
+        V0_printf(EOL "ERROR: cc._testmode %s is not supported/legal, initting to 0" EOL, cc._testmode);
+        snprintf(cc._testmode, sizeof(cc._testmode), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     // what does atoi() when null is first char? returns 0
     // detect that case to get ascii 0 in there
-    if (_correction[0] == 0 || atoi(_correction) < -30000 || atoi(_correction) > 30000) {
+    if (cc._correction[0] == 0 || atoi(cc._correction) < -30000 || atoi(cc._correction) > 30000) {
         // left room for 6 bytes
-        V0_printf(EOL "ERROR: _correction %s is not supported/legal, initting to 0" EOL, _correction);
-        snprintf(_correction, sizeof(_correction), "0");
+        V0_printf(EOL "ERROR: cc._correction %s is not supported/legal, initting to 0" EOL, cc._correction);
+        snprintf(cc._correction, sizeof(cc._correction), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
-    if (_go_when_rdy[0] != '0' && _go_when_rdy[0] != '1') {
-        V0_printf(EOL "ERROR: _go_when_rdy %s is not supported/legal, initting to 0" EOL, _go_when_rdy);
-        snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
+    if (cc._go_when_rdy[0] != '0' &&cc._go_when_rdy[0] != '1') {
+        V0_printf(EOL "ERROR: cc._go_when_rdy %s is not supported/legal, initting to 0" EOL, cc._go_when_rdy);
+        snprintf(cc._go_when_rdy, sizeof(cc._go_when_rdy), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
-    if (_use_sim65m[0] != '0' && _use_sim65m[0] != '1') {
-        V0_printf(EOL "ERROR: _use_sim65m %s is not supported/legal, initting to 0" EOL, _use_sim65m);
-        snprintf(_use_sim65m, sizeof(_use_sim65m), "0");
+    if (cc._use_sim65m[0] != '0' &&cc._use_sim65m[0] != '1') {
+        V0_printf(EOL "ERROR: cc._use_sim65m %s is not supported/legal, initting to 0" EOL, cc._use_sim65m);
+        snprintf(cc._use_sim65m, sizeof(cc._use_sim65m), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
-    if (_factory_reset_done[0] != '0' && _factory_reset_done[0] != '1') {
-        V0_printf(EOL "ERROR: _factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, _factory_reset_done);
+    if (cc._factory_reset_done[0] != '0' &&cc._factory_reset_done[0] != '1') {
+        V0_printf(EOL "ERROR: cc._factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, cc._factory_reset_done);
         doFactoryReset();  // no return, reboots
     }
     //*****************
-    if (_morse_also[0] != '0' && _morse_also[0] != '1') {
-        V0_printf(EOL "ERROR: _morse_also %s is not supported/legal, initting to 0" EOL, _morse_also);
-        snprintf(_morse_also, sizeof(_morse_also), "0");
+    if (cc._morse_also[0] != '0' &&cc._morse_also[0] != '1') {
+        V0_printf(EOL "ERROR: cc._morse_also %s is not supported/legal, initting to 0" EOL, cc._morse_also);
+        snprintf(cc._morse_also, sizeof(cc._morse_also), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
-    if (_solar_tx_power[0] != '0' && _solar_tx_power[0] != '1') {
-        V0_printf(EOL "ERROR: _solar_tx_power %s is not supported/legal, initting to 0" EOL, _solar_tx_power);
-        snprintf(_solar_tx_power, sizeof(_solar_tx_power), "0");
+    if (cc._solar_tx_power[0] != '0' &&cc._solar_tx_power[0] != '1') {
+        V0_printf(EOL "ERROR: cc._solar_tx_power %s is not supported/legal, initting to 0" EOL, cc._solar_tx_power);
+        snprintf(cc._solar_tx_power, sizeof(cc._solar_tx_power), "0");
         write_FLASH();
         result = -1;
     }
@@ -1220,24 +1149,24 @@ void show_values(void) {
 
     V0_print(F("FLASH read values:" EOL));
 
-    V0_printf("C: callsign: %s" EOL, _callsign);
-    V0_printf("U: U4B channel: %s" EOL, _U4B_chan);
-    V0_printf("A: band: %s (meters)" EOL, _Band);
-    V0_printf("B: band for cw: %s (meters)" EOL, _Band_cw);
-    V0_printf(" (id13: %s", _id13);
-    V0_printf(" start Minute: %s", _start_minute);
-    V0_printf(" lane: %s)" EOL, _lane);
-    V0_printf("P: tx_high: %s" EOL, _tx_high);
-    V0_printf("V: verbose: %s" EOL, _verbose);
-    V0_printf("T: TELEN config: %s" EOL, _TELEN_config);
-    V0_printf("K: clock speed: %s (Mhz)" EOL, _clock_speed);
-    V0_printf("D: TESTMODE: %s" EOL, _testmode);
-    V0_printf("R: correction: %s (Mhz)" EOL, _correction);
-    V0_printf("G: go_when_rdy: %s" EOL, _go_when_rdy);
-    V0_printf("S: use_sim65m: %s" EOL, _use_sim65m);
-    V0_printf("M: morse_also: %s" EOL, _morse_also);
-    V0_printf("L: dynamic tx power using solar elevation: %s" EOL, _solar_tx_power);
-    V0_printf("*: factory_reset_done: %s" EOL, _factory_reset_done);
+    V0_printf("C: callsign: %s" EOL, cc._callsign);
+    V0_printf("U: U4B channel: %s" EOL, cc._U4B_chan);
+    V0_printf("A: band: %s (meters)" EOL, cc._Band);
+    V0_printf("B: band for cw: %s (meters)" EOL, cc._Band_cw);
+    V0_printf(" (id13: %s", cc._id13);
+    V0_printf(" start Minute: %s", cc._start_minute);
+    V0_printf(" lane: %s)" EOL, cc._lane);
+    V0_printf("P: tx_high: %s" EOL, cc._tx_high);
+    V0_printf("V: verbose: %s" EOL, cc._verbose);
+    V0_printf("T: TELEN config: %s" EOL, cc._TELEN_config);
+    V0_printf("K: clock speed: %s (Mhz)" EOL, cc._clock_speed);
+    V0_printf("D: TESTMODE: %s" EOL, cc._testmode);
+    V0_printf("R: correction: %s (Mhz)" EOL, cc._correction);
+    V0_printf("G: go_when_rdy: %s" EOL, cc._go_when_rdy);
+    V0_printf("S: use_sim65m: %s" EOL, cc._use_sim65m);
+    V0_printf("M: morse_also: %s" EOL, cc._morse_also);
+    V0_printf("L: dynamic tx power using solar elevation: %s" EOL, cc._solar_tx_power);
+    V0_printf("*: factory_reset_done: %s" EOL, cc._factory_reset_done);
 
     V0_printf(EOL "XMIT_FREQUENCY: %lu (symbol 0)" EOL, XMIT_FREQUENCY);
     V0_print(F("SIE_STATUS: bit 16 is CONNECTED. bit 3:2 is LINE_STATE. bit 0 is VBUS_DETECTED" EOL));
@@ -1282,23 +1211,23 @@ void show_commands(void) {
 //*****************************************************
 void doFactoryReset() {
     V0_println(F("doFactoryReset START"));
-    snprintf(_callsign, sizeof(_callsign), "AB1CDE");
-    snprintf(_verbose, sizeof(_verbose), "1");
-    snprintf(_TELEN_config, sizeof(_TELEN_config), "----");
-    snprintf(_clock_speed, sizeof(_clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
-    snprintf(_U4B_chan, sizeof(_U4B_chan), "%s", "599"); // always 3 chars?
-    snprintf(_Band, sizeof(_Band), "20");
-    snprintf(_Band_cw, sizeof(_Band), "20");
-    snprintf(_tx_high, sizeof(_tx_high), "1");
-    snprintf(_testmode, sizeof(_testmode), "0");
-    snprintf(_correction, sizeof(_correction), "0");
-    snprintf(_go_when_rdy, sizeof(_go_when_rdy), "0");
+    snprintf(cc._callsign, sizeof(cc._callsign), "AB1CDE");
+    snprintf(cc._verbose, sizeof(cc._verbose), "1");
+    snprintf(cc._TELEN_config, sizeof(cc._TELEN_config), "----");
+    snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
+    snprintf(cc._U4B_chan, sizeof(cc._U4B_chan), "%s", "599"); // always 3 chars?
+    snprintf(cc._Band, sizeof(cc._Band), "20");
+    snprintf(cc._Band_cw, sizeof(cc._Band), "20");
+    snprintf(cc._tx_high, sizeof(cc._tx_high), "1");
+    snprintf(cc._testmode, sizeof(cc._testmode), "0");
+    snprintf(cc._correction, sizeof(cc._correction), "0");
+    snprintf(cc._go_when_rdy, sizeof(cc._go_when_rdy), "0");
     // when we read_FLASH, if this is 0, we set everything to default
     // or if user command is '*'
-    snprintf(_factory_reset_done, sizeof(_go_when_rdy), "1");
-    snprintf(_use_sim65m, sizeof(_use_sim65m), "0");
-    snprintf(_morse_also, sizeof(_morse_also), "0");
-    snprintf(_solar_tx_power, sizeof(_solar_tx_power), "0");
+    snprintf(cc._factory_reset_done, sizeof(cc._go_when_rdy), "1");
+    snprintf(cc._use_sim65m, sizeof(cc._use_sim65m), "0");
+    snprintf(cc._morse_also, sizeof(cc._morse_also), "0");
+    snprintf(cc._solar_tx_power, sizeof(cc._solar_tx_power), "0");
 
     // What about the side decodes? Don't worry, just reboot
     write_FLASH();

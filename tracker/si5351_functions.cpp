@@ -80,6 +80,7 @@
 #include "led_functions.h"
 #include "u4b_functions.h"
 #include "farey_functions.h"
+#include "global_structs.h"
 
 // These are in arduino-pio core
 // https://github.com/earlephilhower/arduino-pico/tree/master/libraries
@@ -118,15 +119,10 @@ extern uint32_t XMIT_FREQUENCY;
 // decode of _verbose 0-9
 extern bool VERBY[10];
 
-extern char _tx_high[2];  // 0 is 4mA si5351. 1 is 8mA si5351
-extern char _solar_tx_power[2]; // 1 byte
-
 // FIX! update this based on solar elevation
 extern uint8_t SOLAR_SI5351_TX_POWER;
 
-extern char _correction[7];  // parts per billion -3000 to 3000. default 0
-extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
-extern char _U4B_chan[4];  // string with 0-599
+extern ConfigStruct cc;
 
 extern const int Si5351Pwr;
 // FIX! are these just used on the Wire.begin?
@@ -141,7 +137,7 @@ static bool vfo_turn_off_completed = false;
 static uint8_t si5351bx_clken = 0xff;
 static bool s_is_on = false;
 
-// updated with config _tx_high during vfo_turn_on()
+// updated with config cc._tx_high during vfo_turn_on()
 // 0:2mA, 1:4mA, 2:6mA, 3:8mA
 static uint8_t s_vfo_drive_strength[3] = { 0 };
 
@@ -1892,7 +1888,7 @@ void vfo_turn_on() {
 
     //*********************
     uint8_t power;
-    if (_solar_tx_power[0] == '1') {
+    if (cc._solar_tx_power[0] == '1') {
         switch (SOLAR_SI5351_TX_POWER)  {
             case 0: power = SI5351A_CLK01_IDRV_2MA; break;
             case 1: power = SI5351A_CLK01_IDRV_4MA; break;
@@ -1901,7 +1897,7 @@ void vfo_turn_on() {
             default: power = SI5351A_CLK01_IDRV_8MA;
         }
     } else {
-        if (_tx_high[0] == '1') power = SI5351A_CLK01_IDRV_8MA;
+        if (cc._tx_high[0] == '1') power = SI5351A_CLK01_IDRV_8MA;
         else power = SI5351A_CLK01_IDRV_4MA;
     }
     // this also clears the "prev" state, so we know we'll reload all state in the si5351
@@ -2029,10 +2025,10 @@ void vfo_turn_on() {
 // do this on the tcxo 26Mhz, everything else shouldn't need correction
 uint32_t doCorrection(uint32_t freq) {
     uint32_t freq_corrected = freq;
-    if (atoi(_correction) != 0) {
+    if (atoi(cc._correction) != 0) {
     // this will be a floor divide
     // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
-        freq_corrected = freq + (atoi(_correction) * freq / 1000000000UL);
+        freq_corrected = freq + (atoi(cc._correction) * freq / 1000000000UL);
     }
     V1_printf("doCorrection (should be tcxo freq?) freq %lu freq_corrected %lu" EOL,
         freq, freq_corrected);

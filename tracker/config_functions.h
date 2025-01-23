@@ -7,12 +7,8 @@
 #define CONFIG_FUNCTIONS_H
 #include <stdint.h>
 
-// any of this needed
-// #include <stdio.h>
-// #include <string.h>
-// #include <ctype.h>
-// #include "pico/stdlib.h"
 
+//***********************************************************
 void forceHACK(void);
 void decodeVERBY(void);
 int read_FLASH(void);

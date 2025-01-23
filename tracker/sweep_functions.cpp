@@ -14,12 +14,13 @@
 #include "print_functions.h"
 #include "led_functions.h"
 #include "u4b_functions.h"
+#include "global_structs.h"
 
 //****************************************************************************
 extern bool VERBY[10];
 extern uint32_t XMIT_FREQUENCY;
-extern char _Band[3];  // string with 10, 12, 15, 17, 20 legal. null at end
-extern char _U4B_chan[4];  // string with 0-599
+
+extern ConfigStruct cc;
 
 extern uint64_t PLL_CALC_SHIFT;
 extern uint64_t PLL_FREQ_TARGET;
@@ -34,7 +35,7 @@ void si5351a_calc_sweep(void) {
 
     // global XMIT_FREQUENCY should already be set for band, channel?
     uint32_t xmit_freq = XMIT_FREQUENCY;
-    V0_printf("band %s channel %s xmit_freq %lu" EOL, _Band, _U4B_chan, xmit_freq);
+    V0_printf("band %s channel %s xmit_freq %lu" EOL, cc._Band, cc._U4B_chan, xmit_freq);
     double symbol0desired = calcSymbolFreq(xmit_freq, 0, true);  // print
 
     V1_printf("Now: sweep calc 5351a programming starting at %.6f" EOL, symbol0desired);
@@ -197,7 +198,7 @@ void si5351a_calc_sweep_band() {
     // FIX! do we need this if we didn't load anything into the cache?
     vfo_calc_cache_flush();
     // restore PLL_FREQ_TARGET to the band configuration
-    init_PLL_freq_target(&PLL_FREQ_TARGET, _Band);
+    init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
     V1_print(F("si5351a_calc_sweep_band END" EOL));
 }
 //*********************************************************************************
@@ -223,7 +224,7 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     // should already be set for band, channel? (XMIT_FREQUENCY)
     uint32_t xmit_freq = XMIT_FREQUENCY;
     if (print) {
-        V0_printf("band %s channel %s xmit_freq %lu" EOL, _Band, _U4B_chan, xmit_freq);
+        V0_printf("band %s channel %s xmit_freq %lu" EOL, cc._Band, cc._U4B_chan, xmit_freq);
     }
 
     // compute the actual shifts too, which are the more important thing
@@ -248,13 +249,13 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
         // +2*(12000/8192) Hz [2.9296 Hz]
         // +3*(12000/8192) Hz [4.3945 Hz]
         V1_printf("band %s channel %s desired symbol 0 freq %.6f" EOL,
-            _Band, _U4B_chan, symbol0desired);
+            cc._Band, cc._U4B_chan, symbol0desired);
         V1_printf("band %s channel %s desired symbol 1 freq %.6f" EOL,
-            _Band, _U4B_chan, symbol1desired);
+            cc._Band, cc._U4B_chan, symbol1desired);
         V1_printf("band %s channel %s desired symbol 2 freq %.6f" EOL,
-            _Band, _U4B_chan, symbol2desired);
+            cc._Band, cc._U4B_chan, symbol2desired);
         V1_printf("band %s channel %s desired symbol 3 freq %.6f" EOL,
-            _Band, _U4B_chan, symbol3desired);
+            cc._Band, cc._U4B_chan, symbol3desired);
         V1_print(F(EOL));
     }
 
@@ -275,7 +276,7 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
             freq_xxx, true); // use PLL_DENOM_OPTIMIZE if not Farey
 
         if (print) {
-            V1_printf("channel %s symbol %u", _U4B_chan, symbol);
+            V1_printf("channel %s symbol %u", cc._U4B_chan, symbol);
             V1_printf(" actual %.6f actual_pll_freq %.6f", actual, actual_pll_freq);
             V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
                 pll_mult, pll_num_here, pll_denom_here, ms_div, r_divisor);
@@ -292,13 +293,13 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
         V1_print(F(EOL));
         V1_print(F("Showing shifts in symbol frequencies, rather than absolute error" EOL));
         V1_printf("channel %s symbol 0 actual %.6f" EOL,
-            _U4B_chan, symbol0actual);
+            cc._U4B_chan, symbol0actual);
         V1_printf("channel %s symbol 1 actual %.6f shift0to1 %.6f Hz" EOL,
-            _U4B_chan, symbol1actual, symbol1actual - symbol0actual);
+            cc._U4B_chan, symbol1actual, symbol1actual - symbol0actual);
         V1_printf("channel %s symbol 2 actual %.6f shift0to2 %.6f Hz" EOL,
-            _U4B_chan, symbol2actual, symbol2actual - symbol0actual);
+            cc._U4B_chan, symbol2actual, symbol2actual - symbol0actual);
         V1_printf("channel %s symbol 3 actual %.6f shift0to3 %.6f Hz" EOL,
-            _U4B_chan, symbol3actual, symbol3actual - symbol0actual);
+            cc._U4B_chan, symbol3actual, symbol3actual - symbol0actual);
     }
 
     // just one absolute error
@@ -370,7 +371,7 @@ void si5351a_denom_optimize_search() {
 
         // Instead: use the best initial values per band in this function
         // (from spreadsheet or prior runs for a band)
-        set_PLL_DENOM_OPTIMIZE(_Band);
+        set_PLL_DENOM_OPTIMIZE(cc._Band);
         // print
         uint32_t default_PLL_DENOM_OPTIMIZE = PLL_DENOM_OPTIMIZE;
         si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, &pll_denom, true);

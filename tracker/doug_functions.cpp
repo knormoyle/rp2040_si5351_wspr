@@ -4,21 +4,24 @@
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
 #include <Arduino.h>
+#include <Adafruit_SleepyDog.h>
 #include "led_functions.h"
 #include "debug_functions.h"
 #include "print_functions.h"
-#include <Adafruit_SleepyDog.h>
+#include "doug_functions.h"
 #include "WsprEncoded.h"
+#include "global_structs.h"
 
-// #include <cstdint>
-
-extern char _Band[3];
-extern char _U4B_chan[4];
+extern TeleStruct tt;
+extern ConfigStruct cc;
 extern bool VERBY[10];
 
 WsprMessageTelemetryBasic msg;
 
-void encodeBasicTele(const char *id13, const char *grid56, uint32_t altitudeMeters, int8_t temperatureCelsius, double voltageVolts, uint8_t speedKnots, bool gpsIsValid) {
+// FIX! currently not using
+void encodeBasicTele(const char *id13, const char *grid56,
+    uint32_t altitudeMeters, int8_t temperatureCelsius, double voltageVolts, uint8_t speedKnots, bool gpsIsValid) {
+
     V1_print(F("encodeBasicTele START" EOL));
 
     // Set the telemetry fields
@@ -84,7 +87,7 @@ void define_codecGpsMsg() {
 // FIX! have to add parameters to encode or will it grab from global TinyGps state?
 void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
     V1_print(F("encode_codecGpsMsg START" EOL));
-    switch(slot) {
+    switch (slot) {
         case 0: {;}
         case 2: {;}
         case 4: {;}
@@ -99,8 +102,8 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     // uint16_t channel = 123;
     char band[4];
     // append 'm'
-    snprintf(band, sizeof(band), "%sm", _Band);
-    uint16_t channel = atoi(_U4B_chan);
+    snprintf(band, sizeof(band), "%sm", cc._Band);
+    uint16_t channel = atoi(cc._U4B_chan);
 
     // Get channel details
     WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(band, channel);
@@ -110,11 +113,19 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     // Note which transmission slot you will send in
     codecGpsMsg.SetHdrSlot(slot);
 
-    codecGpsMsg.Set("SatCountUSA", 12);
-    codecGpsMsg.Set("SatCountChina", 10);
-    codecGpsMsg.Set("SatCountRussia", 0);
-    codecGpsMsg.Set("LockTimeSecs", 10.74);
-    codecGpsMsg.Set("LockTimeSecsAvg", 12.76);
+    if (false) {
+        codecGpsMsg.Set("SatCountUSA", 12);
+        codecGpsMsg.Set("SatCountChina", 10);
+        codecGpsMsg.Set("SatCountRussia", 0);
+        codecGpsMsg.Set("LockTimeSecs", 10.74);
+        codecGpsMsg.Set("LockTimeSecsAvg", 12.76);
+    } else {
+        codecGpsMsg.Set("SatCountUSA", atoi(tt.gp_sats));
+        codecGpsMsg.Set("SatCountChina", atoi(tt.gb_sats));
+        codecGpsMsg.Set("SatCountRussia", atoi(tt.gl_sats));
+        codecGpsMsg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
+        codecGpsMsg.Set("LockTimeSecsAvg", atoi(tt.gpsLockSecsAvg));
+    }
 
     codecGpsMsg.Encode();
 
@@ -133,7 +144,7 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
 
     // instead: remove the const char* ?
     // https://stackoverflow.com/questions/77869711/returning-a-char-pointer-when-the-argument-is-a-constant-char-pointer
- 
+
     // *hf_power = GetPowerDbm;
     // wants to be char array instead of uint8_t?
     snprintf(hf_power, 3, "%u", GetPowerDbm);

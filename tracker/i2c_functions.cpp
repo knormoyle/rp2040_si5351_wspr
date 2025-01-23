@@ -27,7 +27,6 @@ extern const int BMP_I2C1_SCL_PIN;
 extern const int BMP_I2C1_SCL_HZ;
 extern const int Si5351Pwr;
 
-// extern char _verbose[2];
 // decode of verbose 0-9
 extern bool VERBY[10];
 
