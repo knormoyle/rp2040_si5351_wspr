@@ -1132,6 +1132,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
 
             V1_printf(EOL "DEBUG: trial %u pll_freq_target_trial %" PRIu64 EOL, 
                 trial, pll_freq_target_trial);
+            V1_printf("DEBUG: freq: %" PRIu64 EOL, freq_xxx >> PLL_CALC_SHIFT);
             V1_printf("DEBUG: pll_freq_target_trial shifted: aaa %" PRIu64 EOL, aaa);
             V1_printf("DEBUG: bits_shifted_out: %" PRIu64 EOL, bits_shifted_out);
             V1_printf("DEBUG: PLL_CALC_SHIFT %" PRIu64 EOL, PLL_CALC_SHIFT);

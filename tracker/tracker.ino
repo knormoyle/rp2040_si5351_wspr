@@ -201,17 +201,22 @@ TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
 // $GAGSV,1,1,03,10,61,127,30,25,48,313,41,05,10,227,,7*4D
 // $GBGSV,1,1,03,35,74,049,36,44,54,226,42,45,23,137,40,1*48
 
-// USE_SIM65M
+//SIM65M
 TinyGPSCustom ga_sats(gps, "GAGSV", 3); // Galileo
 
+// do both, because config can change USE_SIM65M ??
+// SIM65M
+TinyGPSCustom ggb_sats(gps, "GBGSV", 3); // BeiDou
 // ATGM336H
-TinyGPSCustom gb_sats(gps, "GBGSV", 3); // BeiDou
+TinyGPSCustom gbd_sats(gps, "BDGSV", 3); // BeiDou
 
 // FIX! do we only get GNGSA ?? ?? don't need?
 // no..was getting. on ATGM336H?
 // eventually replaced by $GNGSA, maybe?
 // $BDGSA,A,3,21,22,44,,,,,,,,,,3.8,1.9,3.3*23
 // $GPGSA,A,3,10,18,27,32,,,,,,,,,3.8,1.9,3.3*3D
+
+// SIM65M and ATGM336H ?
 TinyGPSCustom gb_pdop(gps, "BDGSA", 15);
 TinyGPSCustom gb_hdop(gps, "BDGSA", 16);
 TinyGPSCustom gb_vdop(gps, "BDGSA", 17);
@@ -1300,6 +1305,7 @@ void loop1() {
         // this doesn't need qualification on whether we got a good date/time
         // since we check that first, before we do any looking for a 3d fix
         bool fix_valid_all = !GpsInvalidAll &&
+            gps.date.isValid() &&
             gps.time.isValid() &&
             (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
             gps.satellites.isValid() && (gps.satellites.value() >= 3) &&

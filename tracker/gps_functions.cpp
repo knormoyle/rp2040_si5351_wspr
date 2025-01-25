@@ -2347,8 +2347,11 @@ void gpsDebug() {
     bool validD = gps.altitude.isValid() && !GpsInvalidAll;
     bool validE = gps.course.isValid() && !GpsInvalidAll;
     bool validF = gps.speed.isValid() && !GpsInvalidAll;
-    V1_printf("gps valids: %u %u %u %u %u %u %u" EOL,
-        !GpsInvalidAll, validA, validB, validC, validD, validE, validF);
+    // FIX! don't have GpsInvalidAll in these
+    bool validG = gps.date.isValid(); 
+    bool validH = gps.time.isValid();
+    V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
+        !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
 
     printStr("Sats", true, 5);
     printStr("HDOP", true, 5);
@@ -2379,7 +2382,8 @@ void gpsDebug() {
         printFloat(gps.location.lat(), validC, 12, 6);
         printFloat(gps.location.lng(), validC, 12, 6);
         printInt(gps.location.age(), validC, 7);
-        printGpsDateTime(gps.date, gps.time, true);  // printAge 
+        // printAge. date & time isValid() is in the function
+        printGpsDateTime(gps.date, gps.time, true); 
         printFloat(gps.altitude.meters(), validD, 8, 2);
         printFloat(gps.course.deg(), validE, 7, 2);
         printFloat(gps.speed.kmph(), validF, 6, 2);

@@ -33,6 +33,7 @@ extern uint64_t GpsTimeToLastFix;  // milliseconds
 
 extern bool BALLOON_MODE;
 extern bool TESTMODE;
+extern bool USE_SIM65M;
 
 extern bool GpsInvalidAll;
 extern uint64_t GpsTimeToLastFix;  // milliseconds
@@ -41,7 +42,8 @@ extern uint64_t GpsTimeToLastFixMax;
 extern uint64_t GpsTimeToLastFixAvg;
 
 extern TinyGPSCustom gp_sats;
-extern TinyGPSCustom gb_sats;
+extern TinyGPSCustom ggb_sats; // GBGSV
+extern TinyGPSCustom gbd_sats; // BDGSV
 extern TinyGPSCustom gl_sats;
 extern TinyGPSCustom ga_sats;
 // FIX! do we only get GNGSA ?? ?? don't need?
@@ -375,26 +377,33 @@ void snapForTelemetry() {
     bool validA = gps.satellites.isValid() && !GpsInvalidAll;
     // bool validB = gps.hdop.isValid() && !GpsInvalidAll;
     bool validB_gp = gp_sats.isValid() && !GpsInvalidAll;
-    bool validB_gb = gb_sats.isValid() && !GpsInvalidAll;
+    bool validB_gb;
+    if (USE_SIM65M) 
+        validB_gb = ggb_sats.isValid() && !GpsInvalidAll; // GBGSV
+    else
+        validB_gb = gbd_sats.isValid() && !GpsInvalidAll; // BDGSV
+
     bool validB_gl = gl_sats.isValid() && !GpsInvalidAll;
     bool validB_ga = ga_sats.isValid() && !GpsInvalidAll;
     // bool validC = gps.location.isValid() && !GpsInvalidAll;
     // bool validD = gps.altitude.isValid() && !GpsInvalidAll;
     uint8_t s;
-    // FIX! not range checking these?
     if (validA) s = gps.satellites.value();
     else s = 0;
     s = clamp_uint8_t(s, 0, 99);
     snprintf(tt.sats, sizeof(tt.sats), "%u", s);
 
-    // what if it's blank?
+    // returns 0 if empty
     if (validB_gp) s = atoi(gp_sats.value());
     else s = 0;
     s = clamp_uint8_t(s, 0, 99);
     snprintf(tt.gp_sats, sizeof(tt.gp_sats), "%u", s);
 
-    if (validB_gb) s = atoi(gb_sats.value());
-    else s = 0;
+    if (USE_SIM65M) 
+        s = atoi(ggb_sats.value()); // GBGSV
+    else
+        s = atoi(gbd_sats.value()); // BDGSV
+    if (!validB_gb) s = 0;
     s = clamp_uint8_t(s, 0, 99);
     snprintf(tt.gb_sats, sizeof(tt.gb_sats), "%u", s);
 

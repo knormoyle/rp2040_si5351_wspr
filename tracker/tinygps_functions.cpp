@@ -12,6 +12,7 @@
 
 // object for TinyGPSPlus state
 extern TinyGPSPlus gps;
+extern bool USE_SIM65M;
 
 // FIX! why do we have to declare in tracker.ino and extern here?
 extern TinyGPSCustom gp_sats;
@@ -19,7 +20,8 @@ extern TinyGPSCustom gp_pdop;
 extern TinyGPSCustom gp_hdop;
 extern TinyGPSCustom gp_vdop;
 
-extern TinyGPSCustom gb_sats;
+extern TinyGPSCustom gbd_sats;
+extern TinyGPSCustom ggb_sats;
 extern TinyGPSCustom gb_pdop;
 extern TinyGPSCustom gb_hdop;
 extern TinyGPSCustom gb_vdop;
@@ -108,7 +110,12 @@ void tinyGpsCustom() {
         bool validA = gps.satellites.isValid() && !GpsInvalidAll;
         bool validB = gps.hdop.isValid() && !GpsInvalidAll;
         bool validB_gp = gp_sats.isValid() && !GpsInvalidAll;
-        bool validB_gb = gb_sats.isValid() && !GpsInvalidAll;
+        bool validB_gb; 
+        if (USE_SIM65M) 
+            validB_gb = ggb_sats.isValid() && !GpsInvalidAll; // GBGSV
+        else
+            validB_gb = gbd_sats.isValid() && !GpsInvalidAll; // BDGSV
+
         bool validB_gl = gl_sats.isValid() && !GpsInvalidAll;
         bool validB_ga = ga_sats.isValid() && !GpsInvalidAll;
         bool validC = gps.location.isValid() && !GpsInvalidAll;
@@ -163,7 +170,11 @@ void tinyGpsCustom() {
 
             // apparently all the custom stuff is saved as strings?
             printStr(gp_sats.value(), validB_gp, 8);
-            printStr(gb_sats.value(), validB_gb, 8);
+            if (USE_SIM65M) 
+                printStr(ggb_sats.value(), validB_gb, 8); // GBGSV
+            else
+                printStr(gbd_sats.value(), validB_gb, 8); // BDGSV
+
             printStr(gl_sats.value(), validB_gl, 8);
             printStr(ga_sats.value(), validB_ga, 8);
 
