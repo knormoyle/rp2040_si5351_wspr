@@ -263,7 +263,7 @@ extern const int STATUS_LED_PIN = 25;
 // https://www.makermatrix.com/blog/read-and-write-data-with-the-pi-pico-onboard-flash/
 
 //*********************************
-// all extern consts can be externed for reference in another file (like gps_functions.cpp)
+// extern consts can be externed for reference in another file (like gps_functions.cpp)
 // extern is needed here or the linker doesn't find it.
 // see https://forum.arduino.cc/t/linker-problems-with-extern-const-struct/647136/2
 extern const int GpsPwr = 16;  // output ..this cuts VCC, leaves VBAT. assert low
@@ -445,12 +445,8 @@ uint64_t PLL_FREQ_TARGET = 600000000;
 // no green cells on 10M (and the 12M value is small)
 // so I won't use 390Mhz target because
 // I want the perfect symbol shift on 10M too
+
 //***************************
-
-// anything else will use PLL_DENOM_MAX
-// double check the values if the algo for div/mul in si5351_functios.cpp changes relative
-// to reaction to PLL_FREQ_TARGET
-
 extern const int VFO_VDD_ON_N_PIN = 4;
 // are these really on Wire1
 extern const int VFO_I2C0_SDA_PIN = 12;
@@ -470,7 +466,7 @@ extern const int PICO_I2C_CLK_HZ = (100 * 1000);
 // FIX! are the pcb pullups less aggressive on BMP i2c?
 // maybe have to stay slower on speed?
 
-// The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR, which is 0x60
+// The I2C address for the MS5351M is the same as the Si5351A-B-GT/GTR
 extern const int SI5351A_I2C_ADDR = 0x60;
 
 // config and telemetry (snapped) structs
@@ -719,7 +715,7 @@ void setup() {
 // run all balloon stuff on core1
 // core 0 just looks for keyboard interrupts. Can interrupt core1 to prevent
 // So can't resume core1 after interrupting it. (Serial.print isn't going to resume)
-// Can only reboot which is the normal behavior afte messing with config state.
+// Can only reboot which is the normal behavior after messing with config state.
 
 // So core0 can stop core1 at any time. Do stuff with config, then reboot.
 // That should be safe.
@@ -777,8 +773,9 @@ void loop() {
 
     bool usbConnected = get_sie_connected();
     while (!BALLOON_MODE && usbConnected && !IGNORE_KEYBOARD_CHARS) {
-        // detect the transition of 1 -> 0 on IGNORE_KEYBOARD_CHARS (by core1)  (gps cold reset)
-        // and drain all garbage chars in serial. Should only happen around gps cold reset
+        // detect the transition of 1 -> 0 on IGNORE_KEYBOARD_CHARS (by core1)
+        // and drain all garbage chars in serial.
+        // Should only happen around gps cold reset
         // and it's low power nonsense: turning usb off/on
         if (IGNORE_KEYBOARD_CHARS_last & !IGNORE_KEYBOARD_CHARS) {
             // drain it of everything..garbage during gps cold reset
@@ -841,7 +838,6 @@ void setup1() {
     // CORE1_PROCEED should start false, so no need to wait?
     sleep_ms(1000);
     // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
-    // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
     // Initialize a core such that the other core can lock it out during flash_safe_execute.
     // see the dire need at the link above (around flash access)
     // flash_safe_execute_core_init();
@@ -1238,9 +1234,9 @@ void loop1() {
     GpsInvalidAll = GpsInvalidAllCnt > 0;
 
     // FIX! updated to have a global static int global GpsInvalidateAll
-    // I count that down during loop1() iterations and ignore all gps
-    // until it's zero. TinyGPS++ state should have transitioned by then
-    // based on new NMEA sentences. (should transition cleanly within 2 secs?)
+    // I count that down during loop1() iterations and ignore all gps until it's zero.
+    // TinyGPS++ state should have transitioned by then based on new NMEA sentences.
+    // (should transition cleanly within 2 secs?)
     // if we were ready to go but not aligned,
     // this is a computed delay into the next minute to align better
     // (not so good if we're only tx starting every 10 minutes
@@ -1733,11 +1729,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     //**************************
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
-    // GPS will stay off for all
     char hf_callsign[7] = {0};
     snprintf(hf_callsign, sizeof(hf_callsign), "%s", tt.callsign);
-    // same declared size, so could just strncpy
-    // strncpy(hf_callsign, tt.callsign, 6);
 
     double lat_double = atof(tt.lat);
     double lon_double = atof(tt.lon);
@@ -1969,7 +1962,6 @@ void sleepSeconds(int secs) {
         // otherwise save power for a cycle?
         // FIX! not worth it..power spike when turned back on?
         // better to just stay on except duing RF?
-
         // should hot fix within secs after we turn it back on?
     }
 
@@ -2057,7 +2049,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
     }
     //*******************************
     // earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
-    // i.e. code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
+    // code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
 
     // Assuming both gps/tracker and pc are time-synchronized
     // With no extra tx delay: wsjt-x/sdr says DT = -0.3 ..
@@ -2370,7 +2362,8 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     //******************
     bool fatalErrorReboot = false;
     // hf_power needs to be passed as uint8_t
-    // were any spaces on the left due to snprintf to hf_callsign? (starting at hf_callsign[0])
+    // were any spaces on the left due to snprintf to hf_callsign?
+    // (starting at hf_callsign[0])
     int l;
     l = strlen(hf_callsign);
     V1_printf("length check: hf_callsign %s before jtencode was strlen %d" EOL,

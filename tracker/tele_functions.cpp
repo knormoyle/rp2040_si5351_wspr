@@ -89,6 +89,11 @@ double clamp_double(double v, double minv, double maxv) {
     return min(maxv, max(minv, v));
 }
 
+// https://stackoverflow.com/questions/2422712/rounding-integer-division-instead-of-truncating
+int divRoundNearest(const int n, const int d) {
+    return ((n < 0) == (d < 0)) ? ((n + d/2)/d) : ((n - d/2)/d);
+}
+
 //****************************************************
 // https://www.google.com/search?q=c+modify+elements+of+struct+passed+to+function&oq=c+modify+elements+of+struct+passed+to+function&gs_lcrp=EgZjaHJvbWUyBggAEEUYOdIBCDg1NTlqMGo3qAIAsAIA&sourceid=chrome&ie=UTF-8
 void snapForTelemetry() {
@@ -404,17 +409,20 @@ void snapForTelemetry() {
     snprintf(tt.ga_sats, sizeof(tt.ga_sats), "%u", s);
     // FIX! add to all the prints
 
+    // https://stackoverflow.com/questions/2422712/rounding-integer-division-instead-of-truncating
+    // easiest to just cast to float and round
+
     // milliseconds
-    s = GpsTimeToLastFix / 1000;
+    s = divRoundNearest(GpsTimeToLastFix, 1000);
     s = clamp_uint64_t(s, 0, 999);
     snprintf(tt.gpsLockSecs,    sizeof(tt.gpsLockSecs),    "%u", s);
-    s = GpsTimeToLastFixMin / 1000;
+    s = divRoundNearest(GpsTimeToLastFixMin, 1000);
     s = clamp_uint64_t(s, 0, 999);
     snprintf(tt.gpsLockSecsMin, sizeof(tt.gpsLockSecsMin), "%u", s);
-    s = GpsTimeToLastFixMax / 1000;
+    s = divRoundNearest(GpsTimeToLastFixMax, 1000);
     s = clamp_uint64_t(s, 0, 999);
     snprintf(tt.gpsLockSecsMax, sizeof(tt.gpsLockSecsMax), "%u", s);
-    s = GpsTimeToLastFixAvg / 1000;
+    s = divRoundNearest(GpsTimeToLastFixAvg, 1000);
     s = clamp_uint64_t(s, 0, 999);
     snprintf(tt.gpsLockSecsAvg, sizeof(tt.gpsLockSecsAvg), "%u", s);
 

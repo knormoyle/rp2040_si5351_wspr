@@ -19,7 +19,8 @@ extern bool VERBY[10];
 WsprMessageTelemetryBasic msg;
 
 // FIX! currently not using
-void encodeBasicTele(const char *id13, const char *grid56,
+void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
+    const char *id13, const char *grid56,
     uint32_t altitudeMeters, int8_t temperatureCelsius,
     double voltageVolts, uint8_t speedKnots, bool gpsIsValid) {
 
@@ -34,7 +35,6 @@ void encodeBasicTele(const char *id13, const char *grid56,
     msg.SetGpsIsValid(gpsIsValid);
     msg.SetId13(id13);
 
-    // Report the parameters passed, and if they got automatically clamped
     V1_printf("id13 %s %s" EOL, id13, msg.GetId13());
     V1_printf("grid56 %s %s" EOL, grid56, msg.GetGrid56());
     V1_printf("altM %lu %d" EOL, altitudeMeters, msg.GetAltitudeMeters());
@@ -45,15 +45,23 @@ void encodeBasicTele(const char *id13, const char *grid56,
 
     msg.Encode();
 
-    // Extract the WSPR Type1 Message fields from the encoder
-    const char *callsign = msg.GetCallsign();
-    const char *grid4 = msg.GetGrid4();
-    uint8_t powerDbm = msg.GetPowerDbm();
+    const char *GetCallsign = msg.GetCallsign();
+    const char *GetGrid4 = msg.GetGrid4();
+    uint8_t GetPowerDbm = msg.GetPowerDbm();
 
-    // Report what the Type1 Message fields are
-    V1_printf("callsign: %s" EOL, callsign);
-    V1_printf("grid4: %s" EOL, grid4);
-    V1_printf("pwrDbm: %u" EOL, powerDbm);
+    V1_printf("callsign: %s" EOL, GetCallsign);
+    V1_printf("grid4: %s" EOL, GetGrid4);
+    V1_printf("pwrDbm: %u" EOL, GetPowerDbm);
+
+    // ah, can't use sizeof. size is lost
+    // everything should fill the print here..no spaces
+    // match what u4b_functions.cpp does
+    snprintf(hf_callsign, 7, "%s", GetCallsign);
+    snprintf(hf_grid4, 5, "%s", GetGrid4);
+
+    // shouldn't be bigger than 60
+    if (GetPowerDbm > 60) GetPowerDbm = 60;
+    snprintf(hf_power, 3, "%u", GetPowerDbm);
 
     V1_print(F("encodeBasicTele END" EOL));
 }
@@ -130,7 +138,6 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
 
     codecGpsMsg.Encode();
 
-    // Extract the now-encoded WSPR message fields
     const char *GetCallsign = codecGpsMsg.GetCallsign();
     const char *GetGrid4 = codecGpsMsg.GetGrid4();
     uint8_t GetPowerDbm = (uint8_t) codecGpsMsg.GetPowerDbm();
@@ -140,13 +147,14 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     V1_printf("GetGrid4: %s" EOL, GetGrid4);
     V1_printf("GetPowerDbm: %u" EOL, GetPowerDbm);
 
-    strncpy(hf_callsign, GetCallsign, sizeof(hf_callsign) - 1);
-    strncpy(hf_grid4, GetGrid4, sizeof(hf_grid4) - 1);
+    // ah, can't use sizeof. size is lost
+    // everything should fill the print here..no spaces
+    // match what u4b_functions.cpp does
+    snprintf(hf_callsign, 7, "%s", GetCallsign);
+    snprintf(hf_grid4, 5, "%s", GetGrid4);
 
-    // instead: remove the const char* ?
     // https://stackoverflow.com/questions/77869711/returning-a-char-pointer-when-the-argument-is-a-constant-char-pointer
 
-    // *hf_power = GetPowerDbm;
     // wants to be char array instead of uint8_t?
     // shouldn't be bigger than 60
     if (GetPowerDbm > 60) GetPowerDbm = 60;

@@ -1250,8 +1250,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         pll_remain_xxx = pll_freq_xxx - (pll_mult_here * tcxo_freq_xxx);
         double bits_pll_remain_xxx = log2(pll_remain_xxx);
 
-
-        // this is for farey target, but is good for non-farey algo too?
+        // this is for Farey target, but is good for non-Farey algo too?
         // this cast of pll_remain_xxx can only have 52 bits of precision?
         pll_remain = ((double) pll_remain_xxx) / pow(2, PLL_CALC_SHIFT);
         // we want a fraction to multiple the txco_freq with

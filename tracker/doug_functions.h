@@ -7,8 +7,8 @@
 #define DOUG_FUNCTIONS_H
 #include <stdint.h>
 
-void encodeBasicTele(const char *id13, const char *grid56, uint32_t altitudeMeters, int8_t temperatureCelsius, double voltageVolts, uint8_t speedKnots, bool gpsIsValid);
 
+void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power, const char *id13, const char *grid56, uint32_t altitudeMeters, int8_t temperatureCelsius, double voltageVolts, uint8_t speedKnots, bool gpsIsValid); 
 void define_codecGpsMsg(void);
 void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot);
 
