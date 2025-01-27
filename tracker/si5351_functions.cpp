@@ -2022,15 +2022,17 @@ void vfo_turn_on() {
     V1_print(F("vfo_turn_on END" EOL));
 }
 //****************************************************
-// do this on the tcxo 26Mhz, everything else shouldn't need correction
+// do this on the tcxo 26Mhz freq as ppb effect to get actual tcxo freq
 uint32_t doCorrection(uint32_t freq) {
     uint32_t freq_corrected = freq;
     if (atoi(cc._correction) != 0) {
     // this will be a floor divide
     // https://user-web.icecube.wisc.edu/~dglo/c_class/constants.html
+        V1_printf("Correcting tcxo %lu freq using ppb multiplier (* 1e-9) to get actual tcxo freq", freq);
+        V1_printf(" correction %s" EOL, cc._correction);
         freq_corrected = freq + (atoi(cc._correction) * freq / 1000000000UL);
     }
-    V1_printf("doCorrection (should be tcxo freq?) freq %lu freq_corrected %lu" EOL,
+    V1_printf("doCorrection freq %lu freq %lu freq_corrected %lu (actual tcxo freq?)" EOL,
         freq, freq_corrected);
     return freq_corrected;
 }

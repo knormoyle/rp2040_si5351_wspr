@@ -323,14 +323,20 @@ void u4b_encode_std(char *hf_callsign, char *hf_grid4, char *hf_power,
     // t_speed is integer
     // max t_speed could be 999 ?
     int speed = atoi(t_speed);
+    // this should round to nearest 2 since the telemety is 2 knot precision
+    // we should have already rounded to nearest 2 when setting speed
+    speed = 2 * ((speed + 1) / 2);
+
     // if we're sending solar elevation here, we forced it to be >=0
     // so we'll be sending half the solar elevation? 
     // will be able to get up to 82 deg angle reported?
     // with the 0-41 range?  (integer)
+
     int speedKnotsNum = speed / 2;
     // range clamp t_speed (0-41 legal range).
     // clamp to max, not wrap. maybe from bad GNGGA field (wrong sat count?)
     if (speedKnotsNum < 0) speedKnotsNum = 0;
+    // since we're reporting 2x solarElevation ..we will clamp at 41 deg 
     if (speedKnotsNum > 41) speedKnotsNum = 41;
 
     //****************

@@ -381,7 +381,7 @@ void user_interface(void) {
         V0_print(F(UNDERLINE_OFF NORMAL));
 
         Watchdog.reset();
-        char c_char = getOneChar(15000);
+        char c_char = getOneChar(60000); // wait 60 secs
 
         // V0_printf("%s" EOL, c_char);
         if (c_char == 0) {
@@ -529,9 +529,7 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'R':
-                V0_print(F("Don't cause more than approx. 43 hz 'correction' on a band." EOL));
-                V0_print(F("effect varies per band?" EOL));
-                get_user_input("Enter ppb Correction to si5351: (-30000 to 30000)" EOL,
+                get_user_input("Enter ppb Correction to si5351 tcxo freq: (-30000 to 30000)" EOL,
                    cc._correction, sizeof(cc._correction));
                 write_FLASH();
                 break;
@@ -1161,7 +1159,7 @@ void show_values(void) {
     V0_printf("T: TELEN config: %s" EOL, cc._TELEN_config);
     V0_printf("K: clock speed: %s (Mhz)" EOL, cc._clock_speed);
     V0_printf("D: TESTMODE: %s" EOL, cc._testmode);
-    V0_printf("R: correction: %s (Mhz)" EOL, cc._correction);
+    V0_printf("R: correction: %s (* 1e-9)" EOL, cc._correction);
     V0_printf("G: go_when_rdy: %s" EOL, cc._go_when_rdy);
     V0_printf("S: use_sim65m: %s" EOL, cc._use_sim65m);
     V0_printf("M: morse_also: %s" EOL, cc._morse_also);

@@ -18,7 +18,7 @@
  * limitations under the License.
  */
 
-#include "Arduino.h"
+// #include "Arduino.h"
 #define VERSION 1.0
 
 // moved here from the short_functions.h

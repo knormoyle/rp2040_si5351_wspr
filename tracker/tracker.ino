@@ -1055,7 +1055,7 @@ void setup1() {
     if (USE_FAREY_WITH_PLL_REMAINDER) {
         V1_print(F("Using Farey:"));
     } else {
-        V1_print(F("Using Numerator-Shift with hard-wired denom:" EOL));
+        V1_print(F("Using Numerator-Shift with hard-wired denom:"));
     }
 
     V1_printf(" pll_denom %lu pll_num %lu", pll_denom, pll_num);

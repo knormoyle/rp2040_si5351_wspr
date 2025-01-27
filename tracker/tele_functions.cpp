@@ -173,10 +173,22 @@ void snapForTelemetry() {
     snprintf(tt.solarDistance, sizeof(tt.solarDistance), "%.0f", solarDistance);
 
     int speed;
-    if (SPEED_IS_SOLAR_ELEVATION_MODE)
-        speed = solarElevation; // 0 if bad?
-    else
+    if (SPEED_IS_SOLAR_ELEVATION_MODE) {
+        // https://stackoverflow.com/questions/29557459/round-to-nearest-multiple-of-a-number
+        // https://stackoverflow.com/questions/71499092/generic-function-to-accurately-round-floating-point-to-the-nearest-multiple-of-x
+        // speed = round(solarElevation); // 0 if bad?
+
+        // maybe we should report 2x solarElevation? works up to 41. clamp to 41?
+        // hack: since knots is 0-82 with precision 2 knots (0-41 is legal speed telemetry)
+        // This integer result rounds to nearest degree
+        double t = (2 * solarElevation);
+        // This integer result should reflect round to nearest 2 degrees
+        speed = 2 * round(t / 2.0);
+    } else {
         speed = gps.speed.isValid() ? gps.speed.knots() : 0;
+        // this should round to nearest 2 since the telemetry is 2 knot precision
+        speed = 2 * ((speed + 1) / 2);
+    }
 
     //****************************************************
 
