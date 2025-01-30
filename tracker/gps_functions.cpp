@@ -127,8 +127,8 @@ extern bool BALLOON_MODE;
 
 //************************************************
 // false and true work here
-// sort power on for gps cold reset only
-bool PWM_GPS_POWER_ON_MODE = true;
+bool PWM_GPS_POWER_ON_MODE = false;
+
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 // causing intermittent fails if true?
 bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false;
