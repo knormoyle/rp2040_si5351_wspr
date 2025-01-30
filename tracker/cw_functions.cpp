@@ -66,8 +66,10 @@ const uint8_t test_to_do = SEND_BALLOON;
 // number of morse chars on Serial after which we newline
 #define SERIAL_LINE_WIDTH 80
 
-#define KEYING_DELAY sleep_ms
-// #define KEYING_DELAY busy_wait_ms
+// is timing too inaccurate if using sleep (sometimes)
+// swith to using the busy_wait_ms
+// #define KEYING_DELAY sleep_ms
+#define KEYING_DELAY busy_wait_ms
 
 //******************************************
 // from hans
