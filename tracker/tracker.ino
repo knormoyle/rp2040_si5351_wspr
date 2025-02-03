@@ -1815,7 +1815,10 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         // all the hf_* is a char array
         // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
         //     TELEN1_val1, TELEN1_val2, false, cc._id13);
-        uint8_t slot = 4;
+        // bug
+        // uint8_t slot = 4;
+        // should be slot 3
+        uint8_t slot = 3;
         switch (cc._TELEN_config[0]) {
             case '0':
             default:

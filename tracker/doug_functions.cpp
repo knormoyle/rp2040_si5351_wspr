@@ -79,15 +79,48 @@ void define_codecGpsMsg() {
     // Define counts of GPS satellites for each constellation type.
     // Values will be clamped between 0 - 100 inclusive.
     // Resolution will be in increments of 1.
-    codecGpsMsg.DefineField("SatCountUSA", 0, 100, 1);
-    codecGpsMsg.DefineField("SatCountChina", 0, 100, 1);
-    codecGpsMsg.DefineField("SatCountRussia", 0, 100, 1);
+    bool accepted;
+    accepted = codecGpsMsg.DefineField("SatCountUSA", 0, 100, 1);
+    if (!accepted) {
+        V1_print(F("ERROR: codecGpsMsg.DefineField('SatCountUSA', 0, 100, 1) not accepted"));
+    }
+    accepted = codecGpsMsg.DefineField("SatCountChina", 0, 100, 1);
+    if (!accepted) {
+        V1_print(F("ERROR: codecGpsMsg.DefineField('SatCountChina', 0, 100, 1) not accepted"));
+    }
+    accepted = codecGpsMsg.DefineField("SatCountRussia", 0, 100, 1);
+    if (!accepted) {
+        V1_print(F("ERROR: codecGpsMsg.DefineField('SatCountRussia', 0, 100, 1) not accepted"));
+    }
+
+    // Returns true if field is accepted
+    // Returns false if field is rejected
+    //
+    // A field will be rejected due to:
+    // - The template-specified number of fields have already been configured
+    // - The field name is a nullptr
+    // - The field already exists
+    // - lowValue, highValue, or stepSize is too precise (more than 3 decimal places of precision)
+    // - lowValue >= highValue
+    // - stepSize <= 0
+    // - The stepSize does not evenly divide the range between lowValue and highValue
+    // - The field size exceeds the sum total capacity of 29.180 bits along with other fields
+    // or by itself
 
     // Define a metric for GPS lock times, in seconds.
     // Values will be clamped between 0 - 180 inclusive.
     // Resolution will be in increments of 1.
-    codecGpsMsg.DefineField("LockTimeSecs", 0, 180, 1);
-    codecGpsMsg.DefineField("LockTimeSecsAvg", 0, 180, 1);
+    accepted = codecGpsMsg.DefineField("LockTimeSecs", 0, 180, 1);
+    if (!accepted) {
+        V1_print(F("ERROR: codecGpsMsg.DefineField('LockTimeSecs', 0, 180, 1) not accepted"));
+    }
+
+    // how to form url
+    // https://traquito.github.io/copilot/dashboard/#overview
+
+    // causes overflow
+    // codecGpsMsg.DefineField("LockTimeSecsAvg", 0, 180, 1);
+
 
     V1_print(F("define_codecGpsMsg() END" EOL));
 }

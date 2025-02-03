@@ -290,6 +290,18 @@ void do_gpsResetTest() {
     V0_print(F("do_gpsResetTest END" EOL));
 }
 //********************************************
+void do_cwTest(void) {
+    // picks a good HF freq for the config'ed cc._Band
+    // uses t_callsign a and t_grid6 in the message
+    // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
+    while (true)  {
+        V0_print(F(EOL "cw_send_message() with current cc._Band/_callsign/grid6/altitude" EOL));
+        cw_send_message();
+        V0_print(F(EOL "<enter> within 2 secs to abort cw test loop, otherwise repeats" EOL));
+        char c_char = getOneChar(2000);  // 2 secs
+        if (c_char != 0) break;
+    }
+}
 // 'Z' command causes this to execute
 void do_someTest(void) {
     V0_print(F(EOL "do_someTest START"));
@@ -405,6 +417,10 @@ void user_interface(void) {
 
             case 'Y':
                 do_gpsResetTest();
+                break;
+
+            case 'Q':
+                do_cwTest();
                 break;
 
             case '@':
@@ -1183,22 +1199,25 @@ void show_commands(void) {
 
     V0_println(F(EOL "Valid commands:" EOL));
     V0_println(F("X: exit config mode and reboot"));
-    V0_println(F("/: reboot to drag/drop new .uf2 (not implemented)"));
-    V0_println(F("@: write current gps config, no broadcast, 1 constellation to GPS Flash (for boot)"));
     V0_println(F("*: factory reset all config values"));
     V0_println(F("Z: run wspr 4 tone freq test loop"));
     V0_println(F("Y: run gps warm rest test loop"));
-    V0_println(F("C: change Callsign (6 char max)"));
+    V0_println(F("Q: run cw test loop"));
+
+    V0_println(F(EOL "/: reboot to drag/drop new .uf2 (not implemented)"));
+    V0_println(F("@: write current gps config, no broadcast, 1 constellation to GPS Flash (for boot)"));
+    V0_println(F("V: verbose (0 for no messages, 9 for all)"));
+    V0_println(F("D: TESTMODE (current: sweep telemetry values) (default: 0)"));
+    V0_println(F("G: go_when_rdy (callsign tx starts at any modulo 2 starting minute (default: 0)"));
+
+    V0_println(F(EOL "C: change Callsign (6 char max)"));
     V0_println(F("U: change U4b channel # (0-599)"));
     V0_println(F("A: change band (2,10,12,15,17,20 default 20)"));
     V0_println(F("B: change band for cw (2,10,12,15,17,20 default 20)"));
     V0_println(F("P: change tx power: 1 high, 0 lower default )"));
-    V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("T: TELEN config"));
     V0_printf("K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
-    V0_println(F("D: TESTMODE (current: sweep telemetry values) (default: 0)"));
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
-    V0_println(F("G: go_when_rdy (callsign tx starts at any modulo 2 starting minute (default: 0)"));
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
     V0_println(F("M: morse_also: 1 tx cw msg after all wspr(default: 0)"));
     V0_println(F("L: solar_tx_power: 1 adjust power from solar elevation(default: 0)"));
