@@ -1809,19 +1809,19 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEN1);
 
         txNum = 2;
-        V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg().." EOL, txNum);
-        V1_flush();
 
         // all the hf_* is a char array
         // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
         //     TELEN1_val1, TELEN1_val2, false, cc._id13);
         // bug
         // uint8_t slot = 4;
-        // should be slot 3
-        uint8_t slot = 3;
+        // should be slot 3 (2) ?
+        uint8_t slot = 2;
         switch (cc._TELEN_config[0]) {
             case '0':
             default:
+                V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL, txNum, slot);
+                V1_flush();
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
         }
 
@@ -1829,8 +1829,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
         V1_printf("hf_callsign %-6s" EOL, hf_callsign);
         V1_printf("hf_grid4 %s" EOL, hf_grid4);
-        V1_printf("hf_power %s" EOL, hf_power);
-        V1_print(F(EOL));
+        V1_printf("hf_power %s" EOL, hf_power); V1_print(F(EOL));
         V1_flush();
         vfoOffAtEnd = cc._TELEN_config[2] == '-' && cc._TELEN_config[3] == '-';
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);

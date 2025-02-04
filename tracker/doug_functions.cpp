@@ -67,7 +67,7 @@ void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
 }
 
 //***************************************************************
-WsprMessageTelemetryExtendedUserDefined<5> codecGpsMsg;
+WsprMessageTelemetryExtendedUserDefined<4> codecGpsMsg;
 void define_codecGpsMsg() {
     V1_print(F("define_codecGpsMsg() START" EOL));
 
@@ -130,14 +130,15 @@ void define_codecGpsMsg() {
 void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
     V1_print(F("encode_codecGpsMsg START" EOL));
     switch (slot) {
-        case 0: {;}
+        case 1: {;}
         case 2: {;}
+        case 3: {;}
         case 4: {;}
-        case 6: {;}
-        case 8: break;
+        case 5: break;
         default:
-            V1_printf("ERROR: encode_codecGpsMsg illegal slot %u ..using 4" EOL, slot);
-            slot = 4;
+            // count 0,1,2,3,4 here
+            V1_printf("ERROR: encode_codecGpsMsg illegal slot %u ..using 2" EOL, slot);
+            slot = 2;
     }
 
     // const char *band = "20m";
