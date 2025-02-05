@@ -1904,7 +1904,7 @@ void GpsOFF(bool keepTinyGpsState) {
 
 //********
 // FIX! why was this static void before?
-void updateGpsDataAndTime(int ms) {
+uint64_t updateGpsDataAndTime(int ms) {
     // to make sure we get some update, even if fix_age is larger than 1 sec.
     static bool gpsTimeWasUpdated = false;
     V1_println(F("updateGpsDataAndTime START"));
@@ -2309,11 +2309,11 @@ void updateGpsDataAndTime(int ms) {
     last_gfc = gfc;
     //******************************
 
-
     updateStatusLED();
     uint64_t total_millis = millis() - entry_millis;
     // will be interesting to compare total_millis to duration_millis
     V1_printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL, total_millis);
+    return total_millis;
 }
 
 //************************************************

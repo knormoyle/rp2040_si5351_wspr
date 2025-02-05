@@ -1229,7 +1229,7 @@ extern const uint32_t GPS_LOCATION_AGE_MAX = 30000;
 // needs to be at least 1 sec (a little more) since it
 // wants to grab a full burst, and we don't know where we are in the repeating
 // burst behavior when we start (idle or in the middle of a burst?)
-extern const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1100;
+extern const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
 
 //*************************************************************************
 void loop1() {
@@ -1914,6 +1914,8 @@ void sleepSeconds(int secs) {
     uint64_t current_millis = start_millis;
     uint64_t duration_millis = (uint64_t) secs * 1000;
     float solarVoltage;
+    uint64_t gdt_millis = 0;
+    uint32_t increasingWait = 0;
     do {
         Watchdog.reset();
         // can power off gps depending on voltage
@@ -1937,9 +1939,19 @@ void sleepSeconds(int secs) {
             // 1050: was this causing rx buffer overrun (21 to 32)
             // 1500 was good for 9600 and up
             // not long enough for 4800?
-            // arg is milliseconds
-            if ((!USE_SIM65M) && ATGM336H_BAUD_RATE == 4800) updateGpsDataAndTime(2000);
-            else updateGpsDataAndTime(1500);
+            // arg is milliseconds 
+            if ((!USE_SIM65M) && ATGM336H_BAUD_RATE == 4800)  {
+                gdt_millis = updateGpsDataAndTime(2000);
+            } else {
+                gdt_millis = updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
+            }
+            // randomize an increasing delay if the gdt_millis < 100 (didn't get anything)
+            if (gdt_millis < 100) {
+                uint32_t randnum = random(20, 25);
+                increasingWait = increasingWait + randnum;
+                if (increasingWait > 1500) increasingWait = 0;
+                sleep_ms(increasingWait);
+            }
         } else {
             sleep_ms(1500);
         }
