@@ -2080,7 +2080,6 @@ uint64_t updateGpsDataAndTime(int ms) {
             getChar();
         }
 
-        //*******************
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
         // break out when we don't the next char right away
@@ -2094,13 +2093,7 @@ uint64_t updateGpsDataAndTime(int ms) {
             // FIX! could the LED blinking have gotten delayed?
             // we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
-            duration_millis = current_millis - start_millis;
-            if (false && VERBY[1]) {
-                StampPrintf(
-                    "updateGpsDataAndTime early out: ms %d "
-                    "loop break at %" PRIu64 " millis,  duration %" PRIu64  EOL,
-                     ms, current_millis, duration_millis);
-            }
+            // if we didn't get any chars, start_millis will be 0, use entry_millis instead
             break;
         }
         gpsSleepForMillis(50, true);  // stop the wait early if symbols arrive
@@ -2108,6 +2101,12 @@ uint64_t updateGpsDataAndTime(int ms) {
         getChar();
         current_millis = millis();
     }
+
+    //*******************
+    if (start_millis != 0) 
+        duration_millis = current_millis - start_millis;
+    else 
+        duration_millis = 0;
 
     // print/clear any accumulated NMEA sentence stuff
     if (VERBY[1]) {
@@ -2129,9 +2128,6 @@ uint64_t updateGpsDataAndTime(int ms) {
             sentenceStartCnt, sentenceEndCnt, diff);
         V1_flush();
 
-        // we can round up or down by adding 500 before the floor divide
-        duration_millis = current_millis - start_millis;
-
         // This will be lower than a peak rate
         // It includes dead time at start, dead time at end...
         // With some constant rate in the middle? but sentences could be split..
@@ -2140,7 +2136,6 @@ uint64_t updateGpsDataAndTime(int ms) {
         // include the end stall detect (25 millis)
         // So it's an average over that period.
         float AvgCharRateSec;
-
         if (duration_millis == 0) AvgCharRateSec = 0;
         else AvgCharRateSec = 1000.0 * ((float)incomingCharCnt / (float)duration_millis);
         // can it get too big?
