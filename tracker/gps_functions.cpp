@@ -1068,6 +1068,8 @@ void setGpsBaud(int desiredBaud) {
     // when it's in a not-9600 state? it's like vbat keeps the old baud rate on reset
     // and/or power cycle?? makes it dangerous to use anything other than 9600 baud.
     Serial2.end();
+    // delay between end and begin?
+    gpsSleepForMillis(1000, false);
     Serial2.begin(usedBaud);
     V1_printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
     // then have to change Serial2.begin() to agree
@@ -1165,6 +1167,8 @@ void GpsINIT(void) {
     // Serial2.setFIFOSize(SERIAL2_FIFO_SIZE);
     Serial2.flush();
     Serial2.end();
+    // delay between end and begin?
+    gpsSleepForMillis(1000, false);
 
     if (USE_SIM65M) {
         // default uart baud rate for SIM65
@@ -1881,6 +1885,8 @@ void GpsOFF(bool keepTinyGpsState) {
     // FIX! do we really need or want to turn off Serial2?
     // Remember to Serial2.begin() when we turn it back on
     Serial2.end();
+    // delay between end and begin?
+    gpsSleepForMillis(1000, false);
     // unlike i2c to vfo, we don't tear down the Serial2 definition...just .end()
     // so we can just .begin() again later
     if (!keepTinyGpsState)
