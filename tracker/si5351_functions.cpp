@@ -1415,7 +1415,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         if (use_PLL_DENOM_OPTIMIZE) {
             // old hardwired, per-band, constant. assume these are correct (not too big
             pll_denom_here = PLL_DENOM_OPTIMIZE;
-            V1_printf(EOL "Numerator-Shift algo using PLL_DENOM_OPTIMIZE, pll_denom_here %" PRIu64 EOL, 
+            V1_printf(EOL "Numerator-Shift algo using hard-wired PLL_DENOM_OPTIMIZE, pll_denom_here %" PRIu64 EOL, 
                 pll_denom_here);
         } else {
             // we can multiply it by 2 or 3, if the result is < PLL_DENOM_MAX
@@ -1429,7 +1429,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
                 pll_denom_here = 2 * pll_denom_to_use;
             else 
                 pll_denom_here = pll_denom_to_use;
-            V1_printf(EOL "Numerator-Shift algo after multiplying, pll_denom_here %" PRIu64 EOL, 
+            V1_printf(EOL "Numerator-Shift algo using calculated pll_denom, pll_denom_here %" PRIu64 EOL, 
                 pll_denom_here);
         }
 

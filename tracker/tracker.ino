@@ -1053,9 +1053,9 @@ void setup1() {
     // this walks thru the 4 symbols we're going to use
     si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, &pll_denom, true);
     if (USE_FAREY_WITH_PLL_REMAINDER) {
-        V1_print(F("Using Farey:"));
+        V1_print(F("Using Farey optimal calculated num and denom:"));
     } else {
-        V1_print(F("Using Numerator-Shift with hard-wired denom:"));
+        V1_print(F("Using Numerator-Shift with either hard-wired or calculated denom:"));
     }
 
     V1_printf(" pll_denom %lu pll_num %lu", pll_denom, pll_num);
