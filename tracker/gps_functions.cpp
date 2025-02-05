@@ -544,7 +544,7 @@ void setGpsBroadcast(void) {
             busy_wait_us(500);
             strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
             Serial2.print(nmeaSentence);
-            busy_wait_us(500);
+            busy_wait_us(2000);
         }
 
     } else {
@@ -613,6 +613,7 @@ void setGpsBroadcast(void) {
         // $PCAS03,1,1,1,1,1,0,0,1,0,0,,,1,1,,,,1*33
         Serial2.print(nmeaSentence);
         Serial2.flush();
+        busy_wait_us(2000);
     }
 
 
@@ -650,14 +651,15 @@ void disableGpsBroadcast(void) {
             busy_wait_us(500);
             strncpy(nmeaSentence, "$PAIR062,6,0*38" CR LF, 62);
             Serial2.print(nmeaSentence);
-            busy_wait_us(500);
+            busy_wait_us(2000);
         }
     } else {
         // checksum from https://www.meme.au/nmea-checksum.html
         strncpy(nmeaSentence, "$PCAS03,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*02" CR LF, 64);
+        Serial2.print(nmeaSentence);
+        Serial2.flush();
+        busy_wait_us(2000);
     }
-    Serial2.print(nmeaSentence);
-    Serial2.flush();
     // delay(1000);
     V1_printf("disableGpsBroadcast sent %s" EOL, nmeaSentence);
     V1_print(F("disableGpsBroadcast END" EOL));
@@ -807,7 +809,7 @@ void setGpsConstellations(int desiredConstellations) {
 
     Serial2.print(nmeaSentence);
     Serial2.flush();
-    delay(1000);
+    delay(2000);
 
     V1_printf("setGpsConstellations for usedConstellations %d, sent %s" EOL,
         desiredConstellations, nmeaSentence);
@@ -1540,7 +1542,7 @@ void GpsFullColdReset(void) {
 
     // this is all done earlier in the experimental mode
     // FIX! we don't need to toggle power to get the effect?
-    setGpsBalloonMode();
+    if (USE_SIM65M) setGpsBalloonMode();
 
     // from the CASIC_ProtocolSpecification_english.pdf page 24
     // Could be dangerous,
@@ -1665,9 +1667,8 @@ void GpsWarmReset(void) {
     if (USE_SIM65M) {
         // it either comes up in desiredBaud from some memory, or comes up in 115200?
         Serial2.begin(115200);
-        // since Serial2 was reset by setGpsBaud()..
-        // could try it again. might aid recovery
-        // setGpsBaud(desiredBaud);
+        // brings it down to 9600 baud
+        setGpsBaud(desiredBaud);
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         Serial2.begin(9600);
@@ -1680,7 +1681,7 @@ void GpsWarmReset(void) {
     V1_println(F("Do we get some gps output after reset?"));
     // we'll see if it's wrong baud rate or not, at this point
     drainInitialGpsOutput();
-    setGpsBalloonMode();
+    if (USE_SIM65M) setGpsBalloonMode();
 
     // setGpsConstellations(7);
     // FIX! try just GPS to see effect on power on current
@@ -1738,7 +1739,7 @@ void writeGpsConfigNoBroadcastToFlash() {
     // this will cause a gps cold reset config with GNSS service off (SIM65M only)
     if (USE_SIM65M) setGnssOff_SIM65M();
 
-    char nmeaBaudSentence[64] = { 0 };
+    char nmeaSentence[64] = { 0 };
     if (USE_SIM65M) {
         // Packet Type:513 PAIR_NVRAM_SAVE_SETTING
         // Save the current configuration from RTC RAM to flash.
@@ -1755,12 +1756,12 @@ void writeGpsConfigNoBroadcastToFlash() {
         // Please send PAIR_GNSS_SUBSYS_POWER_OFF to power off GNSS
         // before use this command
         // $PAIR514*3A
-        strncpy(nmeaBaudSentence, "$PAIR513*3D" CR LF, 64);
+        strncpy(nmeaSentence, "$PAIR513*3D" CR LF, 64);
     } else {
-        strncpy(nmeaBaudSentence, "$PCAS00*01" CR LF, 64);
+        strncpy(nmeaSentence, "$PCAS00*01" CR LF, 64);
     }
-    V1_printf("%s" EOL, nmeaBaudSentence);
-    Serial2.print(nmeaBaudSentence);
+    V1_printf("%s" EOL, nmeaSentence);
+    Serial2.print(nmeaSentence);
     Serial2.flush();
     sleep_ms(1000);
 
