@@ -1175,8 +1175,7 @@ void GpsINIT(void) {
         // first talk at 9600..but GpsFullColdReset() will do..so a bit redundant
         Serial2.begin(9600);
     }
-    gpsSleepForMillis(500, false);
-    //****************
+    gpsSleepForMillis(2000, false);
 
     // full cold reset, set baud to target baud rate, and setGpsBalloonMode done
     // FIX! hmm will sim65 reset to 9600?
@@ -1523,19 +1522,19 @@ void GpsFullColdReset(void) {
         Serial2.begin(115200);
         // since Serial2 was reset by setGpsBaud()..
         // could try it again. might aid recovery
-        // setGpsBaud(desiredBaud);
+        // then up the speed to desired (both gps chip and then Serial2
+        setGpsBaud(desiredBaud);
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         Serial2.begin(9600);
-        // since Serial2 was reset by setGpsBaud()..could try it again.
-        // might aid recovery
+        // then up the speed to desired (both gps chip and then Serial2
+
+        // since we're not changing from default 9600 for ATGM336..don't do!
         // setGpsBaud(desiredBaud);
     }
-    // then up the speed to desired (both gps chip and then Serial2
-    setGpsBaud(desiredBaud);
 
-    gpsSleepForMillis(1000, false);  // 1 sec
-    V1_println(F("Should get some gps output after reset?"));
+    gpsSleepForMillis(2000, false);  // 1 sec
+    V1_println(F("Do we get some gps output after reset?"));
     // we'll see if it's wrong baud rate or not, at this point
     drainInitialGpsOutput();
 
@@ -1639,15 +1638,9 @@ void GpsWarmReset(void) {
     }
 
     gpsSleepForMillis(2000, false); // no early out
-
     // now assert the on/off pin
     digitalWrite(GPS_ON_PIN, HIGH);
-    gpsSleepForMillis(1000, false); // no early out
-    // new: 1/17/25 to see if we get some output right away
-    drainInitialGpsOutput();
-    gpsSleepForMillis(1000, false); // no early out
-    // new: 1/17/25 to see if we get some output right away
-    drainInitialGpsOutput();
+    gpsSleepForMillis(2000, false); // no early out
 
     //****************************
     // ATGM336H:
@@ -1683,8 +1676,10 @@ void GpsWarmReset(void) {
         // setGpsBaud(desiredBaud);
     }
 
-    // then up the speed to desired (both gps chip and then Serial2
-    setGpsBaud(desiredBaud);
+    gpsSleepForMillis(2000, false); // no early out
+    V1_println(F("Do we get some gps output after reset?"));
+    // we'll see if it's wrong baud rate or not, at this point
+    drainInitialGpsOutput();
     setGpsBalloonMode();
 
     // setGpsConstellations(7);
@@ -1698,6 +1693,7 @@ void GpsWarmReset(void) {
     setGpsBroadcast();
     // I guess it doesn't power on with location service on
     if (USE_SIM65M) setGnssOn_SIM65M();
+
     drainInitialGpsOutput();
 
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
