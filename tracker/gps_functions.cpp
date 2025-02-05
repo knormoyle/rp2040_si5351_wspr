@@ -416,27 +416,25 @@ void setGnssOn_SIM65M(void) {
     // such as the firmware release information, DCB values, HW interface,
     // ULP enable and NVRAM auto saving.
 
-    if (true) {
-        V1_println(F("setGnsOn_SIM65M START"));
-        // PAIR_GET_VERSION
-        Serial2.print("$PAIR020*38" CR LF);
-        // Serial2.flush();
-        // can see that nmeaBufferFastPoll() does get us the responses
-        // we don't validate or wait for responses (yet??)
-        // we can see version numbers here, et
-        // interesting: AG3352Q_V2.5.0.AG3352_20230420
+    V1_println(F("setGnsOn_SIM65M START"));
+    // PAIR_GET_VERSION
+    Serial2.print("$PAIR020*38" CR LF);
+    // Serial2.flush();
+    // can see that nmeaBufferFastPoll() does get us the responses
+    // we don't validate or wait for responses (yet??)
+    // we can see version numbers here, et
+    // interesting: AG3352Q_V2.5.0.AG3352_20230420
 
-        // I suppose there is some flow control, i.e. I shouldn't send
-        // to many overlapping requests. I guess it depends on the service
-        // that is absorbing and responding to requests..the ACK/NACK responses
-        // aid sw flow control
+    // I suppose there is some flow control, i.e. I shouldn't send
+    // to many overlapping requests. I guess it depends on the service
+    // that is absorbing and responding to requests..the ACK/NACK responses
+    // aid sw flow control
 
-        // $GNGGA,213449.096,,,,,0,0,,,M,,M
-        // $PAIR001,000,4*3F
-        // $PAIR001,020,0*39
-        // $PAIR020,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,*17
-        nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
-    }
+    // $GNGGA,213449.096,,,,,0,0,,,M,,M
+    // $PAIR001,000,4*3F
+    // $PAIR001,020,0*39
+    // $PAIR020,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,*17
+    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
 
     //*****************
     if (false) {
@@ -454,10 +452,9 @@ void setGnssOn_SIM65M(void) {
     // (when writing to flash)
 
     // PAIR_GNSS_SUBSYS_POWER_ON
-    if (false) {
-        Serial2.print("$PAIR002*38" CR LF);
-        Serial2.flush();
-    }
+    // in case we changed the default config to powered off
+    Serial2.print("$PAIR002*38" CR LF);
+    Serial2.flush();
 
     sleep_ms(2000);
     V1_println(F(EOL "setGnsOn_SIM65M END"));
@@ -466,8 +463,8 @@ void setGnssOn_SIM65M(void) {
 //************************************************
 void setGnssOff_SIM65M(void) {
     V1_println(F("setGnsOff_SIM65M START"));
-    // PAIR_GNSS_SUBSYS_POWER_ON
-    Serial2.print("$PAIR002*38" CR LF);
+    // PAIR_GNSS_SUBSYS_POWER_OFF
+    Serial2.print("$PAIR003*38" CR LF);
     Serial2.flush();
     sleep_ms(2000);
     V1_println(F("setGnsOff_SIM65M END"));
@@ -953,7 +950,6 @@ void setupSIM65M(int desiredBaud) {
     // Baudrate is 115200.
     // $PAIR860,0,2,37,115200,0*29\r\n ==> Open UART2 to NMEA output without flow control.
     // Baudrate is 115200.
-
 
     // Packet Type:862 PAIR_IO_SET_DATA_TYPE
     // Set GNSS port data type configuration
@@ -1599,6 +1595,11 @@ void GpsFullColdReset(void) {
 
 //************************************************
 void GpsWarmReset(void) {
+    // FIX! SIM65M spec says when the power supply is off, settings
+    // are reset to factory config and receiver performs a cold start
+    // on next power up
+    // I suppose we should just switch to idle mode instead of powering
+    // gps chip off?
     V1_println(F("GpsWarmReset START"));
     GpsIsOn_state = false;
     GpsStartTime = get_absolute_time();  // usecs
@@ -1692,7 +1693,7 @@ void GpsWarmReset(void) {
     // set desired broadcast
     // we don't need no ZDA/TXT
     setGpsBroadcast();
-    // I guess it doesn't power on with location service on
+    // we could change the default config to power up with GNSS off?
     if (USE_SIM65M) setGnssOn_SIM65M();
 
     drainInitialGpsOutput();
@@ -1709,7 +1710,7 @@ void GpsWarmReset(void) {
 void writeGpsConfigNoBroadcastToFlash() {
     V1_println(F("writeGpsConfigNoBroadcastToFlash() START"));
     // FIX! we'll have to figure this out for SIM65M
-    // let's turn off the GNSS_SUBSYS so it's not on at gps cold reset
+    // turn off the GNSS_SUBSYS so it's not on at gps cold reset?
 
     // Packet Type:002 PAIR_GNSS_SUBSYS_POWER_ON
     // Power on the GNSS system. Include DSP/RF/Clock and other GNSS modules.
@@ -1765,7 +1766,7 @@ void writeGpsConfigNoBroadcastToFlash() {
     Serial2.flush();
     sleep_ms(1000);
 
-    // back on with everything
+    // we could change the default config to power up with GNSS off?
     if (USE_SIM65M) setGnssOn_SIM65M();
     // set desired constellations
     // FIX! this doesn't change SIM65M default constellations (yet)
@@ -1954,16 +1955,14 @@ void updateGpsDataAndTime(int ms) {
     bool printable = true;
 
     // always setup for next loop iteration
-    // V1_println(F("debug1"));
     getChar();
-    // V1_println(F("debug2"));
     // V1_flush();
 
     // fast drain if necessary ..throw away any uart buffered broken sentence at start
     // (since we're unaligned initially)
     // hmm shouldn't get '0' but I guess it would drain that too
     if (VERBY[1] && charsAvailable && incomingChar != '$')
-        StampPrintf("OKAY: did fast draining NMEA backup to '$'. uart rx was %d)" EOL,
+        StampPrintf("OKAY: did fast draining NMEA backup to '$'. uart rx was %d" EOL,
             (int) charsAvailable);
     // if there's backup, means we jumped into the middle of a broadcast burst
     // probably best to throw away all chars until we hit a '$' that is start of
@@ -1996,15 +1995,12 @@ void updateGpsDataAndTime(int ms) {
                 // Would think this case shouldn't happen in this loop now that
                 // we silently drain above to sentence start?
                 if (VERBY[1])
-                    StampPrintf("WARN: was NMEA almost full. uart rx was %d)" EOL,
+                    StampPrintf("WARN: was NMEA almost full. uart rx was %d" EOL,
                         (int) charsAvailable);
             }
             // always send everything to TinyGPS++ ??
             // does it expect the CR LF ?
-            // V1_printf("debug3 incomingChar '%c'" EOL, incomingChar);
-            // V1_flush();
             gps.encode(incomingChar);
-            // V1_println(F("debug4"));
             V1_flush();
             // we count all chars, even CR LF etc
             incomingCharCnt++;
@@ -2026,13 +2022,11 @@ void updateGpsDataAndTime(int ms) {
             }
             // always strip these here
             bool enableStrip = true;
-            // V1_println(F("debug5b"));
             if (enableStrip && (spaceChar || nullChar || !printable)) {
                 getChar();
                 current_millis = millis();
                 continue;
             }
-            // V1_println(F("debug5c"));
 
             // stopPrint: don't put CR LF in the nmeaBuffer. will add one on the transition
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
@@ -2062,33 +2056,26 @@ void updateGpsDataAndTime(int ms) {
 
             // Do we get any unprintable? ignore unprintable chars, just in case.
             if (VERBY[1]) {
-                if (enableStrip &&
-                    (last_stopPrint && !stopPrint && printable && !nullChar && !spaceChar)) {
-                    // false: don't print if full, just empty
-                    nmeaBufferAndPrint('\r', false);
-                    nmeaBufferAndPrint('\n', false);
-                }
-                if (!enableStrip ||
-                    (!stopPrint && printable && !nullChar && !spaceChar)) {
-                    // FIX! can we not send CR LF? don't care. Performance-wise, might be good?
-                    // moved above to send everything to TinyGPS++
-                    // gps.encode(incomingChar);
-                    nmeaBufferAndPrint(incomingChar, false);
+                if (printable && !nullChar && !spaceChar) {
+                    if (enableStrip && last_stopPrint && !stopPrint) {
+                        // false: don't print if full, just empty
+                        nmeaBufferAndPrint('\r', false);
+                        nmeaBufferAndPrint('\n', false);
+                    }
+                    if (!enableStrip || !stopPrint)  {
+                        nmeaBufferAndPrint(incomingChar, false);
+                    }
                 }
             }
-            // V1_println(F("debug5d"));
             current_millis = millis();
             last_serial2_millis = current_millis;
             last_stopPrint = stopPrint;
             // setup for loop iteration
             getChar();
-            // V1_println(F("debug5e"));
         }
 
         //*******************
-        // V1_println(F("debug5f"));
-
-        // did we wait more than 50 millis() since good data read?
+        // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
         // break out when we don't the next char right away
         updateStatusLED();
@@ -2097,7 +2084,7 @@ void updateGpsDataAndTime(int ms) {
         else timeSinceLastChar_millis = current_millis - last_serial2_millis;
 
         // FIX! should the two delays used be dependent on baud rate?
-        if (timeSinceLastChar_millis >= 12) {
+        if (timeSinceLastChar_millis >= 50) {
             // FIX! could the LED blinking have gotten delayed?
             // we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
@@ -2110,16 +2097,11 @@ void updateGpsDataAndTime(int ms) {
             }
             break;
         }
-        // V1_println(F("debug6"));
-
-        gpsSleepForMillis(12, true);  // stop the wait early if symbols arrive
+        gpsSleepForMillis(50, true);  // stop the wait early if symbols arrive
         // setup for loop iteration
         getChar();
         current_millis = millis();
-        // V1_println(F("debug7"));
     }
-
-    // V1_println(F("debug8"));
 
     // print/clear any accumulated NMEA sentence stuff
     if (VERBY[1]) {
