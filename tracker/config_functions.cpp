@@ -90,6 +90,8 @@ extern uint64_t PLL_FREQ_TARGET;
 extern const uint32_t DEFAULT_PLL_SYS_MHZ;
 extern uint32_t PLL_SYS_MHZ;  // decode of cc._clock_speed
 
+extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
+
 // PWM stuff gets recalc'ed if PLL_SYS_MHZ changes
 extern uint32_t PWM_DIV;
 extern uint32_t PWM_WRAP_CNT;
@@ -751,12 +753,14 @@ int read_FLASH(void) {
         V0_print(F("ERROR: check_data_validity_and_set_defaults() fixed some illegal value (1)"));
     }
 
-    // forceHACK();
-
     if (cc._testmode[0] == '1') TESTMODE = true;
     else TESTMODE = false;
     if (cc._use_sim65m[0] == '1') USE_SIM65M = true;
     else USE_SIM65M = false;
+
+    // adjust this to be 2000 if USE_SIM65M (in config_functions.cpp)
+    // because more constellations and the repeat interval is 5 secs not 1 sec
+    if (USE_SIM65M) GPS_WAIT_FOR_NMEA_BURST_MAX = 2000; 
 
     decodeVERBY();
 

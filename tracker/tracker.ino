@@ -1229,7 +1229,12 @@ extern const uint32_t GPS_LOCATION_AGE_MAX = 30000;
 // needs to be at least 1 sec (a little more) since it
 // wants to grab a full burst, and we don't know where we are in the repeating
 // burst behavior when we start (idle or in the middle of a burst?)
-extern const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
+// extern const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
+
+// with all the constellations on SIM65M, seems like we should wait longer to get 
+// full set of NMEA sentences for a burst (plus the burst is only every 5 secs no)
+// adjust this to be 2000 if USE_SIM65M (in config_functions.cpp)
+extern int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
 
 //*************************************************************************
 void loop1() {
