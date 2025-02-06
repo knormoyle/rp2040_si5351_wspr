@@ -2032,7 +2032,7 @@ uint32_t doCorrection(uint32_t freq) {
         V1_printf(" correction %s" EOL, cc._correction);
         freq_corrected = freq + (atoi(cc._correction) * freq / 1000000000UL);
     }
-    V1_printf("doCorrection freq %lu freq %lu freq_corrected %lu (actual tcxo freq?)" EOL,
+    V1_printf("doCorrection freq %lu freq_corrected %lu (actual tcxo freq?)" EOL,
         freq, freq_corrected);
     return freq_corrected;
 }
