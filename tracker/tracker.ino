@@ -1234,7 +1234,7 @@ extern const uint32_t GPS_LOCATION_AGE_MAX = 30000;
 // with all the constellations on SIM65M, seems like we should wait longer to get 
 // full set of NMEA sentences for a burst (plus the burst is only every 5 secs no)
 // adjust this to be 2000 if USE_SIM65M (in config_functions.cpp)
-extern int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
+int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
 
 //*************************************************************************
 void loop1() {

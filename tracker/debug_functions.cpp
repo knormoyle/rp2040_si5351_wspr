@@ -430,8 +430,10 @@ void gpsResetTest() {
         Watchdog.reset();
         // could be negative
         int64_t wait_millis =  1000 - (int64_t) duration_millis;
-        V0_printf("wait_millis %" PRIu64 EOL, wait_millis);
-        if (wait_millis > 0) sleep_ms(wait_millis);
+        if (wait_millis > 0) {
+            V0_printf("will sleep for wait_millis %" PRId64 EOL, wait_millis);
+            sleep_ms(wait_millis);
+        }
     }
 
     if (fix_valid_all) {
