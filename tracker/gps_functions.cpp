@@ -2008,7 +2008,6 @@ uint64_t updateGpsDataAndTime(int ms) {
             // always send everything to TinyGPS++ ??
             // does it expect the CR LF ?
             gps.encode(incomingChar);
-            V1_flush();
             // we count all chars, even CR LF etc
             incomingCharCnt++;
             // do we get any null chars?
