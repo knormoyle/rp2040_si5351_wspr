@@ -320,11 +320,6 @@ extern const int SIM65M_BAUD_RATE = 9600;
 // so I can't talk to him without a full power off (vcc and vbat?)
 // AG6NS board can't turn off VBAT under progam control
 
-// Update: we use the gps resetn pin now, for full cold reset to revert
-// baud to 9600 ALWAYS at init (then set desired baud rate
-// created GpsWarmReset() and GpsColdReset()
-// GpsWarmReset is normal "just power" on/off management that keeps vbat on.
-
 // see gps_functions.cpp and problems with resetting to 9600 from higher bauds
 // too dangerous to use anything higher than 9600..could get stuck
 // with out vcc plus vbat power cycle.. I can't control vbat when on usb power

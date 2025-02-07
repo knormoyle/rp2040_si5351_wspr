@@ -12,8 +12,8 @@
 
 bool GpsIsOn(void);
 void GpsINIT(void);
-void GpsFullColdReset(void);
-void GpsWarmReset(void);
+bool GpsFullColdReset(void);
+bool GpsWarmReset(void);
 // why did this not compile if void in param?
 void invalidateTinyGpsState();
 void GpsON(bool GpsColdReset);
@@ -26,7 +26,7 @@ void writeGpsConfigNoBroadcastToFlash(void);
 void nmeaBufferPrintAndClear(void);
 void nmeaBufferAndPrint(const char charToAdd, bool printIfFull);
 void gpsSleepForMillis(int n, bool enableEarlyOut);
-void drainInitialGpsOutput(void);
+bool getInitialGpsOutput(void);
 void setGpsBalloonMode(void);
 void setGpsBroadcast(void);
 void disableGpsBroadcast(void);

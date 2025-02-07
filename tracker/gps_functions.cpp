@@ -168,11 +168,12 @@ void getChar() {
 // tries to get all data from gps without losing any, for a blocking period of time
 // loops as fast as possible into a ram buffer
 void nmeaBufferFastPoll(uint64_t duration_millis, bool printIfFull) {
+    V1_println(F("nmeaBufferFastPoll START"));
     uint64_t start_millis = millis();
     // nmeaBuffer should be empty the first time we use this?
     // should be no harm (delay) in checking here?
     nmeaBufferPrintAndClear();
-    bool spaceChar, nullChar, stopPrint, printable;
+    bool spaceChar, nullChar, printable;
     while (millis() - start_millis < duration_millis) {
         // set globals: incomingChar, charsAvailable
         getChar();
@@ -181,20 +182,17 @@ void nmeaBufferFastPoll(uint64_t duration_millis, bool printIfFull) {
             // are CR LF unprintable?
             spaceChar = false;
             nullChar = false;
-            stopPrint = false;
             printable = isprint(incomingChar);
             // good to eliminate garbage to save buffer room
             // we'll add appropriate EOLs when printing buffer
             // FIX! will there be enough garbage visible when baud rate is wrong
             // that we'll still see bad baud rate issues?
             switch (incomingChar) {
-                case '\n': stopPrint = true; break;
-                case '\r': stopPrint = true; break;
                 case '\0': nullChar = true; break;
                 case ' ':  spaceChar = true; break;
                 default: { ; }
             }
-            if (!spaceChar && !nullChar && !stopPrint && printable) {
+            if (!spaceChar && !nullChar && printable) {
                 nmeaBufferAndPrint(incomingChar, printIfFull);
             }
             getChar();
@@ -202,6 +200,7 @@ void nmeaBufferFastPoll(uint64_t duration_millis, bool printIfFull) {
         busy_wait_ms(1);  // just wait 1 milli?
     }
     nmeaBufferPrintAndClear();
+    V1_println(F("nmeaBufferFastPoll END"));
 }
 
 //***************************************************
@@ -298,41 +297,44 @@ int checkGpsBaudRate(int desiredBaud) {
 }
 
 //************************************************
-void drainInitialGpsOutput(void) {
-    V1_println(F("drainInitialGpsOutput START"));
-
-    // FIX! rely on watchdog reset in case we stay here  forever?
-    if (false) {
-        V1_println(F("drain any Serial2 garbage first"));
-        // drain any initial garbage
-        while (Serial2.available()) {
-            Serial2.read();
-        }
-    }
-
-    V1_println(F("Look for some Serial2 bytes"));
-    int i;
+bool getInitialGpsOutput(void) {
+    V1_println(F("getInitialGpsOutput START"));
+    V1_println(F("Look for some Serial2 bytes for 5 secs or 200 chars or 2 sentences"));
     char incomingChar = { 0 };
+    uint32_t incomingCharCnt = 0;
+    uint32_t incomingSentenceCnt = 0;
     // we drain during the GpsINIT now, oh. we should leave gps on so we get chars
-    for (i = 0; i < 1; i++) {
+    // 5 secs?
+    uint64_t start_millis = millis();
+    uint64_t duration_millis = 0;
+    while (duration_millis < 5000) {
         Watchdog.reset();
         if (!Serial2.available()) {
-            V1_println(F("no Serial2.available() ..sleep and reverify"));
+            ;
         } else {
             while (Serial2.available()) {
                 incomingChar = Serial2.read();
                 // buffer it up like we do normally below, so we can see sentences
                 // skip any non-printable, as we won't be able to dos2unix the putty.log if in there
                 bool printable = isprint(incomingChar);
-                if (printable) nmeaBufferAndPrint(incomingChar, true);  // print if full
+                if (printable) {
+                    nmeaBufferAndPrint(incomingChar, true);  // print if full
+                    incomingCharCnt += 1;
+                    if (incomingChar == '$') incomingSentenceCnt += 1;
+                }
             }
+            if (incomingCharCnt >= 200) break;
+            if (incomingSentenceCnt >= 2) break;
         }
         gpsSleepForMillis(1000, true);  // return early if Serial2.available()
+        duration_millis = millis() - start_millis;
     }
     nmeaBufferPrintAndClear();
     updateStatusLED();
     Watchdog.reset();
-    V1_println(F("drainInitialGpsOutput END"));
+    V1_println(F("getInitialGpsOutput END"));
+
+    return (incomingSentenceCnt >= 2);
 }
 
 //************************************************
@@ -455,6 +457,7 @@ void setGnssOn_SIM65M(void) {
     // in case we changed the default config to powered off
     Serial2.print("$PAIR002*38" CR LF);
     Serial2.flush();
+    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
 
     sleep_ms(2000);
     V1_println(F(EOL "setGnsOn_SIM65M END"));
@@ -1079,7 +1082,7 @@ void setGpsBaud(int desiredBaud) {
 
 //************************************************
 void GpsINIT(void) {
-    V1_println(F("GpsINIT START"));
+    V1_println(F(EOL "GpsINIT START"));
     updateStatusLED();
     Watchdog.reset();
 
@@ -1191,7 +1194,7 @@ void GpsINIT(void) {
     while (Serial2.available()) Serial2.read();
     // sleep 3 secs
     gpsSleepForMillis(3000, false);
-    V1_println(F("GpsINIT END"));
+    V1_println(F("GpsINIT END" EOL));
 }
 
 //************************************************
@@ -1241,7 +1244,7 @@ void pwmGpsPwrOn() {
 }
 
 //************************************************
-void GpsFullColdReset(void) {
+bool GpsFullColdReset(void) {
     // BUG: can't seem to reset the baud rate to 9600 when
     // the GPS chip has a non-working baud rate?
 
@@ -1465,40 +1468,6 @@ void GpsFullColdReset(void) {
     //******************
     Watchdog.reset();
 
-    if (false && !USE_SIM65M) {
-        // HACK experiment
-        // since vbat seems to preserve the baud rate, even with NRESET assertion
-        // try sending the full cold reset command at all reasonable baud rates
-        // whatever baud rate the GPS was at, it should get one?
-        V1_println(F("try full cold reset NMEA cmd at 9600 baud"));
-        Serial2.begin(9600);
-        Serial2.print("$PMTK104*37" CR LF);
-        Serial2.flush();
-        gpsSleepForMillis(1000, false);
-
-        V1_println(F("try full cold reset NMEA cmd at 19200 baud"));
-        Serial2.begin(19200);
-        Serial2.print("$PMTK104*37" CR LF);
-        Serial2.flush();
-        gpsSleepForMillis(1000, false);
-
-        V1_println(F("try full cold reset NMEA cmd at 38400 baud"));
-        Serial2.begin(38400);
-        Serial2.print("$PMTK104*37" CR LF);
-        Serial2.flush();
-        gpsSleepForMillis(1000, false);
-
-        // We know we would have never told GPS a higher baud rate
-        // because we get data rx overruns
-        // FIX! do we have to toggle power off/on to get the cold reset?..i.e. the
-        // nmea request just says what happens on the next power off/on?
-        // vbat is kept on when we toggle vcc
-        digitalWrite(GpsPwr, HIGH);
-        gpsSleepForMillis(1000, false);
-        digitalWrite(GpsPwr, LOW);
-        gpsSleepForMillis(1000, false);
-    }
-
     // hmm. we get a power surge here then? Is it because the Serial2 data
     // was backed up in the gps chip and busy waiting?
     // Drain it? (usually it's the TXT stuff (versions)
@@ -1536,10 +1505,6 @@ void GpsFullColdReset(void) {
     }
 
     gpsSleepForMillis(2000, false);  // 1 sec
-    V1_println(F("Do we get some gps output after reset?"));
-    // we'll see if it's wrong baud rate or not, at this point
-    drainInitialGpsOutput();
-
     // this is all done earlier in the experimental mode
     // FIX! we don't need to toggle power to get the effect?
     if (USE_SIM65M) setGpsBalloonMode();
@@ -1588,17 +1553,20 @@ void GpsFullColdReset(void) {
     // I guess it doesn't power on with location service on
     if (USE_SIM65M) setGnssOn_SIM65M();
 
-    drainInitialGpsOutput();
+    bool sentencesFound = getInitialGpsOutput();
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
     // a big fix_age
     invalidateTinyGpsState();
-    GpsIsOn_state = true;
+
     GpsStartTime = get_absolute_time();  // usecs
-    V1_println(F("GpsFullColdReset END"));
+
+    if (sentencesFound) GpsIsOn_state = true;
+    V1_printf("GpsFullColdReset END sentencesFound %u" EOL, sentencesFound);
+    return sentencesFound;
 }
 
 //************************************************
-void GpsWarmReset(void) {
+bool GpsWarmReset(void) {
     // FIX! SIM65M spec says when the power supply is off, settings
     // are reset to factory config and receiver performs a cold start
     // on next power up
@@ -1640,14 +1608,14 @@ void GpsWarmReset(void) {
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
     } else {
-        digitalWrite(GpsPwr, LOW);  // assert to mosfet
+        digitalWrite(GpsPwr, LOW);   // assert to mosfet
         gpsSleepForMillis(500, false);
     }
 
-    gpsSleepForMillis(2000, false); // no early out
+    gpsSleepForMillis(2000, false);  // no early out
     // now assert the on/off pin
     digitalWrite(GPS_ON_PIN, HIGH);
-    gpsSleepForMillis(2000, false); // no early out
+    gpsSleepForMillis(2000, false);  // no early out
 
     //****************************
     // ATGM336H:
@@ -1682,10 +1650,8 @@ void GpsWarmReset(void) {
         // setGpsBaud(desiredBaud);
     }
 
-    gpsSleepForMillis(2000, false); // no early out
-    V1_println(F("Do we get some gps output after reset?"));
-    // we'll see if it's wrong baud rate or not, at this point
-    drainInitialGpsOutput();
+    gpsSleepForMillis(2000, false);  // no early out
+
     if (USE_SIM65M) setGpsBalloonMode();
 
     // setGpsConstellations(7);
@@ -1700,14 +1666,16 @@ void GpsWarmReset(void) {
     // we could change the default config to power up with GNSS off?
     if (USE_SIM65M) setGnssOn_SIM65M();
 
-    drainInitialGpsOutput();
-
+    bool sentencesFound = getInitialGpsOutput();
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
     // a big fix_age
     invalidateTinyGpsState();
     GpsIsOn_state = true;
     GpsStartTime = get_absolute_time();  // usecs
-    V1_println(F("GpsWarmReset END"));
+
+    if (sentencesFound) GpsIsOn_state = true;
+    V1_printf("GpsWarmReset END sentencesFound %u" EOL, sentencesFound);
+    return sentencesFound;
 }
 
 //************************************************
@@ -1796,10 +1764,34 @@ void GpsON(bool GpsColdReset) {
     // Assume GpsINIT was already done (pins etc)
     Watchdog.reset();
 
+    bool sentencesFound = false;
+    uint32_t tryCnt = 0;
+
+    if (!GpsColdReset && GpsIsOn()) {
+        // fake this to avoid doing a gps warm reset if successfully on?
+        V1_print("do nothing because GpsIsOn()");
+        sentencesFound = true;
+    }
+
     // don't care what the initial state is, for cold reset
-    if (GpsColdReset) GpsFullColdReset();
-    // does nothing if already on
-    else if (!GpsIsOn()) GpsWarmReset();
+    while (!sentencesFound) {
+        tryCnt += 1;
+        if (tryCnt >= 5) {
+            if (GpsColdReset) {
+                V1_print("ERROR: tryCnt 5 on GpsFullColdReset.. not retrying any more");
+                break;
+            } else {
+                V1_print("ERROR: tryCnt 5 on GpsWarmReset.. switch to trying GpsColdReset");
+                GpsColdReset = true;
+                tryCnt = 0;
+            }
+        }
+        if (GpsColdReset) {
+            sentencesFound = GpsFullColdReset();
+        } else {
+            sentencesFound = GpsWarmReset();
+        }
+    }
 
     if (!GpsColdReset) {
         V1_printf("GpsON END GpsIsOn_state %u" EOL EOL, GpsIsOn_state);
@@ -1952,10 +1944,6 @@ uint64_t updateGpsDataAndTime(int ms) {
     // Could keep the sum for all time, and track total busy time..
     // but I think better not to average..just track this particular call.
     int incomingCharCnt = 0;
-    bool stopPrint = false;
-    // NEW: start with no printing..so we don't print until we get a $ to start
-    // saves some buffer space, maybe useful at higher baud rates
-    bool last_stopPrint = true;
     bool nullChar = false;
     bool spaceChar = false;
     bool printable = true;
@@ -1980,7 +1968,7 @@ uint64_t updateGpsDataAndTime(int ms) {
     // note this could empty with a sentence in the 32 deep fifo, just fitting
     // UPDATE: maybe keep draining until we know we have enough room so not almost full!
     // too much messaging if we're dancing around the buffer close to full, below
-    while (charsAvailable > 8 || (charsAvailable && incomingChar != '$')) {
+    while (charsAvailable && incomingChar != '$') {
         getChar();
     }
 
@@ -2012,16 +2000,12 @@ uint64_t updateGpsDataAndTime(int ms) {
             incomingCharCnt++;
             // do we get any null chars?
             // are CR LF unprintable?
-            stopPrint = last_stopPrint;
             spaceChar = false;
             nullChar = false;
             printable = isprint(incomingChar);
             switch (incomingChar) {
-                case '$':  sentenceStartCnt++; stopPrint = false; break;
+                case '$':  sentenceStartCnt++; break;
                 case '*':  sentenceEndCnt++; break;
-                case '\n': stopPrint = true; break;
-                case '\r': stopPrint = true; break;
-                // don't change the stopPrint flow if get a unprintable or these
                 case '\0': nullChar = true; break;
                 case ' ':  spaceChar = true; break;
                 default: { ; }
@@ -2034,7 +2018,6 @@ uint64_t updateGpsDataAndTime(int ms) {
                 continue;
             }
 
-            // stopPrint: don't put CR LF in the nmeaBuffer. will add one on the transition
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
             // either a number (0123456789),
             // an uppercase letter ABCDEFGHIJKLMNOPQRSTUVWXYZ
@@ -2057,25 +2040,15 @@ uint64_t updateGpsDataAndTime(int ms) {
             // always start printing again on inital call to this function
             // (see inital state)
 
-            // note we're detecting the 1->0 transition on stopPrint here, to add \r\n for eol
-            // before we print the current char
-
             // Do we get any unprintable? ignore unprintable chars, just in case.
             if (VERBY[1]) {
                 if (printable && !nullChar && !spaceChar) {
-                    if (enableStrip && last_stopPrint && !stopPrint) {
-                        // false: don't print if full, just empty
-                        nmeaBufferAndPrint('\r', false);
-                        nmeaBufferAndPrint('\n', false);
-                    }
-                    if (!enableStrip || !stopPrint)  {
-                        nmeaBufferAndPrint(incomingChar, false);
-                    }
+                    // I guess we get the \r \n in the buffer now
+                    nmeaBufferAndPrint(incomingChar, false);
                 }
             }
             current_millis = millis();
             last_serial2_millis = current_millis;
-            last_stopPrint = stopPrint;
             // setup for loop iteration
             getChar();
         }
@@ -2103,9 +2076,9 @@ uint64_t updateGpsDataAndTime(int ms) {
     }
 
     //*******************
-    if (start_millis != 0) 
+    if (start_millis != 0)
         duration_millis = current_millis - start_millis;
-    else 
+    else
         duration_millis = 0;
 
     // print/clear any accumulated NMEA sentence stuff
@@ -2152,9 +2125,8 @@ uint64_t updateGpsDataAndTime(int ms) {
         GpsInvalidAll, gps.time.isValid(), gps.date.year());
     V1_flush();
 
-    if (!GpsInvalidAll && gps.time.isValid() && 
+    if (!GpsInvalidAll && gps.time.isValid() &&
         (gps.date.year() >= 2024 && gps.date.year() <= 2034)) {
-
         // FIX! don't be updating this every time
         // this will end up checking every time we get a burst?
 
@@ -2328,7 +2300,7 @@ void gpsDebug() {
     bool validE = gps.course.isValid() && !GpsInvalidAll;
     bool validF = gps.speed.isValid() && !GpsInvalidAll;
     // FIX! don't have GpsInvalidAll in these
-    bool validG = gps.date.isValid(); 
+    bool validG = gps.date.isValid();
     bool validH = gps.time.isValid();
     V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
         !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
@@ -2363,7 +2335,7 @@ void gpsDebug() {
         printFloat(gps.location.lng(), validC, 12, 6);
         printInt(gps.location.age(), validC, 7);
         // printAge. date & time isValid() is in the function
-        printGpsDateTime(gps.date, gps.time, true); 
+        printGpsDateTime(gps.date, gps.time, true);
         printFloat(gps.altitude.meters(), validD, 8, 2);
         printFloat(gps.course.deg(), validE, 7, 2);
         printFloat(gps.speed.kmph(), validF, 6, 2);
