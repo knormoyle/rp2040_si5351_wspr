@@ -168,7 +168,7 @@ void getChar() {
 // tries to get all data from gps without losing any, for a blocking period of time
 // loops as fast as possible into a ram buffer
 void nmeaBufferFastPoll(uint64_t duration_millis, bool printIfFull) {
-    V1_println(F("nmeaBufferFastPoll START"));
+    V1_println(F(EOL "nmeaBufferFastPoll START"));
     uint64_t start_millis = millis();
     // nmeaBuffer should be empty the first time we use this?
     // should be no harm (delay) in checking here?
@@ -366,17 +366,30 @@ void setGpsBalloonMode(void) {
     // '1' [Default Value] Fitness mode: For running and walking activities
     //     so that the low-speed (< 5 m/s) movement will have more of an effect
     //     on the position calculation.
-    // '2' Reserved
-    // '3' Reserved
+    // '2' Reserved Could this be Aviation mode?
+    // '3' Reserved Could this be Balloon mode?
+    // quectel_l70.pdf has 3 = balloon mode (2015)
     // '4' Stationary mode: For stationary applications where a zero dynamic assumed.
     // '5' Reserved
+    // is this really drone mode
+    // Drone mode: used for drone applications with equivalent dynamics range 
+    // and vertical application on different flight phase (Ex. Hovering, cruising etc)
     // '6' Reserved
     // '7' Swimming mode: For swimming purpose so that it smooths the trajectory and
     //     improves the accuracy of distance calculation.
     //************************
 
     if (USE_SIM65M) {
-        Serial2.print("$PAIR080,0*2E" CR LF);  // Normal mode: For general purpose
+        if (true) {
+            Serial2.print("$PAIR080,3*2D" CR LF);  // Reserved Balloon mode?
+            V1_print(F("Balloon mode: sent $PAIR080,3*2D" CR LF));  // Reserved Balloon mode?
+        } else if (false) {
+            Serial2.print("$PAIR080,5*2B" CR LF);  // Reserved Drone mode?
+            V1_print(F("Drone mode: sent $PAIR080,5*2B" CR LF));  // Reserved Drone mode?
+        } else {
+            Serial2.print("$PAIR080,0*2E" CR LF);  // Normal mode: general purpose
+            V1_print(F("Normal mode: sent $PAIR080,0*2E" CR LF));
+        }
         Serial2.flush();
         sleep_ms(2000);
     }
