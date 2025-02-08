@@ -299,7 +299,9 @@ int checkGpsBaudRate(int desiredBaud) {
 //************************************************
 bool getInitialGpsOutput(void) {
     V1_println(F("getInitialGpsOutput START"));
-    V1_println(F("Look for some Serial2 bytes for 5 secs or 200 chars or 2 sentences"));
+    // there can be a lot of bogus chars after warm/cold reset, like over 200
+    // if we can get effective 900 chars/sec, probably want 5x that
+    V1_println(F("Look for some Serial2 bytes for 5 secs or 5000 chars or 2 sentences"));
     char incomingChar = { 0 };
     uint32_t incomingCharCnt = 0;
     uint32_t incomingSentenceCnt = 0;
@@ -323,7 +325,7 @@ bool getInitialGpsOutput(void) {
                     if (incomingChar == '$') incomingSentenceCnt += 1;
                 }
             }
-            if (incomingCharCnt >= 200) break;
+            if (incomingCharCnt >= 5000) break;
             if (incomingSentenceCnt >= 2) break;
         }
         gpsSleepForMillis(1000, true);  // return early if Serial2.available()
@@ -1992,24 +1994,23 @@ uint64_t updateGpsDataAndTime(int ms) {
     // works if ms is 0
     while ((current_millis - entry_millis) < (uint64_t) ms) {
         while (charsAvailable > 0) {
+            // we count all chars, even CR LF etc
+            incomingCharCnt++;
             // start the duration timing when we get the first char
             if (start_millis == 0) start_millis = current_millis;
-            if (charsAvailable > 25) {
-                // 25/32 now, because with initial drain, shouldn't hit?
-                // This is the case where started with something in the buffer
-                // Unload each in less than 1ms..
-                // so we catch up pretty quick if necessary.
-                // Would think this case shouldn't happen in this loop now that
-                // we silently drain above to sentence start?
-                if (VERBY[1])
-                    StampPrintf("WARN: was NMEA almost full. uart rx was %d" EOL,
-                        (int) charsAvailable);
+            if (VERBY[1] && charsAvailable >= 31) {
+                // this should only be full on the first char
+                // our unload should keep up with new loads after that
+                if (incomingCharCnt > 1)
+                    StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL, 
+                        (int) charsAvailable, incomingCharCnt);
+                else
+                    StampPrintf("WARN: full. uart rx depth %d incomingCharCnt %d" EOL, 
+                        (int) charsAvailable, incomingCharCnt);
             }
             // always send everything to TinyGPS++ ??
             // does it expect the CR LF ?
             gps.encode(incomingChar);
-            // we count all chars, even CR LF etc
-            incomingCharCnt++;
             // do we get any null chars?
             // are CR LF unprintable?
             spaceChar = false;
