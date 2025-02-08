@@ -1266,6 +1266,7 @@ bool GpsFullColdReset(void) {
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
     V1_println(F(EOL "GpsFullColdReset START"));
+    uint64_t start_millis = millis();
     Watchdog.reset();
 
     GpsIsOn_state = false;
@@ -1335,10 +1336,10 @@ bool GpsFullColdReset(void) {
     // we still have usb pll on, and default clock frequency at this point?
     if (PWM_GPS_POWER_ON_MODE) {
         // this is probably at least 2 secs. let's measure
-        uint64_t start_millis = millis();
+        uint64_t start_millis2 = millis();
         pwmGpsPwrOn();
-        uint64_t duration_millis = millis() - start_millis;
-        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 " millisecs" EOL, duration_millis);
+        uint64_t duration_millis2 = millis() - start_millis2;
+        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 " millisecs" EOL, duration_millis2);
         // soft power-on for GpsPwr (assert low, controls mosfet)
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
@@ -1576,7 +1577,10 @@ bool GpsFullColdReset(void) {
     GpsStartTime = get_absolute_time();  // usecs
 
     if (sentencesFound) GpsIsOn_state = true;
-    V1_printf("GpsFullColdReset END sentencesFound %u" EOL, sentencesFound);
+    uint64_t duration_millis = millis() - start_millis;
+    V1_print(F("GpsFullColdReset END"));
+    V1_printf(" sentencesFound %u", sentencesFound);
+    V1_printf(" duration_millis %" PRIu64 EOL, duration_millis);
     return sentencesFound;
 }
 
@@ -1588,6 +1592,7 @@ bool GpsWarmReset(void) {
     // I suppose we should just switch to idle mode instead of powering
     // gps chip off?
     V1_println(F("GpsWarmReset START"));
+    uint64_t start_millis = millis();
     GpsIsOn_state = false;
     GpsStartTime = get_absolute_time();  // usecs
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -1615,10 +1620,10 @@ bool GpsWarmReset(void) {
     // match the pwm that's done for cold reset
     if (PWM_GPS_POWER_ON_MODE) {
         // this is probably at least 2 secs. let's measure
-        uint64_t start_millis = millis();
+        uint64_t start_millis2 = millis();
         pwmGpsPwrOn();
-        uint64_t duration_millis = millis() - start_millis;
-        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 " millisecs" EOL, duration_millis);
+        uint64_t duration_millis2 = millis() - start_millis2;
+        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 " millisecs" EOL, duration_millis2);
         // soft power-on for GpsPwr (assert low, controls mosfet)
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
@@ -1689,7 +1694,10 @@ bool GpsWarmReset(void) {
     GpsStartTime = get_absolute_time();  // usecs
 
     if (sentencesFound) GpsIsOn_state = true;
-    V1_printf("GpsWarmReset END sentencesFound %u" EOL, sentencesFound);
+    uint64_t duration_millis = millis() - start_millis;
+    V1_print(F("GpsWarmReset END")); 
+    V1_printf(" sentencesFound %u", sentencesFound);
+    V1_printf(" duration_millis %" PRIu64 EOL, duration_millis);
     return sentencesFound;
 }
 
