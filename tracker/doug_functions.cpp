@@ -54,9 +54,11 @@ void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
     V1_printf("pwrDbm: %u" EOL, GetPowerDbm);
 
     // ah, can't use sizeof. size is lost
-    // everything should fill the print here..no spaces
-    // match what u4b_functions.cpp does
-    snprintf(hf_callsign, 7, "%s", GetCallsign);
+    // BUG: reported by Rob KC3LBR
+    // JTEncode walks thru chars 0-12. 
+    // so we now have 14 char array with null term
+    // left justify..i.e. pad with space for what JTEncode gets
+    snprintf(hf_callsign, 14, "%-13s", GetCallsign);
     snprintf(hf_grid4, 5, "%s", GetGrid4);
 
     // shouldn't be bigger than 60
@@ -182,9 +184,11 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     V1_printf("GetPowerDbm: %u" EOL, GetPowerDbm);
 
     // ah, can't use sizeof. size is lost
-    // everything should fill the print here..no spaces
-    // match what u4b_functions.cpp does
-    snprintf(hf_callsign, 7, "%s", GetCallsign);
+    // BUG: reported by Rob KC3LBR
+    // JTEncode walks thru chars 0-12. 
+    // so we now have 14 char array with null term
+    // left justify..i.e. pad with space for what JTEncode gets
+    snprintf(hf_callsign, 14, "%-13s", GetCallsign);
     snprintf(hf_grid4, 5, "%s", GetGrid4);
 
     // https://stackoverflow.com/questions/77869711/returning-a-char-pointer-when-the-argument-is-a-constant-char-pointer

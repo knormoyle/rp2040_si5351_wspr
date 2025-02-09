@@ -2015,10 +2015,11 @@ uint64_t updateGpsDataAndTime(int ms) {
             spaceChar = false;
             nullChar = false;
             printable = isprint(incomingChar);
+            // aligned set to true only matters for the first one
             switch (incomingChar) {
                 case '$':  aligned = true; sentenceStartCnt++; break;
-                case '\r': aligned = true; break; // only matters for first one
-                case '\n': aligned = true; break; // only matters for first one
+                case '\r': aligned = true; break;
+                case '\n': aligned = true; break;
                 case '*':  sentenceEndCnt++; break;
                 case '\0': nullChar = true; break;
                 case ' ':  spaceChar = true; break;

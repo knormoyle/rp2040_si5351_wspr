@@ -1735,8 +1735,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     //**************************
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
-    char hf_callsign[7] = {0};
-    snprintf(hf_callsign, sizeof(hf_callsign), "%s", tt.callsign);
+    // BUG: reported by Rob KC3LBR
+    // JTEncode walks thru chars 0-12. 
+    // so we really need a 14 char array with null term
+    char hf_callsign[14] = {0};
+    // left justify..i.e. pad with space for what JTEncode gets
+    snprintf(hf_callsign, sizeof(hf_callsign), "%-13s", tt.callsign);
 
     double lat_double = atof(tt.lat);
     double lon_double = atof(tt.lon);
@@ -2384,30 +2388,37 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     // hf_power needs to be passed as uint8_t
     // were any spaces on the left due to snprintf to hf_callsign?
     // (starting at hf_callsign[0])
-    int l;
-    l = strlen(hf_callsign);
-    V1_printf("length check: hf_callsign %s before jtencode was strlen %d" EOL,
-        hf_callsign, l);
-
-    if (l < 3 || l > 6) {
-        V1_printf("ERROR: bad length: hf_callsign %s before jtencode was strlen %d" EOL,
-            hf_callsign, l);
-        fatalErrorReboot = true;
-    }
 
     // shouldn't be any spaces in hf_callsign. possible due to wrong use of snprintf()
     // already checked for any other badness
-    for (uint32_t i = 0; i <= sizeof(hf_callsign); i++) {
-        if (hf_callsign[i] == ' ') {
-            V1_printf("ERROR: hf_callsign '%s' has <space> at %lu" EOL, hf_callsign, i);
-            fatalErrorReboot = true;
+    // UPDATE: we space pad on the right now for JTEncode bug
+    // so change check to error only if any non-space after space
+    bool spaceFound = false;
+    uint8_t notspaceCnt = 0;
+    for (uint8_t i = 0; i < sizeof(hf_callsign); i++) {
+        if (hf_callsign[i] == ' ')
+            spaceFound = true;
+        else {
+            if (spaceFound) {
+                V1_printf("ERROR: hf_callsign '%s' has non-space after space at %u" EOL, hf_callsign, i);
+                fatalErrorReboot = true;
+            }
+            notspaceCnt += 1;
         }
+    }
+    V1_printf("length check: hf_callsign %s before jtencode was strlen %d" EOL,
+        hf_callsign, notspaceCnt);
+
+    if (notspaceCnt < 3 || notspaceCnt > 6) {
+        V1_printf("ERROR: bad notspaceCnt: hf_callsign %s before jtencode was strlen %d" EOL,
+            hf_callsign, notspaceCnt);
+        fatalErrorReboot = true;
     }
 
     //******************
     // no checks on hf_power uint8_t
     //******************
-    l = strlen(hf_grid4);
+    int l = strlen(hf_grid4);
     V1_printf("length check: hf_grid4 %s before jtencode was strlen %d" EOL,
         hf_grid4, l);
 

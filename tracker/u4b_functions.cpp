@@ -374,8 +374,11 @@ void u4b_encode_std(char *hf_callsign, char *hf_grid4, char *hf_power,
     // null term is appended after the generated string
 
     // ah, can't use sizeof. size is lost
-    // everything should fill the print here..no spaces
-    snprintf(hf_callsign, 7, "%s", callsign);
+    // BUG: reported by Rob KC3LBR
+    // JTEncode walks thru chars 0-12. 
+    // so we now have 14 char array with null term
+    // left justify..i.e. pad with space for what JTEncode gets
+    snprintf(hf_callsign, sizeof(hf_callsign), "%-13s", callsign);
     snprintf(hf_grid4, 5, "%s", grid4);
     snprintf(hf_power, 3, "%s", power);
 
