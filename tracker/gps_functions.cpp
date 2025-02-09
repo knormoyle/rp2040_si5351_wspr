@@ -2004,16 +2004,14 @@ uint64_t updateGpsDataAndTime(int ms) {
 
     // Don't want to potentially loop forever if something is wrong with gps,
     // and no '$' ever
-    if (charsAvailable &&
-            incomingChar != '$' && incomingChar != '\r' && incomingChar != '\n') {
+    if (charsAvailable && incomingChar != '$') {
         if (VERBY[1])
             StampPrintf("INFO: initially drained NMEA chars to align to $|CR|LF. uart rx %d" EOL,
                 (int) charsAvailable);
         drainCharCnt = 0;
         Watchdog.reset();
         // should be at most 150 to drain
-        while (charsAvailable &&
-            incomingChar != '$' && incomingChar != '\r' && incomingChar != '\n') {
+        while (charsAvailable && incomingChar != '$') {
             getChar();
             drainCharCnt += 1;
             // this is really just for the case where the baud rate is wrong or something
