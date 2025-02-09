@@ -1792,7 +1792,7 @@ void GpsON(bool GpsColdReset) {
 
     if (!GpsColdReset && GpsIsOn()) {
         // fake this to avoid doing a gps warm reset if successfully on?
-        V1_print("do nothing because GpsIsOn()");
+        V1_println(F("do nothing because GpsIsOn()"));
         sentencesFound = true;
     }
 
@@ -1801,10 +1801,10 @@ void GpsON(bool GpsColdReset) {
         tryCnt += 1;
         if (tryCnt >= 5) {
             if (GpsColdReset) {
-                V1_print("ERROR: tryCnt 5 on GpsFullColdReset.. not retrying any more");
+                V1_println(F("ERROR: tryCnt 5 on GpsFullColdReset.. not retrying any more"));
                 break;
             } else {
-                V1_print("ERROR: tryCnt 5 on GpsWarmReset.. switch to trying GpsColdReset");
+                V1_println(F("ERROR: tryCnt 5 on GpsWarmReset.. switch to trying GpsColdReset"));
                 GpsColdReset = true;
                 tryCnt = 0;
             }
