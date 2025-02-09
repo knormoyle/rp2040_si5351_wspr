@@ -9,6 +9,9 @@
 // ATGM336N if false
 extern bool USE_SIM65M;
 
+// Don't reconfig if not necessary
+bool WARM_RESET_REDO_CONFIG = false;
+
 //*******************************************
 // Reference docs (for SIM28 but should apply)
 // can download all from https://simcom.ee/documents/?dir=SIM28
@@ -393,9 +396,8 @@ void setGpsBalloonMode(void) {
             V1_print(F("Normal mode: sent $PAIR080,0*2E" CR LF));
         }
         Serial2.flush();
-        sleep_ms(2000);
+        sleep_ms(1000);
     }
-
     // FIX! should we not worry about setting balloon mode (3) for ATGM336?
     // doesn't seem like ATGM336 has a balloon mode. no PCAS10 cmd in
     // the CASIC specifiction pdf
@@ -630,7 +632,6 @@ void setGpsBroadcast(void) {
         Serial2.flush();
         busy_wait_us(2000);
     }
-
 
     V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
     V1_print(F("setGpsBroadcast END" EOL));
@@ -1638,52 +1639,64 @@ bool GpsWarmReset(void) {
     gpsSleepForMillis(2000, false);  // no early out
 
     //****************************
-    // ATGM336H:
-    // if it comes back up in out desired BAUD rate already,
-    // everything will be fine and we'll start talking to it
-    // as long as the tracker only got one other Baud rate other than 9600
-    // all will be fine
-    // or will this come out of warm reset at 9600 baud and we can't talk to it?
-    // FIX! this is a don't care then? whatever it was? or ??
-    // but since we serial2.end() above, we have to restart it on the rp2040
-
-    //****************************
     int BAUD_RATE;
     if (USE_SIM65M) BAUD_RATE = SIM65M_BAUD_RATE;
     else BAUD_RATE = ATGM336H_BAUD_RATE;
     int desiredBaud = checkGpsBaudRate(BAUD_RATE);
 
     //****************************
-    // FIX! does SIM65M sometimes come up in 115200 and
-    // sometimes in the last BAUD_RATE set?
-    // do both?
+    // should come up in the last programmed baud rate (from cold reset)
     if (USE_SIM65M) {
-        // it either comes up in desiredBaud from some memory, or comes up in 115200?
-        Serial2.begin(115200);
-        // brings it down to 9600 baud
-        setGpsBaud(desiredBaud);
+        // it either comes up in desiredBaud from some memory (9600?), or comes up in 115200?
+        // Serial2.begin(115200);
+        Serial2.begin(desiredBaud);
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
+        // we never change ATGM336 baud rate now.
         Serial2.begin(9600);
-        // since Serial2 was reset by setGpsBaud()..could try it again.
-        // might aid recovery
-        // setGpsBaud(desiredBaud);
+    }
+    gpsSleepForMillis(500, false);  // no early out
+
+    if (WARM_RESET_REDO_CONFIG) {
+        //****************************
+        // ATGM336H:
+        // if it comes back up in out desired BAUD rate already,
+        // everything will be fine and we'll start talking to it
+        // as long as the tracker only got one other Baud rate other than 9600
+        // all will be fine
+        // or will this come out of warm reset at 9600 baud and we can't talk to it?
+        // FIX! this is a don't care then? whatever it was? or ??
+        // but since we serial2.end() above, we have to restart it on the rp2040
+        if (USE_SIM65M) {
+            // brings it down to 9600 baud
+            setGpsBaud(desiredBaud);
+        }
+        gpsSleepForMillis(1000, false);  // no early out
+
+        // setGpsConstellations(7);
+        // FIX! try just GPS to see effect on power on current
+
+        // redundant sometimes
+        // all constellations
+        setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
+        // set desired broadcast
+        // we don't need no ZDA/TXT
+        setGpsBroadcast();
+
+        // always reconfig this. there were known issues with ublox losing this?
+        // also: hard to realize if we lost it, unless we read the mode?
+        if (USE_SIM65M) setGpsBalloonMode();
+
     }
 
-    gpsSleepForMillis(2000, false);  // no early out
+    // always read it to make sure it's right thru warm reset
+    V1_println(F("Read the navigation mode: $PAIR081*33"));
+    // Packet Type:081 PAIR_COMMON_GET_NAVIGATION_MODE
+    Serial2.print("$PAIR081*33" CR LF);
+    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
 
-    if (USE_SIM65M) setGpsBalloonMode();
-
-    // setGpsConstellations(7);
-    // FIX! try just GPS to see effect on power on current
-
-    // redundant sometimes
-    // all constellations
-    setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
-    // set desired broadcast
-    // we don't need no ZDA/TXT
-    setGpsBroadcast();
     // we could change the default config to power up with GNSS off?
+    // so always do this?
     if (USE_SIM65M) setGnssOn_SIM65M();
 
     bool sentencesFound = getInitialGpsOutput();
