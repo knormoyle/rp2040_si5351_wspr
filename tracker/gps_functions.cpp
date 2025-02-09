@@ -1967,7 +1967,6 @@ uint64_t updateGpsDataAndTime(int ms) {
     // Could keep the sum for all time, and track total busy time..
     // but I think better not to average..just track this particular call.
     int incomingCharCnt = 0;
-    int drainCharCnt = 0;
     int charsToDrain = 0;
     bool nullChar = false;
     bool spaceChar = false;
@@ -1989,35 +1988,11 @@ uint64_t updateGpsDataAndTime(int ms) {
         }
     }
 
-    // Now drain until we get to the start of a sentence ($)
-    // so we don't get checksum errors on a partial sentence
 
-    // At worst, a partial sentence to discard.
-    // Can't be more than 120 chars or so?
-
-    // Interesting question about whether we lose CR LF between sentences
-    // doing this draining. I guess stop on CR or LF also.
-
-    // Same issue when we end early on a partial sentence
-    // I suppose it depends on how we ended the prior burst handling?
-    // maybe we should preserve any CR LF we see in the queue, also?
-
-    // Don't want to potentially loop forever if something is wrong with gps,
-    // and no '$' ever
-    if (charsAvailable && incomingChar != '$') {
-        if (VERBY[1])
-            StampPrintf("INFO: initially drained NMEA chars to align to $|CR|LF. uart rx %d" EOL,
-                (int) charsAvailable);
-        drainCharCnt = 0;
-        Watchdog.reset();
-        // should be at most 150 to drain
-        while (charsAvailable && incomingChar != '$') {
-            getChar();
-            drainCharCnt += 1;
-            // this is really just for the case where the baud rate is wrong or something
-            if (drainCharCnt > 180) break;
-        }
-    }
+    // don't start sending to TinyGPS until we get $|CR|LF so we know we're aligned 
+    // can't do in another loop, because of delays getting chars. Have
+    // to have it in this main timeout loop
+    bool aligned = false;
 
     // incomingChar will be '0' if charsAvailable is 0 at this point
     // incomingChar could have a valid char if charsAvailable was nonzero.
@@ -2030,34 +2005,31 @@ uint64_t updateGpsDataAndTime(int ms) {
             incomingCharCnt++;
             // start the duration timing when we get the first char
             if (start_millis == 0) start_millis = current_millis;
+            // shouldn't happen any more?
             if (VERBY[1] && charsAvailable >= 31) {
-                // this should only be full on the first char
-                // our unload should keep up with new loads after that
-                if (incomingCharCnt > 1)
-                    StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL,
-                        (int) charsAvailable, incomingCharCnt);
-                else
-                    StampPrintf("WARN: full. uart rx depth %d incomingCharCnt %d" EOL,
-                        (int) charsAvailable, incomingCharCnt);
+                StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL,
+                    (int) charsAvailable, incomingCharCnt);
             }
-            // always send everything to TinyGPS++ ??
-            // does it expect the CR LF between sentences?
-            gps.encode(incomingChar);
             // do we get any null chars?
             // are CR LF unprintable?
             spaceChar = false;
             nullChar = false;
             printable = isprint(incomingChar);
             switch (incomingChar) {
-                case '$':  sentenceStartCnt++; break;
+                case '$':  aligned = true; sentenceStartCnt++; break;
+                case '\r': aligned = true; break; // only matters for first one
+                case '\n': aligned = true; break; // only matters for first one
                 case '*':  sentenceEndCnt++; break;
                 case '\0': nullChar = true; break;
                 case ' ':  spaceChar = true; break;
                 default: { ; }
             }
-            // always strip these here
-            bool enableStrip = true;
-            if (enableStrip && (spaceChar || nullChar || !printable)) {
+            // after aligning, send everything to TinyGPS++ ??
+            // does it expect the CR LF between sentences?
+            if (aligned) gps.encode(incomingChar);
+
+            // always strip these here, and continue the loop
+            if (spaceChar || nullChar || !printable) {
                 getChar();
                 current_millis = millis();
                 continue;
