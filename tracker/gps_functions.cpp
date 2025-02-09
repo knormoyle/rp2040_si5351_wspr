@@ -1978,7 +1978,7 @@ uint64_t updateGpsDataAndTime(int ms) {
     getChar();
     if (charsAvailable>=31) {
         if (VERBY[1])
-            StampPrintf("INFO: draining NMEA chars because initially full. rx was %d" EOL,
+            StampPrintf("INFO: initially drained NMEA chars because rx full. uart rx %d" EOL,
                 (int) charsAvailable);
         charsToDrain = charsAvailable;
         Watchdog.reset();
@@ -2007,7 +2007,7 @@ uint64_t updateGpsDataAndTime(int ms) {
     if (charsAvailable &&
             incomingChar != '$' && incomingChar != '\r' && incomingChar != '\n') {
         if (VERBY[1])
-            StampPrintf("INFO: draining NMEA chars to align to $|CR|LF. uart initial rx was %d" EOL,
+            StampPrintf("INFO: initially drained NMEA chars to align to $|CR|LF. uart rx %d" EOL,
                 (int) charsAvailable);
         drainCharCnt = 0;
         Watchdog.reset();
