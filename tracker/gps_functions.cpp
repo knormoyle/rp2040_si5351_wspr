@@ -374,7 +374,7 @@ void setGpsBalloonMode(void) {
     // '4' Stationary mode: For stationary applications where a zero dynamic assumed.
     // '5' Reserved
     // is this really drone mode
-    // Drone mode: used for drone applications with equivalent dynamics range 
+    // Drone mode: used for drone applications with equivalent dynamics range
     // and vertical application on different flight phase (Ex. Hovering, cruising etc)
     // '6' Reserved
     // '7' Swimming mode: For swimming purpose so that it smooths the trajectory and
@@ -1695,7 +1695,7 @@ bool GpsWarmReset(void) {
 
     if (sentencesFound) GpsIsOn_state = true;
     uint64_t duration_millis = millis() - start_millis;
-    V1_print(F("GpsWarmReset END")); 
+    V1_print(F("GpsWarmReset END"));
     V1_printf(" sentencesFound %u", sentencesFound);
     V1_printf(" duration_millis %" PRIu64 EOL, duration_millis);
     return sentencesFound;
@@ -1917,7 +1917,7 @@ void GpsOFF(bool keepTinyGpsState) {
 }
 
 
-//********
+//************************************************
 // FIX! why was this static void before?
 uint64_t updateGpsDataAndTime(int ms) {
     // to make sure we get some update, even if fix_age is larger than 1 sec.
@@ -1967,32 +1967,58 @@ uint64_t updateGpsDataAndTime(int ms) {
     // Could keep the sum for all time, and track total busy time..
     // but I think better not to average..just track this particular call.
     int incomingCharCnt = 0;
+    int drainCharCnt = 0;
+    int charsToDrain = 0;
     bool nullChar = false;
     bool spaceChar = false;
     bool printable = true;
 
-    // always setup for next loop iteration
+    // do at most charsAvailable. the initial state of the fifo
+    // Can't use them because we may have discarded some chars after buffer full
     getChar();
-    // V1_flush();
+    if (charsAvailable>=31) {
+        if (VERBY[1])
+            StampPrintf("INFO: draining NMEA chars because initially full. rx was %d" EOL,
+                (int) charsAvailable);
+        charsToDrain = charsAvailable;
+        Watchdog.reset();
+        // should be at most 31 to drain
+        while (charsToDrain != 0) {
+            getChar();
+            charsToDrain -= 1;
+        }
+    }
 
-    // fast drain if necessary ..throw away any uart buffered broken sentence at start
-    // (since we're unaligned initially)
-    // hmm shouldn't get '0' but I guess it would drain that too
-    if (VERBY[1] && charsAvailable && incomingChar != '$')
-        StampPrintf("OKAY: did fast draining NMEA backup to '$'. uart rx was %d" EOL,
-            (int) charsAvailable);
-    // if there's backup, means we jumped into the middle of a broadcast burst
-    // probably best to throw away all chars until we hit a '$' that is start of
-    // a sentence..like this situation:
-    // ,,38,05,,,38,20,71,192,,27,06,12
-    // $BDGSV,2,2,06,29,65,316,,30,54,126,*65
-    // I suppose only worry about this special 'fast draining' when we first get here
-    // we might totally drain without finding a '$'
-    // note this could empty with a sentence in the 32 deep fifo, just fitting
-    // UPDATE: maybe keep draining until we know we have enough room so not almost full!
-    // too much messaging if we're dancing around the buffer close to full, below
-    while (charsAvailable && incomingChar != '$') {
-        getChar();
+    // Now drain until we get to the start of a sentence ($)
+    // so we don't get checksum errors on a partial sentence
+
+    // At worst, a partial sentence to discard.
+    // Can't be more than 120 chars or so?
+
+    // Interesting question about whether we lose CR LF between sentences
+    // doing this draining. I guess stop on CR or LF also.
+
+    // Same issue when we end early on a partial sentence
+    // I suppose it depends on how we ended the prior burst handling?
+    // maybe we should preserve any CR LF we see in the queue, also?
+
+    // Don't want to potentially loop forever if something is wrong with gps,
+    // and no '$' ever
+    if (charsAvailable &&
+            incomingChar != '$' && incomingChar != '\r' && incomingChar != '\n') {
+        if (VERBY[1])
+            StampPrintf("INFO: draining NMEA chars to align to $|CR|LF. uart initial rx was %d" EOL,
+                (int) charsAvailable);
+        drainCharCnt = 0;
+        Watchdog.reset();
+        // should be at most 150 to drain
+        while (charsAvailable &&
+            incomingChar != '$' && incomingChar != '\r' && incomingChar != '\n') {
+            getChar();
+            drainCharCnt += 1;
+            // this is really just for the case where the baud rate is wrong or something
+            if (drainCharCnt > 180) break;
+        }
     }
 
     // incomingChar will be '0' if charsAvailable is 0 at this point
@@ -2010,14 +2036,14 @@ uint64_t updateGpsDataAndTime(int ms) {
                 // this should only be full on the first char
                 // our unload should keep up with new loads after that
                 if (incomingCharCnt > 1)
-                    StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL, 
+                    StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL,
                         (int) charsAvailable, incomingCharCnt);
                 else
-                    StampPrintf("WARN: full. uart rx depth %d incomingCharCnt %d" EOL, 
+                    StampPrintf("WARN: full. uart rx depth %d incomingCharCnt %d" EOL,
                         (int) charsAvailable, incomingCharCnt);
             }
             // always send everything to TinyGPS++ ??
-            // does it expect the CR LF ?
+            // does it expect the CR LF between sentences?
             gps.encode(incomingChar);
             // do we get any null chars?
             // are CR LF unprintable?
