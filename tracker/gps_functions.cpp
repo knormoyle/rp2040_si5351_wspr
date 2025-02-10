@@ -2226,9 +2226,9 @@ uint64_t updateGpsDataAndTime(int ms) {
 
         // NOTE: looks like grep of fix_age in putty.log can be frequently
         // just 125 to 143 millisecs
-        // so how about we only update when fix_age is < 300 millisecs??
+        // so how about we only update when fix_age is < 500 millisecs??
         if (!gpsTimeWasUpdated || (
-             (gps_date_valid && fix_age <= 300) && (
+             (gps_date_valid && fix_age <= 500) && (
                 hour() != gps_hour ||
                 minute() != gps_minute ||
                 second() != gps_second) )) {
