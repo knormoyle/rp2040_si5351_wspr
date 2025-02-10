@@ -760,7 +760,9 @@ int read_FLASH(void) {
 
     // adjust this to be 5500 if USE_SIM65M (in config_functions.cpp)
     // because more constellations and the repeat interval is 5 secs not 1 sec
-    if (USE_SIM65M) GPS_WAIT_FOR_NMEA_BURST_MAX = 5500; 
+    // STOPPED because worried about not getting enough setTime events to update rtc
+    // from gps time, probably because the TinyGps fixAge was > 300ms when I looked at it?
+    // if (USE_SIM65M) GPS_WAIT_FOR_NMEA_BURST_MAX = 5500; 
 
     decodeVERBY();
 

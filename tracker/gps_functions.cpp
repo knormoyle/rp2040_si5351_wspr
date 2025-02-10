@@ -541,7 +541,7 @@ void setGpsBroadcast(void) {
         // FIX! do we not get enough info in a single sec if we change to 5 here?
         // enable this, because we're disabling broadcast in default config now
         // for SIM65M. Assumes the default fix rate is 1000ms (1 per sec?)
-        if (true) {
+        if (false) {
             strncpy(nmeaSentence, "$PAIR062,0,5*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
@@ -561,6 +561,30 @@ void setGpsBroadcast(void) {
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(2000);
+        }
+        if (true) {
+            // set all to interval of 1 
+            strncpy(nmeaSentence, "$PAIR062,0,1*3F" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,1,1*3E" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,2,1*3D" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,3,1*3C" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,4,1*3B" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,5,1*3A" CR LF, 62);
+            Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            strncpy(nmeaSentence, "$PAIR062,6,1*39" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(2000);
         }
@@ -2208,24 +2232,30 @@ uint64_t updateGpsDataAndTime(int ms) {
                 hour() != gps_hour ||
                 minute() != gps_minute ||
                 second() != gps_second) )) {
-            // use hundredths from the gps, to busy_wait_usecs
-            // until we're more likely aligned to the second exactly.
-            if (gps_hundredths > 99) {
-                V1_printf("ERROR: TinyGPS gps_hundredths %u > 99. using 0"
-                    EOL, gps_hundredths);
-                gps_hundredths = 0;
+
+            if (false) {
+                // This idea doesn't work. We'd have to increment the secs = 59 to wrap to 0
+                // and then propagate it up thru everything
+
+                // use hundredths from the gps, to busy_wait_usecs
+                // until we're more likely aligned to the second exactly.
+                if (gps_hundredths > 99) {
+                    V1_printf("ERROR: TinyGPS gps_hundredths %u > 99. using 0"
+                        EOL, gps_hundredths);
+                    gps_hundredths = 0;
+                }
+                // Got some total code delay beyond the gps hundredths but assume 0.
+                // that will be our fixed error. (positive relative to gps). should be < 1.0 sec
+                // since we're polling gps NMEA every sec? Hmm, we should only use it if fix_age
+                // is small. fix_age is millisecs.
+                // So to keep error below 1 sec, lets only update if fix_millisecs < 1000
+                // or if we never updated.
+                uint32_t usecsToAlign = 1000000 - (gps_hundredths * 10000);
+                busy_wait_us(usecsToAlign);
+                // now we're one more second past the gps time we got from TinyGPS.
+                // adjust the second before we use it.
+                gps_second += 1;
             }
-            // Got some total code delay beyond the gps hundredths but assume 0.
-            // that will be our fixed error. (positive relative to gps). should be < 1.0 sec
-            // since we're polling gps NMEA every sec? Hmm, we should only use it if fix_age
-            // is small. fix_age is millisecs.
-            // So to keep error below 1 sec, lets only update if fix_millisecs < 1000
-            // or if we never updated.
-            uint32_t usecsToAlign = 1000000 - (gps_hundredths * 10000);
-            busy_wait_us(usecsToAlign);
-            // now we're one more second past the gps time we got from TinyGPS.
-            // adjust the second before we use it.
-            gps_second += 1;
 
             //******************************
             // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
@@ -2270,9 +2300,9 @@ uint64_t updateGpsDataAndTime(int ms) {
             if (gpsTimeBad) {
                 V1_print(F("ERROR: gps time is bad. Maybe no received gps time yet."));
                 V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-                    gps_day, gps_month, gps_year);
-                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
                     gps_hour, gps_minute, gps_second);
+                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+                    gps_day, gps_month, gps_year);
             } else {
                 setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
                 // should be UTC time zone?
