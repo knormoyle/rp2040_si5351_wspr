@@ -108,6 +108,7 @@ public:
    uint8_t day();
    //*************
    // HACK: kevin moved from private 12_15_24 so the .ino can clear them in invalidateTinyGpsState()
+   // no longer do that. use flush()
    bool valid, updated;
    uint32_t date;
    //*************
@@ -138,13 +139,20 @@ public:
    uint8_t minute();
    uint8_t second();
    uint8_t centisecond();
+   //*************
+   // HACK: kevin moved from private 12_15_24 so the .ino can clear them in invalidateTinyGpsState()
+   // no longer do that. use flush()
+   bool valid, updated;
+   uint32_t time;
+   //*************
+   // HACK: kevin better: make public method
+   void flush() { updated = false; valid = false; time = 0; }
 
    TinyGPSTime() : valid(false), updated(false), time(0)
    {}
 
 private:
-   bool valid, updated;
-   uint32_t time, newTime;
+   uint32_t newTime;
    uint32_t lastCommitTime;
    void commit();
    void setTime(const char *term);

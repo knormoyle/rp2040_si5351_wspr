@@ -19,6 +19,7 @@ void invalidateTinyGpsState();
 void GpsON(bool GpsColdReset);
 void GpsOFF(bool keepTinyGpsState);
 uint64_t updateGpsDataAndTime(int ms);
+void checkUpdateTimeFromGps(void);
 void gpsDebug(void);
 void writeGpsConfigNoBroadcastToFlash(void);
 

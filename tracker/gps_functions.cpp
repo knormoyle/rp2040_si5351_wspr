@@ -565,7 +565,7 @@ void setGpsBroadcast(void) {
             busy_wait_us(2000);
         }
         if (true) {
-            // set all to interval of 1 
+            // set all to interval of 1
             strncpy(nmeaSentence, "$PAIR062,0,1*3F" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
@@ -1641,7 +1641,7 @@ bool GpsWarmReset(void) {
     digitalWrite(GpsPwr, HIGH);
     Serial2.end();
     // 2 secs off?
-    gpsSleepForMillis(2000, false); // no early out
+    gpsSleepForMillis(2000, false);  // no early out
 
     // match the pwm that's done for cold reset
     if (PWM_GPS_POWER_ON_MODE) {
@@ -1711,18 +1711,18 @@ bool GpsWarmReset(void) {
         // always reconfig this. there were known issues with ublox losing this?
         // also: hard to realize if we lost it, unless we read the mode?
         if (USE_SIM65M) setGpsBalloonMode();
-
     }
 
-    // always read it to make sure it's right thru warm reset
-    V1_println(F("Read the navigation mode: $PAIR081*33"));
-    // Packet Type:081 PAIR_COMMON_GET_NAVIGATION_MODE
-    Serial2.print("$PAIR081*33" CR LF);
-    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
-
-    // we could change the default config to power up with GNSS off?
-    // so always do this?
-    if (USE_SIM65M) setGnssOn_SIM65M();
+    if (USE_SIM65M) {
+        // always read it to make sure it's right thru warm reset
+        V1_println(F("Read the navigation mode: $PAIR081*33"));
+        // Packet Type:081 PAIR_COMMON_GET_NAVIGATION_MODE
+        Serial2.print("$PAIR081*33" CR LF);
+        nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
+        // we could change the default config to power up with GNSS off?
+        // so always do this?
+        setGnssOn_SIM65M();
+    }
 
     bool sentencesFound = getInitialGpsOutput();
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
@@ -1912,20 +1912,12 @@ void invalidateTinyGpsState(void) {
     // how do we clear a fix from TinyGPS++ ?
     // do we wait until we turn GpsON() on, beforre clearing GPSInvalidAll
     // we can decrement the count only if gps is on? (in setup1())
-    if (false) {
-        // this worked
-        gps.date.valid = false;
-        gps.date.updated = false;
-        gps.date.date = 0;
-        gps.location.valid = false;
-        gps.location.updated = false;
-    } else {
-        // new public methods created in TinyGPS++.h
-        gps.location.flush();
-        gps.location.fixQualityFlush();
-        gps.location.fixModeFlush();
-        gps.date.flush();
-    }
+    // new public methods created in TinyGPS++.h
+    gps.location.flush();
+    gps.location.fixQualityFlush();
+    gps.location.fixModeFlush();
+    gps.date.flush();
+    gps.time.flush();
     V1_println(F("invalidateTinyGpsState END"));
 }
 
@@ -1959,7 +1951,6 @@ void GpsOFF(bool keepTinyGpsState) {
 // FIX! why was this static void before?
 uint64_t updateGpsDataAndTime(int ms) {
     // to make sure we get some update, even if fix_age is larger than 1 sec.
-    static bool gpsTimeWasUpdated = false;
     V1_println(F("updateGpsDataAndTime START"));
     Watchdog.reset();
 
@@ -2013,7 +2004,7 @@ uint64_t updateGpsDataAndTime(int ms) {
     // do at most charsAvailable. the initial state of the fifo
     // Can't use them because we may have discarded some chars after buffer full
     getChar();
-    if (charsAvailable>=31) {
+    if (charsAvailable >= 31) {
         if (VERBY[1])
             StampPrintf("INFO: initially drained NMEA chars because rx full. uart rx %d" EOL,
                 (int) charsAvailable);
@@ -2026,8 +2017,7 @@ uint64_t updateGpsDataAndTime(int ms) {
         }
     }
 
-
-    // don't start sending to TinyGPS until we get $|CR|LF so we know we're aligned 
+    // don't start sending to TinyGPS until we get $|CR|LF so we know we're aligned
     // can't do in another loop, because of delays getting chars. Have
     // to have it in this main timeout loop
     bool aligned = false;
@@ -2109,6 +2099,12 @@ uint64_t updateGpsDataAndTime(int ms) {
             getChar();
         }
 
+        //*******************
+        // keep it as close as possible to the NMEA sentence arrival?
+        // I suppose we'll see gps.time.updated every time?
+        checkUpdateTimeFromGps();
+        //*******************
+
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
         // break out when we don't the next char right away
@@ -2131,191 +2127,43 @@ uint64_t updateGpsDataAndTime(int ms) {
         current_millis = millis();
     }
 
-    //*******************
     if (start_millis != 0)
         duration_millis = current_millis - start_millis;
     else
         duration_millis = 0;
 
-    // print/clear any accumulated NMEA sentence stuff
+    //*******************
     if (VERBY[1]) {
-        // print should only get dumped here?
-        nmeaBufferPrintAndClear();  // print and clear
+        // print/clear any accumulated NMEA sentence stuff
+        nmeaBufferPrintAndClear();
         V1_print(F(EOL));
-        // dump/flush the StampPrintf log_buffer
         DoLogPrint();
     }
-    if (VERBY[1]) {
-        // seems like we get 12 sentences every time we call this function
-        // should stay steady
-        int diff = sentenceStartCnt - sentenceEndCnt;
-        // these 3 form a oneliner
-        V1_print(F("updateGpsDataAndTime:"));
-        V1_printf(" start_millis %" PRIu64 " current_millis %" PRIu64,
-            start_millis, current_millis);
-        V1_printf(" sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
-            sentenceStartCnt, sentenceEndCnt, diff);
-        V1_flush();
 
-        // This will be lower than a peak rate
-        // It includes dead time at start, dead time at end...
-        // With some constant rate in the middle? but sentences could be split..
-        // fixed: entry_millis is the entrance to the function
-        // star_millis is the first char. so duration_millis will
-        // include the end stall detect (25 millis)
-        // So it's an average over that period.
-        float AvgCharRateSec;
-        if (duration_millis == 0) AvgCharRateSec = 0;
-        else AvgCharRateSec = 1000.0 * ((float)incomingCharCnt / (float)duration_millis);
-        // can it get too big?
-        if (AvgCharRateSec > 999999.9) AvgCharRateSec = 999999.9;
-        V1_printf(
-            "NMEA sentences: AvgCharRateSec %.f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,
-            AvgCharRateSec, duration_millis, incomingCharCnt);
-        V1_flush();
-    }
-
+    int diff = sentenceStartCnt - sentenceEndCnt;
     V1_print(F("updateGpsDataAndTime:"));
-    // year is uint16_t
-    V1_printf(" GpsInvalidAll:%u gps.time.isValid():%u gps.date.year():%u" EOL,
-        GpsInvalidAll, gps.time.isValid(), gps.date.year());
+    V1_printf(" start_millis %" PRIu64 " current_millis %" PRIu64,
+        start_millis, current_millis);
+    V1_printf(" sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
+        sentenceStartCnt, sentenceEndCnt, diff);
     V1_flush();
 
-    if (!GpsInvalidAll && gps.time.isValid() &&
-        (gps.date.year() >= 2024 && gps.date.year() <= 2034)) {
-        // FIX! don't be updating this every time
-        // this will end up checking every time we get a burst?
-
-        // do we need to check every iteration?
-        // Update the arduino (cpu) time. setTime is in the Time library.
-        // we don't care about comparing that the date is right??
-        // we actually don't care about hour..but good to be aligned with that
-        // uint8_t for gps data
-        // the Time things are int
-        // see example https://arduiniana.org/libraries/TinyGPS/
-        uint16_t gps_year;
-        // use now for setting rtc, so we have a better solar elevation
-        // calc if the time is old
-        // lat/lon will still be old. we don't use altitude for that calc?
-        uint8_t gps_month, gps_day, gps_hour, gps_minute, gps_second;
-        uint32_t fix_age;
-        // Use gps.time.age()?
-        // also duplicate this check to say it's a valid date in TinyGPS
-        fix_age = gps.time.age();
-        gps_year = gps.date.year();
-        gps_month = gps.date.month();
-        gps_day = gps.date.day();
-        gps_hour = gps.time.hour();
-        gps_minute = gps.time.minute();
-        gps_second = gps.time.second();
-
-        // new way. more accurate syncing?
-        // FIX! hmm. we don't get hundredths any more?
-        // so we could be off by +- 0.5 sec + code delay?
-        // (300 millisecs + ?)
-        uint8_t gps_hundredths;
-        gps_hundredths = gps.time.centisecond();
-        // FIX! we could also look at TimeLib timeStatus() to help qualify?
-        // https://github.com/PaulStoffregen/Time?tab=readme-ov-file
-        // enum is timeNotSet or timeSet
-        bool gps_date_valid = gps_year >= 2025 && gps_year <= 2034;
-
-        // function doesn't exist anymore?
-        // gps.crack_datetime(&gps_year, &gps_month, &gps_day, &gps_hour,
-        //     &gps_minute, &gps_second, &gps_hundredths, &fix_age);
-
-        // NOTE: looks like grep of fix_age in putty.log can be frequently
-        // just 125 to 143 millisecs
-        // so how about we only update when fix_age is < 500 millisecs??
-        if (!gpsTimeWasUpdated || (
-             (gps_date_valid && fix_age <= 500) && (
-                hour() != gps_hour ||
-                minute() != gps_minute ||
-                second() != gps_second) )) {
-
-            if (false) {
-                // This idea doesn't work. We'd have to increment the secs = 59 to wrap to 0
-                // and then propagate it up thru everything
-
-                // use hundredths from the gps, to busy_wait_usecs
-                // until we're more likely aligned to the second exactly.
-                if (gps_hundredths > 99) {
-                    V1_printf("ERROR: TinyGPS gps_hundredths %u > 99. using 0"
-                        EOL, gps_hundredths);
-                    gps_hundredths = 0;
-                }
-                // Got some total code delay beyond the gps hundredths but assume 0.
-                // that will be our fixed error. (positive relative to gps). should be < 1.0 sec
-                // since we're polling gps NMEA every sec? Hmm, we should only use it if fix_age
-                // is small. fix_age is millisecs.
-                // So to keep error below 1 sec, lets only update if fix_millisecs < 1000
-                // or if we never updated.
-                uint32_t usecsToAlign = 1000000 - (gps_hundredths * 10000);
-                busy_wait_us(usecsToAlign);
-                // now we're one more second past the gps time we got from TinyGPS.
-                // adjust the second before we use it.
-                gps_second += 1;
-            }
-
-            //******************************
-            // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
-            // year can be given as full four digit year or two digts (2010 or 10 for 2010);
-            // it is converted to years since 1970
-            // we don't compare day/month/year on time anywhere, except when looking
-            // for bad time from TinyGPS state (tracker.ino)
-            // FIX! should I work about setting day month year? why not
-            // then we can get all that info from the rtc, so if the gps data is
-            // stail for time, we get a better solar elevation calculation..accurate time?
-
-            // JUST IN CASE: let's validate the ranges and not update if invalid!!
-            bool gpsTimeBad = false;
-            // all uint8_t so don't have to check negatives
-            if (gps_hour > 23) gpsTimeBad = true;
-            if (gps_minute > 59) gpsTimeBad = true;
-            if (gps_second > 59) gpsTimeBad = true;
-            // should we validate by the month? forget about that.
-            // unlikely to glitch that way?
-            if (gps_day > 31) gpsTimeBad = true;
-            if (gps_month > 12) gpsTimeBad = true;
-            if (gps_month < 1) gpsTimeBad = true;
-            // should already have validated year range? but do it here too
-            // will have to remember to update this in 10 years (and above too!)
-            if (gps_year < 2025 && gps_year > 2034) gpsTimeBad = true;
-
-            // what the heck, check the days in a month is write.
-            // (subtract one from month)
-            // if we have a valid month for this array!
-            static const uint8_t monthDays[] =
-                {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-            if (!gpsTimeBad) {
-                // we know will be 0 to 11, from above check of gps_month
-                uint8_t validDays = monthDays[gps_month - 1];
-                if (gps_day > validDays) {
-                    V1_print(F("ERROR: gps time is bad."));
-                    V1_printf(" day %u too big. max %u for the month" EOL,
-                        gps_day, validDays);
-                    gpsTimeBad = true;
-                }
-            }
-            if (gpsTimeBad) {
-                V1_print(F("ERROR: gps time is bad. Maybe no received gps time yet."));
-                V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-                    gps_hour, gps_minute, gps_second);
-                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
-                    gps_day, gps_month, gps_year);
-            } else {
-                setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
-                // should be UTC time zone?
-                adjustTime(0);
-                gpsTimeWasUpdated = true;
-                V1_print(F("GOOD: rtc setTime() with"));
-                V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-                    gps_hour, gps_minute, gps_second);
-                V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
-                    gps_day, gps_month, gps_year);
-            }
-        }
-    }
+    // This will be lower than a peak rate
+    // It includes dead time at start, dead time at end...
+    // With some constant rate in the middle? but sentences could be split..
+    // fixed: entry_millis is the entrance to the function
+    // star_millis is the first char. so duration_millis will
+    // include the end stall detect (25 millis)
+    // So it's an average over that period.
+    float AvgCharRateSec;
+    if (duration_millis == 0) AvgCharRateSec = 0;
+    else AvgCharRateSec = 1000.0 * ((float)incomingCharCnt / (float)duration_millis);
+    // can it get too big?
+    if (AvgCharRateSec > 999999.9) AvgCharRateSec = 999999.9;
+    V1_printf(
+        "NMEA sentences: AvgCharRateSec %.f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,
+        AvgCharRateSec, duration_millis, incomingCharCnt);
+    V1_flush();
 
     //******************************
     // checksum errors at TinyGPS?
@@ -2336,13 +2184,165 @@ uint64_t updateGpsDataAndTime(int ms) {
     last_gcp = gcp;
     last_gswf = gswf;
     last_gfc = gfc;
-    //******************************
 
+    //******************************
     updateStatusLED();
     uint64_t total_millis = millis() - entry_millis;
     // will be interesting to compare total_millis to duration_millis
     V1_printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL, total_millis);
     return total_millis;
+}
+
+//************************************************
+void checkUpdateTimeFromGps() {
+    static bool gpsDateTimeWasUpdated = false;
+    static uint64_t lastUpdate_millis = 0;
+
+    // time since last update. Don't update more than once every 30 secs
+    uint64_t elapsed_millis = millis() - lastUpdate_millis;
+    if (gpsDateTimeWasUpdated && elapsed_millis < 30000) { 
+        return;
+    }
+
+    uint16_t gps_year = gps.date.year();
+    bool gps_year_valid = gps_year >= 2025 && gps_year <= 2034;
+    uint32_t fix_age = gps.time.age();
+
+    // so how about we only update when fix_age is < 100 millisecs??
+    // (10 ms for possible code delays here
+    if (!gps_year_valid || fix_age > 100 || 
+            GpsInvalidAll || !gps.date.isValid() || !gps.time.isValid()) {
+        return;
+    }
+            
+    // FIX! don't be updating this every time
+    // this will end up checking every time we get a burst?
+    // uint8_t for gps data
+    // the Time things are int
+    // see example https://arduiniana.org/libraries/TinyGPS/
+    // use now for setting rtc, so we have a better solar elevation
+    // calc if the time is old
+    // lat/lon will still be old. we don't use altitude for that calc?
+
+    // these all should be stable/consistent as we're gathering them?
+    uint8_t gps_month = gps.date.month();
+    uint8_t gps_day = gps.date.day();
+    uint8_t gps_hour = gps.time.hour();
+    uint8_t gps_minute = gps.time.minute();
+    uint8_t gps_second = gps.time.second();
+
+    // to get a consistent snapshot of all
+    // store the current time in time variable t
+    time_t t = now();
+
+    // all the Time things are int
+    // https://stackoverflow.com/questions/6636793/what-are-the-general-rules-for-comparing-different-data-types-in-c
+    uint16_t y = (uint16_t) year(t);
+    uint8_t m = (uint8_t) month(t);
+    uint8_t d = (uint8_t) day(t);
+    uint8_t hh = (uint8_t) hour(t);
+    uint8_t mm = (uint8_t) minute(t);
+    uint8_t ss = (uint8_t) second(t);
+
+    if (gpsDateTimeWasUpdated && 
+        y == gps_year && m == gps_month && d == gps_day &&
+        hh == gps_hour && mm == gps_minute && ss == gps_second) {
+        return;
+    }
+    V1_print(F("WARN: checkUpdateTimeFromGps not set or drift?" EOL));
+
+    uint8_t gps_hundredths = gps.time.centisecond();
+
+    //******************************
+    // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
+    // year can be given as full four digit year or two digts (2010 or 10 for 2010);
+    // it is converted to years since 1970
+    // we don't compare day/month/year on time anywhere, except when looking
+    // for bad time from TinyGPS state (tracker.ino)
+    // FIX! should I work about setting day month year? why not
+    // then we can get all that info from the rtc, so if the gps data is
+    // stail for time, we get a better solar elevation calculation..accurate time?
+
+    // JUST IN CASE: let's validate the ranges and not update if invalid!!
+    // all uint8_t so don't have to check negatives
+    bool gpsDateTimeBad = false;
+    if (gps_hour > 23) gpsDateTimeBad = true;
+    if (gps_minute > 59) gpsDateTimeBad = true;
+    if (gps_second > 59) gpsDateTimeBad = true;
+    // should we validate by the month? forget about that.
+    // unlikely to glitch that way?
+    if (gps_day > 31) gpsDateTimeBad = true;
+    if (gps_month > 12) gpsDateTimeBad = true;
+    if (gps_month < 1) gpsDateTimeBad = true;
+    // should already have validated year range? but do it here too
+    // will have to remember to update this in 10 years (and above too!)
+    if (gps_year < 2025 && gps_year > 2034) gpsDateTimeBad = true;
+
+    if (gps_hundredths > 99) {
+        V1_printf("ERROR: TinyGPS gps_hundredths %u > 99" EOL,
+            gps_hundredths);
+        gpsDateTimeBad = true;
+    }
+
+    // what the heck, check the days in a month is write.
+    // (subtract one from month)
+    // if we have a valid month for this array!
+    static const uint8_t monthDays[] =
+        {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    if (!gpsDateTimeBad) {
+        // we know will be 0 to 11, from above check of gps_month
+        uint8_t validDays = monthDays[gps_month - 1];
+        if (gps_day > validDays) {
+            V1_print(F("ERROR: gps time is bad."));
+            V1_printf(" day %u too big. max %u for the month" EOL,
+                gps_day, validDays);
+            gpsDateTimeBad = true;
+        }
+    }
+
+    if (gpsDateTimeBad) {
+        V1_print(F("ERROR: gps time is bad. Maybe no received gps time yet."));
+        V1_printf(" gps_hour %u gps_minute %u gps_second %u",
+            gps_hour, gps_minute, gps_second);
+        V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+            gps_day, gps_month, gps_year);
+    } else {
+        setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+        // should be UTC time zone?
+
+        V1_print(F("GOOD: rtc setTime() with"));
+        V1_printf(" gps_hour %u gps_minute %u gps_second %u",
+            gps_hour, gps_minute, gps_second);
+        V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+            gps_day, gps_month, gps_year);
+
+        V1_print(F("time (t) was:"));
+        V1_printf(" hour %d minute %d second %d", hh, mm, ss);
+        V1_printf(" day %d month %d year %d", d, m, y);
+        V1_printf(" gpsDateTimeWasUpdated %u" EOL, gpsDateTimeWasUpdated);
+
+        int secondDelta = ((int) ss) - ((int) gps_second);
+        V1_printf("system vs gps: secondDelta %d" EOL, secondDelta);
+
+        V1_printf("gps fix_age was: %lu" EOL, fix_age);
+        fix_age = gps.time.age();
+        V1_printf("gps fix_age currently: %lu" EOL, fix_age);
+
+        // bump a sec to account for delays from gps to the code above?
+        // and maybe any floor effects (ignoring millisecs) that the Time library does?
+        adjustTime(1);
+        // we could just look at hundredths and bump if > 50 ? (rounding?)
+        // could bump time by 1 sec?
+        // does Time library chop things down to sec by using millis()
+        // does that introduce error also?
+        if (gps_hundredths > 50) {
+            V1_printf("Adjusting time +1 sec because gps_hundredths %u" EOL,
+                gps_hundredths);
+            adjustTime(1);
+        }
+        gpsDateTimeWasUpdated = true;
+        lastUpdate_millis = millis();
+    }
 }
 
 //************************************************
@@ -2548,6 +2548,9 @@ void kazuClocksSlow() {
         // CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
 
         // CLK RTC = XOSC 12MHz / 256 = 46875Hz
+        // FIX! this should be usb clk / 1024 ?? around
+        // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/pico_runtime_init/runtime_init_clocks.c
+
         clock_configure(clk_rtc,
             0,  // No GLMUX
             CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,

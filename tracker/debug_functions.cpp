@@ -191,6 +191,7 @@ void measureMyFreqs(void) {
     uint32_t f_clk_usb = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_USB);
     uint32_t f_clk_adc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_ADC);
 #ifdef CLOCKS_FC0_SRC_VALUE_CLK_RTC
+    // accuracy is just +-1Khz here?
     uint32_t f_clk_rtc = frequency_count_khz(CLOCKS_FC0_SRC_VALUE_CLK_RTC);
 #endif
 
