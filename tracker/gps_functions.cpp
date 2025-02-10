@@ -508,6 +508,7 @@ void setGpsBroadcast(void) {
         // If set less than 1000 ms, ASCII NMEA will automatically increase
         // the update interval in order to decrease IO throughput.
         // It will return false if the operating voltage setting is not correct.
+
         // For SIM65M module, <Fix_Interval> parameter only support 1000 ms.
         // $PAIR050,<Fix_Interval>*<checksum>
         // Fix_Intervalmsec--Position fix interval in milliseconds (ms).

@@ -758,9 +758,9 @@ int read_FLASH(void) {
     if (cc._use_sim65m[0] == '1') USE_SIM65M = true;
     else USE_SIM65M = false;
 
-    // adjust this to be 2000 if USE_SIM65M (in config_functions.cpp)
+    // adjust this to be 5500 if USE_SIM65M (in config_functions.cpp)
     // because more constellations and the repeat interval is 5 secs not 1 sec
-    if (USE_SIM65M) GPS_WAIT_FOR_NMEA_BURST_MAX = 2000; 
+    if (USE_SIM65M) GPS_WAIT_FOR_NMEA_BURST_MAX = 5500; 
 
     decodeVERBY();
 

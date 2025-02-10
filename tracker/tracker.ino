@@ -2406,11 +2406,11 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
             notspaceCnt += 1;
         }
     }
-    V1_printf("length check: hf_callsign %s before jtencode was strlen %d" EOL,
+    V1_printf("length check: hf_callsign %s before jtencode had notspaceCnt %d" EOL,
         hf_callsign, notspaceCnt);
 
     if (notspaceCnt < 3 || notspaceCnt > 6) {
-        V1_printf("ERROR: bad notspaceCnt: hf_callsign %s before jtencode was strlen %d" EOL,
+        V1_printf("ERROR: bad notspaceCnt: hf_callsign %s before jtencode had notspaceCnt %d" EOL,
             hf_callsign, notspaceCnt);
         fatalErrorReboot = true;
     }
