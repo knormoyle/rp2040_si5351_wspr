@@ -1922,7 +1922,7 @@ void invalidateTinyGpsState(void) {
 }
 
 //************************************************
-void GpsOFF(bool keepTinyGpsState) {
+void GpsOFF() {
     V1_printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
     digitalWrite(GpsPwr, HIGH);
     // Serial2.end() Disables serial communication,
@@ -1934,8 +1934,9 @@ void GpsOFF(bool keepTinyGpsState) {
     gpsSleepForMillis(1000, false);
     // unlike i2c to vfo, we don't tear down the Serial2 definition...just .end()
     // so we can just .begin() again later
-    if (!keepTinyGpsState)
-        invalidateTinyGpsState();
+    // have to flush everything. Can't keep enqueued time. not worth saving altitude/lat/lon..we have to 
+    // wait for time to get set again?
+    invalidateTinyGpsState();
 
     GpsIsOn_state = false;
     GpsStartTime = 0;
@@ -2307,6 +2308,21 @@ void checkUpdateTimeFromGps() {
         V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
             gps_day, gps_month, gps_year);
     } else {
+        // did we flush TinyGPS state out when we turn gps off?
+        V1_print(F(EOL));
+        V1_print(F(EOL));
+        bool validA = gps.satellites.isValid() && !GpsInvalidAll;
+        bool validB = gps.hdop.isValid() && !GpsInvalidAll;
+        bool validC = gps.location.isValid() && !GpsInvalidAll;
+        bool validD = gps.altitude.isValid() && !GpsInvalidAll;
+        bool validE = gps.course.isValid() && !GpsInvalidAll;
+        bool validF = gps.speed.isValid() && !GpsInvalidAll;
+        // FIX! don't have GpsInvalidAll in these
+        bool validG = gps.date.isValid();
+        bool validH = gps.time.isValid();
+
+        V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
+        !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
         setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
         // should be UTC time zone?
 
@@ -2326,28 +2342,32 @@ void checkUpdateTimeFromGps() {
         if (gps_minute != mm) {
             minuteDelta = ((int) mm) - ((int) gps_minute);
         }
+
         // check hour delta also? to cover hour transitions
         int hourDelta = 0;
         if (gps_hour != mm) {
             hourDelta = ((int) hh) - ((int) gps_hour);
         }
+
         // check day delta also? to cover day transitions
         // won't bother with month or year transitions
         int dayDelta = 0;
         if (gps_day != mm) {
             dayDelta = ((int) d) - ((int) gps_day);
         }
-        // (except the first setting)
-
         int secondDelta = ((int) ss) - ((int) gps_second);
+        secondDelta += (60 * minuteDelta) + (60 * 60 * hourDelta) + (60 * 60 * 24 * dayDelta);
+
         // add in the minuteDelta cover minute transitions
         // too much drift/error?
-        if (abs(secondDelta) > 1) {
-            V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d" EOL, secondDelta);
+        // don't print the first time thru..since that doesn't matter
+        if (gpsDateTimeWasUpdated) {
+            V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
+            if (abs(secondDelta) > 1) {
+                V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d" EOL, secondDelta);
+            }
         }
         
-        secondDelta += (60 * minuteDelta) + (60 * 60 * hourDelta) + (60 * 60 * 24 * dayDelta);
-        V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
 
         V1_printf("gps fix_age was: %lu" EOL, fix_age);
         fix_age = gps.time.age();

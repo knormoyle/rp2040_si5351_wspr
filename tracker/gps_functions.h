@@ -17,7 +17,7 @@ bool GpsWarmReset(void);
 // why did this not compile if void in param?
 void invalidateTinyGpsState();
 void GpsON(bool GpsColdReset);
-void GpsOFF(bool keepTinyGpsState);
+void GpsOFF();
 uint64_t updateGpsDataAndTime(int ms);
 void checkUpdateTimeFromGps(void);
 void gpsDebug(void);

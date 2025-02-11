@@ -1386,7 +1386,7 @@ void loop1() {
                 V1_println(F("ERROR: loop1() GpsWatchdogCnt > 20 ..gps full cold reset"));
                 // FIX! have to send cold gps reset, in case ephemeris is corrupted?
                 // since vbat is always there.. otherwise this is a warm reset?
-                GpsOFF(false);  // don't keep TinyGPS state
+                GpsOFF();
 
                 // note that GpsOFF() has public access to TinyGPS++ now and
                 // update: it uses some hacked-in public methods to flush, now
@@ -1680,7 +1680,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     }
 
     // don't want gps power and tx power together
-    GpsOFF(true);  // keep TinyGPS state
+    GpsOFF();
 
     // start the vfo 20 seconds before needed
     // if off beforehand, it will have no clocks running
@@ -1931,7 +1931,7 @@ void sleepSeconds(int secs) {
         if (solarVoltage < BattMin || solarVoltage < GpsMinVolt) {
             V1_printf("sleepSeconds() bad solarVoltage %.f ..(1) turn gps off" EOL,
                 solarVoltage);
-            GpsOFF(false);  // don't keep TinyGPS state
+            GpsOFF();
         }
         // FIX! should we unload/use GPS data during this?
         // gps could be on or off, so no?
@@ -1971,7 +1971,7 @@ void sleepSeconds(int secs) {
     if (solarVoltage < BattMin || solarVoltage < GpsMinVolt) {
         V1_printf("sleepSeconds() bad solarVoltage %.f ..(2) turn gps off" EOL,
             solarVoltage);
-        GpsOFF(false);  // don't keep TinyGPS state
+        GpsOFF();
     } else {
         // I suppose we really want to know how long it's been off
         // shouldn't keep it off if we don't have a valid fix

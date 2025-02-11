@@ -392,9 +392,9 @@ void gpsResetTest() {
     if (count == 0) {
         V0_print(F("need gps init and cold reset once to fully setup gps"));
         GpsINIT();
-        GpsOFF(false);  // don't keep TinyGPS state
+        GpsOFF();
         GpsON(false);   // no gps cold reset
-        GpsOFF(false);  // don't keep TinyGPS state
+        GpsOFF();
         count += 1;
         V0_print(F("do_gpsResetTest END"));
         V0_flush();
@@ -411,6 +411,7 @@ void gpsResetTest() {
         // we can look at time/drift updates here
         updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
         fix_valid_all = !GpsInvalidAll &&
+            gps.date.isValid() &&
             gps.time.isValid() &&
             (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
             gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
@@ -449,7 +450,7 @@ void gpsResetTest() {
         // prints out the summary info
         gpsDebug();
     }
-    GpsOFF(false);  // don't keep TinyGPS state
+    GpsOFF();
     count += 1;
     V0_print(F("do_gpsResetTest END"));
     V0_flush();

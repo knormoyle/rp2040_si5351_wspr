@@ -310,7 +310,7 @@ void do_someTest(void) {
     // quick and dirty way to execute some different tests
     if (true) {
         V0_print(F("Cycle thru the 4 wspr symbol frequencies. 15 secs each"));
-        GpsOFF(true);  // keep TinyGPS state
+        GpsOFF();
         init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
         init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
         vfo_turn_on();

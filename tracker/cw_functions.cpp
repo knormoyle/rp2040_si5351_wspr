@@ -326,7 +326,7 @@ void cw_tx_state(tx_state_e s) {
         case E_STATE_TX: if (tx_state != E_STATE_TX) {
             V1_print(F(EOL "cw_tx_state E_STATE_TX start" EOL));
             // make sure it GPS is off.
-            GpsOFF(true);  // keep TinyGPS state
+            GpsOFF();
             updateStatusLED();
             // start with the vfo off
             vfo_turn_off();
