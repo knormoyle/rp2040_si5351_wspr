@@ -2326,7 +2326,17 @@ void checkUpdateTimeFromGps() {
         if (gps_minute != mm) {
             minuteDelta = ((int) mm) - ((int) gps_minute);
         }
-        // FIX! should we check hour delta also? should never be that much drift?
+        // check hour delta also? to cover hour transitions
+        int hourDelta = 0;
+        if (gps_hour != mm) {
+            hourDelta = ((int) hh) - ((int) gps_hour);
+        }
+        // check day delta also? to cover day transitions
+        // won't bother with month or year transitions
+        int dayDelta = 0;
+        if (gps_day != mm) {
+            dayDelta = ((int) d) - ((int) gps_day);
+        }
         // (except the first setting)
 
         int secondDelta = ((int) ss) - ((int) gps_second);
@@ -2336,7 +2346,7 @@ void checkUpdateTimeFromGps() {
             V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d" EOL, secondDelta);
         }
         
-        secondDelta += 60 * minuteDelta;
+        secondDelta += (60 * minuteDelta) + (60 * 60 * hourDelta) + (60 * 60 * 24 * dayDelta);
         V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
 
         V1_printf("gps fix_age was: %lu" EOL, fix_age);
