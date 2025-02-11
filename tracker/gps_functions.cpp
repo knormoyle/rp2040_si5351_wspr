@@ -2367,7 +2367,6 @@ void checkUpdateTimeFromGps() {
                 V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d" EOL, secondDelta);
             }
         }
-        
 
         V1_printf("gps fix_age was: %lu" EOL, fix_age);
         fix_age = gps.time.age();
@@ -2375,7 +2374,7 @@ void checkUpdateTimeFromGps() {
 
         // bump a sec to account for delays from gps to the code above?
         // and maybe any floor effects (ignoring millisecs) that the Time library does?
-        adjustTime(1);
+        // adjustTime(1);
 
         // we could just look at hundredths and bump if > 50 ? (rounding?)
         // could bump time by 1 sec?
