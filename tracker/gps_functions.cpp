@@ -2330,11 +2330,13 @@ void checkUpdateTimeFromGps() {
 
         // bump a sec to account for delays from gps to the code above?
         // and maybe any floor effects (ignoring millisecs) that the Time library does?
-        adjustTime(1);
+        // Not good?
+        if (false) adjustTime(1);
         // we could just look at hundredths and bump if > 50 ? (rounding?)
         // could bump time by 1 sec?
         // does Time library chop things down to sec by using millis()
         // does that introduce error also?
+
         if (gps_hundredths > 50) {
             V1_printf("Adjusting time +1 sec because gps_hundredths %u" EOL,
                 gps_hundredths);
@@ -2342,6 +2344,7 @@ void checkUpdateTimeFromGps() {
         }
         gpsDateTimeWasUpdated = true;
         lastUpdate_millis = millis();
+        V1_print(EOL);
     }
 }
 
