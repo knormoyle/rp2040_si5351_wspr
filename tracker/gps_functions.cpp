@@ -2321,8 +2321,23 @@ void checkUpdateTimeFromGps() {
         V1_printf(" day %d month %d year %d", d, m, y);
         V1_printf(" gpsDateTimeWasUpdated %u" EOL, gpsDateTimeWasUpdated);
 
+        // did we cross a minute boundary for comparing the two
+        int minuteDelta = 0;
+        if (gps_minute != mm) {
+            minuteDelta = ((int) mm) - ((int) gps_minute);
+        }
+        // FIX! should we check hour delta also? should never be that much drift?
+        // (except the first setting)
+
         int secondDelta = ((int) ss) - ((int) gps_second);
-        V1_printf("system vs gps: secondDelta %d" EOL, secondDelta);
+        // add in the minuteDelta cover minute transitions
+        // too much drift/error?
+        if (abs(secondDelta) > 1) {
+            V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d" EOL, secondDelta);
+        }
+        
+        secondDelta += 60 * minuteDelta;
+        V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
 
         V1_printf("gps fix_age was: %lu" EOL, fix_age);
         fix_age = gps.time.age();

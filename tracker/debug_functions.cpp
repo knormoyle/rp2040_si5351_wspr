@@ -408,6 +408,7 @@ void gpsResetTest() {
     while (!fix_valid_all) {
         Watchdog.reset();
         tries += 1;
+        // we can look at time/drift updates here
         updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
         fix_valid_all = !GpsInvalidAll &&
             gps.time.isValid() &&
