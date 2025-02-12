@@ -15,6 +15,13 @@ extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
 bool WARM_RESET_REDO_CONFIG = false;
 bool SIM65M_BROADCAST_5SECS = false;
 
+// gps+bds+glonass
+int DEFAULT_CONSTELLATIONS_CHOICE = 7;
+// gps+bds
+// int DEFAULT_CONSTELLATIONS_CHOICE = 3;
+// gps
+// int DEFAULT_CONSTELLATIONS_CHOICE = 1;
+
 //*******************************************
 // Reference docs (for SIM28 but should apply)
 // can download all from https://simcom.ee/documents/?dir=SIM28
@@ -92,12 +99,6 @@ bool SIM65M_BROADCAST_5SECS = false;
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-// gps+bds+glonass
-// #define DEFAULT_CONSTELLATIONS_CHOICE 7
-// gps+bds
-// #define DEFAULT_CONSTELLATIONS_CHOICE 3
-// gps
-#define DEFAULT_CONSTELLATIONS_CHOICE 1
 
 // object for TinyGPSPlus state
 extern TinyGPSPlus gps;
@@ -501,7 +502,6 @@ void setGnssOff_SIM65M(void) {
 // always GGA GLL GSA GSV RMC
 // nver ZDA TXT
 void setGpsBroadcast(void) {
-    // FIX! we'll have to figure this out for SIM65M
     V1_print(F("setGpsBroadcast START" EOL));
     updateStatusLED();
     Watchdog.reset();
@@ -518,7 +518,7 @@ void setGpsBroadcast(void) {
 
         // For SIM65M module, <Fix_Interval> parameter only support 1000 ms.
         // $PAIR050,<Fix_Interval>*<checksum>
-        // Fix_Intervalmsec--Position fix interval in milliseconds (ms).
+        // Fix_Interval--Position fix interval in milliseconds (ms).
         // [Range: 100 ~ 1000]
         // [Example]
         // $PAIR050,1000*12
@@ -532,12 +532,14 @@ void setGpsBroadcast(void) {
         // 1 NMEA_SEN_GLL, // GLL interval - Geographic Position - Latitude longitude
         // 2 NMEA_SEN_GSA, // GSA interval - GNSS DOPS and Active Satellites
         // 3 NMEA_SEN_GSV, // GSV interval - GNSS Satellites in View
-        // 4 NMEA_SEN_RMC, // RMC interval - Recommended Minimum Specific GNSS Sentence
+        // 4 NMEA_SEN_RMC, // RMC interval - Minimum Specific GNSS Sentence
         // 5 NMEA_SEN_VTG, // VTG interval - Course Over Ground and Ground Speed
         // 6 NMEA_SEN_ZDA, // ZDA interval - Time & Date
 
-        // Output interval: <what is default? should we only output 1 per 5 position fixes?
-        // is the position fix rate 1 per sec to 10 per sec?
+        // Output interval: default 1?
+        // 1 per 5 position fixes?
+        // is the position fix rate 1 per sec to 10 per sec? 
+        // see elsewhere. they might have bugs if fix rate is reduced
         // 0 - Disabled or not supported sentence
         // 1 - Output once every one position fix
         // 2 - Output once every two position fixes
@@ -545,7 +547,6 @@ void setGpsBroadcast(void) {
         // 4 - Output once every four position fixes
         // 5 - Output once every five position fixes
 
-        // FIX! do we not get enough info in a single sec if we change to 5 here?
         // enable this, because we're disabling broadcast in default config now
         // for SIM65M. Assumes the default fix rate is 1000ms (1 per sec?)
         if (SIM65M_BROADCAST_5SECS) {
@@ -623,7 +624,7 @@ void setGpsBroadcast(void) {
         //*************************************************
         // ATGM336H
 
-        // ZDA
+        // ZDA. does this exist for ATGM336H? disabled?
         // this time info is in other sentences also?
         // $–ZDA,hhmmss.ss,xx,xx,xxxx,xx,xx
         // hhmmss.ss = UTC
@@ -636,7 +637,7 @@ void setGpsBroadcast(void) {
         // from the latest CASIC_ProtocolSpecification_english.pdf
         // $PCAS03 string nGGA value Message ID, sentence header
 
-        // no 0 or 1 fields?
+        // Field 1 is the PCAS03
 
         // 2  GGA output frequency,
         // statement output frequency is based on positioning update rate
@@ -665,24 +666,10 @@ void setGpsBroadcast(void) {
         //    XOR result of all characters between $ and * (excluding $ and *)
         // 21 <CR><LF> charactersCarriage return and line feed
 
-        // hmm this didn't work? still got zda and ANT txt.
-        // this was a forum posting. wrong apparently
-        // strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0*02" CR LF, 21);
-
         // spec has more/new detail. see below
         // FIX! was I still getting GNZDA and GPTXT ANTENNAOPEN with this?
         strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
 
-        // example in pdf
-        // first field after 3, is field ..no it's field 2
-        // reserved fields are empty here
-        // all data
-        // $PCAS03,1,1,1,1,1,1,1,1,0,0,,,1,1,,,,1*33
-
-        // using this:
-        // no ANT or ZDA (example already disabled DHV and LPS)
-        // why is 19 TIM PCAS60 needed? That's another receiver time in "subsequent versions"
-        // $PCAS03,1,1,1,1,1,0,0,1,0,0,,,1,1,,,,1*33
         Serial2.print(nmeaSentence);
         Serial2.flush();
         busy_wait_us(2000);
@@ -893,7 +880,6 @@ void setGpsConstellations(int desiredConstellations) {
     // PAIR066,1,1,1,1,0,0 GPS+GLONASS+GALILEO+BEIDOU
     // PAIR066,1,1,0,1,0,0 GPS+GLONASS+BEIDOU
     // QZSS is always switchable.
-
 
     Serial2.print(nmeaSentence);
     Serial2.flush();
@@ -1633,19 +1619,16 @@ bool GpsFullColdReset(void) {
         // restores to desired constellations and broadcast
     }
 
-    // all constellations GPS/BaiDou/Glonass
-    // setGpsConstellations(7);
-    // FIX! try just gps to see effect on power on current
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
-    // no ZDA/ANT TXT (NMEA sentences) after this:
+    // no ANT TXT (NMEA sentences) after this:
     setGpsBroadcast();
 
     // I guess it doesn't power on with location service on
     if (USE_SIM65M) setGnssOn_SIM65M();
 
     bool sentencesFound = getInitialGpsOutput();
-    // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
-    // a big fix_age
+    // flush out any old state in TinyGPSplus, 
+    // so we don't get a valid fix that's got a big fix_age
     invalidateTinyGpsState();
 
     GpsStartTime = get_absolute_time();  // usecs
@@ -1739,9 +1722,7 @@ bool GpsWarmReset(void) {
 
     if (WARM_RESET_REDO_CONFIG) {
         //****************************
-        // all constellations
         setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
-        // set desired broadcast
         // we don't need no ZDA/TXT
         setGpsBroadcast();
 
@@ -1841,7 +1822,6 @@ void writeGpsConfigNoBroadcastToFlash() {
     // set desired constellations
     // FIX! this doesn't change SIM65M default constellations (yet)
     setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
-    // set desired broadcast.
     setGpsBroadcast();
 
     V1_println(F("writeGpsConfigNoBroadcastToFlash END"));
@@ -1874,12 +1854,12 @@ void GpsON(bool GpsColdReset) {
     // don't care what the initial state is, for cold reset
     while (!sentencesFound) {
         tryCnt += 1;
-        if (tryCnt >= 5) {
+        if (tryCnt >= 3) {
             if (GpsColdReset) {
-                V1_println(F("ERROR: tryCnt 5 on GpsFullColdReset.. not retrying any more"));
+                V1_println(F("ERROR: tryCnt 3 on GpsFullColdReset.. not retrying any more"));
                 break;
             } else {
-                V1_println(F("ERROR: tryCnt 5 on GpsWarmReset.. switch to trying GpsColdReset"));
+                V1_println(F("ERROR: tryCnt 3 on GpsWarmReset.. switch to trying GpsColdReset"));
                 GpsColdReset = true;
                 tryCnt = 0;
             }
@@ -2042,7 +2022,9 @@ uint64_t updateGpsDataAndTime(int ms) {
     // do at most charsAvailable. the initial state of the fifo
     // Can't use them because we may have discarded some chars after buffer full
     getChar();
-    if (charsAvailable >= 31) {
+    // update: treat 30 as full, not 31, just in case arrival while we're starting
+    // would be dropped.
+    if (charsAvailable >= 30) {
         if (VERBY[1])
             StampPrintf("INFO: initially drained NMEA chars because rx full. uart rx %d" EOL,
                 (int) charsAvailable);
@@ -2077,7 +2059,6 @@ uint64_t updateGpsDataAndTime(int ms) {
                     (int) charsAvailable, incomingCharCnt);
             }
             // do we get any null chars?
-            // are CR LF unprintable?
             spaceChar = false;
             nullChar = false;
             printable = isprint(incomingChar);
@@ -2092,7 +2073,7 @@ uint64_t updateGpsDataAndTime(int ms) {
                 default: { ; }
             }
             // after aligning, send everything to TinyGPS++ ??
-            // does it expect the CR LF between sentences?
+            // it expects the CR LF between sentences?
             if (aligned) gps.encode(incomingChar);
 
             // always strip these here, and continue the loop
@@ -2137,11 +2118,9 @@ uint64_t updateGpsDataAndTime(int ms) {
             getChar();
         }
 
-        //*******************
-        // keep it as close as possible to the NMEA sentence arrival?
+        // keep as close as possible to the NMEA sentence arrival?
         // I suppose we'll see gps.time.updated every time?
         checkUpdateTimeFromGps();
-        //*******************
 
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
@@ -2253,10 +2232,9 @@ void checkUpdateTimeFromGps() {
         return;
     }
             
-    // FIX! don't be updating this every time
-    // this will end up checking every time we get a burst?
-    // uint8_t for gps data
-    // the Time things are int
+    // don't be updating this every time
+    // checking every time we get a burst?
+    // uint8_t for gps data. the Time things are int
     // see example https://arduiniana.org/libraries/TinyGPS/
     // use now for setting rtc, so we have a better solar elevation
     // calc if the time is old
@@ -2295,13 +2273,8 @@ void checkUpdateTimeFromGps() {
     // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
     // year can be given as full four digit year or two digts (2010 or 10 for 2010);
     // it is converted to years since 1970
-    // we don't compare day/month/year on time anywhere, except when looking
-    // for bad time from TinyGPS state (tracker.ino)
-    // FIX! should I work about setting day month year? why not
-    // then we can get all that info from the rtc, so if the gps data is
-    // stail for time, we get a better solar elevation calculation..accurate time?
 
-    // JUST IN CASE: let's validate the ranges and not update if invalid!!
+    // validate the ranges and not update if invalid!!
     // all uint8_t so don't have to check negatives
     bool gpsDateTimeBad = false;
     if (gps_hour > 23) gpsDateTimeBad = true;
@@ -2312,7 +2285,8 @@ void checkUpdateTimeFromGps() {
     if (gps_day > 31) gpsDateTimeBad = true;
     if (gps_month > 12) gpsDateTimeBad = true;
     if (gps_month < 1) gpsDateTimeBad = true;
-    // should already have validated year range? but do it here too
+
+    // was year range already validated? but do it here too
     // will have to remember to update this in 10 years (and above too!)
     if (gps_year < 2025 && gps_year > 2034) gpsDateTimeBad = true;
 
@@ -2322,7 +2296,7 @@ void checkUpdateTimeFromGps() {
         gpsDateTimeBad = true;
     }
 
-    // what the heck, check the days in a month is write.
+    // check the days in a month is write.
     // (subtract one from month)
     // if we have a valid month for this array!
     static const uint8_t monthDays[] =
@@ -2366,6 +2340,7 @@ void checkUpdateTimeFromGps() {
         // should be UTC time zone?
 
 
+        // I hacked TinyGPS to take time from ZDA also
         if (USE_SIM65M) {
             // V1_print(F("Do a read of gps time to see if we get <1 sec precision" EOL));
             // this is only time to the second
@@ -2424,6 +2399,7 @@ void checkUpdateTimeFromGps() {
         // and maybe any floor effects (ignoring millisecs) that the Time library does?
         // adjustTime(1);
 
+        // seems like we occasionally get hundredths from gps time.
         // we could just look at hundredths and bump if > 50 ? (rounding?)
         // could bump time by 1 sec?
         // does Time library chop things down to sec by using millis()
