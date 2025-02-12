@@ -2309,22 +2309,34 @@ void checkUpdateTimeFromGps() {
             gps_day, gps_month, gps_year);
     } else {
         // did we flush TinyGPS state out when we turn gps off?
-        V1_print(F(EOL));
-        V1_print(F(EOL));
-        bool validA = gps.satellites.isValid() && !GpsInvalidAll;
-        bool validB = gps.hdop.isValid() && !GpsInvalidAll;
-        bool validC = gps.location.isValid() && !GpsInvalidAll;
-        bool validD = gps.altitude.isValid() && !GpsInvalidAll;
-        bool validE = gps.course.isValid() && !GpsInvalidAll;
-        bool validF = gps.speed.isValid() && !GpsInvalidAll;
-        // FIX! don't have GpsInvalidAll in these
-        bool validG = gps.date.isValid();
-        bool validH = gps.time.isValid();
+        if (false) {
+            V1_print(F(EOL));
+            V1_print(F(EOL));
+            bool validA = gps.satellites.isValid() && !GpsInvalidAll;
+            bool validB = gps.hdop.isValid() && !GpsInvalidAll;
+            bool validC = gps.location.isValid() && !GpsInvalidAll;
+            bool validD = gps.altitude.isValid() && !GpsInvalidAll;
+            bool validE = gps.course.isValid() && !GpsInvalidAll;
+            bool validF = gps.speed.isValid() && !GpsInvalidAll;
+            // FIX! don't have GpsInvalidAll in these
+            bool validG = gps.date.isValid();
+            bool validH = gps.time.isValid();
 
-        V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
-        !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
+            V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
+            !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
+        }
         setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
         // should be UTC time zone?
+
+        V1_print(F("Do a read of time from the gps chip to see if we get <1 sec precision"));
+        if (USE_SIM65M) {
+            // this is only time to the second
+            // Serial2.print("$PAIR001,591,0*36" CR LF);
+            // GLL GGA RMC ZDA is time to thousandsths
+        }
+        // interesting: fix rate for SIM65M can be adjusted 1000ms to 10000ms at 1 sec boundaries
+        // PAIR_COMMON_SET_FIX_RATE $PAIR050,time*<checksum>
+        // ULP mode only support 1Hz.
 
         V1_print(F("GOOD: rtc setTime() with"));
         V1_printf(" gps_hour %u gps_minute %u gps_second %u",
