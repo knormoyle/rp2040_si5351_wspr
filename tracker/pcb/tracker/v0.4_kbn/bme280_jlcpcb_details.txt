@@ -1,0 +1,21 @@
+BME280
+Manufacturer Bosch Sensortec
+MFR.Part # BME280
+JLCPCB Part # C92489
+Package LGA-8(2.5x2.5)
+Description LGA-8(2.5x2.5) Temperature and Humidity Sensor ROHS
+Datasheet Download
+Source JLCPCB
+Assembly Type SMT Assembly
+CAD Model PCB Footprint or Symbol
+ECCN EAR99
+
+lcsc.com has same info
+https://www.lcsc.com/product-detail/Temperature-and-Humidity-Sensor_Bosch-Sensortec-BME280_C92489.html
+datasheet
+https://www.lcsc.com/datasheet/lcsc_datasheet_2302171709_Bosch-Sensortec-BME280_C92489.pdf
+
+they have EasyEDA Model there
+11/22/24
+$3.8747, $3.4813 for 10 at lcsc
+$3.7465, $3.3661 for 10 at jlcpcb

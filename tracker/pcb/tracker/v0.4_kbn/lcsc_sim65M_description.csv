@@ -1,0 +1,13 @@
+LCSC Part Number,Manufacture Part Number,Manufacturer,Customer NO.,Package,Description,RoHS,Order Qty.,Min\Mult Order Qty.,Unit Price($),Order Price($)
+C7495025,SIM65M,SIMCom Wireless Solutions," ","SMD,10.1x9.7mm","SMD,10.1x9.7mm GNSS Modules ROHS",YES,10,1\1,6.0955,60.96
+
+# this is from LCSC_Exported__20241123_043431.csv "Export BOM" on the lcsc order history
+
+C7495025 is the number for my SIM65M consigned parts list at jlcpcb
+SIM65M is the part number
+
+so that matches!
+
+I have separate consignment part for SIM65M-C or SIM65M-C-DCDC(A1)
+loc-18 package
+
