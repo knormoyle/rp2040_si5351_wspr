@@ -8,9 +8,12 @@
 // which gps chip is used?
 // ATGM336N if false
 extern bool USE_SIM65M;
+// change it if we have the 5sec fix/broadcast on USE_SIM65M
+extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
 
 // Don't reconfig if not necessary
 bool WARM_RESET_REDO_CONFIG = false;
+bool SIM65M_BROADCAST_5SECS = false;
 
 //*******************************************
 // Reference docs (for SIM28 but should apply)
@@ -90,7 +93,11 @@ bool WARM_RESET_REDO_CONFIG = false;
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 // gps+bds+glonass
-#define DEFAULT_CONSTELLATIONS_CHOICE 7
+// #define DEFAULT_CONSTELLATIONS_CHOICE 7
+// gps+bds
+// #define DEFAULT_CONSTELLATIONS_CHOICE 3
+// gps
+#define DEFAULT_CONSTELLATIONS_CHOICE 1
 
 // object for TinyGPSPlus state
 extern TinyGPSPlus gps;
@@ -541,7 +548,7 @@ void setGpsBroadcast(void) {
         // FIX! do we not get enough info in a single sec if we change to 5 here?
         // enable this, because we're disabling broadcast in default config now
         // for SIM65M. Assumes the default fix rate is 1000ms (1 per sec?)
-        if (false) {
+        if (SIM65M_BROADCAST_5SECS) {
             strncpy(nmeaSentence, "$PAIR062,0,5*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
@@ -562,9 +569,31 @@ void setGpsBroadcast(void) {
             busy_wait_us(500);
             strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
             Serial2.print(nmeaSentence);
+            busy_wait_us(500);
+            GPS_WAIT_FOR_NMEA_BURST_MAX = 5500;
+
+            // none of this works?
+            // PAIR_COMMON_SET_FIX_RATE $PAIR050,time*<checksum>
+            // SIM65M says: 100ms to 1000ms
+            // want to straddle the 5 sec broadcast
+            // GPS_WAIT_FOR_NMEA_BURST_MAX = 5200;
+            // interesting: fix rate for Quectel L76, says this:
+            // If the set frequency exceeds 1 Hz, 
+            // only RMC, GGA and GNS massages will be output at the set frequency, 
+            // whereas VTG, GLL, ZDA, GRS and GST messages will not be output, 
+            // and GSA and GSV messages will be output at 1Hz
+            // this is the default
+            // strncpy(nmeaSentence, "$PAIR050,1000*12" CR LF, 62);
+
+            // 1000ms to 10000ms at 1 sec boundaries ? who said that?
+            // ULP mode only support 1Hz.
+            // doesn't work?
+            // strncpy(nmeaSentence, "$PAIR050,5000*16" CR LF, 62);
+            // Serial2.print(nmeaSentence);
+
             busy_wait_us(2000);
-        }
-        if (true) {
+
+        } else {
             // set all to interval of 1
             strncpy(nmeaSentence, "$PAIR062,0,1*3F" CR LF, 62);
             Serial2.print(nmeaSentence);
@@ -587,6 +616,7 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,6,1*39" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(2000);
+            // assume the default 1sec position fix rate is there
         }
 
     } else {
@@ -763,6 +793,22 @@ void disableGpsBroadcast(void) {
 // and to receive notifications from the GNSS module.
 // To process data conveniently, the PAIR commands matches with the NMEA sentence format.
 
+// Quectel LC76G spec says:j
+// also mentions some weird things in LC86G ?
+
+// GNSS search modes supported by LC26G (AB), LC26G-T (AA), LC76G series and LC86G (LA, PA):
+// why does it say QZSS is always enabled by default?
+// GPS only
+// GPS + QZSS
+// GPS + GLONASS
+// GPS + GLONASS + QZSS
+// GPS + Galileo
+// GPS + Galileo + QZSS
+// GPS + BDS
+// GPS + BDS + QZSS
+// GPS + GLONASS + Galileo + BDS
+// GPS + GLONASS + Galileo + BDS + QZSS
+
 void setGpsConstellations(int desiredConstellations) {
     // FIX! we'll have to figure this out for SIM65M
     V1_printf("setConstellations START %d" EOL, desiredConstellations);
@@ -773,9 +819,9 @@ void setGpsConstellations(int desiredConstellations) {
     char nmeaSentence[62] = { 0 };
     if (USE_SIM65M) {
         switch (usedConstellations) {
-            // FIX! we don't have a code for including Galileo?
-            // But we seem to be getting it?
             // are these not right, and Galileo is in default?
+            // Gallileo is field 3. the last two fields are QZSS and NavIC
+            case 0: ; // FIX! should I make 0 disable everything?
             case 1:  // GPS
                 strncpy(nmeaSentence, "$PAIR066,1,0,0,0,0,0,*3B" CR LF, 62); break;
             case 2:  // BDS
@@ -790,6 +836,7 @@ void setGpsConstellations(int desiredConstellations) {
                 strncpy(nmeaSentence, "$PAIR066,0,1,0,1,0,0,*3A" CR LF, 62); break;
             case 7:  // GPS+BDS+GLONASS
                 strncpy(nmeaSentence, "$PAIR066,1,1,0,1,0,0,*3B" CR LF, 62); break;
+            case 8: ; // FIX! should I make 8 enable everything?
             default:  // GPS+BDS
                 usedConstellations = 3;
                 strncpy(nmeaSentence, "$PAIR066,1,0,0,1,0,0,*3A" CR LF, 62); break;
@@ -1533,6 +1580,7 @@ bool GpsFullColdReset(void) {
     if (USE_SIM65M) {
         // it either comes up in desiredBaud from some memory, or comes up in 115200?
         Serial2.begin(115200);
+        busy_wait_ms(500);
         // since Serial2 was reset by setGpsBaud()..
         // could try it again. might aid recovery
         // then up the speed to desired (both gps chip and then Serial2
@@ -1664,6 +1712,7 @@ bool GpsWarmReset(void) {
     gpsSleepForMillis(2000, false);  // no early out
 
     //****************************
+    // not used?
     int BAUD_RATE;
     if (USE_SIM65M) BAUD_RATE = SIM65M_BAUD_RATE;
     else BAUD_RATE = ATGM336H_BAUD_RATE;
@@ -1672,9 +1721,15 @@ bool GpsWarmReset(void) {
     //****************************
     // should come up in the last programmed baud rate (from cold reset)
     if (USE_SIM65M) {
+        // Hmm. did we have failures where it didn't come up in the right baud rate?
         // it either comes up in desiredBaud from some memory (9600?), or comes up in 115200?
-        // Serial2.begin(115200);
-        Serial2.begin(desiredBaud);
+        Serial2.begin(115200);
+        gpsSleepForMillis(500, false);  // no early out
+        setGpsBaud(desiredBaud);
+        Serial2.begin(9600);
+        gpsSleepForMillis(500, false);  // no early out
+        setGpsBaud(desiredBaud);
+        
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         // we never change ATGM336 baud rate now.
@@ -1684,24 +1739,6 @@ bool GpsWarmReset(void) {
 
     if (WARM_RESET_REDO_CONFIG) {
         //****************************
-        // ATGM336H:
-        // if it comes back up in out desired BAUD rate already,
-        // everything will be fine and we'll start talking to it
-        // as long as the tracker only got one other Baud rate other than 9600
-        // all will be fine
-        // or will this come out of warm reset at 9600 baud and we can't talk to it?
-        // FIX! this is a don't care then? whatever it was? or ??
-        // but since we serial2.end() above, we have to restart it on the rp2040
-        if (USE_SIM65M) {
-            // brings it down to 9600 baud
-            setGpsBaud(desiredBaud);
-        }
-        gpsSleepForMillis(1000, false);  // no early out
-
-        // setGpsConstellations(7);
-        // FIX! try just GPS to see effect on power on current
-
-        // redundant sometimes
         // all constellations
         setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
         // set desired broadcast
@@ -2328,15 +2365,13 @@ void checkUpdateTimeFromGps() {
         setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
         // should be UTC time zone?
 
-        V1_print(F("Do a read of time from the gps chip to see if we get <1 sec precision"));
+
         if (USE_SIM65M) {
+            // V1_print(F("Do a read of gps time to see if we get <1 sec precision" EOL));
             // this is only time to the second
             // Serial2.print("$PAIR001,591,0*36" CR LF);
             // GLL GGA RMC ZDA is time to thousandsths
         }
-        // interesting: fix rate for SIM65M can be adjusted 1000ms to 10000ms at 1 sec boundaries
-        // PAIR_COMMON_SET_FIX_RATE $PAIR050,time*<checksum>
-        // ULP mode only support 1Hz.
 
         V1_print(F("GOOD: rtc setTime() with"));
         V1_printf(" gps_hour %u gps_minute %u gps_second %u",
@@ -2376,7 +2411,8 @@ void checkUpdateTimeFromGps() {
         if (gpsDateTimeWasUpdated) {
             V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
             if (abs(secondDelta) > 1) {
-                V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d" EOL, secondDelta);
+                V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d" EOL, 
+                    secondDelta);
             }
         }
 

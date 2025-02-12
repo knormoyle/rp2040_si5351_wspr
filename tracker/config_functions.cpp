@@ -90,8 +90,6 @@ extern uint64_t PLL_FREQ_TARGET;
 extern const uint32_t DEFAULT_PLL_SYS_MHZ;
 extern uint32_t PLL_SYS_MHZ;  // decode of cc._clock_speed
 
-extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
-
 // PWM stuff gets recalc'ed if PLL_SYS_MHZ changes
 extern uint32_t PWM_DIV;
 extern uint32_t PWM_WRAP_CNT;
@@ -757,12 +755,6 @@ int read_FLASH(void) {
     else TESTMODE = false;
     if (cc._use_sim65m[0] == '1') USE_SIM65M = true;
     else USE_SIM65M = false;
-
-    // adjust this to be 5500 if USE_SIM65M (in config_functions.cpp)
-    // because more constellations and the repeat interval is 5 secs not 1 sec
-    // STOPPED because worried about not getting enough setTime events to update rtc
-    // from gps time, probably because the TinyGps fixAge was > 300ms when I looked at it?
-    // if (USE_SIM65M) GPS_WAIT_FOR_NMEA_BURST_MAX = 5500; 
 
     decodeVERBY();
 

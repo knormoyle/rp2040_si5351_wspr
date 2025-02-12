@@ -29,6 +29,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define _RMCterm "RMC"
 #define _GGAterm "GGA"
+#define _ZDAterm "ZDA"
 
 #if !defined(ARDUINO) && !defined(__AVR__)
 // Alternate implementation of millis() that relies on std
@@ -181,6 +182,9 @@ bool TinyGPSPlus::endOfTermHandler()
 
       switch(curSentenceType)
       {
+      case GPS_SENTENCE_ZDA: // kbn new. get time from ZDA, the last in SIM65M burst
+        time.commit();
+        break;
       case GPS_SENTENCE_RMC:
         date.commit();
         time.commit();
@@ -225,6 +229,8 @@ bool TinyGPSPlus::endOfTermHandler()
       curSentenceType = GPS_SENTENCE_RMC;
     else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _GGAterm))
       curSentenceType = GPS_SENTENCE_GGA;
+    else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _ZDAterm))
+      curSentenceType = GPS_SENTENCE_ZDA;
     else
       curSentenceType = GPS_SENTENCE_OTHER;
 
@@ -239,6 +245,8 @@ bool TinyGPSPlus::endOfTermHandler()
   if (curSentenceType != GPS_SENTENCE_OTHER && term[0])
     switch(COMBINE(curSentenceType, curTermNumber))
   {
+    // this is weird, it doesn't do everything?
+    case COMBINE(GPS_SENTENCE_ZDA, 1): // kbn Add ZDA (last sentence in burst) for SIM65M
     case COMBINE(GPS_SENTENCE_RMC, 1): // Time in both sentences
     case COMBINE(GPS_SENTENCE_GGA, 1):
       time.setTime(term);
@@ -268,6 +276,8 @@ bool TinyGPSPlus::endOfTermHandler()
     case COMBINE(GPS_SENTENCE_RMC, 8): // Course (RMC)
       course.set(term);
       break;
+    // kbn ZDA has date but in 3 fields
+    // RMC has 120225 (not 2025 ..just 2 digits)
     case COMBINE(GPS_SENTENCE_RMC, 9): // Date (RMC)
       date.setDate(term);
       break;
