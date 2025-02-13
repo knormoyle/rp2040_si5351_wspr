@@ -46,6 +46,12 @@ void refreshCache(time_t t) {
   }
 }
 
+// kbn: 2/12/25 need to flush the Cache afer we setTime()?
+void flushCache() {
+  // t comparison above should never be 0?
+  cacheTime = 0; 
+}
+
 int hour() { // the hour now 
   return hour(now()); 
 }
@@ -297,10 +303,14 @@ void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
   tm.Minute = min;
   tm.Second = sec;
   setTime(makeTime(tm));
+  // kbn 2/12/24
+  flushCache();
 }
 
 void adjustTime(long adjustment) {
   sysTime += adjustment;
+  // kbn 2/12/24
+  flushCache();
 }
 
 // indicates if time has been set and recently synchronized
