@@ -534,7 +534,7 @@ void setGpsBroadcast(void) {
 
         // Output interval: default 1?
         // 1 per 5 position fixes?
-        // is the position fix rate 1 per sec to 10 per sec? 
+        // is the position fix rate 1 per sec to 10 per sec?
         // see elsewhere. they might have bugs if fix rate is reduced
         // 0 - Disabled or not supported sentence
         // 1 - Output once every one position fix
@@ -567,7 +567,7 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
-            GPS_WAIT_FOR_NMEA_BURST_MAX = 5500;
+            GPS_WAIT_FOR_NMEA_BURST_MAX = 5200;
 
             // none of this works?
             // PAIR_COMMON_SET_FIX_RATE $PAIR050,time*<checksum>
@@ -575,9 +575,9 @@ void setGpsBroadcast(void) {
             // want to straddle the 5 sec broadcast
             // GPS_WAIT_FOR_NMEA_BURST_MAX = 5200;
             // interesting: fix rate for Quectel L76, says this:
-            // If the set frequency exceeds 1 Hz, 
-            // only RMC, GGA and GNS massages will be output at the set frequency, 
-            // whereas VTG, GLL, ZDA, GRS and GST messages will not be output, 
+            // If the set frequency exceeds 1 Hz,
+            // only RMC, GGA and GNS massages will be output at the set frequency,
+            // whereas VTG, GLL, ZDA, GRS and GST messages will not be output,
             // and GSA and GSV messages will be output at 1Hz
             // this is the default
             // strncpy(nmeaSentence, "$PAIR050,1000*12" CR LF, 62);
@@ -613,6 +613,7 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,6,1*39" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(2000);
+            GPS_WAIT_FOR_NMEA_BURST_MAX = 1200;
             // assume the default 1sec position fix rate is there
         }
 
@@ -1625,7 +1626,7 @@ bool GpsFullColdReset(void) {
     if (USE_SIM65M) setGnssOn_SIM65M();
 
     bool sentencesFound = getInitialGpsOutput();
-    // flush out any old state in TinyGPSplus, 
+    // flush out any old state in TinyGPSplus,
     // so we don't get a valid fix that's got a big fix_age
     invalidateTinyGpsState();
 
@@ -1710,7 +1711,7 @@ bool GpsWarmReset(void) {
         Serial2.begin(9600);
         gpsSleepForMillis(500, false);  // no early out
         setGpsBaud(desiredBaud);
-        
+
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         // we never change ATGM336 baud rate now.
@@ -1874,7 +1875,7 @@ void GpsON(bool GpsColdReset) {
             sentencesFound = GpsWarmReset();
         }
 
-        // try sending the software command for SIM65M if the 
+        // try sending the software command for SIM65M if the
         // pin assertions didn't work. Depends on the baud setup being right?
         if (USE_SIM65M && !sentencesFound && (tryCnt < max_tryCnt)) {
             if (GpsColdReset) {
@@ -1969,7 +1970,8 @@ void GpsOFF() {
     gpsSleepForMillis(1000, false);
     // unlike i2c to vfo, we don't tear down the Serial2 definition...just .end()
     // so we can just .begin() again later
-    // have to flush everything. Can't keep enqueued time. not worth saving altitude/lat/lon..we have to 
+    // have to flush everything.
+    // Can't keep enqueued time. not worth saving altitude/lat/lon..we have to
     // wait for time to get set again?
     invalidateTinyGpsState();
 
@@ -2254,18 +2256,21 @@ void checkUpdateTimeFromGps() {
     // but we don't adjust time then, we're busy waiting to complete alignment at that point
 
     // Update: make the "quiet zone" 3x the burst delay time
-    if ((!forceUpdate) && (elapsed_millis < (uint64_t) 3 * GPS_WAIT_FOR_NMEA_BURST_MAX)) {
+    
+    // except for first time, always have a quiet zone, after a check
+    if ((updateCnt > 0) && (elapsed_millis < (uint64_t) 3 * GPS_WAIT_FOR_NMEA_BURST_MAX)) {
         return;
     }
     lastCheck_millis = millis();
 
     elapsed_millis = millis() - lastUpdate_millis;
     // force update at least every 1 minutes
-    forceUpdate = elapsed_millis > (1 * 60 * 1000); 
+    // I guess with 2 wsprs, plus cw, this could be delayed until every 5-6 minutes easy?
+    forceUpdate = elapsed_millis > (1 * 60 * 1000);
     if (forceUpdate && updateCnt > 0) {
         // might get this printed multiple times if the forceUpdate is delayed for some reason.
         // will be interesting to see if there are odd cases like that?
-        V1_printf("WARN: trying to forceUpdate. lastUpdate elapsed_millis %lu" EOL, 
+        V1_printf("WARN: trying to forceUpdate. lastUpdate elapsed_millis %lu" EOL,
             elapsed_millis);
     }
 
@@ -2273,12 +2278,6 @@ void checkUpdateTimeFromGps() {
     bool gps_year_valid = gps_year >= 2025 && gps_year <= 2034;
     uint32_t fix_age = gps.time.age();
 
-    uint8_t gps_hundredths = gps.time.centisecond();
-    // shouldn't use the time if hundredths isn't 0, as our skew estimation will be wrong
-    if (gps_hundredths > 0) {
-        V1_printf("INFO: non-zero TinyGPS gps_hundredths %u > 99" EOL,
-            gps_hundredths);
-    }
 
     // so how about we only update when fix_age is < 100 millisecs??
     // (10 ms for possible code delays here
@@ -2289,9 +2288,11 @@ void checkUpdateTimeFromGps() {
         return;
     }
 
+    uint8_t gps_hundredths = gps.time.centisecond();
+
     // try to get as close to the NMEA timestamp as possible
     if (forceUpdate) {
-        // loosen the constraints if a force? 
+        // loosen the constraints if a force?
         // maybe something weird with the gps
         // hundredths supposedly goes to .000 once we get a fix?
         // do we care about system time until we get a fix?
@@ -2299,7 +2300,13 @@ void checkUpdateTimeFromGps() {
     } else {
         if (fix_age > 100 || gps_hundredths > 0) return;
     }
-            
+
+    // shouldn't use the time if hundredths isn't 0, as our skew estimation will be wrong
+    if (gps_hundredths > 0) {
+        V1_printf("INFO: non-zero TinyGPS gps_hundredths %u > 99" EOL,
+            gps_hundredths);
+    }
+
     // don't be updating this every time
     // checking every time we get a burst?
     // uint8_t for gps data. the Time things are int
@@ -2330,21 +2337,18 @@ void checkUpdateTimeFromGps() {
 
     // okay if we unnecessarily update time once a month
     // create monthSecs and gps_monthSecs so we can easily add 1 sec
-    // to monthSecs before comparision. 
+    // to monthSecs before comparision.
     // Since we set system time to 1 sec after what we get for gps secs
     // subtract the 1 for the comparision
     // UPDATE: 0
-    uint32_t monthSecsM0 = 
+    uint32_t monthSecsM0 =
         (d * 24 * 3600) + (hh * 3600) + (mm * 60) + ss - 0;
-    uint32_t gps_monthSecs = 
+    uint32_t gps_monthSecs =
         (gps_day * 24 * 3600) + (gps_hour * 3600) + (gps_minute * 60) + gps_second;
 
 
 
     if ((!forceUpdate) && y == gps_year && m == gps_month && monthSecsM0 == gps_monthSecs) return;
-    
-    V1_print(F("WARN: checkUpdateTimeFromGps not set or drift?" EOL));
-
 
     //******************************
     // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
@@ -2430,23 +2434,36 @@ void checkUpdateTimeFromGps() {
             gps_day, gps_month, gps_year);
 
         V1_print(F("system time - 1 (should be gps time):"));
-
         V1_printf(" hour %d minute %d second %d", hh, mm, ss);
         V1_printf(" day %d month %d year %d", d, m, y);
-        V1_printf(" forceUpdate %u" EOL, forceUpdate);
+        V1_printf(" forceUpdate %u ", forceUpdate);
+        printSystemDateTime();
+        V1_print(F(EOL));
 
         int secondDelta = ((int) monthSecsM0) - ((int) gps_monthSecs);
 
         // add in the minuteDelta cover minute transitions
         // too much drift/error?
         // don't print the first time thru..since that doesn't matter
-        if (updateCnt!=0) {
+        if (updateCnt != 0) {
             V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
             if (abs(secondDelta) > 1) {
-                V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d ", secondDelta);
+                V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
+                    secondDelta, forceUpdate);
                 printSystemDateTime();
                 V1_print(F(EOL));
-
+            // time could be reset by forceUpdate, even if secondDelta == 0
+            } else if (abs(secondDelta) == 1) {
+                V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
+                    secondDelta, forceUpdate);
+                printSystemDateTime();
+                V1_print(F(EOL));
+            // time could be reset by forceUpdate, even if secondDelta == 0
+            } else {
+                V1_printf("GOOD: no drift. secondDelta %lu forceUpdate %u ",
+                    secondDelta, forceUpdate);
+                printSystemDateTime();
+                V1_print(F(EOL));
             }
         }
 
@@ -2466,7 +2483,7 @@ void checkUpdateTimeFromGps() {
         // seems like bursts eventually align so the fractional second is .000 always??
 
         elapsed_millis = millis() - lastUpdate_millis;
-        V1_printf("forceUpdate %u updateCnt %lu millis since last update: %lu" EOL, 
+        V1_printf("forceUpdate %u updateCnt %lu millis since last update: %lu" EOL,
             forceUpdate, updateCnt, elapsed_millis);
         lastUpdate_millis = millis();
         forceUpdate = false;

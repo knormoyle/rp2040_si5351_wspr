@@ -201,7 +201,7 @@ TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
 // $GAGSV,1,1,03,10,61,127,30,25,48,313,41,05,10,227,,7*4D
 // $GBGSV,1,1,03,35,74,049,36,44,54,226,42,45,23,137,40,1*48
 
-//SIM65M
+// SIM65M
 TinyGPSCustom ga_sats(gps, "GAGSV", 3); // Galileo
 
 // do both, because config can change USE_SIM65M ??
@@ -1227,7 +1227,7 @@ extern const uint32_t GPS_LOCATION_AGE_MAX = 30000;
 // burst behavior when we start (idle or in the middle of a burst?)
 // extern const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
 
-// with all the constellations on SIM65M, seems like we should wait longer to get 
+// with all the constellations on SIM65M, seems like we should wait longer to get
 // full set of NMEA sentences for a burst (plus the burst is only every 5 secs no)
 // adjust this to be 2000 if USE_SIM65M (in config_functions.cpp)
 int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
@@ -1734,7 +1734,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
     // BUG: reported by Rob KC3LBR
-    // JTEncode walks thru chars 0-12. 
+    // JTEncode walks thru chars 0-12.
     // so we really need a 14 char array with null term
     char hf_callsign[14] = {0};
     // left justify..i.e. pad with space for what JTEncode gets
@@ -1822,7 +1822,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         switch (cc._TELEN_config[0]) {
             case '0':
             default:
-                V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL, txNum, slot);
+                V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
+                    txNum, slot);
                 V1_flush();
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
         }
@@ -1942,7 +1943,7 @@ void sleepSeconds(int secs) {
             // 1050: was this causing rx buffer overrun (21 to 32)
             // 1500 was good for 9600 and up
             // not long enough for 4800?
-            // arg is milliseconds 
+            // arg is milliseconds
             if ((!USE_SIM65M) && ATGM336H_BAUD_RATE == 4800)  {
                 gdt_millis = updateGpsDataAndTime(2000);
             } else {
@@ -2087,10 +2088,10 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
     // (symbol time: is duration for 1 wspr symbol tx 8192/12000 or equivalently 256/375)
 
     //******************
-    // supposed to be 1 sec in. This is basically 
+    // supposed to be 1 sec in. This is basically
     // 1 sec - (gps to nmea to systime to code here, delay?)
     // static int EXTRA_DELAY_AFTER_PROCEED = 700; // milliseconds
-    static int EXTRA_DELAY_AFTER_PROCEED = 0; // milliseconds
+    static int EXTRA_DELAY_AFTER_PROCEED = 0;  // milliseconds
     if (EXTRA_DELAY_AFTER_PROCEED < 0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
             EXTRA_DELAY_AFTER_PROCEED);
@@ -2401,11 +2402,12 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     bool spaceFound = false;
     uint8_t notspaceCnt = 0;
     for (uint8_t i = 0; i < sizeof(hf_callsign); i++) {
-        if (hf_callsign[i] == ' ')
+        if (hf_callsign[i] == ' ') {
             spaceFound = true;
-        else {
+        } else {
             if (spaceFound) {
-                V1_printf("ERROR: hf_callsign '%s' has non-space after space at %u" EOL, hf_callsign, i);
+                V1_printf("ERROR: hf_callsign '%s' has non-space after space at %u" EOL,
+                    hf_callsign, i);
                 fatalErrorReboot = true;
             }
             notspaceCnt += 1;

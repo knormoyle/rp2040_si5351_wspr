@@ -26,7 +26,7 @@
 #include "config_functions.h"
 #include "cw_functions.h"
 
-// just so we can do some tests? 
+// just so we can do some tests?
 #include "debug_functions.h"
 #include "si5351_functions.h"
 #include "global_structs.h"
@@ -46,9 +46,9 @@
 // Flash is "execute in place" and so will be in use when any code that is stored in flash runs,
 // e.g. an interrupt handler or code running on a different core.
 //
-// Calling flash_range_erase or flash_range_program at the same time 
+// Calling flash_range_erase or flash_range_program at the same time
 // as flash is running code would cause a crash.
-// flash_safe_execute disables interrupts and tries to cooperate with the 
+// flash_safe_execute disables interrupts and tries to cooperate with the
 // other core to ensure flash is not in use
 // See the documentation for flash_safe_execute and its assumptions and limitations
 // int flash_safe_execute (void(*) (void *) func,
@@ -58,13 +58,13 @@
 // Returns
 // PICO_OK on success (the function will have been called).
 // PICO_TIMEOUT on timeout (the function may have been called).
-// PICO_ERROR_NOT_PERMITTED if safe execution is not possible 
+// PICO_ERROR_NOT_PERMITTED if safe execution is not possible
 // (the function will not have been called).
 // PICO_ERROR_INSUFFICIENT_RESOURCES if the method fails due to dynamic resource exhaustion
 // (the function will not have been called)
 // I'm getting -4 ??
 
-// Execute a function with IRQs disabled and with the other core 
+// Execute a function with IRQs disabled and with the other core
 // also not executing/reading flash
 // int rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
 // hard_assert(rc == PICO_OK);
@@ -277,7 +277,7 @@ void show_TELEN_msg() {
 // 'Y' command causes this to execute
 void do_gpsResetTest() {
     // FIX! currently don't have cold reset test
-    
+
     V0_print(F(EOL "do_gpsResetTest START" EOL));
     Watchdog.reset();
     while (true)  {
@@ -319,7 +319,7 @@ void do_someTest(void) {
         while (true)  {
             for (int symbol = 0; symbol < 4; symbol++) {
                 V0_printf(EOL "symbol %d" EOL, symbol);
-                startSymbolFreq(hf_freq, symbol, false, false); 
+                startSymbolFreq(hf_freq, symbol, false, false);
                 for (int i = 0; i < 15; i++) {
                     sleep_ms(1000);
                     Watchdog.reset();
@@ -392,11 +392,8 @@ void user_interface(void) {
         V0_println(F("Enter single char command: "));
         V0_println(F(" Q, Z, *, @, /, X, C, U, V, T, K, A, B, P, D, R, G, S, M, L, E"));
         V0_print(F(UNDERLINE_OFF NORMAL));
-
         Watchdog.reset();
-        char c_char = getOneChar(60000); // wait 60 secs
-
-        // V0_printf("%s" EOL, c_char);
+        char c_char = getOneChar(60000);  // wait 60 secs
         if (c_char == 0) {
             V0_print(F(CLEAR_SCREEN EOL));
             V0_print(F("(3) Timeout waiting for input, ..rebooting" EOL));
@@ -460,7 +457,7 @@ void user_interface(void) {
                 // I'm using arduino ide version 2.3.4
                 // what about:
                 // https://arduino-pico.readthedocs.io/en/latest/rp2040.html
-                // rp2040.rebootToBootloader() 
+                // rp2040.rebootToBootloader()
                 // Will reboot the RP2040 into USB UF2 upload mode.
                 reset_usb_boot(0, 0);
                 // rom_reset_usb_boot();
@@ -485,23 +482,27 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'U':
-                get_user_input("Enter U4B channel (0-599): " EOL, cc._U4B_chan, sizeof(cc._U4B_chan));
+                get_user_input("Enter U4B channel (0-599): " EOL,
+                    cc._U4B_chan, sizeof(cc._U4B_chan));
                 init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
 
                 write_FLASH();
                 break;
             case 'V':
-                get_user_input("Enter Verbosity level (0-9): " EOL, cc._verbose, sizeof(cc._verbose));
+                get_user_input("Enter Verbosity level (0-9): " EOL,
+                    cc._verbose, sizeof(cc._verbose));
                 write_FLASH();
                 break;
             case 'T':
                 show_TELEN_msg();
-                get_user_input("Enter TELEN config: " EOL, cc._TELEN_config, sizeof(cc._TELEN_config));
+                get_user_input("Enter TELEN config: " EOL,
+                    cc._TELEN_config, sizeof(cc._TELEN_config));
                 convertToUpperCase(cc._TELEN_config);
                 write_FLASH();
                 break;
             case 'K':
-                get_user_input("Enter clock speed (18, 20-48, 49-250 (not all)): " EOL, cc._clock_speed, sizeof(cc._clock_speed));
+                get_user_input("Enter clock speed (18, 20-48, 49-250 (not all)): " EOL,
+                    cc._clock_speed, sizeof(cc._clock_speed));
                 write_FLASH();
                 PLL_SYS_MHZ = atoi(cc._clock_speed);
                 // frequencies like 205 mhz will PANIC,
@@ -524,20 +525,23 @@ void user_interface(void) {
 
                 break;
             case 'A':
-                get_user_input("Enter Band (2,10,12,15,17,20):" EOL, cc._Band, sizeof(cc._Band));
+                get_user_input("Enter Band (2,10,12,15,17,20):" EOL,
+                    cc._Band, sizeof(cc._Band));
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
                 write_FLASH();
                 init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
                 break;
             case 'B':
-                get_user_input("Enter CW Band (2,10,12,15,17,20):" EOL, cc._Band_cw, sizeof(cc._Band));
+                get_user_input("Enter CW Band (2,10,12,15,17,20):" EOL,
+                    cc._Band_cw, sizeof(cc._Band));
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
                 write_FLASH();
                 break;
             case 'P':
-                get_user_input("Enter Tx high: (0 or 1)" EOL, cc._tx_high, sizeof(cc._tx_high));
+                get_user_input("Enter Tx high: (0 or 1)" EOL,
+                    cc._tx_high, sizeof(cc._tx_high));
                 write_FLASH();
                 break;
             case 'D':
@@ -564,16 +568,17 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'M':
-                get_user_input("Send morse also? 0 or 1: " EOL, cc._morse_also, sizeof(cc._morse_also));
+                get_user_input("Send morse also? 0 or 1: " EOL,
+                    cc._morse_also, sizeof(cc._morse_also));
                 write_FLASH();
                 break;
             case 'L':
-                get_user_input("Dynamic solar elevation tx power? 0 or 1: " EOL, 
+                get_user_input("Dynamic solar elevation tx power? 0 or 1: " EOL,
                    cc._solar_tx_power, sizeof(cc._solar_tx_power));
                 write_FLASH();
                 break;
             case 'E':
-                get_user_input("Constellation group used: 1 to 7: " EOL, 
+                get_user_input("Constellation group used: 1 to 7: " EOL,
                    cc._const_group, sizeof(cc._const_group));
                 write_FLASH();
                 break;
@@ -608,8 +613,9 @@ void makeSureClockIsGood(void) {
     // do only full Mhz work? maybe can do more but we only need integer Mhz here.
     // This guy say: absolutely can do non Mhz frequencies (just not those between 125 and 126?)
     // https://github.com/raspberrypi/pico-sdk/issues/1450
-    // None of the frequencies can be exactly matched exactly by the PLL so set_sys_clock_khz fails -
-    // as per the docs, you can use vco_calc.py to find out settings
+    // None of the frequencies can be exactly matched exactly by the PLL
+    // so set_sys_clock_khz fails as per the docs
+    // you can use vco_calc.py to find out settings
     // for set_sys_clock_pll for settings that are close.
     // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/scripts/vcocalc.py
 
@@ -643,7 +649,7 @@ void makeSureClockIsGood(void) {
         // check this default?
         freq_khz = PLL_SYS_MHZ * 1000UL;
         if (!set_sys_clock_khz(freq_khz, false)) {
-            V1_println("user_interface: ERROR: The DEFAULT_SYS_MHZ is not legal either. will use 125");
+            V1_println("user_interface: ERROR: DEFAULT_SYS_MHZ is not legal either. will use 125");
             PLL_SYS_MHZ = 125;
             snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", PLL_SYS_MHZ);
             write_FLASH();
@@ -963,7 +969,8 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     if (callsignBad) {
-        V0_printf(EOL "ERROR: cc._callsign %s is not supported/legal, initting to AB1CDE" EOL, cc._callsign);
+        V0_printf(EOL "ERROR: cc._callsign %s is not supported/legal, initting to AB1CDE" EOL,
+            cc._callsign);
         snprintf(cc._callsign, sizeof(cc._callsign), "AB1CDE");
         write_FLASH();
         result = -1;
@@ -972,7 +979,8 @@ int check_data_validity_and_set_defaults(void) {
     //*****************
     // change to strcpy for null terminate
     if (cc._verbose[0] == 0 ||cc._verbose[0] < '0' ||cc._verbose[0] > '9') {
-        V0_printf(EOL "ERROR: cc._verbose %s is not supported/legal, initting to 1" EOL, cc._verbose);
+        V0_printf(EOL "ERROR: cc._verbose %s is not supported/legal, initting to 1" EOL,
+            cc._verbose);
         snprintf(cc._verbose, sizeof(cc._verbose), "1");
         write_FLASH();
         result = -1;
@@ -998,7 +1006,7 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     //*****************
-    //cc._clock_speed
+    // cc._clock_speed
     // keep the upper limit at 250 to avoid nvram getting
     // a freq that won't work. will have to load flash nuke uf2 to clear nram
     // if that happens, so that default clock will return?
@@ -1019,7 +1027,8 @@ int check_data_validity_and_set_defaults(void) {
     } else {
         for (int i = 0; i <= 2; i++) {
             if (cc._clock_speed[i] < '0' &&cc._clock_speed[i] > '9') {
-                V0_printf(EOL "ERROR: check_data_validity...(): (1) illegalcc._clock_speed: %s" EOL, cc._clock_speed);
+                V0_printf(EOL "ERROR: check_data_validity...(): (1) illegalcc._clock_speed: %s" EOL,
+                    cc._clock_speed);
                 clock_speedBad = true;
             }
         }
@@ -1027,19 +1036,22 @@ int check_data_validity_and_set_defaults(void) {
     if (!clock_speedBad) {
         PLL_SYS_MHZ = atoi(cc._clock_speed);
         if (PLL_SYS_MHZ == 0 || PLL_SYS_MHZ < 18 || PLL_SYS_MHZ > 250) {
-            V0_printf(EOL "ERROR: check_data_validity...(): (2) illegalcc._clock_speed: %s" EOL, cc._clock_speed);
+            V0_printf(EOL "ERROR: check_data_validity...(): (2) illegalcc._clock_speed: %s" EOL,
+                cc._clock_speed);
             clock_speedBad = true;
         }
 
         if (!set_sys_clock_khz(PLL_SYS_MHZ * 1000UL, false)) {
             // http://jhshi.me/2014/07/11/print-uint64-t-properly-in-c/index.html
-            V0_printf(EOL "ERROR: check_data_validity...(): RP2040 can't change clock to %lu Mhz" EOL, PLL_SYS_MHZ);
+            V0_printf(EOL "ERROR: check_data_validity...(): RP2040 can't change clock to %lu Mhz" EOL,
+                PLL_SYS_MHZ);
             clock_speedBad = true;
         }
     }
 
     if (clock_speedBad) {
-        V0_printf(EOL "ERROR: cc._clock_speed %s is not legal, initting to %lu" EOL, cc._clock_speed, DEFAULT_PLL_SYS_MHZ);
+        V0_printf(EOL "ERROR: cc._clock_speed %s is not legal, initting to %lu" EOL,
+            cc._clock_speed, DEFAULT_PLL_SYS_MHZ);
         PLL_SYS_MHZ = DEFAULT_PLL_SYS_MHZ;
         // recalc
 
@@ -1047,7 +1059,7 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
-    
+
 
     // always recalc these for the current PLL_SYS_MHZ
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
@@ -1055,7 +1067,8 @@ int check_data_validity_and_set_defaults(void) {
     //*****************
     // be sure to null terminate
     if (cc._U4B_chan[0] == 0 || atoi(cc._U4B_chan) < 0 || atoi(cc._U4B_chan) > 599) {
-        V0_printf(EOL "ERROR: cc._U4B_chan %s is not supported/legal, initting to 599" EOL, cc._U4B_chan);
+        V0_printf(EOL "ERROR: cc._U4B_chan %s is not supported/legal, initting to 599" EOL,
+            cc._U4B_chan);
         snprintf(cc._U4B_chan, sizeof(cc._U4B_chan), "%s", "599");
         write_FLASH();
         // this will setcc._lane, cc._id13, cc._start_minute
@@ -1073,7 +1086,8 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            V0_printf("ERROR: cc._Band %s is not supported/legal, initting to 20" EOL, cc._Band);
+            V0_printf("ERROR: cc._Band %s is not supported/legal, initting to 20" EOL,
+                cc._Band);
             snprintf(cc._Band, sizeof(cc._Band), "20");
             write_FLASH();
             // figure out the XMIT_FREQUENCY for new band
@@ -1092,7 +1106,8 @@ int check_data_validity_and_set_defaults(void) {
         case 17: break;
         case 20: break;
         default:
-            V0_printf("ERROR: cc._Band_cw %s is not supported/legal, initting to 20" EOL, cc._Band);
+            V0_printf("ERROR: cc._Band_cw %s is not supported/legal, initting to 20" EOL,
+                cc._Band);
             snprintf(cc._Band_cw, sizeof(cc._Band_cw), "20");
             write_FLASH();
             result = -1;
@@ -1100,14 +1115,16 @@ int check_data_validity_and_set_defaults(void) {
     }
     //*****************
     if (cc._tx_high[0] != '0' &&cc._tx_high[0] != '1') {
-        V0_printf(EOL "ERROR: cc._tx_high %s is not supported/legal, initting to 1" EOL, cc._tx_high);
+        V0_printf(EOL "ERROR: cc._tx_high %s is not supported/legal, initting to 1" EOL,
+            cc._tx_high);
         snprintf(cc._tx_high, sizeof(cc._tx_high), "1");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (cc._testmode[0] != '0' &&cc._testmode[0] != '1') {
-        V0_printf(EOL "ERROR: cc._testmode %s is not supported/legal, initting to 0" EOL, cc._testmode);
+        V0_printf(EOL "ERROR: cc._testmode %s is not supported/legal, initting to 0" EOL,
+            cc._testmode);
         snprintf(cc._testmode, sizeof(cc._testmode), "0");
         write_FLASH();
         result = -1;
@@ -1117,49 +1134,56 @@ int check_data_validity_and_set_defaults(void) {
     // detect that case to get ascii 0 in there
     if (cc._correction[0] == 0 || atoi(cc._correction) < -30000 || atoi(cc._correction) > 30000) {
         // left room for 6 bytes
-        V0_printf(EOL "ERROR: cc._correction %s is not supported/legal, initting to 0" EOL, cc._correction);
+        V0_printf(EOL "ERROR: cc._correction %s is not supported/legal, initting to 0" EOL,
+            cc._correction);
         snprintf(cc._correction, sizeof(cc._correction), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (cc._go_when_rdy[0] != '0' &&cc._go_when_rdy[0] != '1') {
-        V0_printf(EOL "ERROR: cc._go_when_rdy %s is not supported/legal, initting to 0" EOL, cc._go_when_rdy);
+        V0_printf(EOL "ERROR: cc._go_when_rdy %s is not supported/legal, initting to 0" EOL,
+            cc._go_when_rdy);
         snprintf(cc._go_when_rdy, sizeof(cc._go_when_rdy), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (cc._use_sim65m[0] != '0' &&cc._use_sim65m[0] != '1') {
-        V0_printf(EOL "ERROR: cc._use_sim65m %s is not supported/legal, initting to 0" EOL, cc._use_sim65m);
+        V0_printf(EOL "ERROR: cc._use_sim65m %s is not supported/legal, initting to 0" EOL,
+            cc._use_sim65m);
         snprintf(cc._use_sim65m, sizeof(cc._use_sim65m), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (cc._factory_reset_done[0] != '0' &&cc._factory_reset_done[0] != '1') {
-        V0_printf(EOL "ERROR: cc._factory_reset_done %s is not support/legal .. will doFactoryReset" EOL, cc._factory_reset_done);
+        V0_printf(EOL "ERROR: cc._factory_reset_done %s is not support/legal .. will doFactoryReset" EOL,
+            cc._factory_reset_done);
         doFactoryReset();  // no return, reboots
     }
     //*****************
     if (cc._morse_also[0] != '0' &&cc._morse_also[0] != '1') {
-        V0_printf(EOL "ERROR: cc._morse_also %s is not supported/legal, initting to 0" EOL, cc._morse_also);
+        V0_printf(EOL "ERROR: cc._morse_also %s is not supported/legal, initting to 0" EOL,
+            cc._morse_also);
         snprintf(cc._morse_also, sizeof(cc._morse_also), "0");
         write_FLASH();
         result = -1;
     }
     //*****************
     if (cc._solar_tx_power[0] != '0' &&cc._solar_tx_power[0] != '1') {
-        V0_printf(EOL "ERROR: cc._solar_tx_power %s is not supported/legal, initting to 0" EOL, cc._solar_tx_power);
+        V0_printf(EOL "ERROR: cc._solar_tx_power %s is not supported/legal, initting to 0" EOL,
+            cc._solar_tx_power);
         snprintf(cc._solar_tx_power, sizeof(cc._solar_tx_power), "0");
         write_FLASH();
         result = -1;
     }
-    
+
     int cg = 0;
     cg = atoi(cc._const_group);
     if (cg < 1 || cg > 7) {
-        V0_printf(EOL "ERROR: cc._const_group %s is not supported/legal, initting to 7" EOL, cc._const_group);
+        V0_printf(EOL "ERROR: cc._const_group %s is not supported/legal, initting to 7" EOL,
+            cc._const_group);
         snprintf(cc._const_group, sizeof(cc._const_group), "7");
         write_FLASH();
         result = -1;
@@ -1249,7 +1273,7 @@ void doFactoryReset() {
     snprintf(cc._verbose, sizeof(cc._verbose), "1");
     snprintf(cc._TELEN_config, sizeof(cc._TELEN_config), "----");
     snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
-    snprintf(cc._U4B_chan, sizeof(cc._U4B_chan), "%s", "599"); // always 3 chars?
+    snprintf(cc._U4B_chan, sizeof(cc._U4B_chan), "%s", "599");  // always 3 chars?
     snprintf(cc._Band, sizeof(cc._Band), "20");
     snprintf(cc._Band_cw, sizeof(cc._Band), "20");
     snprintf(cc._tx_high, sizeof(cc._tx_high), "1");
