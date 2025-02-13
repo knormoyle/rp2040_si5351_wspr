@@ -13,7 +13,7 @@ extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
 
 // Don't reconfig if not necessary
 bool WARM_RESET_REDO_CONFIG = false;
-bool SIM65M_BROADCAST_5SECS = false;
+bool SIM65M_BROADCAST_5SECS = true;
 
 #include "global_structs.h"
 #include <stdlib.h>
@@ -567,7 +567,8 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
-            GPS_WAIT_FOR_NMEA_BURST_MAX = 5200;
+            // don't make too big. best if eventually GNGGA is always first in burst
+            GPS_WAIT_FOR_NMEA_BURST_MAX = 5200; 
 
             // none of this works?
             // PAIR_COMMON_SET_FIX_RATE $PAIR050,time*<checksum>
@@ -613,8 +614,8 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,6,1*39" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(2000);
+            // don't make too big. best if eventually GNGGA is always first in burst
             GPS_WAIT_FOR_NMEA_BURST_MAX = 1200;
-            // assume the default 1sec position fix rate is there
         }
 
     } else {
