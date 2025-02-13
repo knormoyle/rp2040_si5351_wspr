@@ -593,7 +593,7 @@ void cw_send_message() {
     // we send 'PARIS ' 3x above
 
     V1_print(F(EOL "Should start to hear CW now.. RF should be toggling" EOL));
-    uint64_t start_millis = millis();
+    uint32_t start_millis = millis();
     cw_send(cw_msg);
     uint32_t actual_duration = millis() - start_millis;
 

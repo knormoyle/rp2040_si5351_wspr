@@ -36,9 +36,6 @@ extern TinyGPSCustom ga_sats;
 extern bool VERBY[10];
 extern bool BALLOON_MODE;
 
-extern uint64_t GpsTimeToLastFix;  // milliseconds
-
-extern uint32_t GpsInvalidAllCnt;
 extern bool GpsInvalidAll;
 
 //************************************************

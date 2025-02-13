@@ -29,17 +29,17 @@ bool SPEED_IS_SOLAR_ELEVATION_MODE = true;
 #include <TinyGPS++.h>  // https://github.com/mikalhart/TinyGPSPlus
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-extern uint64_t GpsTimeToLastFix;  // milliseconds
+extern uint32_t GpsTimeToLastFix;  // milliseconds
 
 extern bool BALLOON_MODE;
 extern bool TESTMODE;
 extern bool USE_SIM65M;
 
 extern bool GpsInvalidAll;
-extern uint64_t GpsTimeToLastFix;  // milliseconds
-extern uint64_t GpsTimeToLastFixMin;
-extern uint64_t GpsTimeToLastFixMax;
-extern uint64_t GpsTimeToLastFixAvg;
+extern uint32_t GpsTimeToLastFix;  // milliseconds
+extern uint32_t GpsTimeToLastFixMin;
+extern uint32_t GpsTimeToLastFixMax;
+extern uint32_t GpsTimeToLastFixAvg;
 
 extern TinyGPSCustom gp_sats;
 extern TinyGPSCustom ggb_sats; // GBGSV
@@ -435,16 +435,16 @@ void snapForTelemetry() {
 
     // milliseconds
     s = divRoundNearest(GpsTimeToLastFix, 1000);
-    s = clamp_uint64_t(s, 0, 999);
+    s = clamp_uint32_t(s, 0, 999);
     snprintf(tt.gpsLockSecs,    sizeof(tt.gpsLockSecs),    "%u", s);
     s = divRoundNearest(GpsTimeToLastFixMin, 1000);
-    s = clamp_uint64_t(s, 0, 999);
+    s = clamp_uint32_t(s, 0, 999);
     snprintf(tt.gpsLockSecsMin, sizeof(tt.gpsLockSecsMin), "%u", s);
     s = divRoundNearest(GpsTimeToLastFixMax, 1000);
-    s = clamp_uint64_t(s, 0, 999);
+    s = clamp_uint32_t(s, 0, 999);
     snprintf(tt.gpsLockSecsMax, sizeof(tt.gpsLockSecsMax), "%u", s);
     s = divRoundNearest(GpsTimeToLastFixAvg, 1000);
-    s = clamp_uint64_t(s, 0, 999);
+    s = clamp_uint32_t(s, 0, 999);
     snprintf(tt.gpsLockSecsAvg, sizeof(tt.gpsLockSecsAvg), "%u", s);
 
     //*********************************
@@ -487,9 +487,6 @@ void snapForTelemetry() {
 }
 
 //****************************************************
-// FIX! are these assigned by anything yet? No?
-static float onewire_values[10] = { 0 };
-
 void process_TELEN_data(void) {
     V1_println(F("process_TELEN_data START"));
     // minutes_since_GPS_acquistion (should this be last time to fix);
@@ -501,9 +498,10 @@ void process_TELEN_data(void) {
     // the 12 bit shift is because thats resolution of ADC
     const float conversionFactor = 3300.0f / (1 << 12);
 
-    int telen_values[4] = { 0 };
+    uint32_t telen_values[4] = { 0 };
     uint32_t timeSinceBoot_secs = millis() / 1000UL;  // seconds
     for (int i=0; i < 4; i++) {
+        // no negative values here
         switch (cc._TELEN_config[i]) {
             case '-':  break;  // do nothing, telen chan is disabled
             case '0':
@@ -523,7 +521,7 @@ void process_TELEN_data(void) {
                 telen_values[i] = timeSinceBoot_secs;  // seconds since running
                 break;
             case '5':
-                telen_values[i] = GpsTimeToLastFix;  // FIX! is always time to fix, now?
+                telen_values[i] = GpsTimeToLastFix; 
                 break;
             case '6':
                 telen_values[i] = tx_cnt_0;
@@ -535,12 +533,7 @@ void process_TELEN_data(void) {
                 telen_values[i] = atoi(tt.hdop);  // hundredths
                 break;
             case '9': { ; }
-                // FIX! what are these onewire_values?
-                if (onewire_values[cc._TELEN_config[i]-'6'] > 0)
-                    telen_values[i] = onewire_values[cc._TELEN_config[i] -'6'] * 100;
-                else
-                    telen_values[i] = 20000 + (-1 * onewire_values[cc._TELEN_config[i] - '6']) * 100;
-                break;
+                telen_values[i] = 0;
         }
     }
     // will get sent as TELEN #1 (extended Telemetry) (a third packet in the U4B protocol)

@@ -403,8 +403,8 @@ void gpsResetTest() {
 
     bool fix_valid_all = false;
     uint32_t tries = 0;
-    uint64_t duration_millis = 0;
-    uint64_t start_millis = millis();
+    uint32_t duration_millis = 0;
+    uint32_t start_millis = millis();
     while (!fix_valid_all) {
         Watchdog.reset();
         tries += 1;
@@ -423,7 +423,7 @@ void gpsResetTest() {
 
         duration_millis = millis() - start_millis;
         if (duration_millis > 240000) {  // 4 * 60 = 240 secs
-            V0_printf("ERROR: gpsResetTest %lu: no fix after %" PRIu64 " millisecs" EOL, 
+            V0_printf("ERROR: gpsResetTest %lu: no fix after %lu millisecs" EOL, 
                 count, duration_millis);
             break;
         }
@@ -432,19 +432,19 @@ void gpsResetTest() {
         V0_flush();
         Watchdog.reset();
         // could be negative
-        int64_t wait_millis =  1000 - (int64_t) duration_millis;
+        int32_t wait_millis =  1000 - (int32_t) duration_millis;
         if (wait_millis > 0) {
-            V0_printf("will sleep for wait_millis %" PRId64 EOL, wait_millis);
+            V0_printf("will sleep for wait_millis %lu" EOL, wait_millis);
             sleep_ms(wait_millis);
         }
     }
 
     if (fix_valid_all) {
         if (duration_millis < 60000) { // 60 secs
-            V0_printf("GOOD: gpsResetTest %lu: fix took %" PRIu64 " millisecs" EOL, 
+            V0_printf("GOOD: gpsResetTest %lu: fix took %lu millisecs" EOL, 
                 count, duration_millis);
         } else {
-            V0_printf("ERROR: gpsResetTest %lu: fix (too slow) took %" PRIu64 " millisecs" EOL, 
+            V0_printf("ERROR: gpsResetTest %lu: fix (too slow) took %lu millisecs" EOL, 
                 count, duration_millis);
         }
         // prints out the summary info

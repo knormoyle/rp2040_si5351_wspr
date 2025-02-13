@@ -1089,10 +1089,10 @@ void setup1() {
 }
 
 //*************************************************************************
-uint64_t GpsTimeToLastFix = 0;  // milliseconds
-uint64_t GpsTimeToLastFixMin = 999999;  // milliseconds
-uint64_t GpsTimeToLastFixMax = 0;  // milliseconds
-uint64_t GpsTimeToLastFixAvg = 0;  // milliseconds
+uint32_t GpsTimeToLastFix = 0;  // milliseconds
+uint32_t GpsTimeToLastFixMin = 999999;  // milliseconds
+uint32_t GpsTimeToLastFixMax = 0;  // milliseconds
+uint32_t GpsTimeToLastFixAvg = 0;  // milliseconds
 // Sum and Cnt are for computing the incremntal Avg
 uint64_t GpsTimeToLastFixSum = 0;
 uint64_t GpsTimeToLastFixCnt = 0;
@@ -1272,9 +1272,7 @@ void loop1() {
     vfo_turn_off();
 
     // Gps may already be on
-    if (!GpsIsOn()) {
-        GpsTimeToLastFix = 0;
-    }
+    if (!GpsIsOn()) GpsTimeToLastFix = 0;
     GpsON(false);  // no full cold reset
 
     // is our solar/battery good?
@@ -1471,27 +1469,26 @@ void loop1() {
                     absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
                 V1_printf("loopCnt %" PRIu64, loopCnt);
                 V1_print(F(" first Gps Fix, after off->on!"));
-                V1_printf(" GpsTimeToLastFix %" PRIu64 " ms" EOL,
+                V1_printf(" GpsTimeToLastFix %lu ms" EOL,
                     GpsTimeToLastFix);
 
                 if (GpsTimeToLastFix < GpsTimeToLastFixMin) {
                     GpsTimeToLastFixMin = GpsTimeToLastFix;
                     V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_printf(" New GpsTimeToLastFixMin %" PRIu64 " ms" EOL,
+                    V1_printf(" New GpsTimeToLastFixMin %lu ms" EOL,
                         GpsTimeToLastFixMin);
                 }
                 if (GpsTimeToLastFix > GpsTimeToLastFixMax) {
                     GpsTimeToLastFixMax = GpsTimeToLastFix;
                     V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_printf(" New GpsTimeToLastFixMax %" PRIu64 " ms" EOL,
+                    V1_printf(" New GpsTimeToLastFixMax %lu ms" EOL,
                         GpsTimeToLastFixMax);
                 }
-                GpsTimeToLastFixSum += GpsTimeToLastFix;
+                GpsTimeToLastFixSum += (uint64_t) GpsTimeToLastFix;
                 GpsTimeToLastFixCnt += 1;
-                GpsTimeToLastFixAvg = GpsTimeToLastFixSum / GpsTimeToLastFixCnt;
+                GpsTimeToLastFixAvg = (uint32_t) GpsTimeToLastFixSum / GpsTimeToLastFixCnt;
                 V1_printf("loopCnt %" PRIu64, loopCnt);
-                V1_printf(" New GpsTimeToLastFixAvg %" PRIu64 " ms" EOL,
-                    GpsTimeToLastFixAvg);
+                V1_printf(" New GpsTimeToLastFixAvg %lu ms" EOL, GpsTimeToLastFixAvg);
             }
 
             // we know we have a good 3d fix at this point
@@ -1627,7 +1624,7 @@ void loop1() {
         "t_grid6: %s "
         "t_power: %s "
         "t_sat_count: %s "
-        "GpsTimeToLastFix %" PRIu64 " "
+        "GpsTimeToLastFix %lu "
         "GpsWatchdogCnt %lu" EOL,
         loopCnt, tt.tx_count_0, tt.callsign, tt.temp, tt.voltage,
         tt.altitude, tt.grid6, tt.power, tt.sat_count,
@@ -1915,11 +1912,12 @@ void sleepSeconds(int secs) {
     // so the delay will be >= secs
     V1_println(F("sleepSeconds START"));
     V1_flush();
-    uint64_t start_millis = millis();
-    uint64_t current_millis = start_millis;
-    uint64_t duration_millis = (uint64_t) secs * 1000;
+    uint32_t start_millis = millis();
+    uint32_t current_millis = start_millis;
+    uint32_t duration_millis = (uint64_t) secs * 1000;
+
     float solarVoltage;
-    uint64_t gdt_millis = 0;
+    uint32_t gdt_millis = 0;
     uint32_t increasingWait = 0;
     do {
         Watchdog.reset();

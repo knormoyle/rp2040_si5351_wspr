@@ -15,12 +15,17 @@ extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
 bool WARM_RESET_REDO_CONFIG = false;
 bool SIM65M_BROADCAST_5SECS = false;
 
+#include "global_structs.h"
+#include <stdlib.h>
+extern ConfigStruct cc;
+int CONSTELLATIONS_GROUP = atoi(cc._const_group);
+
 // gps+bds+glonass
-int DEFAULT_CONSTELLATIONS_CHOICE = 7;
+// int CONSTELLATIONS_GROUP = 7;
 // gps+bds
-// int DEFAULT_CONSTELLATIONS_CHOICE = 3;
+// int CONSTELLATIONS_GROUP = 3;
 // gps
-// int DEFAULT_CONSTELLATIONS_CHOICE = 1;
+// int CONSTELLATIONS_GROUP = 1;
 
 //*******************************************
 // Reference docs (for SIM28 but should apply)
@@ -78,6 +83,7 @@ int DEFAULT_CONSTELLATIONS_CHOICE = 7;
 #include "led_functions.h"
 #include "print_functions.h"
 #include "time_functions.h"
+
 // enums for voltage at:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
 #include "hardware/vreg.h"
@@ -178,9 +184,9 @@ void getChar() {
 //************************************************
 // tries to get all data from gps without losing any, for a blocking period of time
 // loops as fast as possible into a ram buffer
-void nmeaBufferFastPoll(uint64_t duration_millis, bool printIfFull) {
+void nmeaBufferFastPoll(uint32_t duration_millis, bool printIfFull) {
     V1_println(F(EOL "nmeaBufferFastPoll START"));
-    uint64_t start_millis = millis();
+    uint32_t start_millis = millis();
     // nmeaBuffer should be empty the first time we use this?
     // should be no harm (delay) in checking here?
     nmeaBufferPrintAndClear();
@@ -316,10 +322,9 @@ bool getInitialGpsOutput(void) {
     char incomingChar = { 0 };
     uint32_t incomingCharCnt = 0;
     uint32_t incomingSentenceCnt = 0;
-    // we drain during the GpsINIT now, oh. we should leave gps on so we get chars
-    // 5 secs?
-    uint64_t start_millis = millis();
-    uint64_t duration_millis = 0;
+
+    uint32_t start_millis = millis();
+    uint32_t duration_millis = 0;
     while (duration_millis < 5000) {
         Watchdog.reset();
         if (!Serial2.available()) {
@@ -406,18 +411,9 @@ void setGpsBalloonMode(void) {
         Serial2.flush();
         sleep_ms(1000);
     }
-    // FIX! should we not worry about setting balloon mode (3) for ATGM336?
-    // doesn't seem like ATGM336 has a balloon mode. no PCAS10 cmd in
-    // the CASIC specifiction pdf
+    // Should not worry about setting balloon mode (3) for ATGM336?
+    // doesn't seem like ATGM336 has a balloon mode in the CASIC specifiction pdf
 
-    // Serial2.print("$PSIMNAV,W,3*3A\r\n");
-    // normal mode
-    // Serial2.print("$PSIMNAV,W,0*39\r\n");
-
-    // wb8elk said:
-    // $PCAS11,5*18 is the Airborne command but not sure if the 336H accepts
-    // have to wait for the sentence to get out, and also complete
-    // gpsSleepForMillis(1000, false);
     V1_println(F("setGpsBalloonMode END"));
 }
 
@@ -808,7 +804,7 @@ void setGpsConstellations(int desiredConstellations) {
         switch (usedConstellations) {
             // are these not right, and Galileo is in default?
             // Gallileo is field 3. the last two fields are QZSS and NavIC
-            case 0: ; // FIX! should I make 0 disable everything?
+            // case 0: ; // FIX! should I make 0 disable everything?
             case 1:  // GPS
                 strncpy(nmeaSentence, "$PAIR066,1,0,0,0,0,0,*3B" CR LF, 62); break;
             case 2:  // BDS
@@ -823,7 +819,7 @@ void setGpsConstellations(int desiredConstellations) {
                 strncpy(nmeaSentence, "$PAIR066,0,1,0,1,0,0,*3A" CR LF, 62); break;
             case 7:  // GPS+BDS+GLONASS
                 strncpy(nmeaSentence, "$PAIR066,1,1,0,1,0,0,*3B" CR LF, 62); break;
-            case 8: ; // FIX! should I make 8 enable everything?
+            // case 8: ; // FIX! should I make 8 enable everything?
             default:  // GPS+BDS
                 usedConstellations = 3;
                 strncpy(nmeaSentence, "$PAIR066,1,0,0,1,0,0,*3A" CR LF, 62); break;
@@ -831,6 +827,7 @@ void setGpsConstellations(int desiredConstellations) {
     } else {
         switch (usedConstellations) {
             // case 0 isn't defined in the CASIC_ProtocolSpecification.pdf?
+            // case 0: ; // FIX! should I make 0 disable everything?
             case 1: strncpy(nmeaSentence, "$PCAS04,1*18" CR LF, 62); break;  // GPS
             case 2: strncpy(nmeaSentence, "$PCAS04,2*1B" CR LF, 62); break;  // BDS
             case 3: strncpy(nmeaSentence, "$PCAS04,3*1A" CR LF, 62); break;  // GPS+BDS
@@ -838,6 +835,7 @@ void setGpsConstellations(int desiredConstellations) {
             case 5: strncpy(nmeaSentence, "$PCAS04,5*1C" CR LF, 62); break;  // GPS+GLONASS
             case 6: strncpy(nmeaSentence, "$PCAS04,6*AF" CR LF, 62); break;  // BDS+GLONASS
             case 7: strncpy(nmeaSentence, "$PCAS04,7*1E" CR LF, 62); break;  // GPS+BDS+GLONASS
+            // case 8: ; // FIX! should I make 8 enable everything?
             default:
                 usedConstellations = 3;
                 strncpy(nmeaSentence, "$PCAS04,3*1D" CR LF, 62);  // GPS+BDS
@@ -1325,7 +1323,7 @@ bool GpsFullColdReset(void) {
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
     V1_println(F(EOL "GpsFullColdReset START"));
-    uint64_t start_millis = millis();
+    uint32_t start_millis = millis();
     Watchdog.reset();
 
     GpsIsOn_state = false;
@@ -1395,10 +1393,10 @@ bool GpsFullColdReset(void) {
     // we still have usb pll on, and default clock frequency at this point?
     if (PWM_GPS_POWER_ON_MODE) {
         // this is probably at least 2 secs. let's measure
-        uint64_t start_millis2 = millis();
+        uint32_t start_millis2 = millis();
         pwmGpsPwrOn();
-        uint64_t duration_millis2 = millis() - start_millis2;
-        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 " millisecs" EOL, duration_millis2);
+        uint32_t duration_millis2 = millis() - start_millis2;
+        V1_printf("Used pwmGpsPwrOn() and took %lu millisecs" EOL, duration_millis2);
         // soft power-on for GpsPwr (assert low, controls mosfet)
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
@@ -1619,7 +1617,7 @@ bool GpsFullColdReset(void) {
         // restores to desired constellations and broadcast
     }
 
-    setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
+    setGpsConstellations(CONSTELLATIONS_GROUP);
     // no ANT TXT (NMEA sentences) after this:
     setGpsBroadcast();
 
@@ -1634,10 +1632,10 @@ bool GpsFullColdReset(void) {
     GpsStartTime = get_absolute_time();  // usecs
 
     if (sentencesFound) GpsIsOn_state = true;
-    uint64_t duration_millis = millis() - start_millis;
+    uint32_t duration_millis = millis() - start_millis;
     V1_print(F("GpsFullColdReset END"));
     V1_printf(" sentencesFound %u", sentencesFound);
-    V1_printf(" duration_millis %" PRIu64 EOL, duration_millis);
+    V1_printf(" duration_millis %lu" EOL, duration_millis);
     return sentencesFound;
 }
 
@@ -1648,8 +1646,8 @@ bool GpsWarmReset(void) {
     // on next power up
     // I suppose we should just switch to idle mode instead of powering
     // gps chip off?
-    V1_println(F("GpsWarmReset START"));
-    uint64_t start_millis = millis();
+    V1_println(F(EOL "GpsWarmReset START"));
+    uint32_t start_millis = millis();
     GpsIsOn_state = false;
     GpsStartTime = get_absolute_time();  // usecs
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -1677,10 +1675,10 @@ bool GpsWarmReset(void) {
     // match the pwm that's done for cold reset
     if (PWM_GPS_POWER_ON_MODE) {
         // this is probably at least 2 secs. let's measure
-        uint64_t start_millis2 = millis();
+        uint32_t start_millis2 = millis();
         pwmGpsPwrOn();
-        uint64_t duration_millis2 = millis() - start_millis2;
-        V1_printf("Used pwmGpsPwrOn() and took %" PRIu64 " millisecs" EOL, duration_millis2);
+        uint32_t duration_millis2 = millis() - start_millis2;
+        V1_printf("Used pwmGpsPwrOn() and took %lu millisecs" EOL, duration_millis2);
         // soft power-on for GpsPwr (assert low, controls mosfet)
         // note that vbat doesn't have mosfet control, so it will be high right away
         // with availability of power
@@ -1722,7 +1720,7 @@ bool GpsWarmReset(void) {
 
     if (WARM_RESET_REDO_CONFIG) {
         //****************************
-        setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
+        setGpsConstellations(CONSTELLATIONS_GROUP);
         // we don't need no ZDA/TXT
         setGpsBroadcast();
 
@@ -1750,10 +1748,10 @@ bool GpsWarmReset(void) {
     GpsStartTime = get_absolute_time();  // usecs
 
     if (sentencesFound) GpsIsOn_state = true;
-    uint64_t duration_millis = millis() - start_millis;
+    uint32_t duration_millis = millis() - start_millis;
     V1_print(F("GpsWarmReset END"));
     V1_printf(" sentencesFound %u", sentencesFound);
-    V1_printf(" duration_millis %" PRIu64 EOL, duration_millis);
+    V1_printf(" duration_millis %lu" EOL, duration_millis);
     return sentencesFound;
 }
 
@@ -1821,7 +1819,7 @@ void writeGpsConfigNoBroadcastToFlash() {
     if (USE_SIM65M) setGnssOn_SIM65M();
     // set desired constellations
     // FIX! this doesn't change SIM65M default constellations (yet)
-    setGpsConstellations(DEFAULT_CONSTELLATIONS_CHOICE);
+    setGpsConstellations(CONSTELLATIONS_GROUP);
     setGpsBroadcast();
 
     V1_println(F("writeGpsConfigNoBroadcastToFlash END"));
@@ -1844,6 +1842,7 @@ void GpsON(bool GpsColdReset) {
 
     bool sentencesFound = false;
     uint32_t tryCnt = 0;
+    const uint32_t max_tryCnt = 3;
 
     if (!GpsColdReset && GpsIsOn()) {
         // fake this to avoid doing a gps warm reset if successfully on?
@@ -1854,12 +1853,17 @@ void GpsON(bool GpsColdReset) {
     // don't care what the initial state is, for cold reset
     while (!sentencesFound) {
         tryCnt += 1;
-        if (tryCnt >= 3) {
+        if (tryCnt >= max_tryCnt) {
             if (GpsColdReset) {
-                V1_println(F("ERROR: tryCnt 3 on GpsFullColdReset.. not retrying any more"));
+                V1_print(F("ERROR: tryCnt 3 on GpsFullColdReset.. not retrying any more "));
+                printSystemDateTime();
+                V1_print(F(EOL));
                 break;
             } else {
-                V1_println(F("ERROR: tryCnt 3 on GpsWarmReset.. switch to trying GpsColdReset"));
+                V1_print(F("ERROR: tryCnt 3 on GpsWarmReset.. switch to trying GpsColdReset "));
+                printSystemDateTime();
+                V1_print(F(EOL));
+
                 GpsColdReset = true;
                 tryCnt = 0;
             }
@@ -1868,6 +1872,20 @@ void GpsON(bool GpsColdReset) {
             sentencesFound = GpsFullColdReset();
         } else {
             sentencesFound = GpsWarmReset();
+        }
+
+        // try sending the software command for SIM65M if the 
+        // pin assertions didn't work. Depends on the baud setup being right?
+        if (USE_SIM65M && !sentencesFound && (tryCnt < max_tryCnt)) {
+            if (GpsColdReset) {
+                // Packet Type:007 PAIR_GNSS_SUBSYS_FULL_COLD_START
+                Serial2.print("$PAIR001,007,0*3C" CR LF);
+            } else {
+                // Packet Type:005 PAIR_GNSS_SUBSYS_WARM_START
+                Serial2.print("$PAIR001,005,0*3E" CR LF);
+            }
+            Serial2.flush();
+            gpsSleepForMillis(2000, false);
         }
     }
 
@@ -1967,7 +1985,7 @@ void GpsOFF() {
 
 //************************************************
 // FIX! why was this static void before?
-uint64_t updateGpsDataAndTime(int ms) {
+uint32_t updateGpsDataAndTime(int ms) {
     // to make sure we get some update, even if fix_age is larger than 1 sec.
     V1_println(F("updateGpsDataAndTime START"));
     Watchdog.reset();
@@ -1977,15 +1995,15 @@ uint64_t updateGpsDataAndTime(int ms) {
     // stop if no data for 50 milliseconds
     // all the durations below won't start counting until we get the first char
     // (sets start_millis())
-    uint64_t start_millis = 0;
-    uint64_t last_serial2_millis = 0;
-    uint64_t timeSinceLastChar_millis = 0;
-    uint64_t duration_millis = 0;
-    uint64_t current_millis = millis();
-    uint64_t entry_millis = current_millis;
+    uint32_t start_millis = 0;
+    uint32_t last_serial2_millis = 0;
+    uint32_t timeSinceLastChar_millis = 0;
+    uint32_t duration_millis = 0;
+    uint32_t current_millis = millis();
+    uint32_t entry_millis = current_millis;
 
     V1_printf(
-        "updateGpsDataAndTime started looking for NMEA current_millis %" PRIu64 EOL,
+        "updateGpsDataAndTime started looking for NMEA current_millis %lu" EOL,
         current_millis);
 
     // clear the StampPrintf buffer, in case it had anything.
@@ -2159,7 +2177,7 @@ uint64_t updateGpsDataAndTime(int ms) {
 
     int diff = sentenceStartCnt - sentenceEndCnt;
     V1_print(F("updateGpsDataAndTime:"));
-    V1_printf(" start_millis %" PRIu64 " current_millis %" PRIu64,
+    V1_printf(" start_millis %lu current_millis %lu",
         start_millis, current_millis);
     V1_printf(" sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
         sentenceStartCnt, sentenceEndCnt, diff);
@@ -2178,7 +2196,7 @@ uint64_t updateGpsDataAndTime(int ms) {
     // can it get too big?
     if (AvgCharRateSec > 999999.9) AvgCharRateSec = 999999.9;
     V1_printf(
-        "NMEA sentences: AvgCharRateSec %.f duration_millis %" PRIu64 " incomingCharCnt %d" EOL,
+        "NMEA sentences: AvgCharRateSec %.f duration_millis %lu incomingCharCnt %d" EOL,
         AvgCharRateSec, duration_millis, incomingCharCnt);
     V1_flush();
 
@@ -2204,17 +2222,18 @@ uint64_t updateGpsDataAndTime(int ms) {
 
     //******************************
     updateStatusLED();
-    uint64_t total_millis = millis() - entry_millis;
+    uint32_t total_millis = millis() - entry_millis;
     // will be interesting to compare total_millis to duration_millis
-    V1_printf("updateGpsDataAndTime END total_millis %" PRIu64 EOL EOL, total_millis);
+    V1_printf("updateGpsDataAndTime END total_millis %lu" EOL EOL, total_millis);
     return total_millis;
 }
 
 //************************************************
 void checkUpdateTimeFromGps() {
-    static bool gpsDateTimeWasUpdated = false;
+    static bool forceUpdate = true;
     static uint64_t lastUpdate_millis = 0;
     static uint64_t lastCheck_millis = 0;
+    static uint32_t updateCnt = 0;
 
     // time since last update. Don't update more than once every 30 secs
     // UPDATE: since the first (GNGGA for ATGM336H) has the least difference
@@ -2225,7 +2244,7 @@ void checkUpdateTimeFromGps() {
     // time event in a burst. For ATGM336 that should be GNGGA?
     // update: change the quiet zone to be time of a burst! that way we always update
     // on the last burst before wspr tx?
-    uint64_t elapsed_millis = millis() - lastCheck_millis;
+    uint32_t elapsed_millis = millis() - lastCheck_millis;
     // is the quiet zone especially important for a long burst? what if the burst interval was 5 secs
     // could there be staleness?
 
@@ -2235,21 +2254,50 @@ void checkUpdateTimeFromGps() {
     // but we don't adjust time then, we're busy waiting to complete alignment at that point
 
     // Update: make the "quiet zone" 3x the burst delay time
-    if (gpsDateTimeWasUpdated && (elapsed_millis < (uint64_t) 3 * GPS_WAIT_FOR_NMEA_BURST_MAX)) {
+    if ((!forceUpdate) && (elapsed_millis < (uint64_t) 3 * GPS_WAIT_FOR_NMEA_BURST_MAX)) {
         return;
     }
     lastCheck_millis = millis();
 
+    elapsed_millis = millis() - lastUpdate_millis;
+    // force update at least every 1 minutes
+    forceUpdate = elapsed_millis > (1 * 60 * 1000); 
+    if (forceUpdate && updateCnt > 0) {
+        // might get this printed multiple times if the forceUpdate is delayed for some reason.
+        // will be interesting to see if there are odd cases like that?
+        V1_printf("WARN: trying to forceUpdate. lastUpdate elapsed_millis %lu" EOL, 
+            elapsed_millis);
+    }
 
     uint16_t gps_year = gps.date.year();
     bool gps_year_valid = gps_year >= 2025 && gps_year <= 2034;
     uint32_t fix_age = gps.time.age();
 
+    uint8_t gps_hundredths = gps.time.centisecond();
+    // shouldn't use the time if hundredths isn't 0, as our skew estimation will be wrong
+    if (gps_hundredths > 0) {
+        V1_printf("INFO: non-zero TinyGPS gps_hundredths %u > 99" EOL,
+            gps_hundredths);
+    }
+
     // so how about we only update when fix_age is < 100 millisecs??
     // (10 ms for possible code delays here
-    if (!gps_year_valid || fix_age > 100 || 
-            GpsInvalidAll || !gps.date.isValid() || !gps.time.isValid()) {
+    // we pay attention to hundredths even in the forceUpdate case?
+    // I guess should be okay..eventually hundredths should go to 0?
+    // hmm. let's ignore in that case
+    if (!gps_year_valid || GpsInvalidAll || !gps.date.isValid() || !gps.time.isValid()) {
         return;
+    }
+
+    // try to get as close to the NMEA timestamp as possible
+    if (forceUpdate) {
+        // loosen the constraints if a force? 
+        // maybe something weird with the gps
+        // hundredths supposedly goes to .000 once we get a fix?
+        // do we care about system time until we get a fix?
+        if (fix_age > 100) return;
+    } else {
+        if (fix_age > 100 || gps_hundredths > 0) return;
     }
             
     // don't be updating this every time
@@ -2291,14 +2339,12 @@ void checkUpdateTimeFromGps() {
     uint32_t gps_monthSecs = 
         (gps_day * 24 * 3600) + (gps_hour * 3600) + (gps_minute * 60) + gps_second;
 
-    // was:
-    //    hh == gps_hour && mm == gps_minute && ss == gps_second) {
-    if (gpsDateTimeWasUpdated && y == gps_year && m == gps_month &&
-        monthSecsM0 == gps_monthSecs) return;
+
+
+    if ((!forceUpdate) && y == gps_year && m == gps_month && monthSecsM0 == gps_monthSecs) return;
     
     V1_print(F("WARN: checkUpdateTimeFromGps not set or drift?" EOL));
 
-    uint8_t gps_hundredths = gps.time.centisecond();
 
     //******************************
     // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
@@ -2325,10 +2371,6 @@ void checkUpdateTimeFromGps() {
         V1_printf("ERROR: TinyGPS gps_hundredths %u > 99" EOL,
             gps_hundredths);
         gpsDateTimeBad = true;
-    }
-    if (gps_hundredths > 0) {
-        V1_printf("INFO: non-zero TinyGPS gps_hundredths %u > 99" EOL,
-            gps_hundredths);
     }
 
     // check the days in a month is write.
@@ -2391,18 +2433,20 @@ void checkUpdateTimeFromGps() {
 
         V1_printf(" hour %d minute %d second %d", hh, mm, ss);
         V1_printf(" day %d month %d year %d", d, m, y);
-        V1_printf(" gpsDateTimeWasUpdated %u" EOL, gpsDateTimeWasUpdated);
+        V1_printf(" forceUpdate %u" EOL, forceUpdate);
 
         int secondDelta = ((int) monthSecsM0) - ((int) gps_monthSecs);
 
         // add in the minuteDelta cover minute transitions
         // too much drift/error?
         // don't print the first time thru..since that doesn't matter
-        if (gpsDateTimeWasUpdated) {
+        if (updateCnt!=0) {
             V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
             if (abs(secondDelta) > 1) {
-                V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d" EOL, 
-                    secondDelta);
+                V1_printf("ERROR: unexpected abs(secondDelta) > 1:  secondDelta %d ", secondDelta);
+                printSystemDateTime();
+                V1_print(F(EOL));
+
             }
         }
 
@@ -2421,11 +2465,12 @@ void checkUpdateTimeFromGps() {
         // don't think they round though.
         // seems like bursts eventually align so the fractional second is .000 always??
 
-
         elapsed_millis = millis() - lastUpdate_millis;
-        V1_printf("millis since last update: %" PRIu64 EOL, elapsed_millis);
+        V1_printf("forceUpdate %u updateCnt %lu millis since last update: %lu" EOL, 
+            forceUpdate, updateCnt, elapsed_millis);
         lastUpdate_millis = millis();
-        gpsDateTimeWasUpdated = true;
+        forceUpdate = false;
+        updateCnt += 1;
 
         V1_print(EOL);
     }

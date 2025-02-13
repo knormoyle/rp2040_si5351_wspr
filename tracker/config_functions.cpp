@@ -389,7 +389,8 @@ void user_interface(void) {
         V0_print(F(UNDERLINE_ON BRIGHT UNDERLINE_OFF NORMAL));
         // no comma to concat strings
         // F() to keep string in flash, not ram
-        V0_println(F("Enter single char command: Z, *, @, /, X, C, U, V, T, K, A, B, P, D, R, G, S, M"));
+        V0_println(F("Enter single char command: "));
+        V0_println(F(" Q, Z, *, @, /, X, C, U, V, T, K, A, B, P, D, R, G, S, M, L, E"));
         V0_print(F(UNDERLINE_OFF NORMAL));
 
         Watchdog.reset();
@@ -571,6 +572,11 @@ void user_interface(void) {
                    cc._solar_tx_power, sizeof(cc._solar_tx_power));
                 write_FLASH();
                 break;
+            case 'E':
+                get_user_input("Constellation group used: 1 to 7: " EOL, 
+                   cc._const_group, sizeof(cc._const_group));
+                write_FLASH();
+                break;
             case 13:  break;
             case 10:  break;
             default:
@@ -657,7 +663,7 @@ void makeSureClockIsGood(void) {
 // https://github.com/MakerMatrix/RP2040_flash_programming/blob/main/RP2040_flash/RP2040_flash.ino
 
 // update whever you add a bit or more to flash used (the offsets used below)
-#define FLASH_BYTES_USED 34
+#define FLASH_BYTES_USED 35
 int read_FLASH(void) {
     Watchdog.reset();
     V1_print(F("read_FLASH START" EOL));
@@ -715,22 +721,23 @@ int read_FLASH(void) {
     }
     // BE SURE YOU ONLY USE ONE PAGE: i.e. 256 bytes total
     // FIX! should we just use snprintf?
-    strncpy(cc._callsign,        flash_target_contents + 0,  6);cc._callsign[6] = 0;
-    strncpy(cc._verbose,         flash_target_contents + 6,  1);cc._verbose[1] = 0;
-    strncpy(cc._TELEN_config,    flash_target_contents + 7,  4);cc._TELEN_config[4] = 0;
-    strncpy(cc._clock_speed,     flash_target_contents + 11, 3);cc._clock_speed[3] = 0;
-    strncpy(cc._U4B_chan,        flash_target_contents + 14, 3);cc._U4B_chan[3] = 0;
+    strncpy(cc._callsign,        flash_target_contents + 0,  6); cc._callsign[6] = 0;
+    strncpy(cc._verbose,         flash_target_contents + 6,  1); cc._verbose[1] = 0;
+    strncpy(cc._TELEN_config,    flash_target_contents + 7,  4); cc._TELEN_config[4] = 0;
+    strncpy(cc._clock_speed,     flash_target_contents + 11, 3); cc._clock_speed[3] = 0;
+    strncpy(cc._U4B_chan,        flash_target_contents + 14, 3); cc._U4B_chan[3] = 0;
     // FIX! change tocc._band everywhere?
-    strncpy(cc._Band,            flash_target_contents + 17, 2);cc._Band[2] = 0;
-    strncpy(cc._tx_high,         flash_target_contents + 19, 1);cc._tx_high[1] = 0;
-    strncpy(cc._testmode,        flash_target_contents + 20, 1);cc._testmode[1] = 0;
-    strncpy(cc._correction,      flash_target_contents + 21, 6);cc._correction[6] = 0;
-    strncpy(cc._go_when_rdy,     flash_target_contents + 27, 1);cc._go_when_rdy[1] = 0;
-    strncpy(cc._factory_reset_done,  flash_target_contents + 28, 1);cc._factory_reset_done[1] = 0;
-    strncpy(cc._use_sim65m,      flash_target_contents + 29, 1);cc._use_sim65m[1] = 0;
-    strncpy(cc._morse_also,      flash_target_contents + 30,  1);cc._morse_also[1] = 0;
-    strncpy(cc._Band_cw,         flash_target_contents + 31,  2);cc._Band_cw[2] = 0;
-    strncpy(cc._solar_tx_power,  flash_target_contents + 33,  1);cc._solar_tx_power[1] = 0;
+    strncpy(cc._Band,            flash_target_contents + 17, 2); cc._Band[2] = 0;
+    strncpy(cc._tx_high,         flash_target_contents + 19, 1); cc._tx_high[1] = 0;
+    strncpy(cc._testmode,        flash_target_contents + 20, 1); cc._testmode[1] = 0;
+    strncpy(cc._correction,      flash_target_contents + 21, 6); cc._correction[6] = 0;
+    strncpy(cc._go_when_rdy,     flash_target_contents + 27, 1); cc._go_when_rdy[1] = 0;
+    strncpy(cc._factory_reset_done,  flash_target_contents + 28, 1); cc._factory_reset_done[1] = 0;
+    strncpy(cc._use_sim65m,      flash_target_contents + 29, 1); cc._use_sim65m[1] = 0;
+    strncpy(cc._morse_also,      flash_target_contents + 30,  1); cc._morse_also[1] = 0;
+    strncpy(cc._Band_cw,         flash_target_contents + 31,  2); cc._Band_cw[2] = 0;
+    strncpy(cc._solar_tx_power,  flash_target_contents + 33,  1); cc._solar_tx_power[1] = 0;
+    strncpy(cc._const_group,     flash_target_contents + 34,  1); cc._const_group[1] = 0;
 
     PLL_SYS_MHZ = atoi(cc._clock_speed);
     // recalc
@@ -848,6 +855,7 @@ void write_FLASH(void) {
     strncpy(data_chunk + 30, cc._morse_also, 1);
     strncpy(data_chunk + 31, cc._Band_cw, 2);
     strncpy(data_chunk + 33, cc._solar_tx_power, 1);
+    strncpy(data_chunk + 34, cc._const_group, 1);
 
     // alternative for casting the array to uint8_t
     // https://stackoverflow.com/questions/40579902/how-to-turn-a-character-array-into-uint8-t
@@ -1147,6 +1155,15 @@ int check_data_validity_and_set_defaults(void) {
         write_FLASH();
         result = -1;
     }
+    
+    int cg = 0;
+    cg = atoi(cc._const_group);
+    if (cg < 1 || cg > 7) {
+        V0_printf(EOL "ERROR: cc._const_group %s is not supported/legal, initting to 7" EOL, cc._const_group);
+        snprintf(cc._const_group, sizeof(cc._const_group), "7");
+        write_FLASH();
+        result = -1;
+    }
     return result;
 }
 
@@ -1178,6 +1195,7 @@ void show_values(void) {
     V0_printf("S: use_sim65m: %s" EOL, cc._use_sim65m);
     V0_printf("M: morse_also: %s" EOL, cc._morse_also);
     V0_printf("L: dynamic tx power using solar elevation: %s" EOL, cc._solar_tx_power);
+    V0_printf("E: constellation group: %s" EOL, cc._const_group);
     V0_printf("*: factory_reset_done: %s" EOL, cc._factory_reset_done);
 
     V0_printf(EOL "XMIT_FREQUENCY: %lu (symbol 0)" EOL, XMIT_FREQUENCY);
@@ -1219,6 +1237,7 @@ void show_commands(void) {
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
     V0_println(F("M: morse_also: 1 tx cw msg after all wspr(default: 0)"));
     V0_println(F("L: solar_tx_power: 1 adjust power from solar elevation(default: 0)"));
+    V0_println(F("E: constellation group: (default: 7)"));
 
     V0_print(F("show_commands END" EOL));
 }
@@ -1243,6 +1262,7 @@ void doFactoryReset() {
     snprintf(cc._use_sim65m, sizeof(cc._use_sim65m), "0");
     snprintf(cc._morse_also, sizeof(cc._morse_also), "0");
     snprintf(cc._solar_tx_power, sizeof(cc._solar_tx_power), "0");
+    snprintf(cc._const_group, sizeof(cc._const_group), "7");
 
     // What about the side decodes? Don't worry, just reboot
     write_FLASH();
