@@ -292,8 +292,9 @@ void setTime(time_t t) {
   // I suppose this could be a parameter, so it's dependent on the 
   // time delay related to where the utc time came from ? (gps)
   // that skew could vary?
+  // Update: use adjustTimeMillis(-500) below
   // restart counting from now (thanks to Korman for this fix)
-  prevMillis = millis() - 500;  
+  prevMillis = millis();
 } 
 
 void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
@@ -311,6 +312,14 @@ void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
   tm.Second = sec;
   setTime(makeTime(tm));
   // kbn 2/12/24
+  flushCache();
+}
+
+// kbn 2/12/24
+// usually a negative adjustment that's < 1 sec to back up prevMillis
+// to where it probably aligned with the setTime sec
+void adjustTimeMillis(long adjustment) {
+  prevMillis += adjustment;
   flushCache();
 }
 

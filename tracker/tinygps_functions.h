@@ -4,7 +4,7 @@
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
 #ifndef TINY_GPS_FUNCTIONS_H
-#define TINY_GPS_FUNCTIONS_H
+#define TINY_GPS_FUNCTIONS_H 
 #include <stdint.h>
 
 void tinyGpsCustomInit(void);

@@ -2372,6 +2372,12 @@ void checkUpdateTimeFromGps() {
             !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
         }
         setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+        // pushes back the prevMillis value in Time, that was captured by setTime
+        // to align more with with the gps chip sent out the time NMEA sentence
+        // probably have to do this closely after setTime
+        // do we have different values for SIM65M?
+        if (USE_SIM65M) adjustTimeMillis(-400);
+        else adjustTimeMillis(-400);
         // make system time 1 sec earlier. for better DT results in sdr/wsjt-x
         // should be UTC time zone?
 
@@ -2415,12 +2421,6 @@ void checkUpdateTimeFromGps() {
         // don't think they round though.
         // seems like bursts eventually align so the fractional second is .000 always??
 
-        // this gets us our 1-sec-in alignment for wspr tx?
-        // better than delaying in sendWspr() from minute alignment?
-        // Note the use of gps Time is always little late? (varies)
-        // UPDATE: 0
-        // adjustTime(1);
-        adjustTime(0);
 
         elapsed_millis = millis() - lastUpdate_millis;
         V1_printf("millis since last update: %" PRIu64 EOL, elapsed_millis);
