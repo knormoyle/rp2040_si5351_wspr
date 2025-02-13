@@ -2228,10 +2228,18 @@ void checkUpdateTimeFromGps() {
     uint64_t elapsed_millis = millis() - lastCheck_millis;
     // is the quiet zone especially important for a long burst? what if the burst interval was 5 secs
     // could there be staleness?
-    if (gpsDateTimeWasUpdated && (elapsed_millis < (uint64_t) GPS_WAIT_FOR_NMEA_BURST_MAX)) {
+
+    // HACK: We're getting excess correction amounts when gps_second is 58 or 59?
+    // I guess updating on 56, 57, 58, 59 is just more likely?
+    // but if we're about to be at a 2 minute interval that could mess with things a little
+    // but we don't adjust time then, we're busy waiting to complete alignment at that point
+
+    // Update: make the "quiet zone" 3x the burst delay time
+    if (gpsDateTimeWasUpdated && (elapsed_millis < (uint64_t) 3 * GPS_WAIT_FOR_NMEA_BURST_MAX)) {
         return;
     }
     lastCheck_millis = millis();
+
 
     uint16_t gps_year = gps.date.year();
     bool gps_year_valid = gps_year >= 2025 && gps_year <= 2034;
