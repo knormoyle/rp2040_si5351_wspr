@@ -240,6 +240,7 @@ TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
 #include "led_functions.h"
 #include "keyboard_functions.h"
 #include "gps_functions.h"
+#include "time_functions.h"
 #include "tinygps_functions.h"
 #include "cw_functions.h"
 #include "sweep_functions.h"
@@ -2065,7 +2066,10 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
 
     //*******************************
     // Note we print this after the extra PROCEED delay(s). (or any additional fixed delay)
-    V1_printf(EOL "sendWspr START now: minute: %d second: %d" EOL, minute(), second());
+    V1_print(F(EOL "sendWspr START now: "));
+    printSystemDateTime();
+    V1_print(F(EOL));
+
     if (VERBY[2]) {
         // do a StampPrintf, so we can measure usec duration from here to the first symbol
         // remember, it's usec running time, it's not aligned to the gps time.

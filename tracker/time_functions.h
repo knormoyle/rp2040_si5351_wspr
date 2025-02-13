@@ -11,5 +11,6 @@
 
 void printGpsDateTime(TinyGPSDate &d, TinyGPSTime &t, bool printAge);
 time_t getEpochTime();
+void printSystemDateTime();
 
 #endif
