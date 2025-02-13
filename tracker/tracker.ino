@@ -2085,10 +2085,11 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
     // (symbol time: is duration for 1 wspr symbol tx 8192/12000 or equivalently 256/375)
 
     //******************
-    // static int EXTRA_DELAY_AFTER_PROCEED = 300; // milliseconds
-    // hmm..no benefit?
-    static int EXTRA_DELAY_AFTER_PROCEED = 0;
-    if (EXTRA_DELAY_AFTER_PROCEED<0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
+    // supposed to be 1 sec in. This is basically 
+    // 1 sec - (gps to nmea to systime to code here, delay?)
+    // static int EXTRA_DELAY_AFTER_PROCEED = 700; // milliseconds
+    static int EXTRA_DELAY_AFTER_PROCEED = 0; // milliseconds
+    if (EXTRA_DELAY_AFTER_PROCEED < 0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
             EXTRA_DELAY_AFTER_PROCEED);
         EXTRA_DELAY_AFTER_PROCEED = 0;
@@ -2112,7 +2113,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
     }
     // hmm. not updating led during this
     // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
-    delay(EXTRA_DELAY_AFTER_PROCEED);
+    busy_wait_ms(EXTRA_DELAY_AFTER_PROCEED);
 
     //******************
     Watchdog.reset();
@@ -2293,7 +2294,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // for debug/checking/consistency..report how long RF is on before we need it here!
     // I guess we should always have clocks off when we hit here..even if
     // multiple wspr messages (check how we end a wspr message)
-    absolute_time_t start_usecs_2;
+    absolute_time_t start_usecs_2 = 0;
 
     // we better do the loop iteration at least once!
     while (!(alignMinute(i-1))) {
@@ -2303,12 +2304,11 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     }
     while (!clk01_turned_on || !(alignMinute(i) && (second() == 0))) {
         Watchdog.reset();
-        // delay(1);
         // whenever we have spin loops we need to updateStatusLED()
         updateStatusLED();
-        // we must have come in here rght before we're aligned
-        // so we could look at millis() being > 900 and
-        // we'll be 100 millis before the alignment to sec?
+        // must have come in here right before we're aligned
+        // so could look at millis() being > 900 and
+        // will be 100 millis before the alignment to sec?
         // that should cover any turn-on glitch
         // just do it once!
 
@@ -2341,6 +2341,9 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     } else {
         if (DO_CLK_OFF_FOR_WSPR_MODE) {
             // for debug/checking/consistency..report how long RF is on before we need it here!
+            if (start_usecs_2 == 0) {
+                V1_printf("ERROR: syncAndSendWspr why is start_usecs_2 == 0 here?");
+            }
             absolute_time_t end_usecs_2 = get_absolute_time();
             uint64_t elapsed_usecs_2 = absolute_time_diff_us(start_usecs_2, end_usecs_2);
             float elapsed_millisecs_2 = (float)elapsed_usecs_2 / 1000.0;

@@ -2214,12 +2214,24 @@ uint64_t updateGpsDataAndTime(int ms) {
 void checkUpdateTimeFromGps() {
     static bool gpsDateTimeWasUpdated = false;
     static uint64_t lastUpdate_millis = 0;
+    static uint64_t lastCheck_millis = 0;
 
     // time since last update. Don't update more than once every 30 secs
-    uint64_t elapsed_millis = millis() - lastUpdate_millis;
-    if (gpsDateTimeWasUpdated && elapsed_millis < 30000) { 
+    // UPDATE: since the first (GNGGA for ATGM336H) has the least difference
+    // in time from being sent from GPS, it's most accurate. The burst takes maybe 1 sec
+    // so the last (GNGST?) might be delayed by 1 sec because of uart transmission delays
+    // by not checking again for 30 secs, we just use the first one
+    // having the check be in a 30 sec quiet zone, means we'll always use the same, first
+    // time event in a burst. For ATGM336 that should be GNGGA?
+    // update: change the quiet zone to be time of a burst! that way we always update
+    // on the last burst before wspr tx?
+    uint64_t elapsed_millis = millis() - lastCheck_millis;
+    // is the quiet zone especially important for a long burst? what if the burst interval was 5 secs
+    // could there be staleness?
+    if (gpsDateTimeWasUpdated && (elapsed_millis < (uint64_t) GPS_WAIT_FOR_NMEA_BURST_MAX)) {
         return;
     }
+    lastCheck_millis = millis();
 
     uint16_t gps_year = gps.date.year();
     bool gps_year_valid = gps_year >= 2025 && gps_year <= 2034;
@@ -2260,11 +2272,21 @@ void checkUpdateTimeFromGps() {
     uint8_t mm = (uint8_t) minute(t);
     uint8_t ss = (uint8_t) second(t);
 
-    if (gpsDateTimeWasUpdated && 
-        y == gps_year && m == gps_month && d == gps_day &&
-        hh == gps_hour && mm == gps_minute && ss == gps_second) {
-        return;
-    }
+    // okay if we unnecessarily update time once a month
+    // create monthSecs and gps_monthSecs so we can easily add 1 sec
+    // to monthSecs before comparision. 
+    // Since we set system time to 1 sec after what we get for gps secs
+    // subtract the 1 for the comparision
+    uint32_t monthSecsM1 = 
+        (d * 24 * 3600) + (hh * 3600) + (mm * 60) + ss - 1;
+    uint32_t gps_monthSecs = 
+        (gps_day * 24 * 3600) + (gps_hour * 3600) + (gps_minute * 60) + gps_second;
+
+    // was:
+    //    hh == gps_hour && mm == gps_minute && ss == gps_second) {
+    if (gpsDateTimeWasUpdated && y == gps_year && m == gps_month &&
+        monthSecsM1 == gps_monthSecs) return;
+    
     V1_print(F("WARN: checkUpdateTimeFromGps not set or drift?" EOL));
 
     uint8_t gps_hundredths = gps.time.centisecond();
@@ -2294,6 +2316,10 @@ void checkUpdateTimeFromGps() {
         V1_printf("ERROR: TinyGPS gps_hundredths %u > 99" EOL,
             gps_hundredths);
         gpsDateTimeBad = true;
+    }
+    if (gps_hundredths > 0) {
+        V1_printf("INFO: non-zero TinyGPS gps_hundredths %u > 99" EOL,
+            gps_hundredths);
     }
 
     // check the days in a month is write.
@@ -2337,48 +2363,22 @@ void checkUpdateTimeFromGps() {
             !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
         }
         setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+        // make system time 1 sec earlier. for better DT results in sdr/wsjt-x
         // should be UTC time zone?
 
-
-        // I hacked TinyGPS to take time from ZDA also
-        if (USE_SIM65M) {
-            // V1_print(F("Do a read of gps time to see if we get <1 sec precision" EOL));
-            // this is only time to the second
-            // Serial2.print("$PAIR001,591,0*36" CR LF);
-            // GLL GGA RMC ZDA is time to thousandsths
-        }
-
-        V1_print(F("GOOD: rtc setTime() with"));
+        V1_print(F("GOOD: system setTime() with"));
         V1_printf(" gps_hour %u gps_minute %u gps_second %u",
             gps_hour, gps_minute, gps_second);
         V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
             gps_day, gps_month, gps_year);
 
-        V1_print(F("time (t) was:"));
+        V1_print(F("system time - 1 (should be gps time):"));
+
         V1_printf(" hour %d minute %d second %d", hh, mm, ss);
         V1_printf(" day %d month %d year %d", d, m, y);
         V1_printf(" gpsDateTimeWasUpdated %u" EOL, gpsDateTimeWasUpdated);
 
-        // did we cross a minute boundary for comparing the two
-        int minuteDelta = 0;
-        if (gps_minute != mm) {
-            minuteDelta = ((int) mm) - ((int) gps_minute);
-        }
-
-        // check hour delta also? to cover hour transitions
-        int hourDelta = 0;
-        if (gps_hour != mm) {
-            hourDelta = ((int) hh) - ((int) gps_hour);
-        }
-
-        // check day delta also? to cover day transitions
-        // won't bother with month or year transitions
-        int dayDelta = 0;
-        if (gps_day != mm) {
-            dayDelta = ((int) d) - ((int) gps_day);
-        }
-        int secondDelta = ((int) ss) - ((int) gps_second);
-        secondDelta += (60 * minuteDelta) + (60 * 60 * hourDelta) + (60 * 60 * 24 * dayDelta);
+        int secondDelta = ((int) monthSecsM1) - ((int) gps_monthSecs);
 
         // add in the minuteDelta cover minute transitions
         // too much drift/error?
@@ -2395,10 +2395,6 @@ void checkUpdateTimeFromGps() {
         fix_age = gps.time.age();
         V1_printf("gps fix_age currently: %lu" EOL, fix_age);
 
-        // bump a sec to account for delays from gps to the code above?
-        // and maybe any floor effects (ignoring millisecs) that the Time library does?
-        // adjustTime(1);
-
         // seems like we occasionally get hundredths from gps time.
         // we could just look at hundredths and bump if > 50 ? (rounding?)
         // could bump time by 1 sec?
@@ -2408,13 +2404,18 @@ void checkUpdateTimeFromGps() {
         // don't do. we should never get hundredths (although sometimes we do)
         // broadcast at 1 sec should have time always at 1 sec granularity?
         // don't think they round though.
-        if (false and gps_hundredths > 50) {
-            V1_printf("Adjusting time +1 sec because gps_hundredths %u" EOL,
-                gps_hundredths);
-            adjustTime(1);
-        }
-        gpsDateTimeWasUpdated = true;
+        // seems like bursts eventually align so the fractional second is .000 always??
+
+        // this gets us our 1-sec-in alignment for wspr tx?
+        // better than delaying in sendWspr() from minute alignment?
+        // Note the use of gps Time is always little late? (varies)
+        adjustTime(1);
+
+        elapsed_millis = millis() - lastUpdate_millis;
+        V1_printf("millis since last update: %" PRIu64 EOL, elapsed_millis);
         lastUpdate_millis = millis();
+        gpsDateTimeWasUpdated = true;
+
         V1_print(EOL);
     }
 }
