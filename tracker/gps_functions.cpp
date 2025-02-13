@@ -2461,7 +2461,7 @@ void checkUpdateTimeFromGps() {
                 V1_print(F(EOL));
             // time could be reset by forceUpdate, even if secondDelta == 0
             } else {
-                V1_printf("GOOD: no drift. secondDelta %lu forceUpdate %u ",
+                V1_printf("GOOD: no drift. secondDelta %d forceUpdate %u ",
                     secondDelta, forceUpdate);
                 printSystemDateTime();
                 V1_print(F(EOL));

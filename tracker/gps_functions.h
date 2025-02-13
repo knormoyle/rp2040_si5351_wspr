@@ -7,9 +7,6 @@
 #define GPS_FUNCTIONS_H
 #include <stdint.h>
 
-// why was this here?
-// #include <TinyGPS++.h> //https://github.com/mikalhart/TinyGPSPlus
-
 bool GpsIsOn(void);
 void GpsINIT(void);
 bool GpsFullColdReset(void);
@@ -26,6 +23,8 @@ void writeGpsConfigNoBroadcastToFlash(void);
 // these probably shouldn't be used outside gps_functions.cpp ?
 void nmeaBufferPrintAndClear(void);
 void nmeaBufferAndPrint(const char charToAdd, bool printIfFull);
+void nmeaBufferFastPoll(uint32_t duration_millis, bool printIfFull);
+
 void gpsSleepForMillis(int n, bool enableEarlyOut);
 bool getInitialGpsOutput(void);
 void setGpsBalloonMode(void);
@@ -37,4 +36,3 @@ void kazuClocksSlow(void);
 void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore);
 
 #endif // GPS_FUNCTIONS_H
-

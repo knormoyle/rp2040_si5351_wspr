@@ -175,6 +175,9 @@ uint8_t hf_tx_buffer[162] = { 0 };  // is this bigger than WSPR_SYMBOL_COUNT?
 volatile bool PROCEED = false;
 
 //*********************************
+// time of last PPS 0->1 from irq, so we can calc offset duration when we setTIme
+uint32_t PPS_rise_millis = 0;
+
 // if we need to ignore TinyGps++ state for a while, because
 // we turned off the Gps, and then TinyGps++ won't change
 // state until we give it a full broadcast's worth of sentences (1 sec of broadcast)
@@ -246,6 +249,7 @@ TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
 #include "sweep_functions.h"
 #include "doug_functions.h"
 #include "global_structs.h"
+#include "pps_functions.h"
 
 //*********************************
 // extern so it links okay
