@@ -2285,15 +2285,16 @@ void checkUpdateTimeFromGps() {
     // to monthSecs before comparision. 
     // Since we set system time to 1 sec after what we get for gps secs
     // subtract the 1 for the comparision
-    uint32_t monthSecsM1 = 
-        (d * 24 * 3600) + (hh * 3600) + (mm * 60) + ss - 1;
+    // UPDATE: 0
+    uint32_t monthSecsM0 = 
+        (d * 24 * 3600) + (hh * 3600) + (mm * 60) + ss - 0;
     uint32_t gps_monthSecs = 
         (gps_day * 24 * 3600) + (gps_hour * 3600) + (gps_minute * 60) + gps_second;
 
     // was:
     //    hh == gps_hour && mm == gps_minute && ss == gps_second) {
     if (gpsDateTimeWasUpdated && y == gps_year && m == gps_month &&
-        monthSecsM1 == gps_monthSecs) return;
+        monthSecsM0 == gps_monthSecs) return;
     
     V1_print(F("WARN: checkUpdateTimeFromGps not set or drift?" EOL));
 
@@ -2386,7 +2387,7 @@ void checkUpdateTimeFromGps() {
         V1_printf(" day %d month %d year %d", d, m, y);
         V1_printf(" gpsDateTimeWasUpdated %u" EOL, gpsDateTimeWasUpdated);
 
-        int secondDelta = ((int) monthSecsM1) - ((int) gps_monthSecs);
+        int secondDelta = ((int) monthSecsM0) - ((int) gps_monthSecs);
 
         // add in the minuteDelta cover minute transitions
         // too much drift/error?
@@ -2417,7 +2418,9 @@ void checkUpdateTimeFromGps() {
         // this gets us our 1-sec-in alignment for wspr tx?
         // better than delaying in sendWspr() from minute alignment?
         // Note the use of gps Time is always little late? (varies)
-        adjustTime(1);
+        // UPDATE: 0
+        // adjustTime(1);
+        adjustTime(0);
 
         elapsed_millis = millis() - lastUpdate_millis;
         V1_printf("millis since last update: %" PRIu64 EOL, elapsed_millis);

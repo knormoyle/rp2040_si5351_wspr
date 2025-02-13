@@ -286,7 +286,14 @@ void setTime(time_t t) {
   sysTime = (uint32_t)t;  
   nextSyncTime = (uint32_t)t + syncInterval;
   Status = timeSet;
-  prevMillis = millis();  // restart counting from now (thanks to Korman for this fix)
+  // kbn: on average, we are probably already half way thru this second
+  // so subtract 500 millis from millis() for the probably millis
+  // aligned with the start time of this sec?
+  // I suppose this could be a parameter, so it's dependent on the 
+  // time delay related to where the utc time came from ? (gps)
+  // that skew could vary?
+  // restart counting from now (thanks to Korman for this fix)
+  prevMillis = millis() - 500;  
 } 
 
 void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
