@@ -108,6 +108,8 @@ extern bool VERBY[10];
 
 //********************************************************
 void setGpsPPSMode(void) {
+    // Does PPS default to negative edge on ATGM366H
+    // if so, add 0.5 to the offset?
     V1_println(F("setGpsPPSMode START"));
     if (USE_SIM65M && !BALLOON_MODE) {
         // automatic. Local_ms and Phase are 0
