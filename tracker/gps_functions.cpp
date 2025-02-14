@@ -18,7 +18,7 @@ extern bool BALLOON_MODE;
 // what if we lose config because vbat glitches?
 // not worth the risk to avoid reconfig
 bool WARM_RESET_REDO_CONFIG = true;
-bool SIM65M_BROADCAST_5SECS = true;
+bool SIM65M_BROADCAST_5SECS = false;
 
 #include "global_structs.h"
 #include <stdlib.h>
@@ -2105,9 +2105,19 @@ uint32_t updateGpsDataAndTime(int ms) {
             printable = isprint(incomingChar);
             // aligned set to true only matters for the first one
             switch (incomingChar) {
-                case '$':  aligned = true; sentenceStartCnt++; break;
-                case '\r': aligned = true; break;
-                case '\n': aligned = true; break;
+                case '$':  
+                    aligned = true; 
+                    sentenceStartCnt++; break;
+                    // if previous sentence CR and/or LF updated?
+                    if (gps.time.isUpdated()) checkUpdateTimeFromGps();
+                    break;
+                case '\r': 
+                    aligned = true; 
+                    break;
+                case '\n': 
+                    if (gps.time.isUpdated()) checkUpdateTimeFromGps();
+                    aligned = true; 
+                    break;
                 case '*':  sentenceEndCnt++; break;
                 case '\0': nullChar = true; break;
                 case ' ':  spaceChar = true; break;
@@ -2472,8 +2482,13 @@ void checkUpdateTimeFromGps() {
         // to align more with with the gps chip sent out the time NMEA sentence
         // probably have to do this closely after setTime
         // do we have different values for SIM65M?
-        if (USE_SIM65M) adjustTimeMillis(-400);
-        else adjustTimeMillis(-400);
+        // if (USE_SIM65M) adjustTimeMillis(-200);
+        // -200 0 gives DT=-0.7
+        // FIX! will this work right with positive numbers?
+        // maybe we can only use 0 or negative
+        if (USE_SIM65M) adjustTimeMillis(0);
+        // else adjustTimeMillis(-400);
+        else adjustTimeMillis(0);
         // make system time 1 sec earlier. for better DT results in sdr/wsjt-x
         // should be UTC time zone?
 
@@ -2483,7 +2498,7 @@ void checkUpdateTimeFromGps() {
         V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
             gps_day, gps_month, gps_year);
 
-        V1_print(F("system time - 1 (should be gps time):"));
+        V1_print(F("system time (should be gps time):"));
         V1_printf(" hour %d minute %d second %d", hh, mm, ss);
         V1_printf(" day %d month %d year %d", d, m, y);
         V1_printf(" forceTimeUpdate %u ", forceTimeUpdate);

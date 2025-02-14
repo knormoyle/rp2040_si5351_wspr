@@ -1426,7 +1426,7 @@ void loop1() {
             } else {
                 // invalid gps should have this fix_age
                 V1_printf("loopCnt %" PRIu64 " WARN: invalid GPS fix.", loopCnt);
-                if (fix_age != 4294967295) {
+                if (false && fix_age != 4294967295) {
                     V1_printf(" Why unexpected fix_age %lu ? (millis)", fix_age);
                 }
                 V1_print(F(EOL));
