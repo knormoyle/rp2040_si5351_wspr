@@ -2332,18 +2332,21 @@ void checkUpdateTimeFromGps() {
 
     // try to get as close to the NMEA timestamp as possible
     if (forceTimeUpdate) {
-        // loosen the constraints if a force?
-        // maybe something weird with the gps
-        // hundredths supposedly goes to .000 once we get a fix?
-        // do we care about system time until we get a fix?
-        // reduce the amount of printing?
-        if (fix_age > 250 || gps_hundredths > 100) {
-            if (VERBY[1]) {
-                // will get printed at end of nmea burst by caller
-                StampPrintf("forceTimeUpdate try. fix_age %lu gps_hundredths %lu" EOL, 
-                    fix_age, gps_hundredths);
+        // always take the first one, to be sure of getting something
+        if (updateCnt != 0) {
+            // loosen the constraints if a force?
+            // maybe something weird with the gps
+            // hundredths supposedly goes to .000 once we get a fix?
+            // do we care about system time until we get a fix?
+            // reduce the amount of printing?
+            if (fix_age > 500 || gps_hundredths > 100) {
+                if (VERBY[1]) {
+                    // will get printed at end of nmea burst by caller
+                    StampPrintf("forceTimeUpdate try. fix_age %lu gps_hundredths %lu" EOL, 
+                        fix_age, gps_hundredths);
+                }
+                return;
             }
-            return;
         }
     } else {
         if (fix_age > 250 || gps_hundredths > 100) {
