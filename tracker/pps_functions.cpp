@@ -24,9 +24,41 @@
 extern const int GPS_1PPS_PIN;
 extern uint32_t PPS_rise_millis;
 extern bool USE_SIM65M;
+extern bool BALLOON_MODE;
 
 // decode of verbose 0-9
 extern bool VERBY[10];
+
+// ATGM336H
+// CFG-TMODE 0x06 0x06 0x05 configures PPS
+// Read/Set timing mode
+
+// CFG-TP 0x06 0x03
+// offset
+// Read/set time pulse parameters
+// 0 interval (us)
+// 4 width (us)
+// 8 enable 
+//     0 Turn off, 
+//     1 enable, 
+//     2 pulse is enabled, when no fix, update rate is maintained, 
+//     3 enabled, no pulse when no fix
+// 9 polar pulse polarity
+//     0 rising
+//     1 falling
+// 10 timeRef
+//     0 UTC time
+//     1 Satellite time
+// 11 timeSource
+//     0 force single GPS timing
+//     1 mandatory single BDS timing
+//     2 mandatory single GLN timing
+//     3 reserve
+//     4 Mainly BDS, switch to other timing systems when BDS is unavailable
+//     5 Mainly GPS, switch to other timing systems when GPS is unavailable
+//     6 Mainly use GLN, switch to other timing systems when GLN is unavailable, 
+
+// 12 userDelay
 
 // FIX! I suppose we'll want to do writes to enable PPS
 // SIM65M
@@ -77,7 +109,7 @@ extern bool VERBY[10];
 //********************************************************
 void setGpsPPSMode(void) {
     V1_println(F("setGpsPPSMode START"));
-    if (USE_SIM65M) {
+    if (USE_SIM65M && !BALLOON_MODE) {
         // automatic. Local_ms and Phase are 0
         // Packet Type:750 PAIR_PPS_SET_CONFIG
         Serial2.print("$PAIR750,0,0,0*24" CR LF);
@@ -125,11 +157,17 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
     // don't need to clear the interrupt for gpio interrupts
 }
 
+// this is done for SIM65 or ATGM336H?
+// FIX! does ATGM336 need commands to cause PPS?
 void gpsPPS_init() {
-    gpio_init(GPS_1PPS_PIN);
-    gpio_set_dir(GPS_1PPS_PIN, GPIO_IN);
-    gpio_pull_up(GPS_1PPS_PIN);
-    gpio_set_irq_enabled_with_callback(GPS_1PPS_PIN, GPIO_IRQ_EDGE_RISE, true, &gpsPPS_callback);
+    V1_println(F("gpsPPS_init START"));
+    if (!BALLOON_MODE) {
+        gpio_init(GPS_1PPS_PIN);
+        gpio_set_dir(GPS_1PPS_PIN, GPIO_IN);
+        gpio_pull_up(GPS_1PPS_PIN);
+        gpio_set_irq_enabled_with_callback(GPS_1PPS_PIN, GPIO_IRQ_EDGE_RISE, true, &gpsPPS_callback);
+    }
+    V1_println(F("gpsPPS_init END"));
 }
 
 //********************************************************

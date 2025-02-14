@@ -12,9 +12,12 @@ extern bool USE_SIM65M;
 // change it if we have the 5sec fix/broadcast on USE_SIM65M
 extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
 extern uint32_t PPS_rise_millis;
+extern bool BALLOON_MODE;
 
 // Don't reconfig if not necessary
-bool WARM_RESET_REDO_CONFIG = false;
+// what if we lose config because vbat glitches?
+// not worth the risk to avoid reconfig
+bool WARM_RESET_REDO_CONFIG = true;
 bool SIM65M_BROADCAST_5SECS = true;
 
 #include "global_structs.h"
@@ -569,7 +572,7 @@ void setGpsBroadcast(void) {
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             // don't make too big. best if eventually GNGGA is always first in burst
-            GPS_WAIT_FOR_NMEA_BURST_MAX = 5200; 
+            GPS_WAIT_FOR_NMEA_BURST_MAX = 5200;
 
             // none of this works?
             // PAIR_COMMON_SET_FIX_RATE $PAIR050,time*<checksum>
@@ -1585,7 +1588,7 @@ bool GpsFullColdReset(void) {
     // this is all done earlier in the experimental mode
     // FIX! we don't need to toggle power to get the effect?
     if (USE_SIM65M) setGpsBalloonMode();
-    if (USE_SIM65M) setGpsPPSMode();
+    if (USE_SIM65M && !BALLOON_MODE) setGpsPPSMode();
 
     // from the CASIC_ProtocolSpecification_english.pdf page 24
     // Could be dangerous,
@@ -1731,7 +1734,8 @@ bool GpsWarmReset(void) {
         // always reconfig this. there were known issues with ublox losing this?
         // also: hard to realize if we lost it, unless we read the mode?
         if (USE_SIM65M) setGpsBalloonMode();
-        if (USE_SIM65M) setGpsPPSMode();
+        // don't do this when flying! unnecessary because no prints
+        if (USE_SIM65M && !BALLOON_MODE) setGpsPPSMode();
     }
 
     if (USE_SIM65M) {
@@ -1880,14 +1884,26 @@ void GpsON(bool GpsColdReset) {
         }
 
         // try sending the software command for SIM65M if the
-        // pin assertions didn't work. Depends on the baud setup being right?
-        if (USE_SIM65M && !sentencesFound && (tryCnt < max_tryCnt)) {
-            if (GpsColdReset) {
-                // Packet Type:007 PAIR_GNSS_SUBSYS_FULL_COLD_START
-                Serial2.print("$PAIR001,007,0*3C" CR LF);
+        // pin assertions didn't work.
+        // Depends on the baud setup being right?
+        if (!sentencesFound && (tryCnt < max_tryCnt)) {
+            if (USE_SIM65M) {
+                if (GpsColdReset) {
+                    // Packet Type:007 PAIR_GNSS_SUBSYS_FULL_COLD_START
+                    Serial2.print("$PAIR001,007,0*3C" CR LF);
+                } else {
+                    // Packet Type:005 PAIR_GNSS_SUBSYS_WARM_START
+                    Serial2.print("$PAIR001,005,0*3E" CR LF);
+                }
             } else {
-                // Packet Type:005 PAIR_GNSS_SUBSYS_WARM_START
-                Serial2.print("$PAIR001,005,0*3E" CR LF);
+                if (GpsColdReset) {
+                    // PCAS10 factory start
+                    Serial2.print("$PCAS10,3*1F" CR LF);
+                } else {
+                    // PCAS10 warm start
+                    Serial2.print("$PCAS10,1*1D" CR LF);
+                    Serial2.print("" CR LF);
+                }
             }
             Serial2.flush();
             gpsSleepForMillis(2000, false);
@@ -2049,9 +2065,10 @@ uint32_t updateGpsDataAndTime(int ms) {
     // update: treat 30 as full, not 31, just in case arrival while we're starting
     // would be dropped.
     if (charsAvailable >= 30) {
-        if (VERBY[1])
+        if (VERBY[1]) {
             StampPrintf("INFO: initially drained NMEA chars because rx full. uart rx %d" EOL,
                 (int) charsAvailable);
+        }
         charsToDrain = charsAvailable;
         Watchdog.reset();
         // should be at most 31 to drain
@@ -2133,7 +2150,7 @@ uint32_t updateGpsDataAndTime(int ms) {
             if (VERBY[1]) {
                 if (printable && !nullChar && !spaceChar) {
                     // I guess we get the \r \n in the buffer now
-                    nmeaBufferAndPrint(incomingChar, false);
+                    nmeaBufferAndPrint(incomingChar, false); // don't print if full
                 }
             }
             current_millis = millis();
@@ -2144,7 +2161,7 @@ uint32_t updateGpsDataAndTime(int ms) {
 
         // keep as close as possible to the NMEA sentence arrival?
         // I suppose we'll see gps.time.updated every time?
-        checkUpdateTimeFromGps();
+        if (gps.time.isUpdated()) checkUpdateTimeFromGps();
 
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
@@ -2178,7 +2195,7 @@ uint32_t updateGpsDataAndTime(int ms) {
         // print/clear any accumulated NMEA sentence stuff
         nmeaBufferPrintAndClear();
         V1_print(F(EOL));
-        DoLogPrint();
+        DoLogPrint(); // dump the StampPrintf if any
     }
 
     int diff = sentenceStartCnt - sentenceEndCnt;
@@ -2236,10 +2253,10 @@ uint32_t updateGpsDataAndTime(int ms) {
 
 //************************************************
 void checkUpdateTimeFromGps() {
-    static bool forceUpdate = true;
+    static bool forceTimeUpdate = true;
     static uint64_t lastUpdate_millis = 0;
     static uint64_t lastCheck_millis = 0;
-    static uint32_t updateCnt = 0;
+    static uint32_t timeUpdateCnt = 0;
 
     // time since last update. Don't update more than once every 30 secs
     // UPDATE: since the first (GNGGA for ATGM336H) has the least difference
@@ -2250,7 +2267,6 @@ void checkUpdateTimeFromGps() {
     // time event in a burst. For ATGM336 that should be GNGGA?
     // update: change the quiet zone to be time of a burst! that way we always update
     // on the last burst before wspr tx?
-    uint32_t elapsed_millis = millis() - lastCheck_millis;
     // is the quiet zone especially important for a long burst? what if the burst interval was 5 secs
     // could there be staleness?
 
@@ -2260,22 +2276,32 @@ void checkUpdateTimeFromGps() {
     // but we don't adjust time then, we're busy waiting to complete alignment at that point
 
     // Update: make the "quiet zone" 3x the burst delay time
-    
+
     // except for first time, always have a quiet zone, after a check
-    if ((updateCnt > 0) && (elapsed_millis < (uint64_t) 3 * GPS_WAIT_FOR_NMEA_BURST_MAX)) {
-        return;
+
+    uint32_t elapsed_millis1 = millis() - lastCheck_millis;
+    uint32_t elapsed_millis2 = millis() - lastUpdate_millis;
+    forceTimeUpdate = elapsed_millis2 > (1 * 60 * 1000);
+    if (forceTimeUpdate) {
+        // want to make sure we get the first time NMEA sentence in the burst,
+        // at least be consistent. Modified TinyGPS to only use GGA to commit time
+        if (elapsed_millis1 < (uint32_t) 1 * GPS_WAIT_FOR_NMEA_BURST_MAX) return;
+
+    } else {
+        // want to make sure we get the first time NMEA sentence in the burst, only
+        if (elapsed_millis1 < (uint32_t) 1 * GPS_WAIT_FOR_NMEA_BURST_MAX) return;
     }
     lastCheck_millis = millis();
 
-    elapsed_millis = millis() - lastUpdate_millis;
     // force update at least every 1 minutes
     // I guess with 2 wsprs, plus cw, this could be delayed until every 5-6 minutes easy?
-    forceUpdate = elapsed_millis > (1 * 60 * 1000);
-    if (forceUpdate && updateCnt > 0) {
-        // might get this printed multiple times if the forceUpdate is delayed for some reason.
+    if (forceTimeUpdate && timeUpdateCnt > 0) {
+        // might get this printed multiple times if the forceTimeUpdate is delayed for some reason.
         // will be interesting to see if there are odd cases like that?
-        V1_printf("INFO: trying to forceUpdate. lastUpdate elapsed_millis %lu" EOL,
-            elapsed_millis);
+        if (VERBY[1]) {
+            // will get printed at end of nmea burst by caller
+            StampPrintf("Try forceTimeUpdate. elapsed_millis2 %lu" EOL, elapsed_millis2);
+        }
     }
 
     uint16_t gps_year = gps.date.year();
@@ -2285,7 +2311,7 @@ void checkUpdateTimeFromGps() {
 
     // so how about we only update when fix_age is < 100 millisecs??
     // (10 ms for possible code delays here
-    // we pay attention to hundredths even in the forceUpdate case?
+    // we pay attention to hundredths even in the forceTimeUpdate case?
     // I guess should be okay..eventually hundredths should go to 0?
     // hmm. let's ignore in that case
     if (!gps_year_valid || GpsInvalidAll || !gps.date.isValid() || !gps.time.isValid()) {
@@ -2295,14 +2321,29 @@ void checkUpdateTimeFromGps() {
     uint8_t gps_hundredths = gps.time.centisecond();
 
     // try to get as close to the NMEA timestamp as possible
-    if (forceUpdate) {
+    if (forceTimeUpdate) {
         // loosen the constraints if a force?
         // maybe something weird with the gps
         // hundredths supposedly goes to .000 once we get a fix?
         // do we care about system time until we get a fix?
-        if (fix_age > 100) return;
+        // reduce the amount of printing?
+        if (fix_age > 250 || gps_hundredths > 100) {
+            if (VERBY[1]) {
+                // will get printed at end of nmea burst by caller
+                StampPrintf("forceTimeUpdate try. fix_age %lu gps_hundredths %lu" EOL, 
+                    fix_age, gps_hundredths);
+            }
+            return;
+        }
     } else {
-        if (fix_age > 100 || gps_hundredths > 0) return;
+        if (fix_age > 250 || gps_hundredths > 100) {
+            if (VERBY[1]) {
+                // will get printed at end of nmea burst by caller
+                StampPrintf("not forceTimeUpdate try. fix_age %lu gps_hundredths %lu" EOL, 
+                    fix_age, gps_hundredths);
+            }
+            return;
+        }
     }
 
     // shouldn't use the time if hundredths isn't 0, as our skew estimation will be wrong
@@ -2349,10 +2390,9 @@ void checkUpdateTimeFromGps() {
         (d * 24 * 3600) + (hh * 3600) + (mm * 60) + ss - 0;
     uint32_t gps_monthSecs =
         (gps_day * 24 * 3600) + (gps_hour * 3600) + (gps_minute * 60) + gps_second;
-
-
-
-    if ((!forceUpdate) && y == gps_year && m == gps_month && monthSecsM0 == gps_monthSecs) return;
+    if ((!forceTimeUpdate) && y == gps_year && m == gps_month && monthSecsM0 == gps_monthSecs) {
+        return;
+    }
 
     //******************************
     // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
@@ -2423,9 +2463,9 @@ void checkUpdateTimeFromGps() {
         }
         if (PPS_rise_millis != 0) {
             // we should be using this at least once per rollover?
-            elapsed_millis = millis() - PPS_rise_millis;
-            V1_printf("INFO: setTime at elapsed_millis %lu from last PPS 0->1 at PPS_rise_millis %lu" EOL,
-                elapsed_millis, PPS_rise_millis);
+            uint32_t elapsed_millis3 = millis() - PPS_rise_millis;
+            V1_printf("INFO: setTime at elapsed_millis3 %lu from last PPS 0->1 at PPS_rise_millis %lu" EOL,
+                elapsed_millis3, PPS_rise_millis);
         }
         setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
         // pushes back the prevMillis value in Time, that was captured by setTime
@@ -2446,7 +2486,7 @@ void checkUpdateTimeFromGps() {
         V1_print(F("system time - 1 (should be gps time):"));
         V1_printf(" hour %d minute %d second %d", hh, mm, ss);
         V1_printf(" day %d month %d year %d", d, m, y);
-        V1_printf(" forceUpdate %u ", forceUpdate);
+        V1_printf(" forceTimeUpdate %u ", forceTimeUpdate);
         printSystemDateTime();
         V1_print(F(EOL));
 
@@ -2455,23 +2495,23 @@ void checkUpdateTimeFromGps() {
         // add in the minuteDelta cover minute transitions
         // too much drift/error?
         // don't print the first time thru..since that doesn't matter
-        if (updateCnt != 0) {
+        if (timeUpdateCnt != 0) {
             V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
             if (abs(secondDelta) > 1) {
-                V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
-                    secondDelta, forceUpdate);
+                V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceTimeUpdate %u ",
+                    secondDelta, forceTimeUpdate);
                 printSystemDateTime();
                 V1_print(F(EOL));
-            // time could be reset by forceUpdate, even if secondDelta == 0
+            // time could be reset by forceTimeUpdate, even if secondDelta == 0
             } else if (abs(secondDelta) == 1) {
-                V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
-                    secondDelta, forceUpdate);
+                V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceTimeUpdate %u ",
+                    secondDelta, forceTimeUpdate);
                 printSystemDateTime();
                 V1_print(F(EOL));
-            // time could be reset by forceUpdate, even if secondDelta == 0
+            // time could be reset by forceTimeUpdate, even if secondDelta == 0
             } else {
-                V1_printf("GOOD: no drift. secondDelta %d forceUpdate %u ",
-                    secondDelta, forceUpdate);
+                V1_printf("GOOD: no drift. secondDelta %d forceTimeUpdate %u ",
+                    secondDelta, forceTimeUpdate);
                 printSystemDateTime();
                 V1_print(F(EOL));
             }
@@ -2492,12 +2532,12 @@ void checkUpdateTimeFromGps() {
         // don't think they round though.
         // seems like bursts eventually align so the fractional second is .000 always??
 
-        elapsed_millis = millis() - lastUpdate_millis;
-        V1_printf("forceUpdate %u updateCnt %lu millis since last update: %lu" EOL,
-            forceUpdate, updateCnt, elapsed_millis);
+        uint32_t elapsed_millis4 = millis() - lastUpdate_millis;
+        V1_printf("forceTimeUpdate %u timeUpdateCnt %lu", forceTimeUpdate, timeUpdateCnt);
+        V1_printf(" elapsed_millis4 %lu since last update" EOL, elapsed_millis4);
         lastUpdate_millis = millis();
-        forceUpdate = false;
-        updateCnt += 1;
+        forceTimeUpdate = false;
+        timeUpdateCnt += 1;
 
         V1_print(EOL);
     }

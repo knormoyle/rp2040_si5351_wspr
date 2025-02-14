@@ -184,14 +184,17 @@ bool TinyGPSPlus::endOfTermHandler()
       switch(curSentenceType)
       {
       case GPS_SENTENCE_ZDA: // kbn new. get time from ZDA, last in SIM65M burst
-        time.commit();
+        // kbn 2/13/25 just use GGA for consistency early in burst
+        // time.commit();
         break;
       case GPS_SENTENCE_GST: // kbn new. get time from GST, last in ATGM336H burst
-        time.commit();
+        // kbn 2/13/25 just use GGA for consistency early in burst
+        // time.commit();
         break;
       case GPS_SENTENCE_RMC:
+        // kbn 2/13/25 just use GGA for time consistency early in burst
         date.commit();
-        time.commit();
+        // time.commit();
         if (sentenceHasFix)
         {
            location.commit();
