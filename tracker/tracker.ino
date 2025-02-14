@@ -914,6 +914,7 @@ void setup1() {
     // 12/7/24. the GpsINIT covers GpsON() now?
     GpsINIT();
     tinyGpsCustomInit();
+    gpsPPS_init();
     // we have this object in gps_functions.cpp for Extended Telemetry
     // WsprMessageTelemetryExtendedUserDefined<5> codecGpsMsg;
     // define it once. time slot is set later
@@ -969,7 +970,6 @@ void setup1() {
     //***************
     Watchdog.reset();
     bmp_init();
-
     // FIX! we're not detecting presence of bmp280 correctly?
     if (!bmp.begin()) {
         // i2c_scan();

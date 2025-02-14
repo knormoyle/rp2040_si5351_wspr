@@ -72,6 +72,8 @@ extern bool VERBY[10];
 // 1 raw meas
 // 2 raw meas + sv info + pvt(including time offset data between GPS and GLO/GAL/BDS)
 
+
+
 //********************************************************
 void setGpsPPSMode(void) {
     V1_println(F("setGpsPPSMode START"));
@@ -87,15 +89,30 @@ void setGpsPPSMode(void) {
         Serial2.flush();
         nmeaBufferFastPoll(500, true);
         // Packet Type:755 PAIR_PPS_SET_TIMETAG
-        // always based off GPS time base
+        // always based off GPS time base. Do they only support GPS time base?
         Serial2.print("$PAIR755,1,1*3D" CR LF);
+        // response: UTC?
+        // $PAIR001,755,0*3C
+
+        // or should it be UTC
+        // https://aviation.stackexchange.com/questions/90839/what-are-satellite-time-gps-time-and-utc-time
+        // Serial2.print("$PAIR755,1,0*3C" CR LF);
+        // GPS time:
+        // Defined as equal to UTC at midnight on January 6th 1980 
+        // when UTC was 19 seconds behind TAI.
+        // 18 leap seconds were added to UTC since then.
+        // GPS time is now 18 seconds ahead of UTC.
+
         Serial2.flush();
         nmeaBufferFastPoll(500, true);
         // 756 PAIR_PPS_GET_TIMETAG_CONFIG
         // 2 raw meas + sv info + pvt(including time offset data between GPS and GLO/GAL/BDS)
-        Serial2.print("$PAIR756,2,1*3D" CR LF);
+        Serial2.print("$PAIR756,2*20" CR LF);
         Serial2.flush();
         nmeaBufferFastPoll(2000, true);
+        // normally we always get this response?
+        // $PAIR001,756,0*3F
+
     }
     V1_println(F("setGpsPPSMode END"));
 }

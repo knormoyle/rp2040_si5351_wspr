@@ -4,12 +4,14 @@
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
 // REMEMBER: no references to Serial.* or usb in BALLOON_MODE!
+#include <Arduino.h>
 
 // which gps chip is used?
 // ATGM336N if false
 extern bool USE_SIM65M;
 // change it if we have the 5sec fix/broadcast on USE_SIM65M
 extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
+extern uint32_t PPS_rise_millis;
 
 // Don't reconfig if not necessary
 bool WARM_RESET_REDO_CONFIG = false;
@@ -75,7 +77,6 @@ int CONSTELLATIONS_GROUP = atoi(cc._const_group);
 // making the positioning accuracy close to the dual-frequency standard,
 //**************************************************
 
-#include <Arduino.h>
 // for isprint()
 #include <ctype.h>
 #include "gps_functions.h"
@@ -83,6 +84,7 @@ int CONSTELLATIONS_GROUP = atoi(cc._const_group);
 #include "led_functions.h"
 #include "print_functions.h"
 #include "time_functions.h"
+#include "pps_functions.h"
 
 // enums for voltage at:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
@@ -104,7 +106,6 @@ int CONSTELLATIONS_GROUP = atoi(cc._const_group);
 // for setTime()
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
-
 
 // object for TinyGPSPlus state
 extern TinyGPSPlus gps;
@@ -1584,6 +1585,7 @@ bool GpsFullColdReset(void) {
     // this is all done earlier in the experimental mode
     // FIX! we don't need to toggle power to get the effect?
     if (USE_SIM65M) setGpsBalloonMode();
+    if (USE_SIM65M) setGpsPPSMode();
 
     // from the CASIC_ProtocolSpecification_english.pdf page 24
     // Could be dangerous,
@@ -1729,6 +1731,7 @@ bool GpsWarmReset(void) {
         // always reconfig this. there were known issues with ublox losing this?
         // also: hard to realize if we lost it, unless we read the mode?
         if (USE_SIM65M) setGpsBalloonMode();
+        if (USE_SIM65M) setGpsPPSMode();
     }
 
     if (USE_SIM65M) {
@@ -2271,7 +2274,7 @@ void checkUpdateTimeFromGps() {
     if (forceUpdate && updateCnt > 0) {
         // might get this printed multiple times if the forceUpdate is delayed for some reason.
         // will be interesting to see if there are odd cases like that?
-        V1_printf("WARN: trying to forceUpdate. lastUpdate elapsed_millis %lu" EOL,
+        V1_printf("INFO: trying to forceUpdate. lastUpdate elapsed_millis %lu" EOL,
             elapsed_millis);
     }
 
@@ -2417,6 +2420,12 @@ void checkUpdateTimeFromGps() {
 
             V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
             !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
+        }
+        if (PPS_rise_millis != 0) {
+            // we should be using this at least once per rollover?
+            elapsed_millis = millis() - PPS_rise_millis;
+            V1_printf("INFO: setTime at elapsed_millis %lu from last PPS 0->1 at PPS_rise_millis %lu" EOL,
+                elapsed_millis, PPS_rise_millis);
         }
         setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
         // pushes back the prevMillis value in Time, that was captured by setTime

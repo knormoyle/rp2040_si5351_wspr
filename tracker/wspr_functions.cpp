@@ -42,7 +42,6 @@
 // https://github.com/khoih-prog/RP2040_RTC/blob/main/README.md
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/common/pico_time/include/pico/time.h
 
-
 // 4) Pico Low-level Timer Hardware API
 // Pico SDK’s “low level hardware API” directly 
 // (see chapter 4.1.22 in the Pico C/C++ SDK datasheet,
