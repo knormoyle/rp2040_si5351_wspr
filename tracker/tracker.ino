@@ -177,6 +177,9 @@ volatile bool PROCEED = false;
 //*********************************
 // time of last PPS 0->1 from irq, so we can calc offset duration when we setTIme
 uint32_t PPS_rise_millis = 0;
+// if this is non-zero we've synced time
+// we can tell how long it's been since we've synced, also
+uint32_t setTime_millis = 0;
 
 // if we need to ignore TinyGps++ state for a while, because
 // we turned off the Gps, and then TinyGps++ won't change
@@ -1303,15 +1306,25 @@ void loop1() {
         // isUpdated() indicates whether the object’s value has been updated
         // (not necessarily changed) since the last time you queried it
         bool fix_updated = gps.location.isUpdated();
+        gps.location.updated = false;
+
         uint32_t fix_sat_cnt = gps.satellites.value();
 
-        // all the data should be valid to consider it a good fix.
-        // this doesn't need qualification on whether we got a good date/time
-        // since we check that first, before we do any looking for a 3d fix
-        bool fix_valid_all = !GpsInvalidAll &&
+        uint32_t elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
+        // should we be setting once per interval?
+        if (elapsed_setTime_secs > (10 * 60)) {
+            V1_printf("ERROR: elapsed_setTime_secs %lu > (10 * 60)" EOL, 
+                elapsed_setTime_secs);
+        }
+        bool fix_valid_all = 
+            !GpsInvalidAll &&
+            // we got system time synced
+            (setTime_millis != 0) && 
+            // we got system time not too old (30 minutes)
+            (elapsed_setTime_secs < (30 * 60)) && 
             gps.date.isValid() &&
             gps.time.isValid() &&
-            (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
+            (gps.date.year() >= 2025 && gps.date.year() <= 2035) &&
             gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
             gps.hdop.isValid() &&
             gps.altitude.isValid() &&
@@ -1324,7 +1337,7 @@ void loop1() {
         // no..should we keep it looser for time?
         // to update time
         // fix_valid is a subset (just 2d location) of fix_valid_all.
-        if ( fix_valid && (fix_age < GPS_LOCATION_AGE_MAX) ) {
+        if (fix_valid_all) {
             setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
         } else {
             // FIX! at what rate is this incremented? ..once per loop iteration (time varies)
@@ -1341,7 +1354,7 @@ void loop1() {
             // On 1/2/25 ~19:00 I saw this: 2080-01-05 23:59:50
             // although time sees okay? (utc time)
             // this is a check for validity
-            if (gps.date.year() >= 2024 && gps.date.year() <= 2034)
+            if (gps.date.year() >= 2025 && gps.date.year() <= 2035)
                 setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
             else
                 setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -1416,6 +1429,7 @@ void loop1() {
         V1_printf("fix_age %lu millisecs" EOL, fix_age);
         V1_printf("fix_sat_cnt %lu" EOL, fix_sat_cnt);
         V1_printf("fix_updated %u" EOL, fix_updated);
+        V1_printf("elapsed_setTime_secs %lu" EOL, elapsed_setTime_secs); 
         V1_print(F(EOL));
 
         Watchdog.reset();
@@ -1455,7 +1469,6 @@ void loop1() {
             GpsWatchdogCnt = 0;
             // snapForTelemetry (all thett.* state) right before we do all the WSPRing
             // we can update the telemetry buffer any minute we're not tx'ing
-
 
             // GpsStartTime is reset every time we turn the gps on
             // cleared every time we turn it off (don't care)
@@ -2096,7 +2109,10 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
     // supposed to be 1 sec in. This is basically
     // 1 sec - (gps to nmea to systime to code here, delay?)
     // static int EXTRA_DELAY_AFTER_PROCEED = 700; // milliseconds
-    static int EXTRA_DELAY_AFTER_PROCEED = 0;  // milliseconds
+    static int EXTRA_DELAY_AFTER_PROCEED; 
+    if (USE_SIM65M) EXTRA_DELAY_AFTER_PROCEED = 850;  // milliseconds
+    else EXTRA_DELAY_AFTER_PROCEED = 850;
+
     if (EXTRA_DELAY_AFTER_PROCEED < 0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
             EXTRA_DELAY_AFTER_PROCEED);
@@ -2211,12 +2227,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
         // updateStatusLED();
         Watchdog.reset();
         while (!PROCEED) tight_loop_contents();
-
         // hmm. not updating led during this
-        // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
-        // note we have this same delay before the first symbol, above before the loop!
-        delay(EXTRA_DELAY_AFTER_PROCEED);
-
         // another VERBY[3] (or above) print (only VERBY[3] so far)
         if ((i % 10) == 1) V3_print(".");  // one per symbol
         Watchdog.reset();

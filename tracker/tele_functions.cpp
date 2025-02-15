@@ -660,7 +660,7 @@ void solarElevationCalcs(double solarElevation) {
     // just need a good 2d fix?
     bool fix_valid_all =
         gps.time.isValid() &&
-        (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
+        (gps.date.year() >= 2025 && gps.date.year() <= 2035) &&
         gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
         gps.location.isValid();
 

@@ -33,6 +33,8 @@
 extern bool VERBY[10];
 extern bool GpsInvalidAll;
 extern TinyGPSPlus gps;
+// when did we sync system time
+extern uint32_t setTime_millis;
 
 //***********************************
 // background on i/o
@@ -405,15 +407,28 @@ void gpsResetTest() {
     uint32_t tries = 0;
     uint32_t duration_millis = 0;
     uint32_t start_millis = millis();
+    uint32_t elapsed_setTime_secs;
+
     while (!fix_valid_all) {
         Watchdog.reset();
         tries += 1;
         // we can look at time/drift updates here
         updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
-        fix_valid_all = !GpsInvalidAll &&
+        elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
+        if (elapsed_setTime_secs > (10 * 60)) {
+            V1_printf("ERROR: elapsed_setTime_secs %lu > (10 * 60)" EOL, 
+                elapsed_setTime_secs);
+        }
+
+        fix_valid_all = 
+            !GpsInvalidAll &&
+            // we got system time synced
+            (setTime_millis != 0) &&
+            // we got system time not too old (30 minutes)
+            (elapsed_setTime_secs < (30 * 60)) &&
             gps.date.isValid() &&
             gps.time.isValid() &&
-            (gps.date.year() >= 2024 && gps.date.year() <= 2034) &&
+            (gps.date.year() >= 2025 && gps.date.year() <= 2035) &&
             gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
             gps.hdop.isValid() &&
             gps.altitude.isValid() &&

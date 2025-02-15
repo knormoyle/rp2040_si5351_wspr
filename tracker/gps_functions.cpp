@@ -12,6 +12,7 @@ extern bool USE_SIM65M;
 // change it if we have the 5sec fix/broadcast on USE_SIM65M
 extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
 extern uint32_t PPS_rise_millis;
+extern uint32_t setTime_millis; // last millis() when we setTime()
 extern bool BALLOON_MODE;
 
 // Don't reconfig if not necessary
@@ -33,15 +34,6 @@ int CONSTELLATIONS_GROUP = atoi(cc._const_group);
 // int CONSTELLATIONS_GROUP = 1;
 
 //*******************************************
-// Reference docs (for SIM28 but should apply)
-// can download all from https://simcom.ee/documents/?dir=SIM28
-// SIM28M
-// https://simcom.ee/documents/?dir=SIM28M
-// SIM28ML
-// https://simcom.ee/documents/?dir=SIM28ML
-// https://forum.arduino.cc/t/configuration-of-chinese-atgm336-gnss/1265640
-
-//*******************************************
 // ATGM336H uses AT6558 silicon ??
 // AT6558 BDS/GNSS Full Constellation SOC Chip Data Sheet Version 1.14
 // AT6558-5N-3X is GPS + BDS
@@ -50,7 +42,8 @@ int CONSTELLATIONS_GROUP = atoi(cc._const_group);
 
 // says VDD_POR going low causes internal reset (nRESET)
 // nRST pin going low causes internal reset (nRESET)
-// nRST can be low while power is transition on, or it can be asserted/deasserted afer power on
+// nRST can be low while power is transition on, 
+// or it can be asserted/deasserted afer power on
 // tcxo_xref needs to be running
 
 //*******************************************
@@ -63,7 +56,8 @@ int CONSTELLATIONS_GROUP = atoi(cc._const_group);
 
 // It is crucial to call gps.available( gps_port ) or Serial2.read() frequently,
 // and never to call a blocking function that takes more than
-// (1/baud) = 104 usecs @ 9600 baud.. but: effective baud rate from gps chip is less than peak
+// (1/baud) = 104 usecs @ 9600 baud.. 
+// but: effective baud rate from gps chip is less than peak
 // though?  Don't depend on depth 32 to absorb delay?
 
 // I decided to use polling mode, not be interrupt driven on Serial2 data.
@@ -148,7 +142,7 @@ extern bool BALLOON_MODE;
 
 //************************************************
 // false and true work here
-bool PWM_GPS_POWER_ON_MODE = false;
+bool PWM_GPS_POWER_ON_MODE = true;
 
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 // causing intermittent fails if true?
@@ -200,7 +194,7 @@ void nmeaBufferFastPoll(uint32_t duration_millis, bool printIfFull) {
         getChar();
         while (charsAvailable) {
             // do we get any null chars?
-            // are CR LF unprintable?
+            // are CR LF unprintable? yes
             spaceChar = false;
             nullChar = false;
             printable = isprint(incomingChar);
@@ -298,7 +292,7 @@ void gpsSleepForMillis(int n, bool enableEarlyOut) {
             Watchdog.reset();
         }
         // faster recovery with delay?
-        delay(10);
+        busy_wait_ms(10);
     }
 }
 
@@ -720,7 +714,6 @@ void disableGpsBroadcast(void) {
         Serial2.flush();
         busy_wait_us(2000);
     }
-    // delay(1000);
     V1_printf("disableGpsBroadcast sent %s" EOL, nmeaSentence);
     V1_print(F("disableGpsBroadcast END" EOL));
 }
@@ -887,7 +880,7 @@ void setGpsConstellations(int desiredConstellations) {
 
     Serial2.print(nmeaSentence);
     Serial2.flush();
-    delay(2000);
+    busy_wait_ms(1000);
 
     V1_printf("setGpsConstellations for usedConstellations %d, sent %s" EOL,
         desiredConstellations, nmeaSentence);
@@ -1130,13 +1123,12 @@ void setGpsBaud(int desiredBaud) {
     // https://forum.arduino.cc/t/solved-proper-way-to-change-baud-rate-after-initial-setup/419860/5
     // get rid of anything still in the cpu output buffer
     Serial2.flush();
-    delay(1000);
+    busy_wait_ms(1000);
     Serial2.print(nmeaBaudSentence);
     Serial2.flush();
-
-    V1_printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
     // have to wait for the sentence to get out and complete at the GPS
-    delay(3000);
+    busy_wait_ms(1000);
+    V1_printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
 
     // Note:
     // Serial2.end() Disables serial communication,
@@ -1270,8 +1262,7 @@ void GpsINIT(void) {
     //****************
     // drain the rx buffer. GPS is off, but shouldn't keep
     while (Serial2.available()) Serial2.read();
-    // sleep 3 secs
-    gpsSleepForMillis(3000, false);
+    gpsSleepForMillis(2000, false);
     V1_println(F("GpsINIT END" EOL));
 }
 
@@ -1579,12 +1570,11 @@ bool GpsFullColdReset(void) {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         Serial2.begin(9600);
         // then up the speed to desired (both gps chip and then Serial2
-
         // since we're not changing from default 9600 for ATGM336..don't do!
         // setGpsBaud(desiredBaud);
     }
 
-    gpsSleepForMillis(2000, false);  // 1 sec
+    gpsSleepForMillis(2000, false);
     // this is all done earlier in the experimental mode
     // FIX! we don't need to toggle power to get the effect?
     if (USE_SIM65M) setGpsBalloonMode();
@@ -1659,8 +1649,9 @@ bool GpsWarmReset(void) {
     GpsStartTime = get_absolute_time();  // usecs
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
-    // warm reset doesn't change baud rate from prior config?
 
+    // warm reset doesn't change baud rate from prior config?
+    // but what if we lost VBAT and config isn't preserved?
     // turn it off first. may be off or on currently
     // turn off the serial
     V1_flush();
@@ -1906,7 +1897,7 @@ void GpsON(bool GpsColdReset) {
                 }
             }
             Serial2.flush();
-            gpsSleepForMillis(2000, false);
+            gpsSleepForMillis(1000, false);
         }
     }
 
@@ -2055,9 +2046,8 @@ uint32_t updateGpsDataAndTime(int ms) {
     // but I think better not to average..just track this particular call.
     int incomingCharCnt = 0;
     int charsToDrain = 0;
-    bool nullChar = false;
-    bool spaceChar = false;
     bool printable = true;
+    bool crlf = false;
 
     // do at most charsAvailable. the initial state of the fifo
     // Can't use them because we may have discarded some chars after buffer full
@@ -2099,39 +2089,42 @@ uint32_t updateGpsDataAndTime(int ms) {
                 StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL,
                     (int) charsAvailable, incomingCharCnt);
             }
-            // do we get any null chars?
-            spaceChar = false;
-            nullChar = false;
-            printable = isprint(incomingChar);
+            printable = true;
+            crlf = false;
             // aligned set to true only matters for the first one
             switch (incomingChar) {
                 case '$':  
                     aligned = true; 
-                    sentenceStartCnt++; break;
-                    // if previous sentence CR and/or LF updated?
-                    if (gps.time.isUpdated()) checkUpdateTimeFromGps();
+                    sentenceStartCnt++; 
                     break;
-                case '\r': 
-                    aligned = true; 
+                case '\r': aligned = true; printable = false; crlf = true; break;
+                case '\n': aligned = true; printable = false; crlf = true; break;
+                case '*':  
+                    sentenceEndCnt++;
+                    // clear time updated state, right before any TinyGPS term/commit event
+                    // always need checksum before a commit event
+                    gps.time.updated = false;
                     break;
-                case '\n': 
-                    if (gps.time.isUpdated()) checkUpdateTimeFromGps();
-                    aligned = true; 
-                    break;
-                case '*':  sentenceEndCnt++; break;
-                case '\0': nullChar = true; break;
-                case ' ':  spaceChar = true; break;
-                default: { ; }
+                case '\0': printable = false; break;
+                case ' ':  printable = false; break;
+                default: printable = isprint(incomingChar);
             }
-            // after aligning, send everything to TinyGPS++ ??
-            // it expects the CR LF between sentences?
-            if (aligned) gps.encode(incomingChar);
 
             // always strip these here, and continue the loop
-            if (spaceChar || nullChar || !printable) {
+            // CR and LF isprint() is false
+            if (!printable && !crlf) {
                 getChar();
                 current_millis = millis();
                 continue;
+            }
+
+            // crlf comes here, but printable = false, 
+            // so we don't put them in the nmea buffer for printing
+            // after aligning, send everything to TinyGPS++ ??
+            // it expects the CR LF between sentences?
+            if (aligned) {
+                gps.encode(incomingChar);
+                if (gps.time.updated) checkUpdateTimeFromGps();
             }
 
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
@@ -2142,30 +2135,17 @@ uint32_t updateGpsDataAndTime(int ms) {
             // or <space>,
             // or any character classified as printable by the current C locale.
 
-            // hmm are we getting any space chars?
-            // FIX! we even send the CR and LF to the TinyGPS++ ??
-            // is it necessary?
-
             // Note we disabled the GPTXT broadcast to reduce the NMEA load (for here)
-
             // make the nmeaBuffer big enough so that we never print while getting data?
             // and we never throw it away (lose data) ?? (for debug only though)
             // this should eliminate duplicate CR LF sequences and just put one in the stream
 
-            // FIX! might be odd if a stop is spread over two different calls here?
-            // always start printing again on inital call to this function
-            // (see inital state)
-
             // Do we get any unprintable? ignore unprintable chars, just in case.
             if (VERBY[1]) {
-                if (printable && !nullChar && !spaceChar) {
-                    // I guess we get the \r \n in the buffer now
-                    nmeaBufferAndPrint(incomingChar, false); // don't print if full
-                }
+                if (printable) nmeaBufferAndPrint(incomingChar, false); // don't print if full
             }
             current_millis = millis();
             last_serial2_millis = current_millis;
-            // setup for loop iteration
             getChar();
         }
 
@@ -2263,86 +2243,63 @@ uint32_t updateGpsDataAndTime(int ms) {
 
 //************************************************
 void checkUpdateTimeFromGps() {
-    static bool forceTimeUpdate = true;
+    static bool forceUpdate = true;
     static uint64_t lastUpdate_millis = 0;
     static uint64_t lastCheck_millis = 0;
     static uint32_t timeUpdateCnt = 0;
+    uint32_t fix_age_entry = gps.time.age();
 
-    // time since last update. Don't update more than once every 30 secs
     // UPDATE: since the first (GNGGA for ATGM336H) has the least difference
-    // in time from being sent from GPS, it's most accurate. The burst takes maybe 1 sec
-    // so the last (GNGST?) might be delayed by 1 sec because of uart transmission delays
-    // by not checking again for 30 secs, we just use the first one
-    // having the check be in a 30 sec quiet zone, means we'll always use the same, first
-    // time event in a burst. For ATGM336 that should be GNGGA?
-    // update: change the quiet zone to be time of a burst! that way we always update
+    // in time from being sent from GPS, it's most accurate. 
+    // The burst takes about 1 sec so the last (GNGST?) might be delayed by 1 sec 
+    // because of uart transmission delays.
+    // UPDATE: just use GNGGA (TinyGPS mode) ..first one
+    // change the quiet zone to be time of a burst! that way we always update
     // on the last burst before wspr tx?
-    // is the quiet zone especially important for a long burst? what if the burst interval was 5 secs
-    // could there be staleness?
+    // is the quiet zone especially important for a long burst? 
+    // what if the burst interval was 5 secs could there be staleness?
+    // Don't use 5 sec broadcast interval
 
-    // HACK: We're getting excess correction amounts when gps_second is 58 or 59?
-    // I guess updating on 56, 57, 58, 59 is just more likely?
-    // but if we're about to be at a 2 minute interval that could mess with things a little
-    // but we don't adjust time then, we're busy waiting to complete alignment at that point
-
-    // Update: make the "quiet zone" 3x the burst delay time
-
-    // except for first time, always have a quiet zone, after a check
-
+    //*****************************
     uint32_t elapsed_millis1 = millis() - lastCheck_millis;
     uint32_t elapsed_millis2 = millis() - lastUpdate_millis;
-    forceTimeUpdate = elapsed_millis2 > (1 * 60 * 1000);
-    if (forceTimeUpdate) {
-        // want to make sure we get the first time NMEA sentence in the burst,
-        // at least be consistent. Modified TinyGPS to only use GGA to commit time
-        if (elapsed_millis1 < (uint32_t) 1 * GPS_WAIT_FOR_NMEA_BURST_MAX) return;
-
-    } else {
-        // want to make sure we get the first time NMEA sentence in the burst, only
-        if (elapsed_millis1 < (uint32_t) 1 * GPS_WAIT_FOR_NMEA_BURST_MAX) return;
-    }
-    lastCheck_millis = millis();
-
     // force update at least every 1 minutes
     // I guess with 2 wsprs, plus cw, this could be delayed until every 5-6 minutes easy?
-    if (forceTimeUpdate && timeUpdateCnt > 0) {
-        // might get this printed multiple times if the forceTimeUpdate is delayed for some reason.
+    forceUpdate = elapsed_millis2 > (1 * 60 * 1000);
+    // want to make sure we get the first time NMEA sentence in the burst,
+    // at least be consistent. Modified TinyGPS to only use GGA to commit time
+    if (elapsed_millis1 < (uint32_t) 1 * GPS_WAIT_FOR_NMEA_BURST_MAX) return;
+    lastCheck_millis = millis();
+
+    //*****************************
+    if (forceUpdate && timeUpdateCnt > 0) {
+        // might get this printed multiple times if the forceUpdate is delayed for some reason.
         // will be interesting to see if there are odd cases like that?
         if (VERBY[1]) {
             // will get printed at end of nmea burst by caller
-            StampPrintf("Try forceTimeUpdate. elapsed_millis2 %lu" EOL, elapsed_millis2);
+            StampPrintf("Try forceUpdate. elapsed_millis2 %lu" EOL, elapsed_millis2);
         }
     }
 
+    //*****************************
     uint16_t gps_year = gps.date.year();
-    bool gps_year_valid = gps_year >= 2025 && gps_year <= 2034;
-    uint32_t fix_age = gps.time.age();
-
-
-    // so how about we only update when fix_age is < 100 millisecs??
-    // (10 ms for possible code delays here
-    // we pay attention to hundredths even in the forceTimeUpdate case?
-    // I guess should be okay..eventually hundredths should go to 0?
-    // hmm. let's ignore in that case
+    bool gps_year_valid = gps_year >= 2025 && gps_year <= 2035;
     if (!gps_year_valid || GpsInvalidAll || !gps.date.isValid() || !gps.time.isValid()) {
         return;
     }
 
+    //*****************************
     uint8_t gps_hundredths = gps.time.centisecond();
-
+    uint32_t fix_age = gps.time.age();
     // try to get as close to the NMEA timestamp as possible
-    if (forceTimeUpdate) {
+    if (forceUpdate) {
         // always take the first one, to be sure of getting something
-        if (updateCnt != 0) {
-            // loosen the constraints if a force?
-            // maybe something weird with the gps
-            // hundredths supposedly goes to .000 once we get a fix?
-            // do we care about system time until we get a fix?
-            // reduce the amount of printing?
+        if (timeUpdateCnt != 0) {
+            // loose fix_age constraint, if we're forcing, just in case?
             if (fix_age > 500 || gps_hundredths > 100) {
                 if (VERBY[1]) {
                     // will get printed at end of nmea burst by caller
-                    StampPrintf("forceTimeUpdate try. fix_age %lu gps_hundredths %lu" EOL, 
+                    StampPrintf("WARN: bad try forceUpdate. fix_age %lu gps_hundredths %lu" EOL, 
                         fix_age, gps_hundredths);
                 }
                 return;
@@ -2352,26 +2309,36 @@ void checkUpdateTimeFromGps() {
         if (fix_age > 250 || gps_hundredths > 100) {
             if (VERBY[1]) {
                 // will get printed at end of nmea burst by caller
-                StampPrintf("not forceTimeUpdate try. fix_age %lu gps_hundredths %lu" EOL, 
+                StampPrintf("WARN: bad try. fix_age %lu gps_hundredths %lu" EOL, 
                     fix_age, gps_hundredths);
             }
             return;
         }
     }
-
     // shouldn't use the time if hundredths isn't 0, as our skew estimation will be wrong
     if (gps_hundredths > 0) {
         V1_printf("INFO: non-zero TinyGPS gps_hundredths %u > 99" EOL,
             gps_hundredths);
     }
 
-    // don't be updating this every time
-    // checking every time we get a burst?
-    // uint8_t for gps data. the Time things are int
-    // see example https://arduiniana.org/libraries/TinyGPS/
-    // use now for setting rtc, so we have a better solar elevation
-    // calc if the time is old
-    // lat/lon will still be old. we don't use altitude for that calc?
+    //*****************************
+    uint32_t elapsed_millis3 = millis() - PPS_rise_millis;
+    // should be consistently 100 to 350 millis from PPS edge 
+    // FIX! atgm336 edge is 1-> 0
+    // (% 1000 because reset might affect edge?)
+    bool tooFar = false;
+    elapsed_millis3 = elapsed_millis3 % 1000;
+    if (USE_SIM65M) tooFar = elapsed_millis3 < 150 || elapsed_millis3 > 500;
+    else tooFar = elapsed_millis3 < 100 || elapsed_millis3 > 500;
+    if (tooFar) {
+        StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu fix_age %lu forceUpdate %u" EOL, 
+            elapsed_millis3, fix_age, forceUpdate);
+    }
+    // FIX! problems if we try to restrict based on PPS alignment?
+    // forceUpdate: don't worry about how close we are to PPS
+    // just in case there's something broken about PPS or the range checks are bad
+    // if (!forceUpdate && tooFar) return;
+    //*****************************
 
     // these all should be stable/consistent as we're gathering them?
     uint8_t gps_month = gps.date.month();
@@ -2396,14 +2363,11 @@ void checkUpdateTimeFromGps() {
     // okay if we unnecessarily update time once a month
     // create monthSecs and gps_monthSecs so we can easily add 1 sec
     // to monthSecs before comparision.
-    // Since we set system time to 1 sec after what we get for gps secs
-    // subtract the 1 for the comparision
-    // UPDATE: 0
     uint32_t monthSecsM0 =
         (d * 24 * 3600) + (hh * 3600) + (mm * 60) + ss - 0;
     uint32_t gps_monthSecs =
         (gps_day * 24 * 3600) + (gps_hour * 3600) + (gps_minute * 60) + gps_second;
-    if ((!forceTimeUpdate) && y == gps_year && m == gps_month && monthSecsM0 == gps_monthSecs) {
+    if ((!forceUpdate) && y == gps_year && m == gps_month && monthSecsM0 == gps_monthSecs) {
         return;
     }
 
@@ -2426,16 +2390,17 @@ void checkUpdateTimeFromGps() {
 
     // was year range already validated? but do it here too
     // will have to remember to update this in 10 years (and above too!)
-    if (gps_year < 2025 && gps_year > 2034) gpsDateTimeBad = true;
+    if (gps_year < 2025 && gps_year > 2035) gpsDateTimeBad = true;
 
+    // seems like we occasionally get hundredths from gps time.
+    // before we get a fix?
     if (gps_hundredths > 99) {
         V1_printf("ERROR: TinyGPS gps_hundredths %u > 99" EOL,
             gps_hundredths);
         gpsDateTimeBad = true;
     }
 
-    // check the days in a month is write.
-    // (subtract one from month)
+    // check the days in a month (subtract one from month)
     // if we have a valid month for this array!
     static const uint8_t monthDays[] =
         {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
@@ -2474,26 +2439,37 @@ void checkUpdateTimeFromGps() {
             V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
             !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
         }
+
+        setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+        // last millis() when we setTime()
+        setTime_millis = millis(); 
+
         if (PPS_rise_millis != 0) {
             // we should be using this at least once per rollover?
-            uint32_t elapsed_millis3 = millis() - PPS_rise_millis;
-            V1_printf("INFO: setTime at elapsed_millis3 %lu from last PPS 0->1 at PPS_rise_millis %lu" EOL,
-                elapsed_millis3, PPS_rise_millis);
+            elapsed_millis3 = setTime_millis - PPS_rise_millis;
+            // print the modulo 1 sec also, if the last PPS was a while ago? (
+            // gps being reset or ??
+            fix_age = gps.time.age();
+            V1_printf("INFO: setTime at elapsed_millis3 %lu %lu from lastPPS",
+                elapsed_millis3, elapsed_millis3 % 1000);
+            V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
         }
-        setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
+
         // pushes back the prevMillis value in Time, that was captured by setTime
         // to align more with with the gps chip sent out the time NMEA sentence
         // probably have to do this closely after setTime
-        // do we have different values for SIM65M?
-        // if (USE_SIM65M) adjustTimeMillis(-200);
-        // -200 0 gives DT=-0.7
-        // FIX! will this work right with positive numbers?
+
+        // FIX! will this work right with positive numbers? No? (get abort)
         // maybe we can only use 0 or negative
-        if (USE_SIM65M) adjustTimeMillis(0);
-        // else adjustTimeMillis(-400);
-        else adjustTimeMillis(0);
-        // make system time 1 sec earlier. for better DT results in sdr/wsjt-x
-        // should be UTC time zone?
+        // we have to wait for the whole GNGGA sentence, to checksum, 
+        // before TinyGPS can time.commit()
+        // with effective char rates of around 1ms per char
+        // we get these kind of skews from the gps chip? (149ms?)
+        // INFO: setTime at elapsed_millis3 149 149 from lastPPS fix_age 2 forceUpdate 1
+        // so if we backup 129 to 149ms we should be about aligned?
+        // does it matter if we take an average or the min or the max?
+        if (USE_SIM65M) adjustTimeMillis(-140);
+        else adjustTimeMillis(-140);
 
         V1_print(F("GOOD: system setTime() with"));
         V1_printf(" gps_hour %u gps_minute %u gps_second %u",
@@ -2501,10 +2477,11 @@ void checkUpdateTimeFromGps() {
         V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
             gps_day, gps_month, gps_year);
 
-        V1_print(F("system time (should be gps time):"));
+        V1_print(F("system time before: (should be gps time):"));
         V1_printf(" hour %d minute %d second %d", hh, mm, ss);
         V1_printf(" day %d month %d year %d", d, m, y);
-        V1_printf(" forceTimeUpdate %u ", forceTimeUpdate);
+        V1_printf(" forceUpdate %u now: ", forceUpdate);
+        // this will be current system time
         printSystemDateTime();
         V1_print(F(EOL));
 
@@ -2516,45 +2493,34 @@ void checkUpdateTimeFromGps() {
         if (timeUpdateCnt != 0) {
             V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
             if (abs(secondDelta) > 1) {
-                V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceTimeUpdate %u ",
-                    secondDelta, forceTimeUpdate);
+                V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
+                    secondDelta, forceUpdate);
                 printSystemDateTime();
                 V1_print(F(EOL));
-            // time could be reset by forceTimeUpdate, even if secondDelta == 0
+            // time could be reset by forceUpdate, even if secondDelta == 0
             } else if (abs(secondDelta) == 1) {
-                V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceTimeUpdate %u ",
-                    secondDelta, forceTimeUpdate);
+                V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
+                    secondDelta, forceUpdate);
                 printSystemDateTime();
                 V1_print(F(EOL));
-            // time could be reset by forceTimeUpdate, even if secondDelta == 0
+            // time could be reset by forceUpdate, even if secondDelta == 0
             } else {
-                V1_printf("GOOD: no drift. secondDelta %d forceTimeUpdate %u ",
-                    secondDelta, forceTimeUpdate);
+                V1_printf("GOOD: no drift. secondDelta %d forceUpdate %u ",
+                    secondDelta, forceUpdate);
                 printSystemDateTime();
                 V1_print(F(EOL));
             }
         }
 
-        V1_printf("gps fix_age was: %lu" EOL, fix_age);
         fix_age = gps.time.age();
-        V1_printf("gps fix_age currently: %lu" EOL, fix_age);
-
-        // seems like we occasionally get hundredths from gps time.
-        // we could just look at hundredths and bump if > 50 ? (rounding?)
-        // could bump time by 1 sec?
-        // does Time library chop things down to sec by using millis()
-        // does that introduce error also?
-
-        // don't do. we should never get hundredths (although sometimes we do)
-        // broadcast at 1 sec should have time always at 1 sec granularity?
-        // don't think they round though.
-        // seems like bursts eventually align so the fractional second is .000 always??
+        // might give an indication of how long it takes to do all this work
+        V1_printf("gps fix_age_entry %lu fix_age now %lu" EOL, fix_age_entry, fix_age);
 
         uint32_t elapsed_millis4 = millis() - lastUpdate_millis;
-        V1_printf("forceTimeUpdate %u timeUpdateCnt %lu", forceTimeUpdate, timeUpdateCnt);
+        V1_printf("forceUpdate %u timeUpdateCnt %lu", forceUpdate, timeUpdateCnt);
         V1_printf(" elapsed_millis4 %lu since last update" EOL, elapsed_millis4);
         lastUpdate_millis = millis();
-        forceTimeUpdate = false;
+        forceUpdate = false;
         timeUpdateCnt += 1;
 
         V1_print(EOL);
