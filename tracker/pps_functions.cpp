@@ -153,16 +153,23 @@ void setGpsPPSMode(void) {
 
 //********************************************************
 void gpsPPS_callback(uint gpio, uint32_t events) {
+
     if (events & GPIO_IRQ_EDGE_RISE) {
         uint32_t current_millis = millis();
         uint32_t current_micros = micros();
+        static bool was_GpsIsOn;
         // should happen once per sec
 
         if (PPS_rise_micros != 0) {
             uint32_t elapsed_micros = current_micros - PPS_rise_micros;
             // should be 1e6 micros
             int elapsed_micros_error = 1000000 - ((int) elapsed_micros);
-            if (elapsed_micros_error > 1)  {
+            // really should only check this is GPS not been off during the sec interval?
+            // we could do the error a modulo 1e6, in case a sec is missing?
+            // if gps goes off, it goes off for more than 1 sec
+            // so we could look at GpsIsOn() now and last
+            // still won't cover all issues for PPS validity over time?
+            if (elapsed_micros_error > 1 && GpsIsOn() && was_GpsIsOn)  {
                 V1_printf("WARN: PPS edge to edge time is elapsed_micros %lu", elapsed_micros);
                 V1_printf(" elapsed_micros_error %d" EOL, elapsed_micros_error);
             }
@@ -171,6 +178,7 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
 
         PPS_rise_millis = current_millis;
         PPS_rise_micros = current_micros;
+        was_GpsIsOn = GpsIsOn();
     }
     // don't need to clear the interrupt for gpio interrupts
 }

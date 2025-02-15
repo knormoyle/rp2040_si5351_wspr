@@ -2329,7 +2329,8 @@ void checkUpdateTimeFromGps() {
     bool tooFar = false;
     elapsed_millis3 = elapsed_millis3 % 1000;
     if (USE_SIM65M) tooFar = elapsed_millis3 < 150 || elapsed_millis3 > 500;
-    else tooFar = elapsed_millis3 < 100 || elapsed_millis3 > 500;
+    // have seen 92 min! must be small number of chars in CNGGA sentence
+    else tooFar = elapsed_millis3 < 90 || elapsed_millis3 > 500;
     if (tooFar) {
         StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu fix_age %lu forceUpdate %u" EOL, 
             elapsed_millis3, fix_age, forceUpdate);
