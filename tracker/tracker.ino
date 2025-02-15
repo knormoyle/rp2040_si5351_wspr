@@ -177,6 +177,7 @@ volatile bool PROCEED = false;
 //*********************************
 // time of last PPS 0->1 from irq, so we can calc offset duration when we setTIme
 uint32_t PPS_rise_millis = 0;
+uint32_t PPS_rise_micros = 0;
 // if this is non-zero we've synced time
 // we can tell how long it's been since we've synced, also
 uint32_t setTime_millis = 0;

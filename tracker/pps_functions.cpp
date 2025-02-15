@@ -23,6 +23,7 @@
 
 extern const int GPS_1PPS_PIN;
 extern uint32_t PPS_rise_millis;
+extern uint32_t PPS_rise_micros;
 extern bool USE_SIM65M;
 extern bool BALLOON_MODE;
 
@@ -105,7 +106,6 @@ extern bool VERBY[10];
 // 2 raw meas + sv info + pvt(including time offset data between GPS and GLO/GAL/BDS)
 
 
-
 //********************************************************
 void setGpsPPSMode(void) {
     // Does PPS default to negative edge on ATGM366H
@@ -154,7 +154,23 @@ void setGpsPPSMode(void) {
 //********************************************************
 void gpsPPS_callback(uint gpio, uint32_t events) {
     if (events & GPIO_IRQ_EDGE_RISE) {
-        PPS_rise_millis = millis();
+        uint32_t current_millis = millis();
+        uint32_t current_micros = micros();
+        // should happen once per sec
+
+        if (PPS_rise_micros != 0) {
+            uint32_t elapsed_micros = current_micros - PPS_rise_micros;
+            // should be 1e6 micros
+            int elapsed_micros_error = 1000000 - ((int) elapsed_micros);
+            if (elapsed_micros_error > 1)  {
+                V1_printf("WARN: PPS edge to edge time is elapsed_micros %lu", elapsed_micros);
+                V1_printf(" elapsed_micros_error %d" EOL, elapsed_micros_error);
+            }
+            // FIX! should have some bounds for error for 1 sec?
+        }
+
+        PPS_rise_millis = current_millis;
+        PPS_rise_micros = current_micros;
     }
     // don't need to clear the interrupt for gpio interrupts
 }
