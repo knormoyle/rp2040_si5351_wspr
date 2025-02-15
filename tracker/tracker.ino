@@ -176,8 +176,9 @@ volatile bool PROCEED = false;
 
 //*********************************
 // time of last PPS 0->1 from irq, so we can calc offset duration when we setTIme
-uint32_t PPS_rise_millis = 0;
+uint32_t PPS_rise_millis = 0; 
 uint32_t PPS_rise_micros = 0;
+bool PPS_rise_active = false;
 // if this is non-zero we've synced time
 // we can tell how long it's been since we've synced, also
 uint32_t setTime_millis = 0;
@@ -2111,8 +2112,9 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
     // 1 sec - (gps to nmea to systime to code here, delay?)
     // static int EXTRA_DELAY_AFTER_PROCEED = 700; // milliseconds
     static int EXTRA_DELAY_AFTER_PROCEED; 
+    // was 850, both
     if (USE_SIM65M) EXTRA_DELAY_AFTER_PROCEED = 850;  // milliseconds
-    else EXTRA_DELAY_AFTER_PROCEED = 850;
+    else EXTRA_DELAY_AFTER_PROCEED = 800;
 
     if (EXTRA_DELAY_AFTER_PROCEED < 0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,

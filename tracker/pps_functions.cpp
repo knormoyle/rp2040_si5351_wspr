@@ -14,6 +14,7 @@
 #include "print_functions.h"
 #include "time_functions.h"
 #include "gps_functions.h"
+#include "time_functions.h"
 #include "pps_functions.h"
 
 // in libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
@@ -24,6 +25,8 @@
 extern const int GPS_1PPS_PIN;
 extern uint32_t PPS_rise_millis;
 extern uint32_t PPS_rise_micros;
+extern bool PPS_rise_active;
+
 extern bool USE_SIM65M;
 extern bool BALLOON_MODE;
 
@@ -153,31 +156,39 @@ void setGpsPPSMode(void) {
 
 //********************************************************
 void gpsPPS_callback(uint gpio, uint32_t events) {
-
     if (events & GPIO_IRQ_EDGE_RISE) {
         uint32_t current_millis = millis();
         uint32_t current_micros = micros();
         static bool was_GpsIsOn;
         // should happen once per sec
 
-        if (PPS_rise_micros != 0) {
-            uint32_t elapsed_micros = current_micros - PPS_rise_micros;
-            // should be 1e6 micros
-            int elapsed_micros_error = 1000000 - ((int) elapsed_micros);
-            // really should only check this is GPS not been off during the sec interval?
-            // we could do the error a modulo 1e6, in case a sec is missing?
-            // if gps goes off, it goes off for more than 1 sec
-            // so we could look at GpsIsOn() now and last
-            // still won't cover all issues for PPS validity over time?
-            if (elapsed_micros_error > 1 && GpsIsOn() && was_GpsIsOn)  {
-                V1_printf("WARN: PPS edge to edge time is elapsed_micros %lu", elapsed_micros);
-                V1_printf(" elapsed_micros_error %d" EOL, elapsed_micros_error);
+        // no modification or reporting if -1
+        if (PPS_rise_active) {
+            // no reporting if 0
+            if (PPS_rise_micros > 0) {
+                uint32_t elapsed_micros = current_micros - PPS_rise_micros;
+                // should be 1e6 micros
+                int elapsed_micros_error = 1000000 - ((int) elapsed_micros);
+                // really should only check this is GPS not been off during the sec interval?
+                // we could do the error a modulo 1e6, in case a sec is missing?
+                // if gps goes off, it goes off for more than 1 sec
+                // so we could look at GpsIsOn() now and last
+                // still won't cover all issues for PPS validity over time?
+                // FIX! should have some bounds for error for 1 sec?
+                // just look for abs() > 1 to reduce printing
+                if (abs(elapsed_micros_error) > 1 && GpsIsOn() && was_GpsIsOn)  {
+                    V1_printf("WARN: PPS edge to edge time is elapsed_micros %lu", elapsed_micros);
+                    V1_printf(" elapsed_micros_error %d ", elapsed_micros_error);
+                    printSystemDateTime();
+                    V1_print(F(EOL));
+                }
             }
-            // FIX! should have some bounds for error for 1 sec?
-        }
 
-        PPS_rise_millis = current_millis;
-        PPS_rise_micros = current_micros;
+            PPS_rise_millis = current_millis;
+            PPS_rise_micros = current_micros;
+        }
+        // FIX! the GpsIsOn tracking is belts and suspenders. 
+        // doesn't cover more cases than the -1/0 state handling
         was_GpsIsOn = GpsIsOn();
     }
     // don't need to clear the interrupt for gpio interrupts

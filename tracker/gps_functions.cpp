@@ -11,7 +11,6 @@
 extern bool USE_SIM65M;
 // change it if we have the 5sec fix/broadcast on USE_SIM65M
 extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
-extern uint32_t PPS_rise_millis;
 extern uint32_t setTime_millis; // last millis() when we setTime()
 extern bool BALLOON_MODE;
 
@@ -25,6 +24,11 @@ bool SIM65M_BROADCAST_5SECS = false;
 #include <stdlib.h>
 extern ConfigStruct cc;
 int CONSTELLATIONS_GROUP = atoi(cc._const_group);
+
+// clear these to zero if gps goes off (for PPS tracking)
+extern int32_t PPS_rise_millis;
+extern int32_t PPS_rise_micros;
+extern bool PPS_rise_active;
 
 // gps+bds+glonass
 // int CONSTELLATIONS_GROUP = 7;
@@ -1316,6 +1320,10 @@ void pwmGpsPwrOn() {
 bool GpsFullColdReset(void) {
     // BUG: can't seem to reset the baud rate to 9600 when
     // the GPS chip has a non-working baud rate?
+    GpsIsOn_state = false;
+    PPS_rise_active = false;
+    PPS_rise_millis = 0;
+    PPS_rise_micros = 0;
 
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
@@ -1323,7 +1331,6 @@ bool GpsFullColdReset(void) {
     uint32_t start_millis = millis();
     Watchdog.reset();
 
-    GpsIsOn_state = false;
     GpsStartTime = get_absolute_time();  // usecs
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
@@ -1627,8 +1634,13 @@ bool GpsFullColdReset(void) {
     invalidateTinyGpsState();
 
     GpsStartTime = get_absolute_time();  // usecs
+    if (sentencesFound) {
+        GpsIsOn_state = true;
+        PPS_rise_active = true;
+    }
+    PPS_rise_millis = 0;
+    PPS_rise_micros = 0;
 
-    if (sentencesFound) GpsIsOn_state = true;
     uint32_t duration_millis = millis() - start_millis;
     V1_print(F("GpsFullColdReset END"));
     V1_printf(" sentencesFound %u", sentencesFound);
@@ -1638,6 +1650,10 @@ bool GpsFullColdReset(void) {
 
 //************************************************
 bool GpsWarmReset(void) {
+    GpsIsOn_state = false;
+    PPS_rise_active = false;
+    PPS_rise_millis = 0;
+    PPS_rise_micros = 0;
     // FIX! SIM65M spec says when the power supply is off, settings
     // are reset to factory config and receiver performs a cold start
     // on next power up
@@ -1645,8 +1661,7 @@ bool GpsWarmReset(void) {
     // gps chip off?
     V1_println(F(EOL "GpsWarmReset START"));
     uint32_t start_millis = millis();
-    GpsIsOn_state = false;
-    GpsStartTime = get_absolute_time();  // usecs
+
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
 
@@ -1690,7 +1705,9 @@ bool GpsWarmReset(void) {
     digitalWrite(GPS_ON_PIN, HIGH);
     gpsSleepForMillis(2000, false);  // no early out
 
+    GpsStartTime = get_absolute_time();  // usecs
     //****************************
+
     // not used?
     int BAUD_RATE;
     if (USE_SIM65M) BAUD_RATE = SIM65M_BAUD_RATE;
@@ -1744,14 +1761,19 @@ bool GpsWarmReset(void) {
     // flush out any old state in TinyGPSplus, so we don't get a valid fix that's got
     // a big fix_age
     invalidateTinyGpsState();
-    GpsIsOn_state = true;
-    GpsStartTime = get_absolute_time();  // usecs
 
-    if (sentencesFound) GpsIsOn_state = true;
     uint32_t duration_millis = millis() - start_millis;
     V1_print(F("GpsWarmReset END"));
     V1_printf(" sentencesFound %u", sentencesFound);
     V1_printf(" duration_millis %lu" EOL, duration_millis);
+
+    if (sentencesFound) {
+        GpsIsOn_state = true;
+        PPS_rise_active = true;
+    }
+    PPS_rise_millis = 0;
+    PPS_rise_micros = 0;
+    GpsStartTime = get_absolute_time();  // usecs
     return sentencesFound;
 }
 
@@ -1970,6 +1992,12 @@ void invalidateTinyGpsState(void) {
 
 //************************************************
 void GpsOFF() {
+    GpsIsOn_state = false;
+    GpsStartTime = 0;
+    PPS_rise_active = false;
+    PPS_rise_millis = 0;
+    PPS_rise_micros = 0;
+
     V1_printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
     digitalWrite(GpsPwr, HIGH);
     // Serial2.end() Disables serial communication,
@@ -1986,8 +2014,6 @@ void GpsOFF() {
     // wait for time to get set again?
     invalidateTinyGpsState();
 
-    GpsIsOn_state = false;
-    GpsStartTime = 0;
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
 
@@ -2322,25 +2348,28 @@ void checkUpdateTimeFromGps() {
     }
 
     //*****************************
-    uint32_t elapsed_millis3 = millis() - PPS_rise_millis;
-    // should be consistently 100 to 350 millis from PPS edge 
-    // FIX! atgm336 edge is 1-> 0
-    // (% 1000 because reset might affect edge?)
-    bool tooFar = false;
-    elapsed_millis3 = elapsed_millis3 % 1000;
-    if (USE_SIM65M) tooFar = elapsed_millis3 < 150 || elapsed_millis3 > 500;
-    // have seen 92 min! must be small number of chars in CNGGA sentence
-    else tooFar = elapsed_millis3 < 90 || elapsed_millis3 > 500;
-    if (tooFar) {
-        StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu fix_age %lu forceUpdate %u" EOL, 
-            elapsed_millis3, fix_age, forceUpdate);
+    uint32_t elapsed_millis3;
+    if (PPS_rise_active && PPS_rise_millis > 0) {
+        elapsed_millis3 = millis() - PPS_rise_millis;
+        // should be consistently 100 to 350 millis from PPS edge 
+        // FIX! atgm336 edge is 1-> 0
+        // (% 1000 because reset might affect edge?)
+        bool tooFar = false;
+        elapsed_millis3 = elapsed_millis3 % 1000;
+        if (USE_SIM65M) tooFar = elapsed_millis3 < 150 || elapsed_millis3 > 500;
+        // have seen 92 min! must be small number of chars in CNGGA sentence
+        else tooFar = elapsed_millis3 < 90 || elapsed_millis3 > 500;
+        if (tooFar) {
+            StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu fix_age %lu forceUpdate %u" EOL, 
+                elapsed_millis3, fix_age, forceUpdate);
+        }
+        // FIX! problems if we try to restrict based on PPS alignment?
+        // forceUpdate: don't worry about how close we are to PPS
+        // just in case there's something broken about PPS or the range checks are bad
+        // if (!forceUpdate && tooFar) return;
     }
-    // FIX! problems if we try to restrict based on PPS alignment?
-    // forceUpdate: don't worry about how close we are to PPS
-    // just in case there's something broken about PPS or the range checks are bad
-    // if (!forceUpdate && tooFar) return;
-    //*****************************
 
+    //*****************************
     // these all should be stable/consistent as we're gathering them?
     uint8_t gps_month = gps.date.month();
     uint8_t gps_day = gps.date.day();
@@ -2445,7 +2474,7 @@ void checkUpdateTimeFromGps() {
         // last millis() when we setTime()
         setTime_millis = millis(); 
 
-        if (PPS_rise_millis != 0) {
+        if (PPS_rise_active && PPS_rise_millis > 0) {
             // we should be using this at least once per rollover?
             elapsed_millis3 = setTime_millis - PPS_rise_millis;
             // print the modulo 1 sec also, if the last PPS was a while ago? (
