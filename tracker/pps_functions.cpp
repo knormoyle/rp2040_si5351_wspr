@@ -176,9 +176,9 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
                 // still won't cover all issues for PPS validity over time?
                 // FIX! should have some bounds for error for 1 sec?
                 // just look for abs() > 1 to reduce printing
-                if (abs(elapsed_micros_error) > 1 && GpsIsOn() && was_GpsIsOn)  {
-                    V1_printf("WARN: PPS edge to edge time is elapsed_micros %lu", elapsed_micros);
-                    V1_printf(" elapsed_micros_error %d ", elapsed_micros_error);
+                if (false && abs(elapsed_micros_error) > 1 && GpsIsOn() && was_GpsIsOn)  {
+                    V1_printf("WARN: PPS edge to edge micros %lu", elapsed_micros);
+                    V1_printf(" error %d ", elapsed_micros_error);
                     printSystemDateTime();
                     V1_print(F(EOL));
                 }
