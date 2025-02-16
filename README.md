@@ -174,16 +174,17 @@ Added a library for blinking led with morse code, which I may use for detailed e
 kevin@pc8c:~$ cd Arduino
 kevin@pc8c:~/Arduino$ cd libraries
 kevin@pc8c:~/Arduino/libraries$ ls -ltr
-total 4
-lrwxrwxrwx 1 kevin kevin 64 Dec 12 01:08 Adafruit_BMP280_Library -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_BMP280_Library
-lrwxrwxrwx 1 kevin kevin 55 Dec 12 01:08 Adafruit_BusIO -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_BusIO
-lrwxrwxrwx 1 kevin kevin 56 Dec 12 01:08 Adafruit_Sensor -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_Sensor
-lrwxrwxrwx 1 kevin kevin 59 Dec 12 01:08 Adafruit_SleepyDog -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_SleepyDog
-lrwxrwxrwx 1 kevin kevin 59 Dec 12 01:08 Arduino-MemoryFree -> /home/kevin/rp2040_si5351_wspr/libraries/Arduino-MemoryFree
-lrwxrwxrwx 1 kevin kevin 49 Dec 12 01:08 JTEncode -> /home/kevin/rp2040_si5351_wspr/libraries/JTEncode
-lrwxrwxrwx 1 kevin kevin 45 Dec 12 01:08 Time -> /home/kevin/rp2040_si5351_wspr/libraries/Time
-lrwxrwxrwx 1 kevin kevin 52 Dec 12 01:08 TinyGPSPlus -> /home/kevin/rp2040_si5351_wspr/libraries/TinyGPSPlus
-kevin@pc8c:~/Arduino/libraries$
+lrwxrwxrwx 1 kevin kevin   64 Feb 13 22:29 Adafruit_BMP280_Library -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_BMP280_Library
+lrwxrwxrwx 1 kevin kevin   55 Feb 13 22:29 Adafruit_BusIO -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_BusIO
+lrwxrwxrwx 1 kevin kevin   56 Feb 13 22:29 Adafruit_Sensor -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_Sensor
+lrwxrwxrwx 1 kevin kevin   59 Feb 13 22:29 Adafruit_SleepyDog -> /home/kevin/rp2040_si5351_wspr/libraries/Adafruit_SleepyDog
+lrwxrwxrwx 1 kevin kevin   59 Feb 13 22:29 Arduino-MemoryFree -> /home/kevin/rp2040_si5351_wspr/libraries/Arduino-MemoryFree
+lrwxrwxrwx 1 kevin kevin   53 Feb 13 22:29 arduinomorse -> /home/kevin/rp2040_si5351_wspr/libraries/arduinomorse
+lrwxrwxrwx 1 kevin kevin   53 Feb 13 22:29 JTEncode_mod -> /home/kevin/rp2040_si5351_wspr/libraries/JTEncode_mod
+lrwxrwxrwx 1 kevin kevin   49 Feb 13 22:29 Time_mod -> /home/kevin/rp2040_si5351_wspr/libraries/Time_mod
+lrwxrwxrwx 1 kevin kevin   56 Feb 13 22:29 TinyGPSPlus_mod -> /home/kevin/rp2040_si5351_wspr/libraries/TinyGPSPlus_mod
+drwxr-xr-x 5 kevin kevin 4096 Feb 13 22:45 WsprEncoded
+
 
 ```
 Then you get to where you use File to open the tracker dir of my repo, and open the tracker.ino
@@ -194,36 +195,59 @@ all the *.h
 
 ```
 kevin@pc8c:~/rp2040_si5351_wspr/tracker$ 
-
--rw-rw-r-- 1 kevin kevin  1702 Dec  4 11:38 mh_functions.cpp
--rw-rw-r-- 1 kevin kevin   429 Dec  4 11:38 adc_functions.h
--rw-rw-r-- 1 kevin kevin  1010 Dec  4 11:38 config_functions.h
--rw-rw-r-- 1 kevin kevin   663 Dec  4 11:38 bmp_functions.h
--rw-rw-r-- 1 kevin kevin   431 Dec  4 11:38 mh_functions.h
--rw-rw-r-- 1 kevin kevin   911 Dec  4 11:38 led_functions.h
--rw-rw-r-- 1 kevin kevin   782 Dec  4 11:38 i2c_functions.h
--rw-rw-r-- 1 kevin kevin   445 Dec  4 11:38 tele_functions.h
--rw-rw-r-- 1 kevin kevin   793 Dec  4 11:38 u4b_functions.h
--rw-rw-r-- 1 kevin kevin 15801 Dec  5 12:45 u4b_functions.cpp
--rw-rw-r-- 1 kevin kevin  9731 Dec  5 18:34 bmp_functions.cpp
--rw-rw-r-- 1 kevin kevin 21517 Dec  5 23:17 i2c_functions.cpp
--rw-rw-r-- 1 kevin kevin   775 Dec  7 12:41 debug_functions.h
--rw-rw-r-- 1 kevin kevin 10447 Dec  7 12:41 debug_functions.cpp
--rw-rw-r-- 1 kevin kevin 14046 Dec  8 17:41 tele_functions.cpp
--rw-rw-r-- 1 kevin kevin  3114 Dec  9 01:29 print_functions.cpp
--rw-rw-r-- 1 kevin kevin  3821 Dec  9 01:32 adc_functions.cpp
--rw-rw-r-- 1 kevin kevin  3162 Dec  9 02:08 led_functions.cpp
--rw-rw-r-- 1 kevin kevin   521 Dec  9 11:22 keyboard_functions.h
--rw-rw-r-- 1 kevin kevin   631 Dec  9 13:19 wspr_functions.h
--rw-rw-r-- 1 kevin kevin  2543 Dec  9 17:58 print_functions.h
--rw-rw-r-- 1 kevin kevin  1351 Dec  9 21:17 gps_functions.h
--rw-rw-r-- 1 kevin kevin 18871 Dec 10 16:05 wspr_functions.cpp
--rw-rw-r-- 1 kevin kevin  3248 Dec 10 19:13 si5351_functions.h
--rw-rw-r-- 1 kevin kevin  7897 Dec 11 11:40 keyboard_functions.cpp
--rw-rw-r-- 1 kevin kevin 43608 Dec 11 14:27 config_functions.cpp
--rw-rw-r-- 1 kevin kevin 97164 Dec 11 14:29 tracker.ino
--rw-rw-r-- 1 kevin kevin 68514 Dec 11 23:59 gps_functions.cpp
--rw-rw-r-- 1 kevin kevin 47261 Dec 12 00:39 si5351_functions.cpp
+-rw-rw-r-- 1 kevin kevin   1627 Nov 16 04:43 freq_count_functions.cpp
+-rw-rw-r-- 1 kevin kevin    429 Dec  4 11:38 adc_functions.h
+-rw-rw-r-- 1 kevin kevin    663 Dec  4 11:38 bmp_functions.h
+-rw-rw-r-- 1 kevin kevin    431 Dec  4 11:38 mh_functions.h
+-rw-rw-r-- 1 kevin kevin    782 Dec  4 11:38 i2c_functions.h
+-rw-rw-r-- 1 kevin kevin   3114 Dec  9 01:29 print_functions.cpp
+-rw-rw-r-- 1 kevin kevin   9710 Dec 12 17:47 bmp_functions.cpp
+-rw-rw-r-- 1 kevin kevin    631 Dec 19 08:51 wspr_functions.h
+-rw-rw-r-- 1 kevin kevin   7836 Dec 20 11:30 keyboard_functions.cpp
+-rw-rw-r-- 1 kevin kevin    517 Dec 20 11:31 keyboard_functions.h
+-rw-rw-r-- 1 kevin kevin   1701 Dec 20 11:47 mh_functions.cpp
+-rw-rw-r-- 1 kevin kevin   1314 Jan  1 12:20 solar2_functions.h
+-rw-rw-r-- 1 kevin kevin   6322 Jan  2 13:11 solar2_functions.cpp
+-rw-rw-r-- 1 kevin kevin    577 Jan  2 13:16 solar5_functions.h
+-rw-rw-r-- 1 kevin kevin   2119 Jan  2 19:16 solar4_functions.h
+-rw-rw-r-- 1 kevin kevin    780 Jan  3 13:12 cw_functions.h
+-rw-rw-r-- 1 kevin kevin   2271 Jan  4 16:44 solar_functions.h
+-rw-rw-r-- 1 kevin kevin  14105 Jan  4 16:44 solar_functions.cpp
+-rw-rw-r-- 1 kevin kevin    532 Jan  5 01:56 farey_functions.h
+-rw-rw-r-- 1 kevin kevin   3859 Jan  6 17:12 adc_functions.cpp
+-rw-rw-r-- 1 kevin kevin    826 Jan  7 21:06 u4b_functions.h
+-rw-rw-r-- 1 kevin kevin   8104 Jan 10 12:03 farey_functions.cpp
+-rw-rw-r-- 1 kevin kevin   3418 Jan 10 23:02 led_functions.cpp
+-rw-rw-r-- 1 kevin kevin    618 Jan 17 23:09 sweep_functions.h
+-rw-rw-r-- 1 kevin kevin   5253 Jan 17 23:09 si5351_functions.h
+-rw-rw-r-- 1 kevin kevin   9667 Jan 18 22:37 solar5_functions.cpp
+-rw-rw-r-- 1 kevin kevin    879 Jan 20 23:07 debug_functions.h
+-rw-rw-r-- 1 kevin kevin   6555 Jan 21 22:57 solar4_functions.cpp
+-rw-rw-r-- 1 kevin kevin  21490 Jan 22 14:42 i2c_functions.cpp
+-rw-rw-r-- 1 kevin kevin    991 Jan 22 15:57 config_functions.h
+-rw-rw-r-- 1 kevin kevin    730 Jan 22 15:58 tele_functions.h
+-rw-rw-r-- 1 kevin kevin  22608 Jan 22 16:20 sweep_functions.cpp
+-rw-rw-r-- 1 kevin kevin   2609 Jan 22 16:23 print_functions.h
+-rw-rw-r-- 1 kevin kevin    705 Jan 24 23:29 doug_functions.h
+-rw-rw-r-- 1 kevin kevin 112511 Feb  5 22:14 si5351_functions.cpp
+-rw-rw-r-- 1 kevin kevin   1207 Feb  7 12:04 led_functions.h
+-rw-rw-r-- 1 kevin kevin   7532 Feb  9 12:48 doug_functions.cpp
+-rw-rw-r-- 1 kevin kevin  16261 Feb  9 14:31 u4b_functions.cpp
+-rw-rw-r-- 1 kevin kevin   2561 Feb 13 00:01 time_functions.cpp
+-rw-rw-r-- 1 kevin kevin    568 Feb 13 00:05 time_functions.h
+-rw-rw-r-- 1 kevin kevin    450 Feb 13 01:48 tinygps_functions.h
+-rw-rw-r-- 1 kevin kevin  23390 Feb 13 02:56 cw_functions.cpp
+-rw-rw-r-- 1 kevin kevin   7004 Feb 13 09:39 tinygps_functions.cpp
+-rw-rw-r-- 1 kevin kevin   4954 Feb 13 10:09 global_structs.h
+-rw-rw-r-- 1 kevin kevin  55520 Feb 13 14:39 config_functions.cpp
+-rw-rw-r-- 1 kevin kevin    475 Feb 13 16:52 pps_functions.h
+-rw-rw-r-- 1 kevin kevin  18368 Feb 13 17:08 wspr_functions.cpp
+-rw-rw-r-- 1 kevin kevin  31877 Feb 14 16:01 tele_functions.cpp
+-rw-rw-r-- 1 kevin kevin  17577 Feb 14 16:22 debug_functions.cpp
+-rw-rw-r-- 1 kevin kevin   1332 Feb 16 11:34 gps_functions.h
+-rw-rw-r-- 1 kevin kevin 110702 Feb 16 13:53 tracker.ino
+-rw-rw-r-- 1 kevin kevin   7449 Feb 16 14:54 pps_functions.cpp
+-rw-rw-r-- 1 kevin kevin 119776 Feb 16 15:18 gps_functions.cpp
 ```
 
 
@@ -234,15 +258,16 @@ If I cd ../libraries from there, I get:
 kevin@pc8c:~/rp2040_si5351_wspr/tracker$ cd ../libraries
  
 kevin@pc8c:~/rp2040_si5351_wspr/libraries$ ls -ltr
-total 36
-drwxrwxr-x 4 kevin kevin 4096 Nov  7 21:30 TinyGPSPlus
+drwxrwxr-x 4 kevin kevin 4096 Nov  7 21:30 TinyGPSPlus_mod
 drwxrwxr-x 4 kevin kevin 4096 Nov  8 00:01 Adafruit_SleepyDog
-drwxrwxr-x 3 kevin kevin 4096 Nov  8 05:05 Adafruit_BusIO
 drwxrwxr-x 4 kevin kevin 4096 Nov  8 05:53 Adafruit_BMP280_Library
-drwxrwxr-x 3 kevin kevin 4096 Nov  8 06:16 Adafruit_Sensor
-drwxrwxr-x 4 kevin kevin 4096 Nov  8 13:50 JTEncode
-drwxrwxr-x 4 kevin kevin 4096 Nov 20 14:28 Arduino-MemoryFree
-drwxrwxr-x 4 kevin kevin 4096 Nov 22 18:41 Time
+drwxrwxr-x 6 kevin kevin 4096 Dec  5 11:31 not_used
+drwxrwxr-x 4 kevin kevin 4096 Jan  1 12:05 Arduino-MemoryFree
+drwxrwxr-x 3 kevin kevin 4096 Jan  6 13:10 arduinomorse
+drwxrwxr-x 3 kevin kevin 4096 Jan  8 01:47 Adafruit_Sensor
+drwxrwxr-x 3 kevin kevin 4096 Jan 19 18:35 Adafruit_BusIO
+drwxrwxr-x 4 kevin kevin 4096 Feb  9 13:23 JTEncode_mod
+drwxrwxr-x 4 kevin kevin 4096 Feb 16 11:45 Time_mod
 ```
 
 
