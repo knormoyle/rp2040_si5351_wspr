@@ -20,7 +20,7 @@ typedef struct ConfigStruct_ {
     // hmmm. can't declare these arrays 'volatile'
     char _callsign[7];
     char _verbose[2];   // 0 is used to disable all. 1 is all printing for now. 2:9 same
-    char _TELEN_config[5];
+    char _ExtTelemetry[5];
     // FIX! why is this a compiler problem if volatile? an snprintf() fails
     // https://forum.arduino.cc/t/invalid-conversion-from-volatile-char-to-const-char-fpermissive/949522
     char _clock_speed[4];
@@ -117,10 +117,10 @@ typedef struct TeleStruct_ {
 
     int snap_cnt;
 
-    int TELEN1_val1;
-    int TELEN1_val2;
-    int TELEN2_val1;
-    int TELEN2_val2;
+    int ExtTelemetry1_val1;
+    int ExtTelemetry1_val2;
+    int ExtTelemetry2_val1;
+    int ExtTelemetry2_val2;
 } TeleStruct;
 
 #endif // GLOBAL_STRUCTS_H

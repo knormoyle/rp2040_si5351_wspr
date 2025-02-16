@@ -243,23 +243,23 @@ void config_intro(void) {
 }
 
 //***************************************
-void show_TELEN_msg() {
-    V0_print(F("show_TELEN_msg()"));
+void show_ExtTelemetry_msg() {
+    V0_print(F("show_ExtTelemetry_msg()"));
     V0_print(F(EOL "Telen Types:" EOL EOL));
     V0_print(F(BRIGHT UNDERLINE_ON));
-    V0_print(F(EOL EOL EOL EOL "TELEN CONFIG INSTRUCTIONS:" EOL EOL));
+    V0_print(F(EOL EOL EOL EOL "ExtTelemetry CONFIG INSTRUCTIONS:" EOL EOL));
     V0_print(F(UNDERLINE_OFF NORMAL));
-    V0_print(F("* There are 4 possible TELEN values, corresponding to TELEN 1 value 1," EOL));
-    V0_print(F("  TELEN 1 value 2, TELEN 2 value 1 and TELEN 2 value 2." EOL));
-    V0_print(F("* Enter 4 characters (legal 0-9 or -) in TELEN_config." EOL));
+    V0_print(F("* There are 4 possible ExtTelemetry values, corresponding to ExtTelemetry 1 value 1," EOL));
+    V0_print(F("  ExtTelemetry 1 value 2, ExtTelemetry 2 value 1 and ExtTelemetry 2 value 2." EOL));
+    V0_print(F("* Enter 4 characters (legal 0-9 or -) in ExtTelemetry." EOL));
     V0_print(F("  use a '-' (minus) to disable one or more values." EOL));
     V0_print(F("  example:" EOL));
     V0_print(F("  '----' disables all telen " EOL));
     V0_print(F("* example:" EOL));
     V0_print(F("  '01--'" EOL));
-    V0_print(F("    Telen 1 value 1 to type 0" EOL));
-    V0_print(F("    Telen 1 value 2 to type 1" EOL));
-    V0_print(F("    disables all of TELEN 2" EOL));
+    V0_print(F("    ExtTelemetry 1 value 1 to type 0" EOL));
+    V0_print(F("    ExtTelemetry 1 value 2 to type 1" EOL));
+    V0_print(F("    disables all of ExtTelemetry 2" EOL));
 
     V0_print(F(BRIGHT UNDERLINE_ON));
     V0_print(F(EOL "Telen Types:" EOL EOL));
@@ -494,10 +494,10 @@ void user_interface(void) {
                 write_FLASH();
                 break;
             case 'T':
-                show_TELEN_msg();
-                get_user_input("Enter TELEN config: " EOL,
-                    cc._TELEN_config, sizeof(cc._TELEN_config));
-                convertToUpperCase(cc._TELEN_config);
+                show_ExtTelemetry_msg();
+                get_user_input("Enter ExtTelemetry config: " EOL,
+                    cc._ExtTelemetry, sizeof(cc._ExtTelemetry));
+                convertToUpperCase(cc._ExtTelemetry);
                 write_FLASH();
                 break;
             case 'K':
@@ -729,7 +729,7 @@ int read_FLASH(void) {
     // FIX! should we just use snprintf?
     strncpy(cc._callsign,        flash_target_contents + 0,  6); cc._callsign[6] = 0;
     strncpy(cc._verbose,         flash_target_contents + 6,  1); cc._verbose[1] = 0;
-    strncpy(cc._TELEN_config,    flash_target_contents + 7,  4); cc._TELEN_config[4] = 0;
+    strncpy(cc._ExtTelemetry,    flash_target_contents + 7,  4); cc._ExtTelemetry[4] = 0;
     strncpy(cc._clock_speed,     flash_target_contents + 11, 3); cc._clock_speed[3] = 0;
     strncpy(cc._U4B_chan,        flash_target_contents + 14, 3); cc._U4B_chan[3] = 0;
     // FIX! change tocc._band everywhere?
@@ -848,7 +848,7 @@ void write_FLASH(void) {
     // don't take the extra null term (butcc._callsign might be short!)
     strncpy(data_chunk + 0, cc._callsign, 6);
     strncpy(data_chunk + 6, cc._verbose, 1);
-    strncpy(data_chunk + 7, cc._TELEN_config, 4);
+    strncpy(data_chunk + 7, cc._ExtTelemetry, 4);
     strncpy(data_chunk + 11, cc._clock_speed, 3);
     strncpy(data_chunk + 14, cc._U4B_chan, 3);
     strncpy(data_chunk + 17, cc._Band, 2);
@@ -990,17 +990,17 @@ int check_data_validity_and_set_defaults(void) {
     // 0-9 and - are legal.cc._
     // make sure to null terminate
     bool bad = false;
-    if (cc._TELEN_config[0] == 0) {
+    if (cc._ExtTelemetry[0] == 0) {
         bad = true;
     } else {
         for (int i = 0; i <= 3; i++) {
-            if ((cc._TELEN_config[i] < '0' ||cc._TELEN_config[i] > '9') &&cc._TELEN_config[i] != '-') bad = true;
+            if ((cc._ExtTelemetry[i] < '0' ||cc._ExtTelemetry[i] > '9') &&cc._ExtTelemetry[i] != '-') bad = true;
         }
     }
     if (bad) {
-        V0_printf(EOL "ERROR: cc._TELEN_config %s is not supported/legal, initting to ----" EOL,
-           cc._TELEN_config);
-        snprintf(cc._TELEN_config, sizeof(cc._TELEN_config), "----");
+        V0_printf(EOL "ERROR: cc._ExtTelemetry %s is not supported/legal, initting to ----" EOL,
+           cc._ExtTelemetry);
+        snprintf(cc._ExtTelemetry, sizeof(cc._ExtTelemetry), "----");
         write_FLASH();
         result = -1;
     }
@@ -1211,7 +1211,7 @@ void show_values(void) {
     V0_printf(" lane: %s)" EOL, cc._lane);
     V0_printf("P: tx_high: %s" EOL, cc._tx_high);
     V0_printf("V: verbose: %s" EOL, cc._verbose);
-    V0_printf("T: TELEN config: %s" EOL, cc._TELEN_config);
+    V0_printf("T: ExtTelemetry config: %s" EOL, cc._ExtTelemetry);
     V0_printf("K: clock speed: %s (Mhz)" EOL, cc._clock_speed);
     V0_printf("D: TESTMODE: %s" EOL, cc._testmode);
     V0_printf("R: correction: %s (* 1e-9)" EOL, cc._correction);
@@ -1255,7 +1255,7 @@ void show_commands(void) {
     V0_println(F("A: change band (2,10,12,15,17,20 default 20)"));
     V0_println(F("B: change band for cw (2,10,12,15,17,20 default 20)"));
     V0_println(F("P: change tx power: 1 high, 0 lower default )"));
-    V0_println(F("T: TELEN config"));
+    V0_println(F("T: ExtTelemetry config"));
     V0_printf("K: clock speed  (default: %lu)" EOL,  DEFAULT_PLL_SYS_MHZ);
     V0_println(F("R: si5351 ppb correction (-3000 to 3000) (default: 0)"));
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
@@ -1271,7 +1271,7 @@ void doFactoryReset() {
     V0_println(F("doFactoryReset START"));
     snprintf(cc._callsign, sizeof(cc._callsign), "AB1CDE");
     snprintf(cc._verbose, sizeof(cc._verbose), "1");
-    snprintf(cc._TELEN_config, sizeof(cc._TELEN_config), "----");
+    snprintf(cc._ExtTelemetry, sizeof(cc._ExtTelemetry), "----");
     snprintf(cc._clock_speed, sizeof(cc._clock_speed), "%lu", DEFAULT_PLL_SYS_MHZ);
     snprintf(cc._U4B_chan, sizeof(cc._U4B_chan), "%s", "599");  // always 3 chars?
     snprintf(cc._Band, sizeof(cc._Band), "20");

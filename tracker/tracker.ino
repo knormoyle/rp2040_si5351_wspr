@@ -1108,10 +1108,10 @@ uint64_t GpsTimeToLastFixSum = 0;
 uint64_t GpsTimeToLastFixCnt = 0;
 
 // FIX! right now, where are they set?
-int TELEN1_val1 = 0;
-int TELEN1_val2 = 0;
-int TELEN2_val1 = 0;
-int TELEN2_val2 = 0;
+int ExtTelemetry1_val1 = 0;
+int ExtTelemetry1_val2 = 0;
+int ExtTelemetry2_val1 = 0;
+int ExtTelemetry2_val2 = 0;
 
 int tx_cnt_0 = 0;
 int tx_cnt_1 = 0;
@@ -1814,8 +1814,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_flush();
 
     vfoOffAtEnd =
-        cc._TELEN_config[0] == '-' && cc._TELEN_config[1] == '-' &&
-        cc._TELEN_config[2] == '-' && cc._TELEN_config[3] == '-';
+        cc._ExtTelemetry[0] == '-' && cc._ExtTelemetry[1] == '-' &&
+        cc._ExtTelemetry[2] == '-' && cc._ExtTelemetry[3] == '-';
     syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
@@ -1825,20 +1825,20 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     }
 
     // have to send this if telen1 or telen2 is enabled
-    if ( (cc._TELEN_config[0] != '-' || cc._TELEN_config[1] != '-') ||
-         (cc._TELEN_config[2] != '-' || cc._TELEN_config[3] != '-') ) {
-        setStatusLEDBlinkCount(LED_STATUS_TX_TELEN1);
+    if ( (cc._ExtTelemetry[0] != '-' || cc._ExtTelemetry[1] != '-') ||
+         (cc._ExtTelemetry[2] != '-' || cc._ExtTelemetry[3] != '-') ) {
+        setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
 
         txNum = 2;
 
         // all the hf_* is a char array
         // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
-        //     TELEN1_val1, TELEN1_val2, false, cc._id13);
+        //     ExtTelemetry1_val1, ExtTelemetry1_val2, false, cc._id13);
         // bug
         // uint8_t slot = 4;
         // should be slot 3 (2) ?
         uint8_t slot = 2;
-        switch (cc._TELEN_config[0]) {
+        switch (cc._ExtTelemetry[0]) {
             case '0':
             default:
                 V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
@@ -1853,7 +1853,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("hf_grid4 %s" EOL, hf_grid4);
         V1_printf("hf_power %s" EOL, hf_power); V1_print(F(EOL));
         V1_flush();
-        vfoOffAtEnd = cc._TELEN_config[2] == '-' && cc._TELEN_config[3] == '-';
+        vfoOffAtEnd = cc._ExtTelemetry[2] == '-' && cc._ExtTelemetry[3] == '-';
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
         tx_cnt_2 += 1;
         if (VERBY[1]) {
@@ -1862,19 +1862,19 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         }
     }
     // have to send this if telen2 is enabled
-    if ( (cc._TELEN_config[2] != '-' || cc._TELEN_config[3] != '-') ) {
-        setStatusLEDBlinkCount(LED_STATUS_TX_TELEN2);
+    if ( (cc._ExtTelemetry[2] != '-' || cc._ExtTelemetry[3] != '-') ) {
+        setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
         // output: modifies globals: hf_callsign, hf_grid4, hf_power
-        // input: TELEN2_val1/2 are ints?
+        // input: ExtTelemetry2_val1/2 are ints?
         txNum = 3;
         V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg().." EOL, txNum);
         V1_flush();
 
         // all the hf_* is a char array
         // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
-        //     TELEN1_val1, TELEN1_val2, false, cc._id13);
+        //     ExtTelemetry1_val1, ExtTelemetry1_val2, false, cc._id13);
         uint8_t slot = 6;
-        switch (cc._TELEN_config[1]) {
+        switch (cc._ExtTelemetry[1]) {
             case '0':
             default:
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);

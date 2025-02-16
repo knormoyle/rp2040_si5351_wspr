@@ -52,10 +52,10 @@ extern TinyGPSCustom gp_hdop;
 extern TinyGPSCustom gp_vdop;
 
 
-extern int TELEN1_val1;
-extern int TELEN1_val2;
-extern int TELEN2_val1;
-extern int TELEN2_val2;
+extern int ExtTelemetry1_val1;
+extern int ExtTelemetry1_val2;
+extern int ExtTelemetry2_val1;
+extern int ExtTelemetry2_val2;
 
 // FIX! update this based on solar elevation
 extern uint8_t SOLAR_SI5351_TX_POWER;
@@ -280,14 +280,14 @@ void snapForTelemetry() {
     voltage = clamp_float(voltage, 0, 99.99);
     snprintf(tt.voltage, sizeof(tt.voltage), "%.2f", voltage);
 
-    // FIX! could use this for some TELEN telemetry?
+    // FIX! could use this for some Extended Telemetry
     int hdop = gps.hdop.isValid() ? (int) gps.hdop.value() : 0;
     // hundredths. <100 is very good
     // can get >999 from the gps, but we don't tx it (usually?)
     hdop = clamp_int(hdop, 0, 999);
     snprintf(tt.hdop, sizeof(tt.hdop), "%d", hdop);
 
-    // FIX! could use this for some TELEN telemetry?
+    // FIX! could use this for some Extended Telemetry
     int sat_count = gps.satellites.isValid() ? (int) gps.satellites.value() : 0;
     sat_count = clamp_int(sat_count, 0, 99);
     snprintf(tt.sat_count, sizeof(tt.sat_count), "%d", sat_count);
@@ -381,10 +381,10 @@ void snapForTelemetry() {
 
     //*********************************
     // snap for consistency with everything else (all at one instant in time)
-    tt.TELEN1_val1 = TELEN1_val1;
-    tt.TELEN1_val2 = TELEN1_val2;
-    tt.TELEN2_val1 = TELEN2_val1;
-    tt.TELEN2_val2 = TELEN2_val2;
+    tt.ExtTelemetry1_val1 = ExtTelemetry1_val1;
+    tt.ExtTelemetry1_val2 = ExtTelemetry1_val2;
+    tt.ExtTelemetry2_val1 = ExtTelemetry2_val1;
+    tt.ExtTelemetry2_val2 = ExtTelemetry2_val2;
 
     bool validA = gps.satellites.isValid() && !GpsInvalidAll;
     // bool validB = gps.hdop.isValid() && !GpsInvalidAll;
@@ -468,10 +468,10 @@ void snapForTelemetry() {
     V1_printf("tt.temp_ext %s" EOL, tt.temp);
     V1_printf("tt.pressure %s " EOL, tt.pressure);
 
-    // V1_printf("tt.TELEN1_val1 %d " EOL, tt.TELEN1_val1);
-    // V1_printf("tt.TELEN1_val2 %d " EOL, tt.TELEN1_val2);
-    // V1_printf("tt.TELEN2_val1 %d " EOL, tt.TELEN2_val1);
-    // V1_printf("tt.TELEN2_val2 %d " EOL, tt.TELEN2_val2);
+    // V1_printf("tt.ExtTelemetry1_val1 %d " EOL, tt.ExtTelemetry1_val1);
+    // V1_printf("tt.ExtTelemetry1_val2 %d " EOL, tt.ExtTelemetry1_val2);
+    // V1_printf("tt.ExtTelemetry2_val1 %d " EOL, tt.ExtTelemetry2_val1);
+    // V1_printf("tt.ExtTelemetry2_val2 %d " EOL, tt.ExtTelemetry2_val2);
 
     V1_printf("tt.gp_sats %s " EOL, tt.gp_sats);
     V1_printf("tt.gb_sats %s " EOL, tt.gb_sats);
@@ -487,8 +487,8 @@ void snapForTelemetry() {
 }
 
 //****************************************************
-void process_TELEN_data(void) {
-    V1_println(F("process_TELEN_data START"));
+void process_ExtTele_data(void) {
+    V1_println(F("process_ExtTele_data START"));
     // minutes_since_GPS_acquistion (should this be last time to fix);
     // we don't send stuff out if we don't get gps acquistion.
     // so minutes since fix doesn't really matter?
@@ -498,53 +498,53 @@ void process_TELEN_data(void) {
     // the 12 bit shift is because thats resolution of ADC
     const float conversionFactor = 3300.0f / (1 << 12);
 
-    uint32_t telen_values[4] = { 0 };
+    uint32_t telemetry_vals[4] = { 0 };
     uint32_t timeSinceBoot_secs = millis() / 1000UL;  // seconds
     for (int i=0; i < 4; i++) {
         // no negative values here
-        switch (cc._TELEN_config[i]) {
-            case '-':  break;  // do nothing, telen chan is disabled
+        switch (cc._ExtTelemetry[i]) {
+            case '-':  break;  // do nothing
             case '0':
-                telen_values[i] = round((float)analogRead(0) * conversionFactor);
+                telemetry_vals[i] = round((float)analogRead(0) * conversionFactor);
                 break;
             case '1':
-                telen_values[i] = round((float)analogRead(1) * conversionFactor);
+                telemetry_vals[i] = round((float)analogRead(1) * conversionFactor);
                 break;
             case '2':
-                telen_values[i] = round((float)analogRead(2) * conversionFactor);
+                telemetry_vals[i] = round((float)analogRead(2) * conversionFactor);
                 break;
             case '3':
                 // ADC3 is hardwired to Battery via 3:1 voltage divider: make the conversion here
-                telen_values[i] = round((float)analogRead(3) * conversionFactor * 3.0f);
+                telemetry_vals[i] = round((float)analogRead(3) * conversionFactor * 3.0f);
                 break;
             case '4':
-                telen_values[i] = timeSinceBoot_secs;  // seconds since running
+                telemetry_vals[i] = timeSinceBoot_secs;  // seconds since running
                 break;
             case '5':
-                telen_values[i] = GpsTimeToLastFix; 
+                telemetry_vals[i] = GpsTimeToLastFix; 
                 break;
             case '6':
-                telen_values[i] = tx_cnt_0;
+                telemetry_vals[i] = tx_cnt_0;
                 break;
             case '7':
-                telen_values[i] = atoi(tt.sat_count);
+                telemetry_vals[i] = atoi(tt.sat_count);
                 break;
             case '8':
-                telen_values[i] = atoi(tt.hdop);  // hundredths
+                telemetry_vals[i] = atoi(tt.hdop);  // hundredths
                 break;
             case '9': { ; }
-                telen_values[i] = 0;
+                telemetry_vals[i] = 0;
         }
     }
-    // will get sent as TELEN #1 (extended Telemetry) (a third packet in the U4B protocol)
-    TELEN1_val1 = telen_values[0];
+    // will get sent as ExtTele #1 (extended Telemetry) (a third packet in the U4B protocol)
+    ExtTelemetry1_val1 = telemetry_vals[0];
     // max values are 630k and 153k for val and val2
-    TELEN1_val2 = telen_values[1];
-    // will get sent as TELEN #2 (extended Telemetry) (a 4th packet in the U4B protocol)
-    TELEN2_val1 = telen_values[2];
+    ExtTelemetry1_val2 = telemetry_vals[1];
+    // will get sent as ExtTele #2 (extended Telemetry) (a 4th packet in the U4B protocol)
+    ExtTelemetry2_val1 = telemetry_vals[2];
     // max values are 630k and 153k for val and val2
-    TELEN2_val2 = telen_values[3];
-    V1_println(F("process_TELEN_data END"));
+    ExtTelemetry2_val2 = telemetry_vals[3];
+    V1_println(F("process_ExtTele_data END"));
 }
 //****************************************************
 // isFloat tells you the string is float not string
@@ -616,20 +616,20 @@ void telemetrySweepAllForTest(void) {
     doTelemetrySweepInteger(tt.hdop, 3, 0, 999, 1);              // 3 bytes
 
     // not sure of what the range is (max for the integer allowed?)
-    static char telen1_str1[25] = { 0 };
-    static char telen1_str2[25] = { 0 };
-    static char telen2_str1[25] = { 0 };
-    static char telen2_str2[25] = { 0 };
+    static char telemetry1_str1[25] = { 0 };
+    static char telemetry1_str2[25] = { 0 };
+    static char telemetry2_str1[25] = { 0 };
+    static char telemetry2_str2[25] = { 0 };
 
-    doTelemetrySweepInteger(telen1_str1, 24, 0, 999, 1);  // 3 bytes
-    doTelemetrySweepInteger(telen1_str2, 24, 0, 999, 1);  // 3 bytes
-    doTelemetrySweepInteger(telen2_str1, 24, 0, 999, 1);  // 3 bytes
-    doTelemetrySweepInteger(telen2_str2, 24, 0, 999, 1);  // 3 bytes
+    doTelemetrySweepInteger(telemetry1_str1, 24, 0, 999, 1);  // 3 bytes
+    doTelemetrySweepInteger(telemetry1_str2, 24, 0, 999, 1);  // 3 bytes
+    doTelemetrySweepInteger(telemetry2_str1, 24, 0, 999, 1);  // 3 bytes
+    doTelemetrySweepInteger(telemetry2_str2, 24, 0, 999, 1);  // 3 bytes
 
-    tt.TELEN1_val1 = atoi(telen1_str1);  // int
-    tt.TELEN1_val2 = atoi(telen1_str2);  // int
-    tt.TELEN2_val1 = atoi(telen2_str1);  // int
-    tt.TELEN2_val2 = atoi(telen2_str2);  // int
+    tt.ExtTelemetry1_val1 = atoi(telemetry1_str1);  // int
+    tt.ExtTelemetry1_val2 = atoi(telemetry1_str2);  // int
+    tt.ExtTelemetry2_val1 = atoi(telemetry2_str1);  // int
+    tt.ExtTelemetry2_val2 = atoi(telemetry2_str2);  // int
 
     V1_printf("TESTMODE tt.course: %s" EOL, tt.course);
     V1_printf("TESTMODE tt.speed: %s" EOL, tt.speed);
@@ -643,10 +643,10 @@ void telemetrySweepAllForTest(void) {
     V1_printf("TESTMODE tt.sat_count: %s" EOL, tt.sat_count);
     V1_printf("TESTMODE tt.hdop: %s" EOL, tt.hdop);
 
-    V1_printf("TESTMODE tt.TELEN1_val1: %x" EOL, tt.TELEN1_val1);
-    V1_printf("TESTMODE tt.TELEN1_val2: %x" EOL, tt.TELEN1_val2);
-    V1_printf("TESTMODE tt.TELEN2_val1: %x" EOL, tt.TELEN2_val1);
-    V1_printf("TESTMODE tt.TELEN2_val2: %x" EOL, tt.TELEN2_val2);
+    V1_printf("TESTMODE tt.ExtTelemetry1_val1: %x" EOL, tt.ExtTelemetry1_val1);
+    V1_printf("TESTMODE tt.ExtTelemetry1_val2: %x" EOL, tt.ExtTelemetry1_val2);
+    V1_printf("TESTMODE tt.ExtTelemetry2_val1: %x" EOL, tt.ExtTelemetry2_val1);
+    V1_printf("TESTMODE tt.ExtTelemetry2_val2: %x" EOL, tt.ExtTelemetry2_val2);
 
     V1_println(F("telemetrySweepAllForTest END"));
 }
