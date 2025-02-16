@@ -2113,7 +2113,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
     // static int EXTRA_DELAY_AFTER_PROCEED = 700; // milliseconds
     static int EXTRA_DELAY_AFTER_PROCEED; 
     // was 850, both
-    if (USE_SIM65M) EXTRA_DELAY_AFTER_PROCEED = 850;  // milliseconds
+    if (USE_SIM65M) EXTRA_DELAY_AFTER_PROCEED = 900;  // milliseconds
     else EXTRA_DELAY_AFTER_PROCEED = 800;
 
     if (EXTRA_DELAY_AFTER_PROCEED < 0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {

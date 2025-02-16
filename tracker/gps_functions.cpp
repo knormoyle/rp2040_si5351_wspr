@@ -465,7 +465,6 @@ void setGnssOn_SIM65M(void) {
     if (false) {
         // PAIR_GET_SETTING
         Serial2.print("$PAIR021*39" CR LF);
-        // Serial2.flush();
         nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
     }
 
@@ -479,9 +478,8 @@ void setGnssOn_SIM65M(void) {
     // PAIR_GNSS_SUBSYS_POWER_ON
     // in case we changed the default config to powered off
     Serial2.print("$PAIR002*38" CR LF);
-    Serial2.flush();
+    // Serial2.flush();
     nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
-
     sleep_ms(2000);
     V1_println(F(EOL "setGnsOn_SIM65M END"));
 }
@@ -669,7 +667,6 @@ void setGpsBroadcast(void) {
         // spec has more/new detail. see below
         // FIX! was I still getting GNZDA and GPTXT ANTENNAOPEN with this?
         strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
-
         Serial2.print(nmeaSentence);
         Serial2.flush();
         busy_wait_us(2000);
@@ -1128,6 +1125,7 @@ void setGpsBaud(int desiredBaud) {
     // get rid of anything still in the cpu output buffer
     Serial2.flush();
     busy_wait_ms(1000);
+
     Serial2.print(nmeaBaudSentence);
     Serial2.flush();
     // have to wait for the sentence to get out and complete at the GPS
@@ -1919,7 +1917,7 @@ void GpsON(bool GpsColdReset) {
                 }
             }
             Serial2.flush();
-            gpsSleepForMillis(1000, false);
+            busy_wait_ms(1000);
         }
     }
 
@@ -2480,7 +2478,7 @@ void checkUpdateTimeFromGps() {
             // print the modulo 1 sec also, if the last PPS was a while ago? (
             // gps being reset or ??
             fix_age = gps.time.age();
-            V1_printf("INFO: setTime at elapsed_millis3 %lu %lu from lastPPS",
+            V1_printf("INFO: setTime at elapsed_millis3 %lu %lu from last PPS",
                 elapsed_millis3, elapsed_millis3 % 1000);
             V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
         }
@@ -2495,11 +2493,14 @@ void checkUpdateTimeFromGps() {
         // before TinyGPS can time.commit()
         // with effective char rates of around 1ms per char
         // we get these kind of skews from the gps chip? (149ms?)
-        // INFO: setTime at elapsed_millis3 149 149 from lastPPS fix_age 2 forceUpdate 1
-        // so if we backup 129 to 149ms we should be about aligned?
+        // INFO: setTime at elapsed_millis3 149 149 from last PPS fix_age 2 forceUpdate 1
+        // so if we backup 108 to 149ms we should be about aligned?
         // does it matter if we take an average or the min or the max?
-        if (USE_SIM65M) adjustTimeMillis(-140);
-        else adjustTimeMillis(-140);
+        // don't back it up too far. that will take it into the prior second
+        // better to push the EXTRA delay for wspr alignment more
+        
+        if (USE_SIM65M) adjustTimeMillis(-100);
+        else adjustTimeMillis(-100);
 
         V1_print(F("GOOD: system setTime() with"));
         V1_printf(" gps_hour %u gps_minute %u gps_second %u",
