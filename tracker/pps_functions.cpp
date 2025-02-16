@@ -159,7 +159,8 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
     if (events & GPIO_IRQ_EDGE_RISE) {
         uint32_t current_millis = millis();
         uint32_t current_micros = micros();
-        static bool was_GpsIsOn;
+        static bool was_GpsIsOn = false;
+        uint32_t printed = 0; // stop after printing 200
         
         // no modification or reporting if -1
         if (PPS_rise_active) {
@@ -175,7 +176,8 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
                 // still won't cover all issues for PPS validity over time?
                 // FIX! should have some bounds for error for 1 sec?
                 // just look for abs() > 1 to reduce printing
-                if (false && abs(elapsed_micros_error) > 1 && GpsIsOn() && was_GpsIsOn)  {
+                if ((printed < 200) && abs(elapsed_micros_error) > 1 && GpsIsOn() && was_GpsIsOn)  {
+                    printed += 1;
                     V1_printf("WARN: PPS edge to edge micros %lu", elapsed_micros);
                     V1_printf(" error %d ", elapsed_micros_error);
                     printSystemDateTime();
