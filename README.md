@@ -55,8 +55,9 @@ Note LPF has been removed. Capacitive coupling for full differential (antiphase)
 Hans G0UPL did a review of m5351m in 2021. Other reviews exist (Google). I mention that only because that part is in the current BOM, but a si5351a could just be swapped in, if desired. The part seems good, potentially less phase noise?
 [ms5351m review](https://qrp-labs.com/synth/ms5351m.html)
 
-<img src="https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/blob/main/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png" height="500"/>
+<img src="https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/pcb/tracker/v0.4_kbn/corrected_placement_jlcpcb.png" height="500"/>
 
+[schematic](https://github.com/knormoyle/rp2040_si5351_wspr/blob/main/tracker/pcb/tracker/v0.4_kbn/SCH_Schematic1_2023-09-11.pdf)
 
 |   |sf-hab.org RP2040 based Tracker gen1|
 |---|---|
