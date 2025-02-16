@@ -5,9 +5,16 @@ The shorthand name for this pcb is AG6NS 0.4 pcb. The bom and cpl files (BOM* an
 
 [sf-hab.org RP2040 based PicoBalloon Tracker PCB generation 1](https://github.com/kaduhi/sf-hab_rp2040_picoballoon_tracker_pcb_gen1) is an open-hardware project. Kazu AG6NS released the pcb schematics/gerber etc and his port of LightAPRS firmware as open source. Thank you Kazu. Note there were 4 revisions of his work. I forked 0.4 of his pcb work.
 
-The PCB gerber/boms==/placement files  for this firmware is currently at [AD6Z tracker](https://github.com/knormoyle/sf-hab_rp2040_picoballoon_tracker_pcb_gen1/tree/main/pcb/tracker/v0.4_kbn)
-(v0.4_kbn dir). 
-There are multiple BOM and CPL files that work for jlcpcb.com there. Nothing special for using and ordering from jlcpcb.com. Pretty much just like ordering traquito pcbs, if you're familiar with that. Economic assembly works, so stays cheap.
+The PCB gerber/boms/placement files  for this firmware is currently at [tracker pcb v0.4_kbn](https://github.com/knormoyle/rp2040_si5351_wspr/tree/main/tracker/pcb/tracker/v0.4_kbn)
+
+There are multiple BOM and CPL files that work for jlcpcb.com there. If you want a ATGM336H gps chip, use these files:
+```
+ BOM_Board1_PCB1_2023-09-11_atgm336h-5n31.xlsx  
+ PickAndPlace_PCB1_2023-09-11_atgm336h-5n31.xlsx  
+ Gerber_PCB1_2023-09-11.zip
+```
+
+Nothing special for using and ordering from jlcpcb.com. Pretty much just like ordering traquito pcbs, if you're familiar with that. Economic assembly works, so stays cheap.
 
 Contact me by email to find out which you should use if interested in building some at jlcpcb.com. I left the original AG6NS bom in there for comparison, but don't use that one!
 
@@ -24,14 +31,14 @@ Single statement blocks can exclude braces.
 See style forms at https://en.wikipedia.org/wiki/Indentation_style
 
 Linted with Google's cpplint. using Google's C++ Style guide, allowing 100 char lines
-````
+```
    cpplint --linelength=100
-````
+```
 
 vim users can use this in .vimrc to good effect:
-````
+```
    set tabstop=4 softtabstop=0 expandtab shiftwidth=4 smarttab
-````
+```
 
 ## Costs
 I could post invoices from some recent orders from jlcpcb.com. Cheaper with jlcpcb.com discounts and larger quantities. But even quantity 5 (the minimum) is cheap. Shouldn't be more than $10-$12 a board. (no bmp280, atgm336n gps). Shipping costs are $20 if you want fast shipping, but only $1.52 !! if you are willing to wait a bit for Global Standard Direct Line shipping.
@@ -189,10 +196,9 @@ drwxr-xr-x 5 kevin kevin 4096 Feb 13 22:45 WsprEncoded
 ```
 Then you get to where you use File to open the tracker dir of my repo, and open the tracker.ino
 this is where my copy of the repo is, and the files
-one tracker.ino
-all the *.cpp
-all the *.h
-
+one tracker.ino  
+all the *.cpp  
+all the *.h  
 ```
 kevin@pc8c:~/rp2040_si5351_wspr/tracker$ 
 -rw-rw-r-- 1 kevin kevin   1627 Nov 16 04:43 freq_count_functions.cpp
