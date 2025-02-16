@@ -1348,8 +1348,7 @@ void loop1() {
 
             // why doesn't this year check get included in determining valid gps fix?
             // if gps time is valid, we constantly (each NMEA burst grab)
-            // update RP2040 time from gps time in gps_functions.cpp updateGpsDataAndTime()
-            // so don't here. Only update LED state here, though
+
             // it is common for gps chips to send out 1/1/2080 dates when invalid
             // I see 2080-01-01 2080-01-07 in SIM65M. 2000-00-00 ? in ATGM336
             // (is month/day wrong?)
@@ -1929,8 +1928,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
 //***********************************************************
 void sleepSeconds(int secs) {
-    // this doesn't have an early out (although the updateGpsDataAndTime() can
-    // so the delay will be >= secs
+    // this doesn't have an early out 
+    // although the updateGpsDataAndTime() can so the delay will be >= secs
     V1_println(F("sleepSeconds START"));
     V1_flush();
     uint32_t start_millis = millis();
@@ -2108,20 +2107,22 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
     // (symbol time: is duration for 1 wspr symbol tx 8192/12000 or equivalently 256/375)
 
     //******************
-    // supposed to be 1 sec in. This is basically
-    // 1 sec - (gps to nmea to systime to code here, delay?)
-    // static int EXTRA_DELAY_AFTER_PROCEED = 700; // milliseconds
+    // experiment. different way to cause delay to align
+    // supposed to be 1 sec in.
     static int EXTRA_DELAY_AFTER_PROCEED; 
-    // was 850, both
-    if (USE_SIM65M) EXTRA_DELAY_AFTER_PROCEED = 900;  // milliseconds
-    else EXTRA_DELAY_AFTER_PROCEED = 800;
+    // 900 gave 0.2 2/16/25
+    if (USE_SIM65M) EXTRA_DELAY_AFTER_PROCEED = 700;  // milliseconds
+    // 800 gave 0.2 2/16/25
+    // 750 gave 0.1 2/16/25
 
+    else EXTRA_DELAY_AFTER_PROCEED = 700;
     if (EXTRA_DELAY_AFTER_PROCEED < 0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
             EXTRA_DELAY_AFTER_PROCEED);
         EXTRA_DELAY_AFTER_PROCEED = 0;
     }
 
+    // experiment. different way to cause delay to align
     uint8_t PROCEEDS_TO_SYNC = 0;
     for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
         // we can sleep a little less than the symbol time,
@@ -2138,9 +2139,34 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
         while (!PROCEED) tight_loop_contents();
         PROCEED = false;  // ? to 1 symbol time
     }
-    // hmm. not updating led during this
-    // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
-    busy_wait_ms(EXTRA_DELAY_AFTER_PROCEED);
+    //******************
+    // instead of adding delay, just align to 1 sec? since
+    // code delay < 1 sec and we just aligned to 0 sec, this should be best align to 1 sec in?
+    bool ALIGN_TO_1SEC_IN_MODE = true;
+
+    if (ALIGN_TO_1SEC_IN_MODE) {
+        // will be looping here no more than 1 sec
+        // second should still be zero
+        int alignSecond = second();
+        uint32_t alignLoopCnt = 0;
+        if (alignSecond != 0) {
+            V1_printf("ERROR: 1-sec-in alignment started with non-zero second() %d" EOL, alignSecond);
+        }
+        // just in case, break out if it loops more than 100 times
+        while(alignSecond == 0) {
+            alignLoopCnt += 1;
+            if (alignLoopCnt > 101) {
+                V1_print(F("ERROR: 1-sec-in alignment looped > 101 times" EOL));
+                break;
+            }
+            busy_wait_ms(10);
+            alignSecond = second();
+        }
+    } else {
+        // hmm. not updating led during this
+        // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
+        busy_wait_ms(EXTRA_DELAY_AFTER_PROCEED);
+    }
 
     //******************
     Watchdog.reset();

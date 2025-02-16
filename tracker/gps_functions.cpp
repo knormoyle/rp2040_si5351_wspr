@@ -104,7 +104,6 @@ extern bool PPS_rise_active;
 #include "tusb.h"
 
 // in libraries: wget https://github.com/PaulStoffregen/Time/archive/refs/heads/master.zip
-// for setTime()
 #include <TimeLib.h>  // https://github.com/PaulStoffregen/Time
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
@@ -1320,8 +1319,10 @@ bool GpsFullColdReset(void) {
     // the GPS chip has a non-working baud rate?
     GpsIsOn_state = false;
     PPS_rise_active = false;
-    PPS_rise_millis = 0;
-    PPS_rise_micros = 0;
+    // I suppose 0 is legal wraparound for the uint32_t values
+    // so no sense forcing these to 0
+    // PPS_rise_millis = 0;
+    // PPS_rise_micros = 0;
 
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
@@ -1636,8 +1637,6 @@ bool GpsFullColdReset(void) {
         GpsIsOn_state = true;
         PPS_rise_active = true;
     }
-    PPS_rise_millis = 0;
-    PPS_rise_micros = 0;
 
     uint32_t duration_millis = millis() - start_millis;
     V1_print(F("GpsFullColdReset END"));
@@ -1650,8 +1649,6 @@ bool GpsFullColdReset(void) {
 bool GpsWarmReset(void) {
     GpsIsOn_state = false;
     PPS_rise_active = false;
-    PPS_rise_millis = 0;
-    PPS_rise_micros = 0;
     // FIX! SIM65M spec says when the power supply is off, settings
     // are reset to factory config and receiver performs a cold start
     // on next power up
@@ -1769,8 +1766,6 @@ bool GpsWarmReset(void) {
         GpsIsOn_state = true;
         PPS_rise_active = true;
     }
-    PPS_rise_millis = 0;
-    PPS_rise_micros = 0;
     GpsStartTime = get_absolute_time();  // usecs
     return sentencesFound;
 }
@@ -1993,8 +1988,6 @@ void GpsOFF() {
     GpsIsOn_state = false;
     GpsStartTime = 0;
     PPS_rise_active = false;
-    PPS_rise_millis = 0;
-    PPS_rise_micros = 0;
 
     V1_printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
     digitalWrite(GpsPwr, HIGH);
@@ -2102,6 +2095,10 @@ uint32_t updateGpsDataAndTime(int ms) {
     // don't drop it. (the '$' start of sentence draining case above)
     current_millis = millis();
     // works if ms is 0
+    // the time of the last $..for setting system time to the secs in the nmea sentence 
+    // with less variation (rather than time at the end of the checksum)
+    uint32_t dollar_millis = 0;
+    uint32_t dollarStar_millis = 0; // double buffering to guarantee no race condition with '$'
     while ((current_millis - entry_millis) < (uint64_t) ms) {
         while (charsAvailable > 0) {
             // we count all chars, even CR LF etc
@@ -2120,6 +2117,7 @@ uint32_t updateGpsDataAndTime(int ms) {
                 case '$':  
                     aligned = true; 
                     sentenceStartCnt++; 
+                    dollar_millis = millis();
                     break;
                 case '\r': aligned = true; printable = false; crlf = true; break;
                 case '\n': aligned = true; printable = false; crlf = true; break;
@@ -2128,6 +2126,7 @@ uint32_t updateGpsDataAndTime(int ms) {
                     // clear time updated state, right before any TinyGPS term/commit event
                     // always need checksum before a commit event
                     gps.time.updated = false;
+                    dollarStar_millis = dollar_millis;
                     break;
                 case '\0': printable = false; break;
                 case ' ':  printable = false; break;
@@ -2148,7 +2147,9 @@ uint32_t updateGpsDataAndTime(int ms) {
             // it expects the CR LF between sentences?
             if (aligned) {
                 gps.encode(incomingChar);
-                if (gps.time.updated) checkUpdateTimeFromGps();
+                // updated has to transition before we get the next dollar_millis??
+                // we could save dollar_millis in dollarStar_millis, to make sure no race condition
+                if (gps.time.updated) checkUpdateTimeFromGps(dollarStar_millis);
             }
 
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
@@ -2175,7 +2176,7 @@ uint32_t updateGpsDataAndTime(int ms) {
 
         // keep as close as possible to the NMEA sentence arrival?
         // I suppose we'll see gps.time.updated every time?
-        if (gps.time.isUpdated()) checkUpdateTimeFromGps();
+        if (gps.time.updated) checkUpdateTimeFromGps(dollarStar_millis);
 
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
@@ -2266,7 +2267,7 @@ uint32_t updateGpsDataAndTime(int ms) {
 }
 
 //************************************************
-void checkUpdateTimeFromGps() {
+void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     static bool forceUpdate = true;
     static uint64_t lastUpdate_millis = 0;
     static uint64_t lastCheck_millis = 0;
@@ -2347,7 +2348,7 @@ void checkUpdateTimeFromGps() {
 
     //*****************************
     uint32_t elapsed_millis3;
-    if (PPS_rise_active && PPS_rise_millis > 0) {
+    if (PPS_rise_active) {
         elapsed_millis3 = millis() - PPS_rise_millis;
         // should be consistently 100 to 350 millis from PPS edge 
         // FIX! atgm336 edge is 1-> 0
@@ -2400,10 +2401,6 @@ void checkUpdateTimeFromGps() {
     }
 
     //******************************
-    // void setTime(int hr,int min,int sec,int dy, int mnth, int yr){
-    // year can be given as full four digit year or two digts (2010 or 10 for 2010);
-    // it is converted to years since 1970
-
     // validate the ranges and not update if invalid!!
     // all uint8_t so don't have to check negatives
     bool gpsDateTimeBad = false;
@@ -2468,11 +2465,20 @@ void checkUpdateTimeFromGps() {
             !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
         }
 
-        setTime(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year);
-        // last millis() when we setTime()
-        setTime_millis = millis(); 
+        bool USE_DOLLAR_TIME_MODE = true;
+        // year can be given as full four digit year or two digts (2010 or 10 for 2010);
+        // it is converted to years since 1970
 
-        if (PPS_rise_active && PPS_rise_millis > 0) {
+        if (USE_DOLLAR_TIME_MODE) 
+            setTime_millis = dollarStar_millis;
+        else 
+            setTime_millis = millis(); 
+
+        // CUSTOM: pass a millis to setTime!!
+        // setTime_millis should always be before or = current millis()
+        setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
+
+        if (PPS_rise_active) {
             // we should be using this at least once per rollover?
             elapsed_millis3 = setTime_millis - PPS_rise_millis;
             // print the modulo 1 sec also, if the last PPS was a while ago? (
@@ -2481,6 +2487,7 @@ void checkUpdateTimeFromGps() {
             V1_printf("INFO: setTime at elapsed_millis3 %lu %lu from last PPS",
                 elapsed_millis3, elapsed_millis3 % 1000);
             V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
+            
         }
 
         // pushes back the prevMillis value in Time, that was captured by setTime
@@ -2499,8 +2506,15 @@ void checkUpdateTimeFromGps() {
         // don't back it up too far. that will take it into the prior second
         // better to push the EXTRA delay for wspr alignment more
         
-        if (USE_SIM65M) adjustTimeMillis(-100);
-        else adjustTimeMillis(-100);
+        if (USE_DOLLAR_TIME_MODE) {
+            // adjust less with USE_DOLLAR_TIME_MODE because it's time at 
+            // beginning of NMEA sentence. closer to PPS edge (real time)
+            if (USE_SIM65M) adjustTimeMillis(-60);
+            else adjustTimeMillis(-60);
+        } else {
+            if (USE_SIM65M) adjustTimeMillis(-100);
+            else adjustTimeMillis(-100);
+        }
 
         V1_print(F("GOOD: system setTime() with"));
         V1_printf(" gps_hour %u gps_minute %u gps_second %u",
