@@ -2274,6 +2274,9 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     static uint32_t timeUpdateCnt = 0;
     uint32_t fix_age_entry = gps.time.age();
 
+    // positive skew. make negative when adjusting millis time.
+    static uint32_t bestGuessSkewFromPPS = 0;
+
     // UPDATE: since the first (GNGGA for ATGM336H) has the least difference
     // in time from being sent from GPS, it's most accurate. 
     // The burst takes about 1 sec so the last (GNGST?) might be delayed by 1 sec 
@@ -2348,19 +2351,22 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
 
     //*****************************
     uint32_t elapsed_millis3;
+    uint32_t elapsed_millis3_modulo;
     if (PPS_rise_active) {
+        // we're not actually going to use current millis() to set system time
+        // but this is an interesting check
         elapsed_millis3 = millis() - PPS_rise_millis;
+        elapsed_millis3_modulo = elapsed_millis3 % 1000;
         // should be consistently 100 to 350 millis from PPS edge 
         // FIX! atgm336 edge is 1-> 0
         // (% 1000 because reset might affect edge?)
         bool tooFar = false;
-        elapsed_millis3 = elapsed_millis3 % 1000;
-        if (USE_SIM65M) tooFar = elapsed_millis3 < 150 || elapsed_millis3 > 500;
+        if (USE_SIM65M) tooFar = elapsed_millis3_modulo < 150 || elapsed_millis3_modulo > 500;
         // have seen 92 min! must be small number of chars in CNGGA sentence
-        else tooFar = elapsed_millis3 < 90 || elapsed_millis3 > 500;
+        else tooFar = elapsed_millis3_modulo < 90 || elapsed_millis3_modulo > 500;
         if (tooFar) {
-            StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu fix_age %lu forceUpdate %u" EOL, 
-                elapsed_millis3, fix_age, forceUpdate);
+            StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu %lu fix_age %lu forceUpdate %u" EOL, 
+                elapsed_millis3, elapsed_millis3_modulo, fix_age, forceUpdate);
         }
         // FIX! problems if we try to restrict based on PPS alignment?
         // forceUpdate: don't worry about how close we are to PPS
@@ -2481,13 +2487,24 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         if (PPS_rise_active) {
             // we should be using this at least once per rollover?
             elapsed_millis3 = setTime_millis - PPS_rise_millis;
+            // may have missed a PPS_rise_millis update because gps off?
+            // modulo 1 sec will handle that issue well
+            elapsed_millis3_modulo = elapsed_millis3 % 1000;
             // print the modulo 1 sec also, if the last PPS was a while ago? (
             // gps being reset or ??
             fix_age = gps.time.age();
             V1_printf("INFO: setTime at elapsed_millis3 %lu %lu from last PPS",
-                elapsed_millis3, elapsed_millis3 % 1000);
+                elapsed_millis3, elapsed_millis3_modulo);
             V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
-            
+
+            // range check it, before using it next time
+            if (elapsed_millis3_modulo > 20 && elapsed_millis3_modulo < 180) {
+                bestGuessSkewFromPPS = elapsed_millis3_modulo;
+            } else {
+                // fallback to static from reporting over time, values
+                if (USE_SIM65M) bestGuessSkewFromPPS = 80;
+                else bestGuessSkewFromPPS = 60;
+            }
         }
 
         // pushes back the prevMillis value in Time, that was captured by setTime
@@ -2509,8 +2526,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         if (USE_DOLLAR_TIME_MODE) {
             // adjust less with USE_DOLLAR_TIME_MODE because it's time at 
             // beginning of NMEA sentence. closer to PPS edge (real time)
-            if (USE_SIM65M) adjustTimeMillis(-60);
-            else adjustTimeMillis(-60);
+            adjustTimeMillis(-1 * bestGuessSkewFromPPS);
         } else {
             if (USE_SIM65M) adjustTimeMillis(-100);
             else adjustTimeMillis(-100);
