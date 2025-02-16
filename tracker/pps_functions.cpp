@@ -160,7 +160,7 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
         uint32_t current_millis = millis();
         uint32_t current_micros = micros();
         static bool was_GpsIsOn = false;
-        uint32_t printed = 0; // stop after printing 200
+        static uint32_t printed = 0; // stop after printing 200
         
         // no modification or reporting if -1
         if (PPS_rise_active) {
