@@ -1330,7 +1330,6 @@ bool GpsFullColdReset(void) {
     uint32_t start_millis = millis();
     Watchdog.reset();
 
-    GpsStartTime = get_absolute_time();  // usecs
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
 
@@ -1394,6 +1393,7 @@ bool GpsFullColdReset(void) {
     // seems like the gps backs up on the serial data?
 
     // we still have usb pll on, and default clock frequency at this point?
+    GpsStartTime = get_absolute_time();  // usecs
     if (PWM_GPS_POWER_ON_MODE) {
         // this is probably at least 2 secs. let's measure
         uint32_t start_millis2 = millis();

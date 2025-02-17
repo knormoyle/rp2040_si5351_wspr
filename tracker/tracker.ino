@@ -1280,9 +1280,6 @@ void loop1() {
     // FIX! why are we turning off.
     // Is this just a double-check in case of bugs?
     vfo_turn_off();
-
-    // Gps may already be on
-    if (!GpsIsOn()) GpsTimeToLastFix = 0;
     GpsON(false);  // no full cold reset
 
     // is our solar/battery good?
@@ -1476,14 +1473,7 @@ void loop1() {
             // Should this is also cleared when we turn gps off? no?
             // GpsStartTime is set by gps_functions.cpp
 
-            if (GpsStartTime == 0) {
-                // FIX! odd case. Did the GPS get turned off,
-                // but TinyGPS++ says it still has valid fix?
-                // until I figure out why, set GpsTimeToLastFix to 0 for this case
-                V1_printf("loopCnt %" PRIu64, loopCnt);
-                V1_print(F(" odd case: GpsTimeToLastFix likely wrong, GpsStartTime was 0"));
-                GpsTimeToLastFix = 0;
-            } else if (GpsTimeToLastFix == 0) {  // don't set again until we clear it
+            if (GpsTimeToLastFix == 0) {  // don't set again until we clear it
                 GpsTimeToLastFix = (
                     absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
                 V1_printf("loopCnt %" PRIu64, loopCnt);
@@ -1919,9 +1909,8 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     // Now: don't turn GPS back on until beginning of loop
-    // then we reset the fix time variables also (on the off -> on transition))
-    // GpsON(false);  // no gps cold reset
-
+    // reset the fix time variables also (on the off -> on transition))
+    GpsTimeToLastFix = 0;
     V1_print(F("alignAndDoAllSequentialTX END" EOL));
     return 0;  // success
 }
@@ -2064,26 +2053,7 @@ bool alignMinute(int offset) {
 // if not in the minute before starting minute,
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3, or 4 for cw
-
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtEnd) {
-    // currently don't do this, but good strategy?
-    // Instead of delaying in for 1 sec: we can wait for PROCEED here.
-    // If we wait for 2 PROCEEDs, it's okay if the first is short
-    // because of unknown PWM counter initial state?
-
-    // Two PROCEED delays kind of get us to the 1-1.5secs in
-    // target..so okay?
-    // Then we're going more closely interrupt to interrupt right from symbol[0]
-    // each of these should just be symbol time delay
-    // there will be two extra interrupts in our interrupt cnt in the handler?
-
-    // 0.68266666... per symbol
-    // so 2x -> 1.3653333..maybe a little shorter due to code delays
-    // should we do one PROCEED plus a fixed delay?
-    Watchdog.reset();
-
-    //*******************************
-    // Note we print this after the extra PROCEED delay(s). (or any additional fixed delay)
     V1_print(F(EOL "sendWspr START now: "));
     printSystemDateTime();
     V1_print(F(EOL));
@@ -2093,82 +2063,7 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
         // remember, it's usec running time, it's not aligned to the gps time.
         StampPrintf("sendWspr START now: minute: %d second: %d" EOL, minute(), second());
     }
-    //*******************************
-    // earliest time to start is some 'small' time after the 2 minute 0 sec real gps time.
-    // code delays inherent in 'aligned to time' PWM interrupts and my resulting WSPR tx.
 
-    // Assuming both gps/tracker and pc are time-synchronized
-    // With no extra tx delay: wsjt-x/sdr says DT = -0.3 ..
-    // I guess telling  me I start that much before 1 sec in?
-
-    // If I wait additional "symbol time" delays before tx
-    // (most precise running timer I have, interrupt driven)
-    // Each additional "symbol time" delay is 0.682666... seconds
-    // (symbol time: is duration for 1 wspr symbol tx 8192/12000 or equivalently 256/375)
-
-    //******************
-    // experiment. different way to cause delay to align
-    // supposed to be 1 sec in.
-    static int EXTRA_DELAY_AFTER_PROCEED; 
-    // 900 gave 0.2 2/16/25
-    if (USE_SIM65M) EXTRA_DELAY_AFTER_PROCEED = 700;  // milliseconds
-    // 800 gave 0.2 2/16/25
-    // 750 gave 0.1 2/16/25
-
-    else EXTRA_DELAY_AFTER_PROCEED = 700;
-    if (EXTRA_DELAY_AFTER_PROCEED < 0 || EXTRA_DELAY_AFTER_PROCEED > 1000) {
-        V1_printf("ERROR: bad EXTRA_DELAY_AFTER_PROCEED %d.. setting to 0" EOL,
-            EXTRA_DELAY_AFTER_PROCEED);
-        EXTRA_DELAY_AFTER_PROCEED = 0;
-    }
-
-    // experiment. different way to cause delay to align
-    uint8_t PROCEEDS_TO_SYNC = 0;
-    for (int i = 0; i < PROCEEDS_TO_SYNC; i++) {
-        // we can sleep a little less than the symbol time,
-        // after a PROCEED false -> true transition
-        // intersymbol sleep: go as big as we can go safely and not be too big. save power!
-        // we need to wake up at intervals though to do the led
-        // otherwise we get wrong timing and 3-4 short look like 3-4 long!
-        // the 3-4 long are for config/error cases!
-        // 660 ms had worked here. but seems like 645 is better
-        // to match the real symbol PROCEED 'coarse, then very-fine' alignment and rationale
-        // function wakes to update led appropriately
-        // resets watchdog too?
-        wsprSleepForMillis(645);
-        while (!PROCEED) tight_loop_contents();
-        PROCEED = false;  // ? to 1 symbol time
-    }
-    //******************
-    // instead of adding delay, just align to 1 sec? since
-    // code delay < 1 sec and we just aligned to 0 sec, this should be best align to 1 sec in?
-    bool ALIGN_TO_1SEC_IN_MODE = true;
-
-    if (ALIGN_TO_1SEC_IN_MODE) {
-        // will be looping here no more than 1 sec
-        // second should still be zero
-        int alignSecond = second();
-        uint32_t alignLoopCnt = 0;
-        if (alignSecond != 0) {
-            V1_printf("ERROR: 1-sec-in alignment started with non-zero second() %d" EOL, alignSecond);
-        }
-        // just in case, break out if it loops more than 100 times
-        while(alignSecond == 0) {
-            alignLoopCnt += 1;
-            if (alignLoopCnt > 101) {
-                V1_print(F("ERROR: 1-sec-in alignment looped > 101 times" EOL));
-                break;
-            }
-            busy_wait_ms(10);
-            alignSecond = second();
-        }
-    } else {
-        // hmm. not updating led during this
-        // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
-        busy_wait_ms(EXTRA_DELAY_AFTER_PROCEED);
-    }
-
-    //******************
     Watchdog.reset();
     uint8_t symbol_count = WSPR_SYMBOL_COUNT;
     uint8_t i;
@@ -2197,10 +2092,8 @@ void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtE
         // HACK to see the symbol
         // V2_printf("%d", symbol);
 
-        //****************************************************
         startSymbolFreq(hf_freq, symbol, false, false);  // symbol 0 to 3, just change pll_num
 
-        //****************************************************
         // Don't make StampPrintf log buffer bigger to try to save more
         // deferred printing during a whole wspr message, to avoid the slowdown
         // effects of printing here.
@@ -2402,17 +2295,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
 
     // make sure the LED is not stuck on during wspr tx
     turnOnLED(false);
-
-    //*****************************************
     Watchdog.reset();
-
-    // PWM_WRAP_CNT is full period value.
-    // -1 before it's set as the wrap top value.
-    PROCEED = false;
-    // we constantly reset this for every wspr message,
-    // so we know the first interrupt is a little ways
-    // out from where we are now, then?
-    setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
 
     // Now align to 1 seconds in?
     // We could adjust this so the wspr starts EXACTLY at 1 sec in or 2 sec in
@@ -2422,6 +2305,56 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // the usecs (or millis() we can read is not aligned to realtime gps time.
     // those are "since program started running"
 
+    // different way to cause delay to align
+    // supposed to be 1 sec in.
+    static int EXTRA_DELAY_AFTER_ZERO_SEC;
+    // 900 gave 0.2 2/16/25
+    if (USE_SIM65M) EXTRA_DELAY_AFTER_ZERO_SEC = 600;  // milliseconds
+    // 800 gave 0.2 2/16/25
+    // 750 gave 0.1 2/16/25
+    else EXTRA_DELAY_AFTER_ZERO_SEC = 600;
+
+    if (EXTRA_DELAY_AFTER_ZERO_SEC < 0 || EXTRA_DELAY_AFTER_ZERO_SEC > 1000) {
+        V1_printf("ERROR: bad EXTRA_DELAY_AFTER_ZERO_SEC %d.. setting to 0" EOL,
+            EXTRA_DELAY_AFTER_ZERO_SEC);
+        EXTRA_DELAY_AFTER_ZERO_SEC = 0;
+    }
+
+    //******************
+    // instead of adding delay, just align to 1 sec? since
+    // code delay < 1 sec and we just aligned to 0 sec, this should be best align to 1 sec in?
+    bool ALIGN_TO_1SEC_IN_MODE = false;
+    if (ALIGN_TO_1SEC_IN_MODE) {
+        // will be looping here no more than 1 sec
+        // second should still be zero
+        int alignSecond = second();
+        uint32_t alignLoopCnt = 0;
+        if (alignSecond != 0) {
+            V1_printf("ERROR: 1-sec-in alignment started with non-zero second() %d" EOL, alignSecond);
+        }
+        // just in case, break out if it loops more than 100 times
+        while(alignSecond == 0) {
+            alignLoopCnt += 1;
+            if (alignLoopCnt > 101) {
+                V1_print(F("ERROR: 1-sec-in alignment looped > 101 times" EOL));
+                break;
+            }
+            busy_wait_ms(10);
+            alignSecond = second();
+        }
+    } else {
+        // hmm. not updating led during this
+        // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
+        busy_wait_ms(EXTRA_DELAY_AFTER_ZERO_SEC);
+    }
+
+    // PWM_WRAP_CNT is full period value.
+    // -1 before it's set as the wrap top value.
+    PROCEED = false;
+    // we constantly reset this for every wspr message,
+    // so we know the first interrupt is a little ways
+    // out from where we are now, then?
+    setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffAtEnd);
     V1_println(F("syncAndSendWSPR END"));
 }
