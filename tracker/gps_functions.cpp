@@ -2458,140 +2458,142 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
             gps_hour, gps_minute, gps_second);
         V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
             gps_day, gps_month, gps_year);
-    } else {
-        // did we flush TinyGPS state out when we turn gps off?
-        if (false) {
-            V1_print(F(EOL));
-            V1_print(F(EOL));
-            bool validA = gps.satellites.isValid() && !GpsInvalidAll;
-            bool validB = gps.hdop.isValid() && !GpsInvalidAll;
-            bool validC = gps.location.isValid() && !GpsInvalidAll;
-            bool validD = gps.altitude.isValid() && !GpsInvalidAll;
-            bool validE = gps.course.isValid() && !GpsInvalidAll;
-            bool validF = gps.speed.isValid() && !GpsInvalidAll;
-            // FIX! don't have GpsInvalidAll in these
-            bool validG = gps.date.isValid();
-            bool validH = gps.time.isValid();
+        // FIX! don't use it? or use it? solar calcs will be wrong if date is wrong
+        if (!forceUpdate) return;
+    } 
 
-            V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
-            !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
-        }
-
-        bool USE_DOLLAR_TIME_MODE = true;
-        // year can be given as full four digit year or two digts (2010 or 10 for 2010);
-        // it is converted to years since 1970
-
-        if (USE_DOLLAR_TIME_MODE) 
-            setTime_millis = dollarStar_millis;
-        else 
-            setTime_millis = millis(); 
-
-        // CUSTOM: pass a millis to setTime!!
-        // setTime_millis should always be before or = current millis()
-        setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
-
-        if (PPS_rise_active) {
-            // we should be using this at least once per rollover?
-            elapsed_millis3 = setTime_millis - PPS_rise_millis;
-            // may have missed a PPS_rise_millis update because gps off?
-            // modulo 1 sec will handle that issue well
-            elapsed_millis3_modulo = elapsed_millis3 % 1000;
-            // print the modulo 1 sec also, if the last PPS was a while ago? (
-            // gps being reset or ??
-            fix_age = gps.time.age();
-            V1_printf("INFO: setTime at elapsed_millis3 %lu %lu from last PPS",
-                elapsed_millis3, elapsed_millis3_modulo);
-            V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
-
-            // range check it, before using it next time
-            if (elapsed_millis3_modulo > 20 && elapsed_millis3_modulo < 180) {
-                bestGuessSkewFromPPS = elapsed_millis3_modulo;
-            } else {
-                // fallback to static from reporting over time, values
-                if (USE_SIM65M) bestGuessSkewFromPPS = 80;
-                else bestGuessSkewFromPPS = 60;
-            }
-        }
-
-        // pushes back the prevMillis value in Time, that was captured by setTime
-        // to align more with with the gps chip sent out the time NMEA sentence
-        // probably have to do this closely after setTime
-
-        // FIX! will this work right with positive numbers? No? (get abort)
-        // maybe we can only use 0 or negative
-        // we have to wait for the whole GNGGA sentence, to checksum, 
-        // before TinyGPS can time.commit()
-        // with effective char rates of around 1ms per char
-        // we get these kind of skews from the gps chip? (149ms?)
-        // INFO: setTime at elapsed_millis3 149 149 from last PPS fix_age 2 forceUpdate 1
-        // so if we backup 108 to 149ms we should be about aligned?
-        // does it matter if we take an average or the min or the max?
-        // don't back it up too far. that will take it into the prior second
-        // better to push the EXTRA delay for wspr alignment more
-        
-        if (USE_DOLLAR_TIME_MODE) {
-            // adjust less with USE_DOLLAR_TIME_MODE because it's time at 
-            // beginning of NMEA sentence. closer to PPS edge (real time)
-            adjustTimeMillis(-1 * bestGuessSkewFromPPS);
-        } else {
-            if (USE_SIM65M) adjustTimeMillis(-100);
-            else adjustTimeMillis(-100);
-        }
-
-        V1_print(F("GOOD: system setTime() with"));
-        V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-            gps_hour, gps_minute, gps_second);
-        V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
-            gps_day, gps_month, gps_year);
-
-        V1_print(F("system time before: (should be gps time):"));
-        V1_printf(" hour %d minute %d second %d", hh, mm, ss);
-        V1_printf(" day %d month %d year %d", d, m, y);
-        V1_printf(" forceUpdate %u now: ", forceUpdate);
-        // this will be current system time
-        printSystemDateTime();
+    // did we flush TinyGPS state out when we turn gps off?
+    if (false) {
         V1_print(F(EOL));
+        V1_print(F(EOL));
+        bool validA = gps.satellites.isValid() && !GpsInvalidAll;
+        bool validB = gps.hdop.isValid() && !GpsInvalidAll;
+        bool validC = gps.location.isValid() && !GpsInvalidAll;
+        bool validD = gps.altitude.isValid() && !GpsInvalidAll;
+        bool validE = gps.course.isValid() && !GpsInvalidAll;
+        bool validF = gps.speed.isValid() && !GpsInvalidAll;
+        // FIX! don't have GpsInvalidAll in these
+        bool validG = gps.date.isValid();
+        bool validH = gps.time.isValid();
 
-        int secondDelta = ((int) monthSecsM0) - ((int) gps_monthSecs);
-
-        // add in the minuteDelta cover minute transitions
-        // too much drift/error?
-        // don't print the first time thru..since that doesn't matter
-        if (timeUpdateCnt != 0) {
-            V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
-            if (abs(secondDelta) > 1) {
-                V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
-                    secondDelta, forceUpdate);
-                printSystemDateTime();
-                V1_print(F(EOL));
-            // time could be reset by forceUpdate, even if secondDelta == 0
-            } else if (abs(secondDelta) == 1) {
-                V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
-                    secondDelta, forceUpdate);
-                printSystemDateTime();
-                V1_print(F(EOL));
-            // time could be reset by forceUpdate, even if secondDelta == 0
-            } else {
-                V1_printf("GOOD: no drift. secondDelta %d forceUpdate %u ",
-                    secondDelta, forceUpdate);
-                printSystemDateTime();
-                V1_print(F(EOL));
-            }
-        }
-
-        fix_age = gps.time.age();
-        // might give an indication of how long it takes to do all this work
-        V1_printf("gps fix_age_entry %lu fix_age now %lu" EOL, fix_age_entry, fix_age);
-
-        uint32_t elapsed_millis4 = millis() - lastUpdate_millis;
-        V1_printf("forceUpdate %u timeUpdateCnt %lu", forceUpdate, timeUpdateCnt);
-        V1_printf(" elapsed_millis4 %lu since last update" EOL, elapsed_millis4);
-        lastUpdate_millis = millis();
-        forceUpdate = false;
-        timeUpdateCnt += 1;
-
-        V1_print(EOL);
+        V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
+        !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
     }
+
+    bool USE_DOLLAR_TIME_MODE = true;
+    // year can be given as full four digit year or two digts (2010 or 10 for 2010);
+    // it is converted to years since 1970
+
+    if (USE_DOLLAR_TIME_MODE) 
+        setTime_millis = dollarStar_millis;
+    else 
+        setTime_millis = millis(); 
+
+    // CUSTOM: pass a millis to setTime!!
+    // setTime_millis should always be before or = current millis()
+    setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
+
+    if (PPS_rise_active) {
+        // we should be using this at least once per rollover?
+        elapsed_millis3 = setTime_millis - PPS_rise_millis;
+        // may have missed a PPS_rise_millis update because gps off?
+        // modulo 1 sec will handle that issue well
+        elapsed_millis3_modulo = elapsed_millis3 % 1000;
+        // print the modulo 1 sec also, if the last PPS was a while ago? (
+        // gps being reset or ??
+        fix_age = gps.time.age();
+        V1_printf("INFO: setTime at elapsed_millis3 %lu %lu from last PPS",
+            elapsed_millis3, elapsed_millis3_modulo);
+        V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
+
+        // range check it, before using it next time
+        if (elapsed_millis3_modulo > 20 && elapsed_millis3_modulo < 180) {
+            bestGuessSkewFromPPS = elapsed_millis3_modulo;
+        } else {
+            // fallback to static from reporting over time, values
+            if (USE_SIM65M) bestGuessSkewFromPPS = 80;
+            else bestGuessSkewFromPPS = 60;
+        }
+    }
+
+    // pushes back the prevMillis value in Time, that was captured by setTime
+    // to align more with with the gps chip sent out the time NMEA sentence
+    // probably have to do this closely after setTime
+
+    // FIX! will this work right with positive numbers? No? (get abort)
+    // maybe we can only use 0 or negative
+    // we have to wait for the whole GNGGA sentence, to checksum, 
+    // before TinyGPS can time.commit()
+    // with effective char rates of around 1ms per char
+    // we get these kind of skews from the gps chip? (149ms?)
+    // INFO: setTime at elapsed_millis3 149 149 from last PPS fix_age 2 forceUpdate 1
+    // so if we backup 108 to 149ms we should be about aligned?
+    // does it matter if we take an average or the min or the max?
+    // don't back it up too far. that will take it into the prior second
+    // better to push the EXTRA delay for wspr alignment more
+    
+    if (USE_DOLLAR_TIME_MODE) {
+        // adjust less with USE_DOLLAR_TIME_MODE because it's time at 
+        // beginning of NMEA sentence. closer to PPS edge (real time)
+        adjustTimeMillis(-1 * bestGuessSkewFromPPS);
+    } else {
+        if (USE_SIM65M) adjustTimeMillis(-100);
+        else adjustTimeMillis(-100);
+    }
+
+    V1_print(F("GOOD: system setTime() with"));
+    V1_printf(" gps_hour %u gps_minute %u gps_second %u",
+        gps_hour, gps_minute, gps_second);
+    V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+        gps_day, gps_month, gps_year);
+
+    V1_print(F("system time before: (should be gps time):"));
+    V1_printf(" hour %d minute %d second %d", hh, mm, ss);
+    V1_printf(" day %d month %d year %d", d, m, y);
+    V1_printf(" forceUpdate %u now: ", forceUpdate);
+    // this will be current system time
+    printSystemDateTime();
+    V1_print(F(EOL));
+
+    int secondDelta = ((int) monthSecsM0) - ((int) gps_monthSecs);
+
+    // add in the minuteDelta cover minute transitions
+    // too much drift/error?
+    // don't print the first time thru..since that doesn't matter
+    if (timeUpdateCnt != 0) {
+        V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
+        if (abs(secondDelta) > 1) {
+            V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
+                secondDelta, forceUpdate);
+            printSystemDateTime();
+            V1_print(F(EOL));
+        // time could be reset by forceUpdate, even if secondDelta == 0
+        } else if (abs(secondDelta) == 1) {
+            V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
+                secondDelta, forceUpdate);
+            printSystemDateTime();
+            V1_print(F(EOL));
+        // time could be reset by forceUpdate, even if secondDelta == 0
+        } else {
+            V1_printf("GOOD: no drift. secondDelta %d forceUpdate %u ",
+                secondDelta, forceUpdate);
+            printSystemDateTime();
+            V1_print(F(EOL));
+        }
+    }
+
+    fix_age = gps.time.age();
+    // might give an indication of how long it takes to do all this work
+    V1_printf("gps fix_age_entry %lu fix_age now %lu" EOL, fix_age_entry, fix_age);
+
+    uint32_t elapsed_millis4 = millis() - lastUpdate_millis;
+    V1_printf("forceUpdate %u timeUpdateCnt %lu", forceUpdate, timeUpdateCnt);
+    V1_printf(" elapsed_millis4 %lu since last update" EOL, elapsed_millis4);
+    lastUpdate_millis = millis();
+    forceUpdate = false;
+    timeUpdateCnt += 1;
+
+    V1_print(EOL);
 }
 
 //************************************************
