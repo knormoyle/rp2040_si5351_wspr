@@ -495,8 +495,10 @@ void setGnssOff_SIM65M(void) {
 }
 
 //************************************************
-// always GGA GLL GSA GSV RMC
-// nver ZDA TXT
+// always GGA GSA GSV RMC
+// never ZDA TXT
+// never VTG GLL?
+// no GST (ATM336H
 void setGpsBroadcast(void) {
     V1_print(F("setGpsBroadcast START" EOL));
     updateStatusLED();
@@ -524,7 +526,7 @@ void setGpsBroadcast(void) {
         // Set the NMEA sentence output interval of corresponding NMEA type
         // $PAIR062,<Type>,<Output_Rate>*<checksum>
         // -1 Reset all sentence to default value
-        // 0 NMEA_SEN_GGA, // GGA interval - GPS Fix Data
+        // 0 NMEA_SEN_GGA  // GGA interval - GPS Fix Data
         // 1 NMEA_SEN_GLL, // GLL interval - Geographic Position - Latitude longitude
         // 2 NMEA_SEN_GSA, // GSA interval - GNSS DOPS and Active Satellites
         // 3 NMEA_SEN_GSV, // GSV interval - GNSS Satellites in View
@@ -549,7 +551,9 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,0,5*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
-            strncpy(nmeaSentence, "$PAIR062,1,5*3A" CR LF, 62);
+            // no GLL 2/17/25
+            // strncpy(nmeaSentence, "$PAIR062,1,5*3A" CR LF, 62);
+            strncpy(nmeaSentence, "$PAIR062,1,0*3F" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             strncpy(nmeaSentence, "$PAIR062,2,5*39" CR LF, 62);
@@ -561,10 +565,13 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,4,5*3F" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
-            strncpy(nmeaSentence, "$PAIR062,5,5*3E" CR LF, 62);
+            // no VTG 2/17/25
+            // strncpy(nmeaSentence, "$PAIR062,5,5*3E" CR LF, 62);
+            strncpy(nmeaSentence, "$PAIR062,5,0*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
-            strncpy(nmeaSentence, "$PAIR062,6,5*3D" CR LF, 62);
+            // ZDA off. to try to keep worst case burst <= 1 sec?
+            strncpy(nmeaSentence, "$PAIR062,6,0*38" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             // don't make too big. best if eventually GNGGA is always first in burst
@@ -588,7 +595,6 @@ void setGpsBroadcast(void) {
             // doesn't work?
             // strncpy(nmeaSentence, "$PAIR050,5000*16" CR LF, 62);
             // Serial2.print(nmeaSentence);
-
             busy_wait_us(2000);
 
         } else {
@@ -596,7 +602,9 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,0,1*3F" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
-            strncpy(nmeaSentence, "$PAIR062,1,1*3E" CR LF, 62);
+            // no GLL 2/17/25
+            // strncpy(nmeaSentence, "$PAIR062,1,1*3E" CR LF, 62);
+            strncpy(nmeaSentence, "$PAIR062,1,0*3F" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             strncpy(nmeaSentence, "$PAIR062,2,1*3D" CR LF, 62);
@@ -608,13 +616,17 @@ void setGpsBroadcast(void) {
             strncpy(nmeaSentence, "$PAIR062,4,1*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
-            strncpy(nmeaSentence, "$PAIR062,5,1*3A" CR LF, 62);
+            // no VTG 2/17/25
+            // strncpy(nmeaSentence, "$PAIR062,5,1*3A" CR LF, 62);
+            strncpy(nmeaSentence, "$PAIR062,5,0*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
-            strncpy(nmeaSentence, "$PAIR062,6,1*39" CR LF, 62);
+            // ZDA off. to try to keep worst case burst <= 1 sec?
+            strncpy(nmeaSentence, "$PAIR062,6,0*38" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(2000);
-            // don't make too big. best if eventually GNGGA is always first in burst
+            // don't make too big. best if eventually GGA is always first in burst
+            // was 1200 2/16/2025
             GPS_WAIT_FOR_NMEA_BURST_MAX = 1200;
         }
 
@@ -633,11 +645,9 @@ void setGpsBroadcast(void) {
 
         //*************************************************
         // from the latest CASIC_ProtocolSpecification_english.pdf
-        // $PCAS03 string nGGA value Message ID, sentence header
-
         // Field 1 is the PCAS03
 
-        // 2  GGA output frequency,
+        // 2  nGGA output frequency,
         // statement output frequency is based on positioning update rate
         // n (0~9) means output once every n positioning times, 0 means no output
         // If this statement is left blank, the original configuration will be retained.
@@ -649,7 +659,7 @@ void setGpsBroadcast(void) {
         // 7  nVTG VTG output frequency,  same as nGGA
         // 8  nZDA ZDA output frequency,  same as nGGA
         // 9  nANT ANT output frequency,  same as nGGA (this is the antenna open TXT ?)
-        // 10 nDHV DHV output frequency,  same as nGGA
+        // 10 nDHV DHV output frequency,  same as nGGA 
         // 11 nLPS LPS output frequency,  same as nGGA
         // 12 res1 reserve
         // 13 res2 reserve
@@ -662,14 +672,20 @@ void setGpsBroadcast(void) {
 
         // 20 CSvalue Hexadecimal value checksum,
         //    XOR result of all characters between $ and * (excluding $ and *)
-        // 21 <CR><LF> charactersCarriage return and line feed
+        // 21 <CR><LF> characters Carriage return and line feed
 
         // spec has more/new detail. see below
-        // FIX! was I still getting GNZDA and GPTXT ANTENNAOPEN with this?
-        strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
+        // strncpy(nmeaSentence, "$PCAS03,1,1,1,1,1,1,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
+
+        // 2/17/25 no VTG or GLL
+        strncpy(nmeaSentence, "$PCAS03,1,0,1,1,1,0,0,0,0,0,,,1,1,,,,1*33" CR LF, 62);
+        // 2/17/25 disable UTC GST, TIM (wasn't ever getting UTC, TIM?)
+        strncpy(nmeaSentence, "$PCAS03,1,0,1,1,1,0,0,0,0,0,,,0,0,,,,0*32" CR LF, 62);
         Serial2.print(nmeaSentence);
         Serial2.flush();
         busy_wait_us(2000);
+        // was 1200 2/16/2025
+        GPS_WAIT_FOR_NMEA_BURST_MAX = 1200;
     }
 
     V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
@@ -2102,6 +2118,9 @@ uint32_t updateGpsDataAndTime(int ms) {
     // with less variation (rather than time at the end of the checksum)
     uint32_t dollar_millis = 0;
     uint32_t dollarStar_millis = 0; // double buffering to guarantee no race condition with '$'
+    // only one that causes gps.time.updated
+    uint32_t timeUpdate_sentences = 0;
+    bool timeUpdateDone = false;
     while ((current_millis - entry_millis) < (uint64_t) ms) {
         while (charsAvailable > 0) {
             // we count all chars, even CR LF etc
@@ -2129,6 +2148,8 @@ uint32_t updateGpsDataAndTime(int ms) {
                     // clear time updated state, right before any TinyGPS term/commit event
                     // always need checksum before a commit event
                     gps.time.updated = false;
+                    // in case we consume time doing the time update..don't break
+                    timeUpdateDone = false;
                     dollarStar_millis = dollar_millis;
                     break;
                 case '\0': printable = false; break;
@@ -2152,7 +2173,14 @@ uint32_t updateGpsDataAndTime(int ms) {
                 gps.encode(incomingChar);
                 // updated has to transition before we get the next dollar_millis??
                 // we could save dollar_millis in dollarStar_millis, to make sure no race condition
-                if (gps.time.updated) checkUpdateTimeFromGps(dollarStar_millis);
+                if (gps.time.updated) {
+                    checkUpdateTimeFromGps(dollarStar_millis);
+                    gps.time.updated = false;
+                    // if we get two, we've gone too long on the burst?
+                    // trying to synchronize so GGA is always first
+                    timeUpdate_sentences += 1;
+                    timeUpdateDone = true;
+                }
             }
 
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
@@ -2179,7 +2207,8 @@ uint32_t updateGpsDataAndTime(int ms) {
 
         // keep as close as possible to the NMEA sentence arrival?
         // I suppose we'll see gps.time.updated every time?
-        if (gps.time.updated) checkUpdateTimeFromGps(dollarStar_millis);
+        // don't do it here. we should always get more stuff after the GGA above
+        // if (gps.time.updated) checkUpdateTimeFromGps(dollarStar_millis);
 
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
@@ -2190,13 +2219,16 @@ uint32_t updateGpsDataAndTime(int ms) {
         else timeSinceLastChar_millis = current_millis - last_serial2_millis;
 
         // FIX! should the two delays used be dependent on baud rate?
-        if (timeSinceLastChar_millis >= 50) {
+        // if we got slowed down by doing a timeUpdate, don't do this
+        if (timeSinceLastChar_millis >= 50 && !timeUpdateDone) {
             // FIX! could the LED blinking have gotten delayed?
             // we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
             // if we didn't get any chars, start_millis will be 0, use entry_millis instead
             break;
         }
+        if (timeUpdate_sentences >= 2) break;
+
         gpsSleepForMillis(50, true);  // stop the wait early if symbols arrive
         // setup for loop iteration
         getChar();
@@ -2348,7 +2380,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     }
     // shouldn't use the time if hundredths isn't 0, as our skew estimation will be wrong
     if (gps_hundredths > 0) {
-        V1_printf("INFO: non-zero TinyGPS gps_hundredths %u > 99" EOL,
+        StampPrintf("INFO: non-zero TinyGPS gps_hundredths %u > 99" EOL,
             gps_hundredths);
     }
 
@@ -2365,10 +2397,10 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         // (% 1000 because reset might affect edge?)
         bool tooFar = false;
         if (USE_SIM65M) 
-            tooFar = elapsed_millis3_modulo < 20 || elapsed_millis3_modulo > 180;
-        // have seen 92 min! must be small number of chars in CNGGA sentence
+            tooFar = elapsed_millis3_modulo < 20 || elapsed_millis3_modulo > 300;
+        // have seen 92 min! must be small number of chars in GNGGA sentence
         else 
-            tooFar = elapsed_millis3_modulo < 20 || elapsed_millis3_modulo > 180;
+            tooFar = elapsed_millis3_modulo < 20 || elapsed_millis3_modulo > 300;
 
         if (tooFar) {
             StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu %lu fix_age %lu forceUpdate %u" EOL, 
@@ -2493,7 +2525,11 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // setTime_millis should always be before or = current millis()
     setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
 
-    if (PPS_rise_active) {
+    // bestGuessSkewFromPPS is static, so we have something if !PPS_rise_active
+    if (!PPS_rise_active) {
+        V1_printf("setTime PPS_rise_active false. bestGuessSkewFromPPS %lu" EOL,
+            bestGuessSkewFromPPS);
+    } else {
         // we should be using this at least once per rollover?
         elapsed_millis3 = setTime_millis - PPS_rise_millis;
         // may have missed a PPS_rise_millis update because gps off?
@@ -2502,36 +2538,27 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         // print the modulo 1 sec also, if the last PPS was a while ago? (
         // gps being reset or ??
         fix_age = gps.time.age();
-        V1_printf("INFO: setTime at elapsed_millis3 %lu %lu from last PPS",
+        V1_printf("setTime at elapsed_millis3 %lu %lu from last PPS",
             elapsed_millis3, elapsed_millis3_modulo);
         V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
 
         // range check it, before using it next time
-        if (elapsed_millis3_modulo > 20 && elapsed_millis3_modulo < 180) {
+        // if (elapsed_millis3_modulo > 20 && elapsed_millis3_modulo < 180) {
+        if (elapsed_millis3_modulo > 0 && elapsed_millis3_modulo < 999) {
             bestGuessSkewFromPPS = elapsed_millis3_modulo;
         } else {
             // fallback to static from reporting over time, values
             if (USE_SIM65M) bestGuessSkewFromPPS = 80;
             else bestGuessSkewFromPPS = 60;
         }
+        V1_printf("setTime PPS_rise_active true, bestGuessSkewFromPPS %lu" EOL,
+            bestGuessSkewFromPPS);
     }
 
     // pushes back the prevMillis value in Time, that was captured by setTime
     // to align more with with the gps chip sent out the time NMEA sentence
     // probably have to do this closely after setTime
 
-    // FIX! will this work right with positive numbers? No? (get abort)
-    // maybe we can only use 0 or negative
-    // we have to wait for the whole GNGGA sentence, to checksum, 
-    // before TinyGPS can time.commit()
-    // with effective char rates of around 1ms per char
-    // we get these kind of skews from the gps chip? (149ms?)
-    // INFO: setTime at elapsed_millis3 149 149 from last PPS fix_age 2 forceUpdate 1
-    // so if we backup 108 to 149ms we should be about aligned?
-    // does it matter if we take an average or the min or the max?
-    // don't back it up too far. that will take it into the prior second
-    // better to push the EXTRA delay for wspr alignment more
-    
     if (USE_DOLLAR_TIME_MODE) {
         // adjust less with USE_DOLLAR_TIME_MODE because it's time at 
         // beginning of NMEA sentence. closer to PPS edge (real time)
@@ -2544,12 +2571,12 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     V1_print(F("GOOD: system setTime() with"));
     V1_printf(" gps_hour %u gps_minute %u gps_second %u",
         gps_hour, gps_minute, gps_second);
-    V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
-        gps_day, gps_month, gps_year);
+    // V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
+    //     gps_day, gps_month, gps_year);
 
     V1_print(F("system time before: (should be gps time):"));
     V1_printf(" hour %d minute %d second %d", hh, mm, ss);
-    V1_printf(" day %d month %d year %d", d, m, y);
+    // V1_printf(" day %d month %d year %d", d, m, y);
     V1_printf(" forceUpdate %u now: ", forceUpdate);
     // this will be current system time
     printSystemDateTime();
@@ -2584,16 +2611,24 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
 
     fix_age = gps.time.age();
     // might give an indication of how long it takes to do all this work
-    V1_printf("gps fix_age_entry %lu fix_age now %lu" EOL, fix_age_entry, fix_age);
+    // show the rx fifo at this point to understand backup!
+    int charsAvailable = Serial2.available();
+    if (charsAvailable > 15) {
+        V1_print(F("ERROR: rx fifo backup:")); 
+    }
+    V1_printf("gps fix_age_entry %lu fix_age now %lu charsAvailable %d " EOL, fix_age_entry, fix_age);
+    // seems like it takes 11ms or so max?
+    // if chars are arriving 1 per ms, then the rx fifo needs room for 11 when 
+    // we do time, to absorb char backup?
+    // should be okay if we started with empty rx fifo, kept up with it
+    // and then only do this time update once per burst?
 
-    uint32_t elapsed_millis4 = millis() - lastUpdate_millis;
-    V1_printf("forceUpdate %u timeUpdateCnt %lu", forceUpdate, timeUpdateCnt);
-    V1_printf(" elapsed_millis4 %lu since last update" EOL, elapsed_millis4);
     lastUpdate_millis = millis();
     forceUpdate = false;
     timeUpdateCnt += 1;
 
     V1_print(EOL);
+    // FIX! does the uart rx fifo get backed up when we update and do all this printing?
 }
 
 //************************************************

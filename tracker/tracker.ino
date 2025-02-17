@@ -1954,20 +1954,16 @@ void sleepSeconds(int secs) {
             // 1500 was good for 9600 and up
             // not long enough for 4800?
             // arg is milliseconds
-            if ((!USE_SIM65M) && ATGM336H_BAUD_RATE == 4800)  {
-                gdt_millis = updateGpsDataAndTime(2000);
-            } else {
-                gdt_millis = updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
-            }
+            gdt_millis = updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
             // randomize an increasing delay if the gdt_millis < 100 (didn't get anything)
             if (gdt_millis < 100) {
                 uint32_t randnum = random(20, 25);
                 increasingWait = increasingWait + randnum;
-                if (increasingWait > 1500) increasingWait = 0;
+                if (increasingWait > (uint32_t) GPS_WAIT_FOR_NMEA_BURST_MAX) increasingWait = 0;
                 sleep_ms(increasingWait);
             }
         } else {
-            sleep_ms(1500);
+            sleep_ms(GPS_WAIT_FOR_NMEA_BURST_MAX);
         }
         current_millis = millis();
     } while ((current_millis - start_millis) < duration_millis);
@@ -2314,7 +2310,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     if (USE_SIM65M) EXTRA_DELAY_AFTER_ZERO_SEC = 700;  // milliseconds
     // 800 gave 0.2 2/16/25
     // 750 gave 0.1 2/16/25
-    else EXTRA_DELAY_AFTER_ZERO_SEC = 600;
+    else EXTRA_DELAY_AFTER_ZERO_SEC = 700;
 
     if (EXTRA_DELAY_AFTER_ZERO_SEC < 0 || EXTRA_DELAY_AFTER_ZERO_SEC > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_ZERO_SEC %d.. setting to 0" EOL,
