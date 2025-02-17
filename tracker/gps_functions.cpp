@@ -2551,6 +2551,8 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         // range check it..otherwise leave as is.
         if (elapsed_millis3_modulo > 0 && elapsed_millis3_modulo < 500) {
             bestGuessSkewFromPPS = elapsed_millis3_modulo;
+        } else {
+            bestGuessSkewFromPPS = 100;
         }
         V1_printf("setTime PPS_rise_active true, bestGuessSkewFromPPS %lu" EOL,
             bestGuessSkewFromPPS);
