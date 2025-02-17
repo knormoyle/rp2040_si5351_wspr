@@ -273,7 +273,7 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
         // will now calc pll_denom or will use Farey if that's enabled
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
             &ms_div, &pll_mult, &pll_num_here, &pll_denom_here, &r_divisor,
-            freq_xxx, true); // use PLL_DENOM_OPTIMIZE if not Farey
+            freq_xxx, false); // don't use PLL_DENOM_OPTIMIZE
 
         if (print) {
             V1_printf("channel %s symbol %u", cc._U4B_chan, symbol);

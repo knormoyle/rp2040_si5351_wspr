@@ -2307,9 +2307,11 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // supposed to be 1 sec in.
     static int EXTRA_DELAY_AFTER_ZERO_SEC;
     // 900 gave 0.2 2/16/25
+    // was 700 2/17/25
     if (USE_SIM65M) EXTRA_DELAY_AFTER_ZERO_SEC = 700;  // milliseconds
     // 800 gave 0.2 2/16/25
     // 750 gave 0.1 2/16/25
+    // was 700 2/17/25. a little early sometimes
     else EXTRA_DELAY_AFTER_ZERO_SEC = 700;
 
     if (EXTRA_DELAY_AFTER_ZERO_SEC < 0 || EXTRA_DELAY_AFTER_ZERO_SEC > 1000) {

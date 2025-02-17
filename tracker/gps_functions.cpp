@@ -2058,6 +2058,10 @@ uint32_t updateGpsDataAndTime(int ms) {
     // clear the StampPrintf buffer, in case it had anything.
     if (VERBY[1]) DoLogPrint();
 
+    // flush so the buffer has 256, so maybe can absorb the prints if we time update??
+    char debugMsg1[] = "updateGpsDataAndTime";
+    realPrintFlush(debugMsg1, false);  // no print
+
     // FIX! we could leave here after we get N sentences?
     // we could keep track of how many sentences we get?
     // ideally we'd synchronize on the currently uknown start/end sentences?
@@ -2220,6 +2224,9 @@ uint32_t updateGpsDataAndTime(int ms) {
 
         // FIX! should the two delays used be dependent on baud rate?
         // if we got slowed down by doing a timeUpdate, don't do this
+        // FIX! if the time update took more than 32ms the rx fifo would back up, full
+        // in any case, we don't break on this if we did a time update 
+        // situation probably doesn't happen now.
         if (timeSinceLastChar_millis >= 50 && !timeUpdateDone) {
             // FIX! could the LED blinking have gotten delayed?
             // we don't check in the available loop above.
@@ -2228,9 +2235,8 @@ uint32_t updateGpsDataAndTime(int ms) {
             break;
         }
         if (timeUpdate_sentences >= 2) break;
-
-        gpsSleepForMillis(50, true);  // stop the wait early if symbols arrive
-        // setup for loop iteration
+        // stop the wait early if Serial2.available
+        gpsSleepForMillis(50, true);  
         getChar();
         current_millis = millis();
     }
@@ -2569,14 +2575,14 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     }
 
     V1_print(F("GOOD: system setTime() with"));
-    V1_printf(" gps_hour %u gps_minute %u gps_second %u",
-        gps_hour, gps_minute, gps_second);
-    // V1_printf(" gps_day %u gps_month %u gps_year %u" EOL,
-    //     gps_day, gps_month, gps_year);
+    // V1_printf(" %u gps_month %u gps_year %u",
+    //     gps_month, gps_year);
+    V1_printf(" gps_day %u gps_hour %u gps_minute %u gps_second %u" EOL,
+        gps_day, gps_hour, gps_minute, gps_second);
 
     V1_print(F("system time before: (should be gps time):"));
-    V1_printf(" hour %d minute %d second %d", hh, mm, ss);
-    // V1_printf(" day %d month %d year %d", d, m, y);
+    // V1_printf(" month %d year %d", m, y);
+    V1_printf(" day %d hour %d minute %d second %d", d, hh, mm, ss);
     V1_printf(" forceUpdate %u now: ", forceUpdate);
     // this will be current system time
     printSystemDateTime();
@@ -2614,9 +2620,10 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // show the rx fifo at this point to understand backup!
     int charsAvailable = Serial2.available();
     if (charsAvailable > 15) {
-        V1_print(F("ERROR: rx fifo backup:")); 
+        V1_print(F("ERROR: rx fifo backup: ")); 
     }
-    V1_printf("gps fix_age_entry %lu fix_age now %lu charsAvailable %d " EOL, fix_age_entry, fix_age);
+    V1_printf("gps fix_age_entry %lu fix_age now %lu charsAvailable %d" EOL, 
+        fix_age_entry, fix_age, charsAvailable);
     // seems like it takes 11ms or so max?
     // if chars are arriving 1 per ms, then the rx fifo needs room for 11 when 
     // we do time, to absorb char backup?
@@ -2671,7 +2678,6 @@ void gpsDebug() {
     printStr("failCksum", true, 10);
     V1_print(F(EOL));
 
-    // am I getting problems with constant strings in ram??
     char debugMsg1[] = "Before printInt/Float/String gpsDebug prints";
     realPrintFlush(debugMsg1, false);  // no print
 
