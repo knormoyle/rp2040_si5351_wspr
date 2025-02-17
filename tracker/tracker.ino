@@ -1187,11 +1187,6 @@ int tx_cnt_4 = 0;
 
 // TinyGPS::GPS_INVALID_AGE is the value when you never got a valid fix.
 
-
-// FIX! should this be exactly a minute, so all the other things
-// bump by seconds will end up being in the same offset in a minute,
-// the next minute?
-uint16_t  BEACON_WAIT = 60;  // secs
 // seconds sleep if super capacitors/batteries are below BattMin
 uint16_t  BATT_WAIT = 1;  // secs
 
@@ -1448,7 +1443,11 @@ void loop1() {
             vfo_turn_off();
             invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
-            sleepSeconds(BEACON_WAIT);
+            SMART_WAIT = (60 - second() + 20);
+            V1_printf("loopCnt %" PRIu64, loopCnt);
+            V1_print(F(" case 4: sleepSeconds() 20 secs into the next minute"));
+            V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
+            sleepSeconds(SMART_WAIT);
 
         } else if (fix_sat_cnt <= 3) {
             V1_printf("loopCnt %" PRIu64, loopCnt);
@@ -1458,7 +1457,11 @@ void loop1() {
             vfo_turn_off();
             invalidateTinyGpsState();
             GpsON(false);  // no gps cold reset
-            sleepSeconds(BEACON_WAIT);
+            SMART_WAIT = (60 - second() + 20);
+            V1_printf("loopCnt %" PRIu64, loopCnt);
+            V1_print(F(" case 5: sleepSeconds() 20 secs into the next minute"));
+            V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
+            sleepSeconds(SMART_WAIT);
 
         } else {
             V1_printf("loopCnt %" PRIu64 " Good recent 3d fix" EOL, loopCnt);
@@ -1537,7 +1540,6 @@ void loop1() {
                     // we fall thru and can get another gps fix or just try again.
                     // sleep because we don't want to cycle endlessly waiting to align
                     SMART_WAIT = (60 - second() + 20);
-                    // oneliner
                     V1_printf("loopCnt %" PRIu64, loopCnt);
                     V1_print(F(" case 0: sleepSeconds() 20 secs into the next minute"));
                     V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
@@ -1549,19 +1551,16 @@ void loop1() {
                     if (second() > 40) {
                         // to late..don't try to send
                         // minute() second() come from Time.h as ints
-                        // oneliner
                         V1_printf(EOL "loopCnt %" PRIu64, loopCnt);
                         V1_print(F(" WARN: wspr no send, past 40 secs in pre-minute:"));
                         V1_printf(" minute: %d *second: %d* alignMinute(-1) %u" EOL,
                             minute(), second(), alignMinute(-1));
                         SMART_WAIT = (60 - second() + 20);
-                        // oneliner
                         V1_printf("loopCnt %" PRIu64, loopCnt);
                         V1_print(F(" case 1: sleepSeconds() 20 secs into the next minute"));
                         V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
                         sleepSeconds(SMART_WAIT);
                     } else {
-                        // oneliner
                         V1_printf("loopCnt %" PRIu64, loopCnt);
                         V1_print(F(" wspr: wait until 20 secs before starting minute"));
                         V1_printf(" now: minute: %d *second: %d*" EOL, minute(), second());
@@ -1583,7 +1582,7 @@ void loop1() {
                             SMART_WAIT = (60 - second() + 20);
                             // oneliner
                             V1_printf("loopCnt %" PRIu64, loopCnt);
-                            V1_print(F(" alignAndDoAllSequentialTx() res -1 alignment?"));
+                            V1_print(F(" case 2: sleepSeconds() 20 secs into the next minute"));
                             V1_printf(" sleep with SMART_WAIT %d" EOL, SMART_WAIT);
                             sleepSeconds(SMART_WAIT);
                         }
@@ -1595,6 +1594,9 @@ void loop1() {
                 V1_printf(EOL "loopCnt %" PRIu64, loopCnt);
                 V1_printf(" WARN: no send: voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
                     voltageBeforeWSPR, WsprBattMin);
+                V1_printf("loopCnt %" PRIu64, loopCnt);
+                V1_print(F(" case 3: sleepSeconds() BATT_WAIT"));
+                V1_printf(" sleep with BATT_WAIT %d" EOL, BATT_WAIT);
                 sleepSeconds(BATT_WAIT);
             }
         }

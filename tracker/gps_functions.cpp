@@ -458,13 +458,15 @@ void setGnssOn_SIM65M(void) {
     // $PAIR001,000,4*3F
     // $PAIR001,020,0*39
     // $PAIR020,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,*17
-    nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
+    // 2/16/25 faster
+    nmeaBufferFastPoll(1000, true);  // duration_millis, printIfFull
 
     //*****************
     if (false) {
         // PAIR_GET_SETTING
         Serial2.print("$PAIR021*39" CR LF);
-        nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
+        // 2/16/25 faster
+        nmeaBufferFastPoll(1000, true);  // duration_millis, printIfFull
     }
 
     //*****************
@@ -477,9 +479,8 @@ void setGnssOn_SIM65M(void) {
     // PAIR_GNSS_SUBSYS_POWER_ON
     // in case we changed the default config to powered off
     Serial2.print("$PAIR002*38" CR LF);
-    // Serial2.flush();
     nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
-    sleep_ms(2000);
+    // 2/16/25 faster
     V1_println(F(EOL "setGnsOn_SIM65M END"));
 }
 
@@ -1677,8 +1678,8 @@ bool GpsWarmReset(void) {
     digitalWrite(GPS_NRESET_PIN, HIGH);
     digitalWrite(GpsPwr, HIGH);
     Serial2.end();
-    // 2 secs off?
-    gpsSleepForMillis(2000, false);  // no early out
+    // 2/16/2025 try faster for faster gps warm reset
+    gpsSleepForMillis(1000, false);  // no early out
 
     // match the pwm that's done for cold reset
     if (PWM_GPS_POWER_ON_MODE) {
@@ -1695,10 +1696,11 @@ bool GpsWarmReset(void) {
         gpsSleepForMillis(500, false);
     }
 
-    gpsSleepForMillis(2000, false);  // no early out
+    // 2/16/2025 try faster for faster gps warm reset
+    gpsSleepForMillis(1000, false);  // no early out
     // now assert the on/off pin
     digitalWrite(GPS_ON_PIN, HIGH);
-    gpsSleepForMillis(2000, false);  // no early out
+    gpsSleepForMillis(1000, false);  // no early out
 
     GpsStartTime = get_absolute_time();  // usecs
     //****************************
@@ -1746,7 +1748,8 @@ bool GpsWarmReset(void) {
         V1_println(F("Read the navigation mode: $PAIR081*33"));
         // Packet Type:081 PAIR_COMMON_GET_NAVIGATION_MODE
         Serial2.print("$PAIR081*33" CR LF);
-        nmeaBufferFastPoll(2000, true);  // duration_millis, printIfFull
+        // 2/16/2025 try faster for faster gps warm reset
+        nmeaBufferFastPoll(1500, true);  // duration_millis, printIfFull
         // we could change the default config to power up with GNSS off?
         // so always do this?
         setGnssOn_SIM65M();
