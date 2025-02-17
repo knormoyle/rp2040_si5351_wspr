@@ -2361,9 +2361,12 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         // FIX! atgm336 edge is 1-> 0
         // (% 1000 because reset might affect edge?)
         bool tooFar = false;
-        if (USE_SIM65M) tooFar = elapsed_millis3_modulo < 150 || elapsed_millis3_modulo > 500;
+        if (USE_SIM65M) 
+            tooFar = elapsed_millis3_modulo < 20 || elapsed_millis3_modulo > 180;
         // have seen 92 min! must be small number of chars in CNGGA sentence
-        else tooFar = elapsed_millis3_modulo < 90 || elapsed_millis3_modulo > 500;
+        else 
+            tooFar = elapsed_millis3_modulo < 20 || elapsed_millis3_modulo > 180;
+
         if (tooFar) {
             StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu %lu fix_age %lu forceUpdate %u" EOL, 
                 elapsed_millis3, elapsed_millis3_modulo, fix_age, forceUpdate);
