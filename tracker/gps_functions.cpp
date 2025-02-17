@@ -2548,14 +2548,9 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
             elapsed_millis3, elapsed_millis3_modulo);
         V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
 
-        // range check it, before using it next time
-        // if (elapsed_millis3_modulo > 20 && elapsed_millis3_modulo < 180) {
-        if (elapsed_millis3_modulo > 0 && elapsed_millis3_modulo < 999) {
+        // range check it..otherwise leave as is.
+        if (elapsed_millis3_modulo > 0 && elapsed_millis3_modulo < 500) {
             bestGuessSkewFromPPS = elapsed_millis3_modulo;
-        } else {
-            // fallback to static from reporting over time, values
-            if (USE_SIM65M) bestGuessSkewFromPPS = 80;
-            else bestGuessSkewFromPPS = 60;
         }
         V1_printf("setTime PPS_rise_active true, bestGuessSkewFromPPS %lu" EOL,
             bestGuessSkewFromPPS);
@@ -2568,7 +2563,9 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     if (USE_DOLLAR_TIME_MODE) {
         // adjust less with USE_DOLLAR_TIME_MODE because it's time at 
         // beginning of NMEA sentence. closer to PPS edge (real time)
-        adjustTimeMillis(-1 * bestGuessSkewFromPPS);
+        if (bestGuessSkewFromPPS != 0) {
+            adjustTimeMillis(-1 * bestGuessSkewFromPPS);
+        }
     } else {
         if (USE_SIM65M) adjustTimeMillis(-100);
         else adjustTimeMillis(-100);
