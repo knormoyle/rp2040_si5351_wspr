@@ -183,7 +183,8 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
         if (PPS_rise_active) {
             PPS_rise_cnt += 1;
             // keep it just 10, so the first wspr can have setTime that's got good skew measurement
-            PPS_rise_valid = PPS_rise_cnt > 10;
+            // PPS_rise_valid = PPS_rise_cnt > 10
+            PPS_rise_valid = PPS_rise_cnt >= 1;
             // just the first 30 after it's been reset
             if (PPS_rise_cnt < 30) {
                 V1_printf("INFO: PPS_rise_cnt %lu" EOL, PPS_rise_cnt);
