@@ -1,5 +1,4 @@
-// Project: https://github.com/knormoyle/rp2040_si5351_wspr
-// Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
+// Project: https://github.com/knormoyle/rp2040_si5351_wspr // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 
@@ -25,7 +24,12 @@
 extern const int GPS_1PPS_PIN;
 extern uint32_t PPS_rise_millis;
 extern uint32_t PPS_rise_micros;
-extern bool PPS_rise_active;
+// valid after count is 30?
+extern bool PPS_rise_valid;
+extern uint32_t PPS_rise_cnt;
+
+bool PPS_rise_active;
+bool PPS_rise_count;
 
 extern bool USE_SIM65M;
 extern bool BALLOON_MODE;
@@ -109,6 +113,18 @@ extern bool VERBY[10];
 // 2 raw meas + sv info + pvt(including time offset data between GPS and GLO/GAL/BDS)
 
 //********************************************************
+void PPS_countEnable(void) {
+    PPS_rise_active = true;
+    PPS_rise_cnt = 0;
+    PPS_rise_valid = false;
+}
+    
+void PPS_countDisable(void) {
+    PPS_rise_active = false;
+    PPS_rise_cnt = 0;
+    PPS_rise_valid = false;
+}
+
 void setGpsPPSMode(void) {
     // FIX! if this is redone on every warm reset, PPS doesn't have much chance to stablize?
     // since we adjust skew always now, we want this even in BALLOON_MODE
@@ -164,6 +180,9 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
         
         // no modification or reporting if -1
         if (PPS_rise_active) {
+            PPS_rise_cnt += 1;
+            PPS_rise_valid = PPS_rise_cnt > 30;
+
             // no reporting if 0
             // 0 is legal value for the wraparound uint32_t on the PPS_rise_micros
             uint32_t elapsed_micros = current_micros - PPS_rise_micros;
@@ -204,6 +223,7 @@ void gpsPPS_init() {
         gpio_pull_up(GPS_1PPS_PIN);
         gpio_set_irq_enabled_with_callback(GPS_1PPS_PIN, GPIO_IRQ_EDGE_RISE, true, &gpsPPS_callback);
     }
+    PPS_countDisable();
     V1_println(F("gpsPPS_init END"));
 }
 

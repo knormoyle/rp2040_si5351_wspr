@@ -178,7 +178,9 @@ volatile bool PROCEED = false;
 // time of last PPS 0->1 from irq, so we can calc offset duration when we setTIme
 uint32_t PPS_rise_millis = 0; 
 uint32_t PPS_rise_micros = 0;
-bool PPS_rise_active = false;
+bool PPS_rise_valid = false;
+uint32_t PPS_rise_cnt = 0;
+
 // if this is non-zero we've synced time
 // we can tell how long it's been since we've synced, also
 uint32_t setTime_millis = 0;
@@ -2313,7 +2315,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // 800 gave 0.2 2/16/25
     // 750 gave 0.1 2/16/25
     // was 700 2/17/25. a little early sometimes
-    else EXTRA_DELAY_AFTER_ZERO_SEC = 700;
+    else EXTRA_DELAY_AFTER_ZERO_SEC = 650;
 
     if (EXTRA_DELAY_AFTER_ZERO_SEC < 0 || EXTRA_DELAY_AFTER_ZERO_SEC > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_ZERO_SEC %d.. setting to 0" EOL,

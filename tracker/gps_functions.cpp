@@ -28,7 +28,8 @@ int CONSTELLATIONS_GROUP = atoi(cc._const_group);
 // clear these to zero if gps goes off (for PPS tracking)
 extern int32_t PPS_rise_millis;
 extern int32_t PPS_rise_micros;
-extern bool PPS_rise_active;
+extern int32_t PPS_rise_cnt;
+extern bool PPS_rise_valid;
 
 // gps+bds+glonass
 // int CONSTELLATIONS_GROUP = 7;
@@ -1335,11 +1336,7 @@ bool GpsFullColdReset(void) {
     // BUG: can't seem to reset the baud rate to 9600 when
     // the GPS chip has a non-working baud rate?
     GpsIsOn_state = false;
-    PPS_rise_active = false;
-    // I suppose 0 is legal wraparound for the uint32_t values
-    // so no sense forcing these to 0
-    // PPS_rise_millis = 0;
-    // PPS_rise_micros = 0;
+    PPS_countDisable();
 
     // a full cold reset reverts to 9600 baud
     // as does standby modes? (don't use)
@@ -1652,7 +1649,7 @@ bool GpsFullColdReset(void) {
     GpsStartTime = get_absolute_time();  // usecs
     if (sentencesFound) {
         GpsIsOn_state = true;
-        PPS_rise_active = true;
+        PPS_countEnable();
     }
 
     uint32_t duration_millis = millis() - start_millis;
@@ -1665,7 +1662,7 @@ bool GpsFullColdReset(void) {
 //************************************************
 bool GpsWarmReset(void) {
     GpsIsOn_state = false;
-    PPS_rise_active = false;
+    PPS_countDisable();
     // FIX! SIM65M spec says when the power supply is off, settings
     // are reset to factory config and receiver performs a cold start
     // on next power up
@@ -1783,7 +1780,7 @@ bool GpsWarmReset(void) {
 
     if (sentencesFound) {
         GpsIsOn_state = true;
-        PPS_rise_active = true;
+        PPS_countEnable();
     }
     GpsStartTime = get_absolute_time();  // usecs
     return sentencesFound;
@@ -2006,7 +2003,7 @@ void invalidateTinyGpsState(void) {
 void GpsOFF() {
     GpsIsOn_state = false;
     GpsStartTime = 0;
-    PPS_rise_active = false;
+    PPS_countDisable();
 
     V1_printf("GpsOFF START GpsIsOn_state %u" EOL, GpsIsOn_state);
     digitalWrite(GpsPwr, HIGH);
@@ -2393,7 +2390,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     //*****************************
     uint32_t elapsed_millis3;
     uint32_t elapsed_millis3_modulo;
-    if (PPS_rise_active) {
+    if (PPS_rise_valid) {
         // we're not actually going to use current millis() to set system time
         // but this is an interesting check
         elapsed_millis3 = millis() - PPS_rise_millis;
@@ -2409,8 +2406,8 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
             tooFar = elapsed_millis3_modulo < 20 || elapsed_millis3_modulo > 300;
 
         if (tooFar) {
-            StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu %lu fix_age %lu forceUpdate %u" EOL, 
-                elapsed_millis3, elapsed_millis3_modulo, fix_age, forceUpdate);
+            StampPrintf("WARN: bad skew from PPS. elapsed_millis3 %lu %lu PPS_rise_cnt %lu forceUpdate %u" EOL, 
+                elapsed_millis3, elapsed_millis3_modulo, PPS_rise_cnt, forceUpdate);
         }
         // FIX! problems if we try to restrict based on PPS alignment?
         // forceUpdate: don't worry about how close we are to PPS
@@ -2531,9 +2528,8 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // setTime_millis should always be before or = current millis()
     setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
 
-    // bestGuessSkewFromPPS is static, so we have something if !PPS_rise_active
-    if (!PPS_rise_active) {
-        V1_printf("setTime PPS_rise_active false. bestGuessSkewFromPPS %lu" EOL,
+    if (!PPS_rise_valid) {
+        V1_printf("WARN: setTime PPS_rise_valid false. bestGuessSkewFromPPS %lu" EOL,
             bestGuessSkewFromPPS);
     } else {
         // we should be using this at least once per rollover?
@@ -2544,17 +2540,18 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         // print the modulo 1 sec also, if the last PPS was a while ago? (
         // gps being reset or ??
         fix_age = gps.time.age();
-        V1_printf("setTime at elapsed_millis3 %lu %lu from last PPS",
-            elapsed_millis3, elapsed_millis3_modulo);
+        V1_printf("setTime at elapsed_millis3 %lu %lu from after PPS_rise_cnt %lu",
+            elapsed_millis3, elapsed_millis3_modulo, PPS_rise_cnt);
         V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
 
-        // range check it..otherwise leave as is.
+        // range check it..otherwise set to j100?
         if (elapsed_millis3_modulo > 0 && elapsed_millis3_modulo < 500) {
             bestGuessSkewFromPPS = elapsed_millis3_modulo;
         } else {
+            V1_print(("WARN: setTime elapsed_millis3_modulo out of range, using 100" EOL));
             bestGuessSkewFromPPS = 100;
         }
-        V1_printf("setTime PPS_rise_active true, bestGuessSkewFromPPS %lu" EOL,
+        V1_printf("setTime PPS_rise_valid true, bestGuessSkewFromPPS %lu" EOL,
             bestGuessSkewFromPPS);
     }
 
@@ -2619,6 +2616,8 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // show the rx fifo at this point to understand backup!
     int charsAvailable = Serial2.available();
     if (charsAvailable > 15) {
+        V1_print(F("WARN: rx fifo backup: ")); 
+    } else if (charsAvailable > 22) {
         V1_print(F("ERROR: rx fifo backup: ")); 
     }
     V1_printf("gps fix_age_entry %lu fix_age now %lu charsAvailable %d" EOL, 

@@ -11,6 +11,8 @@ void gpsPPS_init();
 void gpsPPS_callback(uint gpio, uint32_t events);
 
 void setGpsPPSMode(void);
+void PPS_countEnable(void);
+void PPS_countDisable(void);
 
 #endif // PPS_FUNCTIONS_H
 
