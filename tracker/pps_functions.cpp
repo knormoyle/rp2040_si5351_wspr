@@ -110,10 +110,11 @@ extern bool VERBY[10];
 
 //********************************************************
 void setGpsPPSMode(void) {
-    // Does PPS default to negative edge on ATGM366H
-    // if so, add 0.5 to the offset?
+    // FIX! if this is redone on every warm reset, PPS doesn't have much chance to stablize?
+    // since we adjust skew always now, we want this even in BALLOON_MODE
+    // what's the default? maybe we don't need this and PPS will be more stable?
     V1_println(F("setGpsPPSMode START"));
-    if (USE_SIM65M && !BALLOON_MODE) {
+    if (false && USE_SIM65M) {
         // automatic. Local_ms and Phase are 0
         // Packet Type:750 PAIR_PPS_SET_CONFIG
         Serial2.print("$PAIR750,0,0,0*24" CR LF);

@@ -2227,7 +2227,7 @@ uint32_t updateGpsDataAndTime(int ms) {
         // FIX! if the time update took more than 32ms the rx fifo would back up, full
         // in any case, we don't break on this if we did a time update 
         // situation probably doesn't happen now.
-        if (timeSinceLastChar_millis >= 50 && !timeUpdateDone) {
+        if (timeSinceLastChar_millis >= 25 && !timeUpdateDone) {
             // FIX! could the LED blinking have gotten delayed?
             // we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
@@ -2236,7 +2236,7 @@ uint32_t updateGpsDataAndTime(int ms) {
         }
         if (timeUpdate_sentences >= 2) break;
         // stop the wait early if Serial2.available
-        gpsSleepForMillis(50, true);  
+        gpsSleepForMillis(25, true);  
         getChar();
         current_millis = millis();
     }
