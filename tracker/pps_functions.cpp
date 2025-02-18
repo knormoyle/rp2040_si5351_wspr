@@ -24,7 +24,7 @@
 extern const int GPS_1PPS_PIN;
 extern uint32_t PPS_rise_millis;
 extern uint32_t PPS_rise_micros;
-// valid after count is 30?
+// valid after count is 10?
 extern bool PPS_rise_valid;
 extern uint32_t PPS_rise_cnt;
 
@@ -113,16 +113,22 @@ extern bool VERBY[10];
 // 2 raw meas + sv info + pvt(including time offset data between GPS and GLO/GAL/BDS)
 
 //********************************************************
-void PPS_countEnable(void) {
+void PPS_countEnable(bool reset) {
+    V1_print(F("PPS_countEnable START END" EOL));
     PPS_rise_active = true;
-    PPS_rise_cnt = 0;
-    PPS_rise_valid = false;
+    if (reset) {
+        // only start from scratch if we cold reset
+        PPS_rise_cnt = 0;
+        PPS_rise_valid = false;
+    }
 }
     
 void PPS_countDisable(void) {
+    V1_print(F("PPS_countDisable START END" EOL));
     PPS_rise_active = false;
-    PPS_rise_cnt = 0;
-    PPS_rise_valid = false;
+    // don't change PPS_rise_cnt or PPS_rise_valid
+    // we might have gotten enough PPS so PPS_rise_micros can be used
+    // with modulo 1 sec, if PPS is now off
 }
 
 void setGpsPPSMode(void) {
@@ -173,31 +179,29 @@ void setGpsPPSMode(void) {
 //********************************************************
 void gpsPPS_callback(uint gpio, uint32_t events) {
     if (events & GPIO_IRQ_EDGE_RISE) {
-        uint32_t current_millis = millis();
-        uint32_t current_micros = micros();
-        static bool was_GpsIsOn = false;
-        static uint32_t printed = 0; // stop after printing 100
-        
         // no modification or reporting if -1
         if (PPS_rise_active) {
             PPS_rise_cnt += 1;
-            PPS_rise_valid = PPS_rise_cnt > 30;
-
+            // keep it just 10, so the first wspr can have setTime that's got good skew measurement
+            PPS_rise_valid = PPS_rise_cnt > 10;
+            // just the first 30 after it's been reset
+            if (PPS_rise_cnt < 30) {
+                V1_printf("INFO: PPS_rise_cnt %lu" EOL, PPS_rise_cnt);
+            }
+        }
+        
+        uint32_t current_millis = millis();
+        uint32_t current_micros = micros();
+        static uint32_t printed = 0; // stop after printing 100
+        if (PPS_rise_valid) {
             // no reporting if 0
             // 0 is legal value for the wraparound uint32_t on the PPS_rise_micros
             uint32_t elapsed_micros = current_micros - PPS_rise_micros;
             // should be 1e6 micros
             int elapsed_micros_error = 1000000 - ((int) elapsed_micros);
-            // really should only check this is GPS not been off during the sec interval?
-            // we could do the error a modulo 1e6, in case a sec is missing?
-            // if gps goes off, it goes off for more than 1 sec
-            // so we could look at GpsIsOn() now and last
-            // still won't cover all issues for PPS validity over time?
-            // FIX! should have some bounds for error for 1 sec?
-            // just look for abs() > 1 to reduce printing
-            if ((printed < 100) && abs(elapsed_micros_error) > 1 && GpsIsOn() && was_GpsIsOn)  {
+            if ((printed < 100) && abs(elapsed_micros_error) > 1) {
                 printed += 1;
-                V1_printf("INFO: PPS edge to edge micros %lu", elapsed_micros);
+                V1_printf("INFO: PPS period micros %lu", elapsed_micros);
                 V1_printf(" error %d ", elapsed_micros_error);
                 printSystemDateTime();
                 V1_print(F(EOL));
@@ -206,24 +210,22 @@ void gpsPPS_callback(uint gpio, uint32_t events) {
             PPS_rise_millis = current_millis;
             PPS_rise_micros = current_micros;
         }
-        // FIX! the GpsIsOn tracking is belts and suspenders. 
-        // doesn't cover more cases than the -1/0 state handling
-        was_GpsIsOn = GpsIsOn();
-    }
     // don't need to clear the interrupt for gpio interrupts
+    }
 }
 
 // this is done for SIM65 or ATGM336H?
 // FIX! does ATGM336 need commands to cause PPS?
 void gpsPPS_init() {
+    // only done once
     V1_println(F("gpsPPS_init START"));
-    if (!BALLOON_MODE) {
-        gpio_init(GPS_1PPS_PIN);
-        gpio_set_dir(GPS_1PPS_PIN, GPIO_IN);
-        gpio_pull_up(GPS_1PPS_PIN);
-        gpio_set_irq_enabled_with_callback(GPS_1PPS_PIN, GPIO_IRQ_EDGE_RISE, true, &gpsPPS_callback);
-    }
-    PPS_countDisable();
+
+    gpio_init(GPS_1PPS_PIN);
+    gpio_set_dir(GPS_1PPS_PIN, GPIO_IN);
+    gpio_pull_up(GPS_1PPS_PIN);
+    gpio_set_irq_enabled_with_callback(GPS_1PPS_PIN, GPIO_IRQ_EDGE_RISE, true, &gpsPPS_callback);
+
+    PPS_countEnable(true); 
     V1_println(F("gpsPPS_init END"));
 }
 

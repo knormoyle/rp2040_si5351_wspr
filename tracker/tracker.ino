@@ -922,7 +922,7 @@ void setup1() {
     GpsINIT();
     tinyGpsCustomInit();
     // BALLOON_MODE is set by not
-    if (!BALLOON_MODE) gpsPPS_init();
+    gpsPPS_init();
     // we have this object in gps_functions.cpp for Extended Telemetry
     // WsprMessageTelemetryExtendedUserDefined<5> codecGpsMsg;
     // define it once. time slot is set later
