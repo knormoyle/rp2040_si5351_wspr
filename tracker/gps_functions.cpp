@@ -2334,7 +2334,6 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // what if the burst interval was 5 secs could there be staleness?
     // Don't use 5 sec broadcast interval
 
-    //*****************************
     uint32_t elapsed_millis1 = millis() - lastCheck_millis;
     lastCheck_millis = millis();
     if (elapsed_millis1 < (uint32_t) 1 * GPS_WAIT_FOR_NMEA_BURST_MAX) return;
@@ -2378,10 +2377,14 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
             return;
         }
     }
+    DoLogPrint();
+
     // shouldn't use the time if hundredths isn't 0, as our skew estimation will be wrong
     if (gps_hundredths > 0) {
-        StampPrintf("WARN: updating while non-zero TinyGPS gps_hundredths %u > 99" EOL,
+        V1_printf("WARN: will setTime ignoring non-zero gps_hundredths %u using gps time", 
             gps_hundredths);
+        printGpsDateTime(gps.date, gps.time, true);
+        V1_print(F(EOL));
     }
 
     //*****************************
@@ -2398,8 +2401,9 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
 
     // all the Time things are int
     // https://stackoverflow.com/questions/6636793/what-are-the-general-rules-for-comparing-different-data-types-in-c
-    uint16_t y = (uint16_t) year(t);
-    uint8_t m = (uint8_t) month(t);
+    // uint16_t y = (uint16_t) year(t);
+    // uint8_t m = (uint8_t) month(t);
+
     uint8_t d = (uint8_t) day(t);
     uint8_t hh = (uint8_t) hour(t);
     uint8_t mm = (uint8_t) minute(t);
@@ -2466,32 +2470,9 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         if (!forceUpdate) return;
     } 
 
-    // did we flush TinyGPS state out when we turn gps off?
-    if (false) {
-        V1_print(F(EOL));
-        V1_print(F(EOL));
-        bool validA = gps.satellites.isValid() && !GpsInvalidAll;
-        bool validB = gps.hdop.isValid() && !GpsInvalidAll;
-        bool validC = gps.location.isValid() && !GpsInvalidAll;
-        bool validD = gps.altitude.isValid() && !GpsInvalidAll;
-        bool validE = gps.course.isValid() && !GpsInvalidAll;
-        bool validF = gps.speed.isValid() && !GpsInvalidAll;
-        // FIX! don't have GpsInvalidAll in these
-        bool validG = gps.date.isValid();
-        bool validH = gps.time.isValid();
-
-        V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
-        !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
-    }
-
     // year can be given as full four digit year or two digts (2010 or 10 for 2010);
     // it is converted to years since 1970
-
     setTime_millis = dollarStar_millis;
-
-    // CUSTOM: pass a millis to setTime!!
-    // setTime_millis should always be before or = current millis()
-    setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
 
     if (!PPS_rise_valid) {
         V1_printf("WARN: setTime PPS_rise_valid false. bestGuessSkewFromPPS %lu" EOL,
@@ -2521,15 +2502,18 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
             bestGuessSkewFromPPS);
     }
 
-    // pushes back the prevMillis value in Time, that was captured by setTime
+    // pushes back the Time prevMillise, that was captured by setTime
     // to align more with with the gps chip sent out the time NMEA sentence
     // probably have to do this closely after setTime
 
     // adjust less with USE_DOLLAR_TIME_MODE because it's time at 
     // beginning of NMEA sentence. closer to PPS edge (real time)
     if (bestGuessSkewFromPPS != 0) {
-        adjustTimeMillis(-1 * bestGuessSkewFromPPS);
+        setTime_millis -= bestGuessSkewFromPPS;
     }
+
+    // setTime_millis should always be before or = current millis()
+    setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
 
     V1_print(F("GOOD: system setTime() with"));
     // V1_printf(" %u gps_month %u gps_year %u",
@@ -2553,19 +2537,17 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     if (timeUpdateCnt != 0) {
         V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
         if (abs(secondDelta) > 1) {
-            V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
+            V1_printf("ERROR: was excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
                 secondDelta, forceUpdate);
             printSystemDateTime();
             V1_print(F(EOL));
-        // time could be reset by forceUpdate, even if secondDelta == 0
         } else if (abs(secondDelta) == 1) {
-            V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
+            V1_printf("WARN: was drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
                 secondDelta, forceUpdate);
             printSystemDateTime();
             V1_print(F(EOL));
-        // time could be reset by forceUpdate, even if secondDelta == 0
         } else {
-            V1_printf("GOOD: no drift. secondDelta %d forceUpdate %u ",
+            V1_printf("GOOD: was no drift. secondDelta %d forceUpdate %u ",
                 secondDelta, forceUpdate);
             printSystemDateTime();
             V1_print(F(EOL));
