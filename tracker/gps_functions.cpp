@@ -2271,6 +2271,23 @@ uint32_t updateGpsDataAndTime(int ms) {
     else AvgCharRateSec = 1000.0 * ((float)incomingCharCnt / (float)duration_millis);
     // can it get too big?
     if (AvgCharRateSec > 999999.9) AvgCharRateSec = 999999.9;
+
+    // the time for chars to arrive should never be more than 1 sec? 
+    // too much stuff in one burst?
+    // NMEA sentences: AvgCharRateSec 893 duration_millis 1103 incomingCharCnt 985
+    // NMEA sentences: AvgCharRateSec 920 duration_millis 1016 incomingCharCnt 935
+    // happened because we also got this PAIR reponses after the RMC
+    // should only happen after power on?
+
+    // $GNRMC,052217.000,A,3801.4142,N,10740.2684,W,0.08,0.00,200225,,,A,V*17
+    // $PAIR001,021,0*38
+    // $PAIR021,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,,-15.48,-15.48,-14.02,-15.48,0,1,##,0,0*34
+    // $PAIR010,0,1,2354,364955*32
+
+    if (duration_millis > 950) {
+        V1_printf("ERROR: NMEA sentences duration_millis %lu > 950 milliseconds" EOL, 
+            duration_millis);
+    }
     V1_printf(
         "NMEA sentences: AvgCharRateSec %.f duration_millis %lu incomingCharCnt %d" EOL,
         AvgCharRateSec, duration_millis, incomingCharCnt);
@@ -2379,12 +2396,14 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     }
     DoLogPrint();
 
-    // shouldn't use the time if hundredths isn't 0, as our skew estimation will be wrong
+    // shouldn't use the time if hundredths isn't 0, as PPS skew seems wrong often, then
+    // it will go to zero once we get a fix. and stay 0 for the repeated broadcast.
     if (gps_hundredths > 0) {
-        V1_printf("WARN: will setTime ignoring non-zero gps_hundredths %u using gps time", 
+        V1_printf("ERROR: won't setTime because non-zero gps_hundredths %u ..PPS skew is often bad" EOL,
             gps_hundredths);
         printGpsDateTime(gps.date, gps.time, true);
         V1_print(F(EOL));
+        return;
     }
 
     //*****************************
