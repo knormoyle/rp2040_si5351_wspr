@@ -40,17 +40,6 @@ extern char t_tx_count_0[4];  // 3 bytes
 //  positive or negative float. clamped to -999.9 to 999.9
 extern char t_temp[7];  // 6 bytes
 
-// examples
-// 1 hPA = 100 PA
-// 11 km (36,000 ft): 226 hPa
-// 20 km (65,000 ft): 54.7 hPa
-// 32 km (105,000 ft): 8.68 hPa
-// always positive float. assume we read hPA. clamped to 0 to 999.999
-// FIX! is it hPA?
-extern char t_bmp_pressure[8];  // 7 bytes
-extern char t_bmp_temp[8];  // 7 bytes
-extern char t_bmp_altitude[8];  // 7 bytes
-
 // always positive float. clamped to 0, 99.99  volts
 extern char t_voltage[6];  // 5 bytes
 

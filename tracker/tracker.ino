@@ -931,6 +931,7 @@ void setup1() {
     // WsprMessageTelemetryExtendedUserDefined<5> codecGpsMsg;
     // define it once. time slot is set later
     define_codecGpsMsg();
+    define_codecBmpMsg();
 
     // usb power means vbat is always on. so a hot reset!
     // we already did a cold reset in the GpsINIT() ..don't do it again!
@@ -1828,8 +1829,10 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
         V1_printf("hf_callsign %-6s" EOL, hf_callsign);
         V1_printf("hf_grid4 %s" EOL, hf_grid4);
-        V1_printf("hf_power %s" EOL, hf_power); V1_print(F(EOL));
+        V1_printf("hf_power %s" EOL, hf_power); 
+        V1_print(F(EOL));
         V1_flush();
+
         vfoOffAtEnd = cc._ExtTelemetry[1] == '-';
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
         tx_cnt_2 += 1;
@@ -1852,12 +1855,12 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         //     ExtTelemetry1_val1, ExtTelemetry1_val2, false, cc._id13);
         uint8_t slot = 3;
         switch (cc._ExtTelemetry[1]) {
-            default:
             case '0':
                 V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
                     txNum, slot);
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
                 break;
+            default:
             case '1':
                 V1_printf("WSPR txNum %d Preparing with encode_codecBmpMsg() slot %u" EOL,
                     txNum, slot);

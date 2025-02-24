@@ -994,14 +994,14 @@ int check_data_validity_and_set_defaults(void) {
     }
 
     //*****************
-    // 0-9 and - are legal.cc._
+    // 0-3 and - are legal.cc._
     // make sure to null terminate
     bool bad = false;
     if (cc._ExtTelemetry[0] == 0) {
         bad = true;
     } else {
         for (int i = 0; i <= 3; i++) {
-            if ((cc._ExtTelemetry[i] < '0' ||cc._ExtTelemetry[i] > '9') &&cc._ExtTelemetry[i] != '-') bad = true;
+            if ((cc._ExtTelemetry[i] < '0' || cc._ExtTelemetry[i] > '3') && cc._ExtTelemetry[i] != '-') bad = true;
         }
     }
     if (bad) {

@@ -69,7 +69,7 @@ void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
 }
 
 //***************************************************************
-WsprMessageTelemetryExtendedUserDefined<3> codecGpsMsg;
+WsprMessageTelemetryExtendedUserDefined<4> codecGpsMsg;
 void define_codecGpsMsg() {
     V1_print(F("define_codecGpsMsg() START" EOL));
 
@@ -82,18 +82,37 @@ void define_codecGpsMsg() {
     // Values will be clamped between 0 - 100 inclusive.
     // Resolution will be in increments of 1.
     bool accepted;
-    accepted = codecGpsMsg.DefineField("SatCountUSA", 0, 100, 1);
+    accepted = codecGpsMsg.DefineField("SatCountUSA", 0, 40, 1);
     if (!accepted) {
-        V1_print(F("ERROR: codecGpsMsg.DefineField('SatCountUSA', 0, 100, 1) not accepted"));
+        V1_println(F("ERROR: codecGpsMsg.DefineField('SatCountUSA', 0, 40, 1) not accepted"));
     }
-    accepted = codecGpsMsg.DefineField("SatCountChina", 0, 100, 1);
+    accepted = codecGpsMsg.DefineField("SatCountChina", 0, 40, 1);
     if (!accepted) {
-        V1_print(F("ERROR: codecGpsMsg.DefineField('SatCountChina', 0, 100, 1) not accepted"));
+        V1_println(F("ERROR: codecGpsMsg.DefineField('SatCountChina', 0, 40, 1) not accepted"));
     }
-    accepted = codecGpsMsg.DefineField("SatCountRussia", 0, 100, 1);
+    accepted = codecGpsMsg.DefineField("SatCountRussia", 0, 40, 1);
     if (!accepted) {
-        V1_print(F("ERROR: codecGpsMsg.DefineField('SatCountRussia', 0, 100, 1) not accepted"));
+        V1_println(F("ERROR: codecGpsMsg.DefineField('SatCountRussia', 0, 40, 1) not accepted"));
     }
+
+    // Define a metric for GPS lock times, in seconds.
+    // Values will be clamped between 0 - 180 inclusive.
+    // Resolution will be in increments of 1.
+    accepted = codecGpsMsg.DefineField("LockTimeSecs", 0, 600, 10);
+    if (!accepted) {
+        V1_println(F("ERROR: codecGpsMsg.DefineField('LockTimeSecs', 0, 600, 10) not accepted"));
+    }
+
+
+    // for use in the traquito website
+    /*  
+{ "name": "SatUSA",       "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
+{ "name": "SatChina",     "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
+{ "name": "SatRussia",    "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
+{ "name": "LockTimeSecs",  "unit": "Seconds", "lowValue": 0, "highValue": 600, "stepSize": 10},
+    */
+    /*
+    */
 
     // Returns true if field is accepted
     // Returns false if field is rejected
@@ -109,19 +128,8 @@ void define_codecGpsMsg() {
     // - The field size exceeds the sum total capacity of 29.180 bits along with other fields
     // or by itself
 
-    // Define a metric for GPS lock times, in seconds.
-    // Values will be clamped between 0 - 180 inclusive.
-    // Resolution will be in increments of 1.
-    accepted = codecGpsMsg.DefineField("LockTimeSecs", 0, 180, 1);
-    if (!accepted) {
-        V1_print(F("ERROR: codecGpsMsg.DefineField('LockTimeSecs', 0, 180, 1) not accepted"));
-    }
-
     // how to form url
     // https://traquito.github.io/copilot/dashboard/#overview
-
-    // causes overflow
-    // codecGpsMsg.DefineField("LockTimeSecsAvg", 0, 180, 1);
 
     V1_print(F("define_codecGpsMsg() END" EOL));
 }
@@ -153,16 +161,20 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(band, channel);
 
     // Encode the data in preparation to transmit
+    bool accepted = true;
     codecGpsMsg.SetId13(cd.id13);
     // Note which transmission slot you will send in
     codecGpsMsg.SetHdrSlot(slot);
 
-    codecGpsMsg.Set("SatCountUSA", atoi(tt.gp_sats));
-    codecGpsMsg.Set("SatCountChina", atoi(tt.gb_sats));
-    codecGpsMsg.Set("SatCountRussia", atoi(tt.gl_sats));
-    codecGpsMsg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
+    accepted &= codecGpsMsg.Set("SatCountUSA", atoi(tt.gp_sats));
+    accepted &= codecGpsMsg.Set("SatCountChina", atoi(tt.gb_sats));
+    accepted &= codecGpsMsg.Set("SatCountRussia", atoi(tt.gl_sats));
+    accepted &= codecGpsMsg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
 
     codecGpsMsg.Encode();
+    if (!accepted) {
+        V1_println("Something didn't get accepted in encode_codecGpsMsg(). missing defines?");
+    }
 
     const char *GetCallsign = codecGpsMsg.GetCallsign();
     const char *GetGrid4 = codecGpsMsg.GetGrid4();
@@ -192,24 +204,31 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
 }
 
 //***************************************************************
-WsprMessageTelemetryExtendedUserDefined<2> codecBmpMsg;
+WsprMessageTelemetryExtendedUserDefined<3> codecBmpMsg;
 void define_codecBmpMsg() {
     V1_print(F("define_codecBmpMsg() START" EOL));
     bool accepted;
-    accepted = codecBmpMsg.DefineField("Pressure", 0.0, 110000.0, 1);
+    accepted = codecBmpMsg.DefineField("Pressure", 0.0, 110000.0, 1000);
     if (!accepted) {
-        V1_print(F("ERROR: codecBmpMsg.DefineField('Pressure', 0.000, 20.000, 0.001) not accepted"));
+        V1_println(F("ERROR: codecBmpMsg.DefineField('Pressure', 0.0, 110000.0, 1000) not accepted"));
     }
 
     accepted = codecBmpMsg.DefineField("Temperature", -60, 100, 1);
     if (!accepted) {
-        V1_print(F("ERROR: codecBmpMsg.DefineField('Temperature', -60, 100, 1) not accepted"));
+        V1_println(F("ERROR: codecBmpMsg.DefineField('Temperature', -60, 100, 1) not accepted"));
     }
 
     accepted = codecBmpMsg.DefineField("Altitude", 0, 60000, 100);
     if (!accepted) {
-        V1_print(F("ERROR: codecBmpMsg.DefineField('Altitude', 0, 60000, 1) not accepted"));
+        V1_println(F("ERROR: codecBmpMsg.DefineField('Altitude', 0, 60000, 100) not accepted"));
     }
+
+// programmed channel 391. comes out on 384
+/*
+{ "name": "Pressure",    "unit": "Pa", "lowValue": 0,   "highValue": 110000, "stepSize": 1000 },
+{ "name": "Temperature", "unit": "C",  "lowValue": -60, "highValue": 100,    "stepSize": 1 },
+{ "name": "Altitude",    "unit": "M",  "lowValue": 0,   "highValue": 60000,  "stepSize": 100 },
+*/
 
     // how to form url
     // https://traquito.github.io/copilot/dashboard/#overview
@@ -243,16 +262,23 @@ void encode_codecBmpMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     // Get channel details
     WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(band, channel);
 
+    bool accepted = true;
     // Encode the data in preparation to transmit
     codecBmpMsg.SetId13(cd.id13);
     // Note which transmission slot you will send in
     codecBmpMsg.SetHdrSlot(slot);
 
-    codecBmpMsg.Set("Pressure", atoi(tt.bmp_pressure));
-    codecBmpMsg.Set("Temperature", atoi(tt.bmp_temperature));
-    codecBmpMsg.Set("Altitude", atoi(tt.bmp_altitude));
+    accepted &= codecBmpMsg.Set("Pressure", atof(tt.bmp_pressure));
+    V1_printf("atof(tt.bmp_pressure %f" EOL, atof(tt.bmp_pressure));
+    accepted &= codecBmpMsg.Set("Temperature", atof(tt.bmp_temperature));
+    V1_printf("atof(tt.bmp_temperature %f" EOL, atof(tt.bmp_temperature));
+    accepted &= codecBmpMsg.Set("Altitude", atof(tt.bmp_altitude));
+    V1_printf("atof(tt.bmp_altitude %f" EOL, atof(tt.bmp_altitude));
 
     codecBmpMsg.Encode();
+    if (!accepted) {
+        V1_println("Something didn't get accepted in encode_codecBmpMsg(). missing defines?");
+    }
 
     const char *GetCallsign = codecBmpMsg.GetCallsign();
     const char *GetGrid4 = codecBmpMsg.GetGrid4();

@@ -581,8 +581,8 @@ void telemetrySweepAllForTest(void) {
     doTelemetrySweepInteger(tt.tx_count_0, 3, 0, 999, 1);       // 3 bytes
     doTelemetrySweepFloat(tt.temp, 6, -100.1, 200.4, 1.0);       // 6 bytes (float)
 
-    doTelemetrySweepFloat(tt.bmp_pressure, 6, 0, 20.000, 1.0);     // 7 bytes (float)
-    doTelemetrySweepFloat(tt.bmp_temperature, 6, -60, 100, 10.0);  // 7 bytes (float)
+    doTelemetrySweepFloat(tt.bmp_pressure, 6, 0, 110000, 1000);    // 7 bytes (float)
+    doTelemetrySweepFloat(tt.bmp_temperature, 6, -60, 200, 10.0);  // 7 bytes (float)
     doTelemetrySweepFloat(tt.bmp_altitude, 6, 0, 60000, 1);        // 7 bytes
 
     doTelemetrySweepFloat(tt.voltage, 5, 0,  6.00, 6.0);         // 5 bytes (float)
