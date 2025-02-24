@@ -79,13 +79,13 @@
 // we'll drive the default 4ma
 #define Si5351Pwr 4
 
-#define VFO_I2C i2c0
+#define BMP_I2C i2c0
+#define BMP280_SDA_PIN 4
+#define BMP280_SCL_PIN 5
+
+#define VFO_I2C i2c1
 #define VFO_SDA_PIN 12;
 #define VFO_SCL_PIN 13;
-
-#define BMP_I2C i2c1
-#define BMP280_SDA_PIN 2
-#define BMP280_SCL_PIN 3
 
 // For these:
 // default=Usually provided via board header, group=hardware_i2c
@@ -177,12 +177,6 @@
 
 
 //*******************************************************************************
-/**
- * Copyright (c) 2020 Raspberry Pi (Trading) Ltd.
- *
- * SPDX-License-Identifier: BSD-3-Clause
- */
-
 // Sweep through all 7-bit I2C addresses, to see if any slaves are present on
 // the I2C bus. Print out a table that looks like this:
 //
@@ -223,7 +217,7 @@
 // 1111 0       10bit address
 
 bool reserved_addr(uint8_t addr) {
-    uint8_t addr7f = addr & 0x7f; 
+    uint8_t addr7f = addr & 0x7f;
     switch (addr7f) {
         case 0x00: ;
         case 0x01: ;
@@ -234,7 +228,7 @@ bool reserved_addr(uint8_t addr) {
         case 0x06: ;
         case 0x07: ;
         case 0x78: ;
-        case 0x79: return true; 
+        case 0x79: return false;
         default: return false;
     }
 }
@@ -242,14 +236,23 @@ bool reserved_addr(uint8_t addr) {
 void setup() { ; }
 
 int scan_i2c(int i2c_number) {
+    // FIX! doesn't arduino-pico core do this? so not necessary
+    // stdio_init_all();
+    // but we do have to wait until it's there
+    while (!Serial) { ; }
+
     Serial.printf(EOL "scan_i2c(%d) START" EOL, i2c_number);
     // power up the Si5351 if we're scanning that bus
     // FIX! what about the BMP..it's always on!
-    if (i2c_number == 0) {
+    if (i2c_number == 1) {
         Serial.println("power on Si5351");
         gpio_init(Si5351Pwr);
         pinMode(Si5351Pwr, OUTPUT_4MA);
         digitalWrite(Si5351Pwr, LOW);
+
+        // wait 1 sec to be sure Si5351 has powered up
+        sleep_ms(1000);
+
     }
 
     // USB_CONNECTED not found
@@ -260,19 +263,9 @@ int scan_i2c(int i2c_number) {
     // have to bootsel/power cycle, to reload non BALOON_FLYING software.
 
 
-    // FIX! doesn't arduino-pico core do this? so not necessary
-    // stdio_init_all();
-    // but we do have to wait until it's there
-    while (!Serial) { ; }
-
-    // wait 1 sec to be sure Si5351 has powered up
-    sleep_ms(1000);
-
-
     // Get I2C instance from I2C hardware instance number
     // i2c_inst_t *i2c_get_instance(uint num)
     i2c_inst_t *i2c_instance_to_test = i2c_get_instance(i2c_number);
-
 
     //**********************************************
     // I suppose could set them both up at once, rather than conditional
@@ -290,17 +283,17 @@ int scan_i2c(int i2c_number) {
     int sda_pin;
     int scl_pin;
     if (i2c_number==0) {
-        sda_pin = VFO_SDA_PIN;
-        scl_pin = VFO_SCL_PIN;
+        sda_pin = BMP280_SDA_PIN;
+        scl_pin = BMP280_SCL_PIN;
     }
     else {
         sda_pin = VFO_SDA_PIN;
         scl_pin = VFO_SCL_PIN;
     }
 
-    Serial.printf("SDA is pin %d" EOL, sda_pin);
+    Serial.printf("i2c%d SDA is pin %d" EOL, i2c_number, sda_pin);
     gpio_set_function(sda_pin, GPIO_FUNC_I2C);
-    Serial.printf("SCL is pin %d" EOL, scl_pin);
+    Serial.printf("i2c%d SCL is pin %d" EOL, i2c_number, scl_pin);
     gpio_set_function(scl_pin, GPIO_FUNC_I2C);
 
     Serial.println("no pullup or pulldowns by RP2040 on both SDA and SCL");
@@ -309,11 +302,20 @@ int scan_i2c(int i2c_number) {
 
     //**********************************************
 
+    if (i2c_number == 0) {
+        Serial.println("power up Si5351");
+        gpio_init(Si5351Pwr);
+        pinMode(Si5351Pwr, OUTPUT_4MA);
+        digitalWrite(Si5351Pwr, LOW);
+        Serial.flush();
+    }
+
+    //**********************************************
     // from the orig. code.
     // Make the I2C pins available to picotool
     // bi_decl(bi_2pins_with_func(PICO_I2C_SDA_PIN, PICO_I2C_SCL_PIN, GPIO_FUNC_I2C));
 
-    Serial.printf(EOL "I2C Bus Scan" EOL);
+    Serial.printf(EOL "I2C %d Bus Scan" EOL, i2c_number);
     Serial.printf("   0  1  2  3  4  5  6  7  8  9  A  B  C  D  E  F" EOL);
 
     for (int addr = 0; addr < (1 << 7); ++addr) {
@@ -329,7 +331,7 @@ int scan_i2c(int i2c_number) {
         int ret;
         uint8_t rxdata;
         if (reserved_addr(addr)) {
-            // Serial.printf("reserved addr %u", addr);
+            Serial.printf("reserved addr %u", addr);
             ret = PICO_ERROR_GENERIC;
         }
         else {
@@ -340,7 +342,7 @@ int scan_i2c(int i2c_number) {
         }
 
         // hmm was this conditional the reason my macros didn't work
-        char char1[2] = { 0 };  
+        char char1[2] = { 0 };
         char1[0] = ret < 0 ? '.' : '@';
         if (addr % 16 == 15) {
             // EOL
@@ -353,14 +355,6 @@ int scan_i2c(int i2c_number) {
         Serial.flush();
     }
 
-    if (i2c_number == 0) {
-        Serial.println("power off Si5351");
-        gpio_init(Si5351Pwr);
-        pinMode(Si5351Pwr, OUTPUT_4MA);
-        digitalWrite(Si5351Pwr, LOW);
-        Serial.flush();
-    }
-
     //**********************************************
     Serial.printf("scan_i2c(%d) END" EOL, i2c_number);
     return 0;
@@ -368,20 +362,21 @@ int scan_i2c(int i2c_number) {
 
 //**********************************************
 void loop() {
-    Serial.println(EOL "Will scan i2c0 (si5351 should be only device)" EOL);
-    scan_i2c(0);
+    Serial.println("power up Si5351");
+    gpio_init(Si5351Pwr);
+    pinMode(Si5351Pwr, OUTPUT_4MA);
+    digitalWrite(Si5351Pwr, LOW);
 
-    Serial.println(EOL "Will scan i2c1 (bmp280 should be only device)" EOL);
+    Serial.println(EOL "Will scan i2c0 (bmp280 should be only device)" EOL);
+    scan_i2c(0);
+    Serial.println(EOL "Will scan i2c1 (si5351 should be only device)" EOL);
     scan_i2c(1);
 
     Serial.println("Deinit both i2c0 and i2c1");
     i2c_deinit(i2c0);
     i2c_deinit(i2c1);
     Serial.println("left sda/scl's as defined with pullups");
-    Serial.println("power off Si5351");
-    gpio_init(Si5351Pwr);
-    pinMode(Si5351Pwr, OUTPUT_4MA);
-    digitalWrite(Si5351Pwr, LOW);
+    sleep_ms(5000);
 
 }
 //********************************************************************

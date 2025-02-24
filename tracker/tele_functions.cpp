@@ -262,20 +262,25 @@ void snapForTelemetry() {
     // 11 km (36,000 ft): 226 hPa
     // 20 km (65,000 ft): 54.7 hPa
     // 32 km (105,000 ft): 8.68 hPa
-    // FIX! do we read hPA
 
-    float pressure = bmp_read_pressure();
-    pressure = clamp_float(pressure, -999.9, 999.9);
-    snprintf(tt.pressure, sizeof(tt.pressure), "%.2f", pressure);
+    // get a new reading?
+    bmp_forced_mode();
 
-    float temp_ext = bmp_read_temperature();
-    temp_ext = clamp_float(temp_ext, -999.9, 999.9);
-    snprintf(tt.temp_ext, sizeof(tt.temp_ext), "%.2f", temp_ext);
+    float bmp_pressure = bmp_read_pressure();
+    bmp_pressure = clamp_float(bmp_pressure, 0.0, 110000.0);
+    // round with no decimal?
+    snprintf(tt.bmp_pressure, sizeof(tt.bmp_pressure), "%.0f", bmp_pressure);
 
-    float humidity = bmp_read_humidity();
-    humidity = clamp_float(humidity, -999.9, 999.9);
-    snprintf(tt.humidity, sizeof(tt.humidity), "%.2f", humidity);
+    float bmp_temperature = bmp_read_temperature();
+    bmp_temperature = clamp_float(bmp_temperature, -60.0, 200.0);
+    snprintf(tt.bmp_temperature, sizeof(tt.bmp_temperature), "%.2f", bmp_temperature);
 
+    float bmp_altitude = bmp_read_altitude();
+    bmp_altitude = clamp_float(bmp_altitude, 0, 60000);
+    // round with no decimal?
+    snprintf(tt.bmp_altitude, sizeof(tt.bmp_altitude), "%.0f", bmp_altitude);
+
+    //*********************************
     float voltage = readVoltage();
     voltage = clamp_float(voltage, 0, 99.99);
     snprintf(tt.voltage, sizeof(tt.voltage), "%.2f", voltage);
@@ -465,9 +470,6 @@ void snapForTelemetry() {
     V1_printf("tt.solarElevation %s " EOL, tt.solarElevation);
     V1_printf("tt.solarAzimuth %s " EOL, tt.solarAzimuth);
 
-    V1_printf("tt.temp_ext %s" EOL, tt.temp);
-    V1_printf("tt.pressure %s " EOL, tt.pressure);
-
     // V1_printf("tt.ExtTelemetry1_val1 %d " EOL, tt.ExtTelemetry1_val1);
     // V1_printf("tt.ExtTelemetry1_val2 %d " EOL, tt.ExtTelemetry1_val2);
     // V1_printf("tt.ExtTelemetry2_val1 %d " EOL, tt.ExtTelemetry2_val1);
@@ -481,6 +483,10 @@ void snapForTelemetry() {
     V1_printf("tt.gpsLockSecsMin %s " EOL, tt.gpsLockSecsMin);
     V1_printf("tt.gpsLockSecsMax %s " EOL, tt.gpsLockSecsMax);
     V1_printf("tt.gpsLockSecsAvg %s " EOL, tt.gpsLockSecsAvg);
+
+    V1_printf("tt.bmp_temperature %s " EOL, tt.bmp_temperature);
+    V1_printf("tt.bmp_pressure %s " EOL, tt.bmp_pressure);
+    V1_printf("tt.bmp_altitude %s " EOL, tt.bmp_altitude);
     V1_printf("************" EOL);
 
     V1_println(F("snapForTelemetry END"));
@@ -489,51 +495,17 @@ void snapForTelemetry() {
 //****************************************************
 void process_ExtTele_data(void) {
     V1_println(F("process_ExtTele_data START"));
-    // minutes_since_GPS_acquistion (should this be last time to fix);
-    // we don't send stuff out if we don't get gps acquistion.
-    // so minutes since fix doesn't really matter?
-
-    // 3.3 * 1000. the 3.3 is from vref,
-    // the 1000 is to convert to mV.
-    // the 12 bit shift is because thats resolution of ADC
-    const float conversionFactor = 3300.0f / (1 << 12);
-
     uint32_t telemetry_vals[4] = { 0 };
     uint32_t timeSinceBoot_secs = millis() / 1000UL;  // seconds
+    // FIX! not used?
     for (int i=0; i < 4; i++) {
         // no negative values here
         switch (cc._ExtTelemetry[i]) {
-            case '-':  break;  // do nothing
+            default:
             case '0':
-                telemetry_vals[i] = round((float)analogRead(0) * conversionFactor);
+                telemetry_vals[i] = timeSinceBoot_secs;
                 break;
-            case '1':
-                telemetry_vals[i] = round((float)analogRead(1) * conversionFactor);
-                break;
-            case '2':
-                telemetry_vals[i] = round((float)analogRead(2) * conversionFactor);
-                break;
-            case '3':
-                // ADC3 is hardwired to Battery via 3:1 voltage divider: make the conversion here
-                telemetry_vals[i] = round((float)analogRead(3) * conversionFactor * 3.0f);
-                break;
-            case '4':
-                telemetry_vals[i] = timeSinceBoot_secs;  // seconds since running
-                break;
-            case '5':
-                telemetry_vals[i] = GpsTimeToLastFix; 
-                break;
-            case '6':
-                telemetry_vals[i] = tx_cnt_0;
-                break;
-            case '7':
-                telemetry_vals[i] = atoi(tt.sat_count);
-                break;
-            case '8':
-                telemetry_vals[i] = atoi(tt.hdop);  // hundredths
-                break;
-            case '9': { ; }
-                telemetry_vals[i] = 0;
+            case '-':  break;  // do nothing
         }
     }
     // will get sent as ExtTele #1 (extended Telemetry) (a third packet in the U4B protocol)
@@ -608,9 +580,11 @@ void telemetrySweepAllForTest(void) {
     doTelemetrySweepInteger(tt.altitude, 6, 0, 99999, 1);        // 6 bytes
     doTelemetrySweepInteger(tt.tx_count_0, 3, 0, 999, 1);       // 3 bytes
     doTelemetrySweepFloat(tt.temp, 6, -100.1, 200.4, 1.0);       // 6 bytes (float)
-    doTelemetrySweepFloat(tt.pressure, 7, -20.10, 100.10, 1.0);  // 7 bytes (float)
-    doTelemetrySweepFloat(tt.temp_ext, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
-    doTelemetrySweepFloat(tt.humidity, 7, -50.12, 200.45, 1.0);  // 7 bytes (float)
+
+    doTelemetrySweepFloat(tt.bmp_pressure, 6, 0, 20.000, 1.0);     // 7 bytes (float)
+    doTelemetrySweepFloat(tt.bmp_temperature, 6, -60, 100, 10.0);  // 7 bytes (float)
+    doTelemetrySweepFloat(tt.bmp_altitude, 6, 0, 60000, 1);        // 7 bytes
+
     doTelemetrySweepFloat(tt.voltage, 5, 0,  6.00, 6.0);         // 5 bytes (float)
     doTelemetrySweepInteger(tt.sat_count, 2, 0, 99, 1);          // 2 bytes
     doTelemetrySweepInteger(tt.hdop, 3, 0, 999, 1);              // 3 bytes
@@ -636,9 +610,11 @@ void telemetrySweepAllForTest(void) {
     V1_printf("TESTMODE tt.altitude: %s" EOL, tt.altitude);
     V1_printf("TESTMODE tt.tx_count_0: %s" EOL, tt.tx_count_0);
     V1_printf("TESTMODE tt.temp: %s" EOL, tt.temp);
-    V1_printf("TESTMODE tt.pressure: %s" EOL, tt.pressure);
-    V1_printf("TESTMODE tt.temp_ext: %s" EOL, tt.temp_ext);
-    V1_printf("TESTMODE tt.humidity: %s" EOL, tt.humidity);
+
+    V1_printf("TESTMODE tt.bmp_pressure: %s" EOL, tt.bmp_pressure);
+    V1_printf("TESTMODE tt.bmp_temperature: %s" EOL, tt.bmp_temperature);
+    V1_printf("TESTMODE tt.bmp_altitude: %s" EOL, tt.bmp_altitude);
+
     V1_printf("TESTMODE tt.voltage: %s" EOL, tt.voltage);
     V1_printf("TESTMODE tt.sat_count: %s" EOL, tt.sat_count);
     V1_printf("TESTMODE tt.hdop: %s" EOL, tt.hdop);

@@ -306,7 +306,7 @@ void do_cwTest(void) {
 void do_someTest(void) {
     V0_print(F(EOL "do_someTest START"));
     // quick and dirty way to execute some different tests
-    if (true) {
+    if (false) {
         V0_print(F("Cycle thru the 4 wspr symbol frequencies. 15 secs each"));
         GpsOFF();
         init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
@@ -329,7 +329,7 @@ void do_someTest(void) {
             char c_char = getOneChar(2000);  // 2 secs
             if (c_char != 0) break;
         }
-    } else if (true) {
+    } else if (false) {
         // picks a good HF freq for the config'ed cc._Band
         // uses t_callsign a and t_grid6 in the message
         // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
@@ -341,9 +341,16 @@ void do_someTest(void) {
             if (c_char != 0) break;
         }
     } else if (true) {
-        i2c_scan_both();
+        if (false) {
+            V0_println(F(EOL "isc scan with Wire()"));
+            i2c_scan_with_Wire_setup();
+            i2c_scan_with_Wire();
+        } else {
+            V0_println(F(EOL "isc scan"));
+            i2c_scan_both();
+        }
     } else {
-        V0_println(F(EOL "Can we read and write these?"));
+        V0_println(F(EOL "ms5351m i2c test: Can we read and write these?"));
 
         // FIX! should we update this to the actual read+write test in i2c_test
         V0_println(F(EOL "SI5351A_MULTISYNTH0_BASE reset state 0xe8 ?"));

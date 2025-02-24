@@ -7,13 +7,9 @@
 #include <stdint.h>
 #include <Adafruit_BMP280.h> // https://github.com/adafruit/Adafruit_BMP280_library
 
-// what about the tiny gps library? already included in the .ino?
-
 void bmp_init(void);
 float bmp_read_temperature(void);
 float bmp_read_pressure(void);
-float bmp_read_humidity(void);
-
-// FIX! add temp and pressure reads?
-
+float bmp_read_altitude(void);
+void bmp_forced_mode();
 #endif

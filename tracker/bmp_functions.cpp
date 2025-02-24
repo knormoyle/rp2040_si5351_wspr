@@ -11,36 +11,11 @@
 
 
 //******************************************
-// Bosch has stepped up their game with their new BME280 sensor, an environmental sensor with temperature, barometric pressure and humidity! This sensor is great for all sorts of indoor environmental sensing and can even be used in both I2C and SPI!
-
-// This precision sensor from Bosch is the best low-cost sensing solution for measuring humidity with ±3% accuracy, barometric pressure with ±1 hPa absolute accuraccy, and temperature with ±1.0°C accuracy. Because pressure changes with altitude, and the pressure measurements are so good, you can also use it as an altimeter with  ±1 meter or better accuracy!
-
-// The BME280 is the next-generation of sensors from Bosch, and is the upgrade to the BMP085/BMP180/BMP183 - with a low altitude noise of 0.25m and the same fast conversion time. It has the same specifications, but can use either I2C or SPI. For simple easy wiring, go with I2C. If you want to connect a bunch of sensors without worrying about I2C address collisions, go with SPI.
-
-// https://www.adafruit.com/product/2652
-// https://www.bosch-sensortec.com/products/environmental-sensors/humidity-sensors-bme280/
-// 2.5x2.5mm 8 pin lga?
-
 // alternative bosch 8 pin sensors (same footprint?)
 // 3x3mm not recommended for new designs. 8 pin lga
 // mouser has 9289 digikey has 15534
 // https://www.bosch-sensortec.com/media/boschsensortec/downloads/datasheets/bst-bme680-ds001.pdf
 // https://www.bosch-sensortec.com/media/boschsensortec/downloads/application_notes_1/bst-bme680-an014.pdf
-
-// Like the BME280 & BMP280, this precision sensor from Bosch can measure humidity with ±3% accuracy, barometric pressure with ±1 hPa absolute accuracy, and temperature with ±1.0°C accuracy. Because pressure changes with altitude, and the pressure measurements are so good, you can also use it as an altimeter with  ±1 meter or better accuracy!
-
-// Personal air quality tracker
-// Air quality mapping
-// Air quality inside cars & public transport
-// Enhanced context awareness
-// Accurate step & calorie tracker
-// Quick GPS-fix & improved navigation
-// Indicator of too high / low humidity
-// Air quality & well-being indicator
-// Sleep / recovery tracker
-// Weather trend
-// Stair counter
-// Floor level detection
 
 // https://www.bosch-sensortec.com/products/environmental-sensors/gas-sensors/bme680/
 
@@ -140,88 +115,109 @@ BMP280_U32_t bmp280_compensate_P_int64(BMP280_S32_t adc_P) {
 // page 22 of datasheet
 
 // The following figure shows the detailed algorithm for pressure and temperature measurement.
-// This algorithm is available to customers as reference C source code (“BMP28x_ API”) from Bosch
-// Sensortec and via its sales and distribution partners.
-
+// This algorithm is available to customers as reference C source code (“BMP28x_ API”)
 
 // FIX! do we use Wire1 for this i2c ?
 // do we need a Wire1.begin() in tracker.ino
-#define BMP280_I2C_INSTANCE i2c1
 #include "bmp_functions.h"
 #include "print_functions.h"
 #include <Wire.h>
+#include <Adafruit_BMP280.h>  // https://github.com/adafruit/Adafruit_BMP280_Library
+#include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
-extern const int BMP280_I2C1_SDA_PIN;
-extern const int BMP280_I2C1_SCL_PIN;
+extern const int BMP_I2C_SDA_PIN;
+extern const int BMP_I2C_SCL_PIN;
+extern const int BMP_I2C_SCL_HZ;
+#define BMP_I2C_INSTANCE i2c1
+
 // extern Adafruit_BMP085 bmp;
 extern Adafruit_BMP280 bmp;
 
 // decode of _verbose 0-9
 extern bool VERBY[10];
-
-// This precision sensor from Bosch is the best low-cost sensing solution
-// for measuring barometric pressure and temperature.
-
-const int BMP280_I2C1_SCL_HZ = (1000 * 1000);
+extern Adafruit_BMP280 bmp; 
+extern bool BMP_FOUND;
 
 void bmp_init(void) {
+    Watchdog.reset();
     V1_println(F("bmp_init START"));
-    return;
-    // always on? these pins don't exist
-    // gpio_init(BMP280_VDD_ON_N_PIN)
+    // always on?
 
-    // gpio_put(BMP280_VDD_ON_N_PIN, 0);
+    // init I2C for BMP
+    // using i2c0 so we can just use the default Wire?
+    // but we have to to set pins to 2 and 3
 
-    // init I2C1 for BMP
-    i2c_init(BMP280_I2C_INSTANCE, BMP280_I2C1_SCL_HZ);
+    // will this be Wire? 
+    // Wire1 should already be setup
+    if (false) {
+        i2c_init(BMP_I2C_INSTANCE, BMP_I2C_SCL_HZ);
+        gpio_set_pulls(BMP_I2C_SDA_PIN, false, false);
+        gpio_set_pulls(BMP_I2C_SCL_PIN, false, false);
+        gpio_set_function(BMP_I2C_SDA_PIN, GPIO_FUNC_I2C);
+        gpio_set_function(BMP_I2C_SCL_PIN, GPIO_FUNC_I2C);
+    } else {
+        Wire1.setSDA(BMP_I2C_SDA_PIN);
+        Wire1.setSCL(BMP_I2C_SCL_PIN);
+        Wire1.setClock(BMP_I2C_SCL_HZ);
+        Wire1.begin();
+    }
+    sleep_ms(1000);
 
-    gpio_set_pulls(BMP280_I2C1_SDA_PIN, false, false);
-    gpio_set_pulls(BMP280_I2C1_SCL_PIN, false, false);
+    // should be 0x76 or 0x77
+    BMP_FOUND = false;
+    if (bmp.begin(BMP280_ADDRESS_ALT, BMP280_CHIPID)) {
+        BMP_FOUND = true;
+    } else {
+        V1_println(F("WARN: Could not find a valid BMP280 sensor using 0x76 on Wire1"));
+    }
 
-    gpio_set_function(BMP280_I2C1_SDA_PIN, GPIO_FUNC_I2C);
-    gpio_set_function(BMP280_I2C1_SCL_PIN, GPIO_FUNC_I2C);
+    if (BMP_FOUND) {
+        V1_printf("bmp280 sensorID() %x" EOL, bmp.sensorID());
+        V1_println(F("bmp280 default settings from datasheet. Forced"));
+
+        // do we need to set this again to get another measurement?
+        bmp_forced_mode();
+    }
+    
     V1_println(F("bmp_init END"));
 }
 
 
-// Default settings from datasheet
-// FIX! bme280? different sampling from default
-// should I do forced or continuous readings
-// might want the device to stay a little warm?
-// is power low enough to not care or ??
-/*
-bmp.setSampling(
-    Adafruit_BMP280::MODE_NORMAL,
-    Adafruit_BMP280::SAMPLING_X2,
-    Adafruit_BMP280::SAMPLING_X16,
-    Adafruit_BMP280::FILTER_X16,
-    Adafruit_BMP280::STANDBY_MS_500);
-*/
-
-
 //*********************
-// FIX! have to add compensation code
-// FIX! have to add humidity code
-// FIX! change this to bme_280?
+// FIX! compensation code?
+void bmp_forced_mode() {
+    V1_println(F("bmp_forced_mode START"));
+    // do we need to set this again every time we want a measurement?
+    bmp.setSampling(Adafruit_BMP280::MODE_FORCED, // Operating Mode
+        Adafruit_BMP280::SAMPLING_X2,     // Temp. oversampling
+        Adafruit_BMP280::SAMPLING_X16,    // Pressure oversampling
+        Adafruit_BMP280::FILTER_X16,      // Filtering
+        Adafruit_BMP280::STANDBY_MS_500); // Standby time
+    sleep_ms(200);
+    V1_println(F("bmp_forced_mode END"));
+}
+
 float bmp_read_temperature(void) {
     V1_println(F("bmp_read_temperature START"));
-    return 0.0;
-    V1_println(F("bmp_read_temperature END"));
-    return bmp.readTemperature();
+    float temperature = 0.0;
+    if (BMP_FOUND) temperature = bmp.readTemperature(); // *C
+    V1_printf("bmp_read_temperature END %.4f" EOL, temperature);
+    return temperature;
 }
 
 float bmp_read_pressure(void) {
     V1_println(F("bmp_read_pressure START"));
-    return 0.0;
-    V1_println(F("bmp_read_pressure END"));
-    return bmp.readPressure();
+    float pressure = 0.0;
+    if (BMP_FOUND) pressure = bmp.readPressure(); // Pa
+    V1_printf("bmp_read_pressure END %.4f" EOL, pressure);
+    return pressure;
 }
 
-float bmp_read_humidity(void) {
-    // FIX! need to switch to bme280
-    // return bmp.readHumidity();
-    V1_println(F("bmp_read_humidity START"));
-    V1_println(F("bmp_read_humidity END"));
-    return 0.0;
+float bmp_read_altitude(void) {
+    V1_println(F("bmp_read_altitude START"));
+    float altitude = 0.0;
+    if (BMP_FOUND) altitude = bmp.readAltitude(); // M
+    V1_printf("bmp_read_altitude END %.4f" EOL, altitude);
+    return altitude;
 }
 

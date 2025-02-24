@@ -19,12 +19,12 @@
 // FIX! where should this go? also in si5351_functions.cpp
 #define VFO_I2C_INSTANCE i2c0
 extern const int SI5351A_I2C_ADDR;
-extern const int VFO_I2C0_SDA_PIN;
-extern const int VFO_I2C0_SCL_PIN;
-extern const int VFO_I2C0_SCL_HZ;
-extern const int BMP_I2C1_SDA_PIN;
-extern const int BMP_I2C1_SCL_PIN;
-extern const int BMP_I2C1_SCL_HZ;
+extern const int VFO_I2C_SDA_PIN;
+extern const int VFO_I2C_SCL_PIN;
+extern const int VFO_I2C_SCL_HZ;
+extern const int BMP_I2C_SDA_PIN;
+extern const int BMP_I2C_SCL_PIN;
+extern const int BMP_I2C_SCL_HZ;
 extern const int Si5351Pwr;
 
 // decode of verbose 0-9
@@ -42,8 +42,8 @@ extern bool VERBY[10];
 
 // RP2040 has i2c0 and i2c1
 // If we use Wire/Wire1:
-// have to use the pins labeled I2C0 for Wire
-// have to use the pins labeleds I2C1 for Wire1
+// have to use the pins labeled I2C for Wire
+// have to use the pins labeleds I2C for Wire1
 // we're not going to use the newer Wire() stuff
 // going to just the older style
 
@@ -205,11 +205,11 @@ int scan_i2c(int i2c_number) {
     int sda_pin;
     int scl_pin;
     if (i2c_number == 0) {
-        sda_pin = VFO_I2C0_SDA_PIN;
-        scl_pin = VFO_I2C0_SCL_PIN;
+        sda_pin = VFO_I2C_SDA_PIN;
+        scl_pin = VFO_I2C_SCL_PIN;
     } else {
-        sda_pin = BMP_I2C1_SDA_PIN;
-        scl_pin = BMP_I2C1_SCL_PIN;
+        sda_pin = BMP_I2C_SDA_PIN;
+        scl_pin = BMP_I2C_SCL_PIN;
     }
 
     V1_printf("SDA is pin %d" EOL, sda_pin);
@@ -299,7 +299,9 @@ void i2c_scan_both() {
 //****************************************************
 // this assumes Wire is created beforehand?
 void i2c_scan_with_Wire(void) {
-    V1_println(F("i2c_scan START"));
+    // what pins does Wire use? should we receate Wire
+
+    V1_println(F("i2c_scan_with_Wire START"));
     uint8_t error, address;
     int nDevices;
     V1_println("Scanning...");
@@ -326,81 +328,83 @@ void i2c_scan_with_Wire(void) {
         V1_println("No I2C devices found" EOL);
     }
     else V1_println("done\n");
-    V1_println(F("i2c_scan END"));
+    V1_println(F("i2c_scan_with_Wire END"));
 }
 
 //************************************************
 byte error, address;
 unsigned int nDevices;
-unsigned int wireN = 0;
 
 // Pi Pico SDA/SCL Pins
 const unsigned int SDA_00 = 0;
 const unsigned int SCL_00 = 1;
-const unsigned int SDA_10 = 2;
-const unsigned int SCL_10 = 3;
 const unsigned int SDA_01 = 4;
 const unsigned int SCL_01 = 5;
-const unsigned int SDA_11 = 6;
-const unsigned int SCL_11 = 7;
 const unsigned int SDA_02 = 8;
 const unsigned int SCL_02 = 9;
-const unsigned int SDA_12 = 10;
-const unsigned int SCL_12 = 11;
 const unsigned int SDA_03 = 12;
 const unsigned int SCL_03 = 13;
-const unsigned int SDA_13 = 14;
-const unsigned int SCL_13 = 15;
 const unsigned int SDA_04 = 16;
 const unsigned int SCL_04 = 17;
-const unsigned int SDA_14 = 18;
-const unsigned int SCL_14 = 19;
 const unsigned int SDA_05 = 20;
 const unsigned int SCL_05 = 21;
+// there are more but we use them for other things
+
+const unsigned int SDA_10 = 2;
+const unsigned int SCL_10 = 3;
+const unsigned int SDA_11 = 6;
+const unsigned int SCL_11 = 7;
+const unsigned int SDA_12 = 10;
+const unsigned int SCL_12 = 11;
+const unsigned int SDA_13 = 14;
+const unsigned int SCL_13 = 15;
+const unsigned int SDA_14 = 18;
+const unsigned int SCL_14 = 19;
 const unsigned int SDA_15 = 26;
 const unsigned int SCL_15 = 27;
 
-void i2c_scanner_with_Wire_setup() {
-    V1_println(F("i2c_scanner_setup START"));
-    V1_println(F("Just Wire"));
+void i2c_scan_with_Wire_setup() {
+    V1_println(F("i2c_scan_with_Wire_setup START"));
+    V1_println(F(EOL "Just Wire"));
 
-    scan_Wire(SDA_00, SCL_00, Wire);
-    scan_Wire(SDA_01, SCL_01, Wire);
-    scan_Wire(SDA_02, SCL_02, Wire);
-    scan_Wire(SDA_03, SCL_03, Wire);
-    scan_Wire(SDA_04, SCL_04, Wire);
-    scan_Wire(SDA_05, SCL_05, Wire);
+    // FIX! this is not reassigning Wire and Wire1 from default setup?
 
-    V1_println(F("Just Wire1"));
-    scan_Wire(SDA_10, SCL_10, Wire1);
-    scan_Wire(SDA_11, SCL_11, Wire1);
-    scan_Wire(SDA_12, SCL_12, Wire1);
-    scan_Wire(SDA_13, SCL_13, Wire1);
-    scan_Wire(SDA_14, SCL_14, Wire1);
-    scan_Wire(SDA_15, SCL_15, Wire1);
+    scan_Wire(SDA_00, SCL_00, Wire, false);
+    scan_Wire(SDA_01, SCL_01, Wire, false);
+    scan_Wire(SDA_02, SCL_02, Wire, false);
+    scan_Wire(SDA_03, SCL_03, Wire, false);
+    scan_Wire(SDA_04, SCL_04, Wire, false);
+    scan_Wire(SDA_05, SCL_05, Wire, false);
 
-    V1_println("All Scans Successful!\n");
-    V1_println(F("i2c_scanner_setup END"));
+    V1_println(F(EOL "Just Wire1"));
+    scan_Wire(SDA_10, SCL_10, Wire1, true);
+    scan_Wire(SDA_11, SCL_11, Wire1, true);
+    scan_Wire(SDA_12, SCL_12, Wire1, true);
+    scan_Wire(SDA_13, SCL_13, Wire1, true);
+    scan_Wire(SDA_14, SCL_14, Wire1, true);
+    scan_Wire(SDA_15, SCL_15, Wire1, true);
+
+    V1_println(EOL "All Scans Successful!\n");
+    V1_println(F("i2c_scan_with_Wire_setup END"));
 }
 
 // scan the Wire interfaces for devices
-void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire) {
-    V1_printf("scan_WIRE %u %u START" EOL, SDA, SCL);
+void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire, bool usingWire1) {
+    V1_printf("scan_Wire %u %u START" EOL, SDA, SCL);
     Wire.setSDA(SDA);
     Wire.setSCL(SCL);
     Wire.begin();
 
-    V1_print(F("Wire"));
-    V1_print(wireN % 2);
-    V1_print(F(" SDA: "));
-    V1_print(SDA);
-    V1_print(F(" SCL: "));
-    V1_println(SCL);
+    if (usingWire1) {
+        V1_print("Wire1");
+    } else {
+        V1_print("Wire");
+    }
+    V1_printf("SDA %d SCL %d" EOL, SDA, SCL);
 
     nDevices = 0;
     for (address = 1; address < 127; address++) {
-        // The i2c_scanner uses the return value of
-        // the Write.endTransmisstion to see if
+        // The i2c_scan uses the return value of the Write.endTransmission to see if
         // a device did acknowledge to the address.
 
         Wire.beginTransmission(address);
@@ -425,8 +429,7 @@ void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire) {
         V1_print(F("Scan Complete" EOL));
     }
     Wire.end();
-    wireN++;
-    V1_printf("scan_WIRE %u %u END" EOL, SDA, SCL);
+    V1_printf("scan_Wire %u %u END" EOL, SDA, SCL);
 }
 
 //****************************************************

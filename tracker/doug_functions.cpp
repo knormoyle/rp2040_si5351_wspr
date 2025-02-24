@@ -69,7 +69,7 @@ void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
 }
 
 //***************************************************************
-WsprMessageTelemetryExtendedUserDefined<4> codecGpsMsg;
+WsprMessageTelemetryExtendedUserDefined<3> codecGpsMsg;
 void define_codecGpsMsg() {
     V1_print(F("define_codecGpsMsg() START" EOL));
 
@@ -123,7 +123,6 @@ void define_codecGpsMsg() {
     // causes overflow
     // codecGpsMsg.DefineField("LockTimeSecsAvg", 0, 180, 1);
 
-
     V1_print(F("define_codecGpsMsg() END" EOL));
 }
 
@@ -132,11 +131,11 @@ void define_codecGpsMsg() {
 void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
     V1_print(F("encode_codecGpsMsg START" EOL));
     switch (slot) {
+        case 0: {;}
         case 1: {;}
         case 2: {;}
         case 3: {;}
-        case 4: {;}
-        case 5: break;
+        case 4: break;
         default:
             // count 0,1,2,3,4 here
             V1_printf("ERROR: encode_codecGpsMsg illegal slot %u ..using 2" EOL, slot);
@@ -158,19 +157,10 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     // Note which transmission slot you will send in
     codecGpsMsg.SetHdrSlot(slot);
 
-    if (false) {
-        codecGpsMsg.Set("SatCountUSA", 12);
-        codecGpsMsg.Set("SatCountChina", 10);
-        codecGpsMsg.Set("SatCountRussia", 0);
-        codecGpsMsg.Set("LockTimeSecs", 10.74);
-        codecGpsMsg.Set("LockTimeSecsAvg", 12.76);
-    } else {
-        codecGpsMsg.Set("SatCountUSA", atoi(tt.gp_sats));
-        codecGpsMsg.Set("SatCountChina", atoi(tt.gb_sats));
-        codecGpsMsg.Set("SatCountRussia", atoi(tt.gl_sats));
-        codecGpsMsg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
-        codecGpsMsg.Set("LockTimeSecsAvg", atoi(tt.gpsLockSecsAvg));
-    }
+    codecGpsMsg.Set("SatCountUSA", atoi(tt.gp_sats));
+    codecGpsMsg.Set("SatCountChina", atoi(tt.gb_sats));
+    codecGpsMsg.Set("SatCountRussia", atoi(tt.gl_sats));
+    codecGpsMsg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
 
     codecGpsMsg.Encode();
 
@@ -199,4 +189,94 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     snprintf(hf_power, 3, "%u", GetPowerDbm);
 
     V1_print(F("encode_codecGpsMsg END" EOL));
+}
+
+//***************************************************************
+WsprMessageTelemetryExtendedUserDefined<2> codecBmpMsg;
+void define_codecBmpMsg() {
+    V1_print(F("define_codecBmpMsg() START" EOL));
+    bool accepted;
+    accepted = codecBmpMsg.DefineField("Pressure", 0.0, 110000.0, 1);
+    if (!accepted) {
+        V1_print(F("ERROR: codecBmpMsg.DefineField('Pressure', 0.000, 20.000, 0.001) not accepted"));
+    }
+
+    accepted = codecBmpMsg.DefineField("Temperature", -60, 100, 1);
+    if (!accepted) {
+        V1_print(F("ERROR: codecBmpMsg.DefineField('Temperature', -60, 100, 1) not accepted"));
+    }
+
+    accepted = codecBmpMsg.DefineField("Altitude", 0, 60000, 100);
+    if (!accepted) {
+        V1_print(F("ERROR: codecBmpMsg.DefineField('Altitude', 0, 60000, 1) not accepted"));
+    }
+
+    // how to form url
+    // https://traquito.github.io/copilot/dashboard/#overview
+
+    V1_print(F("define_codecBmpMsg() END" EOL));
+}
+
+//***************************************************************
+// FIX! have to add parameters to encode or will it grab from global TinyBmp state?
+void encode_codecBmpMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
+    V1_print(F("encode_codecBmpMsg START" EOL));
+    switch (slot) {
+        case 0: {;}
+        case 1: {;}
+        case 2: {;}
+        case 3: {;}
+        case 4: break;
+        default:
+            // count 0,1,2,3,4 here
+            V1_printf("ERROR: encode_codecBmpMsg illegal slot %u ..using 3" EOL, slot);
+            slot = 3;
+    }
+
+    // const char *band = "20m";
+    // uint16_t channel = 123;
+    char band[4];
+    // append 'm'
+    snprintf(band, sizeof(band), "%sm", cc._Band);
+    uint16_t channel = atoi(cc._U4B_chan);
+
+    // Get channel details
+    WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(band, channel);
+
+    // Encode the data in preparation to transmit
+    codecBmpMsg.SetId13(cd.id13);
+    // Note which transmission slot you will send in
+    codecBmpMsg.SetHdrSlot(slot);
+
+    codecBmpMsg.Set("Pressure", atoi(tt.bmp_pressure));
+    codecBmpMsg.Set("Temperature", atoi(tt.bmp_temperature));
+    codecBmpMsg.Set("Altitude", atoi(tt.bmp_altitude));
+
+    codecBmpMsg.Encode();
+
+    const char *GetCallsign = codecBmpMsg.GetCallsign();
+    const char *GetGrid4 = codecBmpMsg.GetGrid4();
+    uint8_t GetPowerDbm = (uint8_t) codecBmpMsg.GetPowerDbm();
+
+    V1_print(F("WsprEncode encoded data:" EOL));
+    V1_printf("GetCallsign: %s" EOL, GetCallsign);
+    V1_printf("GetGrid4: %s" EOL, GetGrid4);
+    V1_printf("GetPowerDbm: %u" EOL, GetPowerDbm);
+
+    // ah, can't use sizeof. size is lost
+    // BUG: reported by Rob KC3LBR
+    // JTEncode walks thru chars 0-12. 
+    // so we now have 14 char array with null term
+    // left justify..i.e. pad with space for what JTEncode gets
+    snprintf(hf_callsign, 14, "%-13s", GetCallsign);
+    snprintf(hf_grid4, 5, "%s", GetGrid4);
+
+    // https://stackoverflow.com/questions/77869711/returning-a-char-pointer-when-the-argument-is-a-constant-char-pointer
+
+    // wants to be char array instead of uint8_t?
+    // shouldn't be bigger than 60
+    if (GetPowerDbm > 60) GetPowerDbm = 60;
+    snprintf(hf_power, 3, "%u", GetPowerDbm);
+
+    V1_print(F("encode_codecBmpMsg END" EOL));
 }

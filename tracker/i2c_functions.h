@@ -8,15 +8,14 @@
 #include <stdint.h>
 
 //************************************************
-void i2c_scanner_setup();
 void i2c_scan();
 int I2cWriteTest(uint8_t reg, uint8_t val);
 int i2cWrReadTestTest(uint8_t reg, uint8_t *val);
 void i2c_scan_both();
 
-void i2c_scanner_with_Wire_setup();
+void i2c_scan_with_Wire_setup();
 void i2c_scan_with_Wire(void);
 #include <Adafruit_I2CDevice.h>  // https://github.com/adafruit/Adafruit_BusIO
-void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire);
+void scan_Wire(unsigned int SDA, unsigned int SCL, TwoWire &Wire, bool usingWire1);
 
 #endif

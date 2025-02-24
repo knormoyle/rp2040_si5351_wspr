@@ -259,11 +259,8 @@ TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
 #include "pps_functions.h"
 
 //*********************************
-// extern so it links okay
-extern const int BMP280_I2C1_SDA_PIN = 2;
-extern const int BMP280_I2C1_SCL_PIN = 3;
-Adafruit_BMP280 bmp;
 
+//*********************************
 JTEncode jtencode;
 
 //*********************************
@@ -461,15 +458,20 @@ uint64_t PLL_FREQ_TARGET = 600000000;
 //***************************
 extern const int VFO_VDD_ON_N_PIN = 4;
 // are these really on Wire1
-extern const int VFO_I2C0_SDA_PIN = 12;
-extern const int VFO_I2C0_SCL_PIN = 13;
+extern const int VFO_I2C_SDA_PIN = 12;
+extern const int VFO_I2C_SCL_PIN = 13;
 
-// extern const int VFO_I2C0_SCL_HZ = (1000 * 1000);
+// extern const int VFO_I2C_SCL_HZ = (1000 * 1000);
 // maybe go lower frequency?
-extern const int VFO_I2C0_SCL_HZ = (100 * 1000);
-extern const int BMP_I2C1_SCL_HZ = (100 * 1000);
-extern const int BMP_I2C1_SDA_PIN = 2;
-extern const int BMP_I2C1_SCL_PIN = 3;
+extern const int VFO_I2C_SCL_HZ = (100 * 1000);
+extern const int BMP_I2C_SCL_HZ = (100 * 1000);
+
+extern const int BMP_I2C_SDA_PIN = 2;
+extern const int BMP_I2C_SCL_PIN = 3;
+
+bool BMP_FOUND = false;
+// this default doesn't get right? SDA/SDK? 
+Adafruit_BMP280 bmp(&Wire1);
 
 // FIX! used in i2c_functions for test of both i2c0 and i2c1
 // pullup resistors are different on each i2c bus on the pcb
@@ -896,24 +898,26 @@ void setup1() {
 
     // https://github.com/earlephilhower/arduino-pico/blob/master/docs/pins.rst
     // doc had
-    // bool setSDA(pin_size_t VFO_I2C0_SDA_PIN);
-    // bool setSCL(pin_size_t VFO_I2C0_SCL_PIN);
+    // bool setSDA(pin_size_t VFO_I2C_SDA_PIN);
+    // bool setSCL(pin_size_t VFO_I2C_SCL_PIN);
     // now says
-    // Wire.setSDA(pin_size_t VFO_I2C0_SDA_PIN);
-    // Wire.setSCL(pin_size_t VFO_I2C0_SCL_PIN);
+    // Wire.setSDA(pin_size_t VFO_I2C_SDA_PIN);
+    // Wire.setSCL(pin_size_t VFO_I2C_SCL_PIN);
     // per May 2022 forum post
 
-    //    Wire.setSDA(VFO_I2C0_SDA_PIN);  // 12
-    //    Wire.setSCL(VFO_I2C0_SCL_PIN);  // 13
-    //    Wire.begin();
+    // Watchdog.reset();
+    // Wire1.setSDA(BMP_I2C_SDA_PIN);
+    // Wire1.setSCL(BMP_I2C_SCL_PIN);
+    // Wire1.setClock(BMP_I2C_SCL_HZ);
+    // Wire1.begin();
+
+    bmp_init();
 
     // I don't use Wire, so this shouldn't matter
     // https://docs.arduino.cc/language-reference/en/functions/communication/wire/
     // default pins for Wire  are SDA=4 SCL=5 (not right for our ISC1? or ??)
     // default pins for Wire1 are SDA=26 SCL=27 ..wants to be our ISC0
 
-    // our ISC0 for the Si5351 is SDA 12, SCL 13))
-    // our ISC1 for the BMP    is SDA 2,  SCL 3))
     Watchdog.reset();
 
     // also turns on and checks for output
@@ -976,22 +980,6 @@ void setup1() {
     SI5351_TCXO_FREQ = doCorrection(SI5351_TCXO_FREQ);
 
     //***************
-    Watchdog.reset();
-    bmp_init();
-    // FIX! we're not detecting presence of bmp280 correctly?
-    if (!bmp.begin()) {
-        // i2c_scan();
-        V1_println(F("Could not find a valid BMP280 sensor"));
-    } else {
-        // Default settings from datasheet.. should we do forced sample
-        // like weather station recommendations (rather than free running)
-        bmp.setSampling(
-            Adafruit_BMP280::MODE_NORMAL,
-            Adafruit_BMP280::SAMPLING_X2,
-            Adafruit_BMP280::SAMPLING_X16,
-            Adafruit_BMP280::FILTER_X16,
-            Adafruit_BMP280::STANDBY_MS_500);
-    }
 
     //***************
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
@@ -1807,9 +1795,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_print(F(EOL));
     V1_flush();
 
-    vfoOffAtEnd =
-        cc._ExtTelemetry[0] == '-' && cc._ExtTelemetry[1] == '-' &&
-        cc._ExtTelemetry[2] == '-' && cc._ExtTelemetry[3] == '-';
+    vfoOffAtEnd = cc._ExtTelemetry[0] == '-' && cc._ExtTelemetry[1] == '-';
     syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
@@ -1818,27 +1804,24 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         DoLogPrint();
     }
 
-    // have to send this if telen1 or telen2 is enabled
-    if ( (cc._ExtTelemetry[0] != '-' || cc._ExtTelemetry[1] != '-') ||
-         (cc._ExtTelemetry[2] != '-' || cc._ExtTelemetry[3] != '-') ) {
+    // have to send this if slot 3 or slot 4 is enabled
+    if ( (cc._ExtTelemetry[0] != '-' || cc._ExtTelemetry[1] != '-') ) {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
 
         txNum = 2;
-
-        // all the hf_* is a char array
-        // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
-        //     ExtTelemetry1_val1, ExtTelemetry1_val2, false, cc._id13);
-        // bug
-        // uint8_t slot = 4;
-        // should be slot 3 (2) ?
         uint8_t slot = 2;
         switch (cc._ExtTelemetry[0]) {
-            case '0':
             default:
+            case '0':
                 V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
                     txNum, slot);
-                V1_flush();
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
+                break;
+            case '1':
+                V1_printf("WSPR txNum %d Preparing with encode_codecBmpMsg() slot %u" EOL,
+                    txNum, slot);
+                encode_codecBmpMsg(hf_callsign, hf_grid4, hf_power, slot);
+                break;
         }
 
         V1_print(F(EOL));
@@ -1847,7 +1830,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("hf_grid4 %s" EOL, hf_grid4);
         V1_printf("hf_power %s" EOL, hf_power); V1_print(F(EOL));
         V1_flush();
-        vfoOffAtEnd = cc._ExtTelemetry[2] == '-' && cc._ExtTelemetry[3] == '-';
+        vfoOffAtEnd = cc._ExtTelemetry[1] == '-';
         syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
         tx_cnt_2 += 1;
         if (VERBY[1]) {
@@ -1856,22 +1839,30 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         }
     }
     // have to send this if telen2 is enabled
-    if ( (cc._ExtTelemetry[2] != '-' || cc._ExtTelemetry[3] != '-') ) {
+    if (cc._ExtTelemetry[1] != '-') {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
         // output: modifies globals: hf_callsign, hf_grid4, hf_power
         // input: ExtTelemetry2_val1/2 are ints?
         txNum = 3;
-        V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg().." EOL, txNum);
+        V1_printf("WSPR txNum %d Preparing." EOL, txNum);
         V1_flush();
 
         // all the hf_* is a char array
         // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
         //     ExtTelemetry1_val1, ExtTelemetry1_val2, false, cc._id13);
-        uint8_t slot = 6;
+        uint8_t slot = 3;
         switch (cc._ExtTelemetry[1]) {
-            case '0':
             default:
+            case '0':
+                V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
+                    txNum, slot);
                 encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
+                break;
+            case '1':
+                V1_printf("WSPR txNum %d Preparing with encode_codecBmpMsg() slot %u" EOL,
+                    txNum, slot);
+                encode_codecBmpMsg(hf_callsign, hf_grid4, hf_power, slot);
+                break;
         }
 
         V1_print(F(EOL));

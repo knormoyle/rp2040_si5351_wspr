@@ -103,7 +103,7 @@ extern bool USE_MFSK16_SHIFT;
 // from tracker.ino
 extern uint32_t SI5351_TCXO_FREQ;  // 26 mhz with correction already done
 extern const int SI5351A_I2C_ADDR;
-extern const int VFO_I2C0_SCL_HZ;
+extern const int VFO_I2C_SCL_HZ;
 
 // Tried a concave optimization (stepwise) on this
 // now that we have optimum denoms from a spreadsheet, (for given mult/div per band)
@@ -128,8 +128,8 @@ extern const int Si5351Pwr;
 // FIX! are these just used on the Wire.begin?
 // FIX! should this be a extern const. Or: only used here?
 #define VFO_I2C_INSTANCE i2c0
-extern const int VFO_I2C0_SDA_PIN;
-extern const int VFO_I2C0_SCL_PIN;
+extern const int VFO_I2C_SDA_PIN;
+extern const int VFO_I2C_SCL_PIN;
 
 static bool vfo_turn_on_completed = false;
 static bool vfo_turn_off_completed = false;
@@ -209,14 +209,14 @@ void vfo_init(void) {
     // just get rid of the vfo_init in setup!
     gpio_put(Si5351Pwr, 0);
 
-    // init I2C0 for VFO
-    uint32_t actualRate = i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+    // init I2C for VFO
+    uint32_t actualRate = i2c_init(VFO_I2C_INSTANCE, VFO_I2C_SCL_HZ);
     V1_printf("vfo_init i2c actual rate: %lu" EOL, actualRate);
     // let it float if we don't drive the i2c?
-    gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
-    gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
-    gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-    gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+    gpio_set_pulls(VFO_I2C_SDA_PIN, false, false);
+    gpio_set_pulls(VFO_I2C_SCL_PIN, false, false);
+    gpio_set_function(VFO_I2C_SDA_PIN, GPIO_FUNC_I2C);
+    gpio_set_function(VFO_I2C_SCL_PIN, GPIO_FUNC_I2C);
     V1_println(F("vfo_init END"));
     Watchdog.reset();
 }
@@ -1805,16 +1805,16 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
         busy_wait_ms(1000);
 
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
-        i2c_init(VFO_I2C_INSTANCE, VFO_I2C0_SCL_HZ);
+        i2c_init(VFO_I2C_INSTANCE, VFO_I2C_SCL_HZ);
         busy_wait_ms(1000);
 
-        // gpio_pull_up(VFO_I2C0_SDA_PIN);
-        // gpio_pull_up(VFO_I2C0_SCL_PIN);
+        // gpio_pull_up(VFO_I2C_SDA_PIN);
+        // gpio_pull_up(VFO_I2C_SCL_PIN);
         // don't use pullups or pulldowns since there are external pullups
-        gpio_set_pulls(VFO_I2C0_SDA_PIN, false, false);
-        gpio_set_pulls(VFO_I2C0_SCL_PIN, false, false);
-        gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_I2C);
-        gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_I2C);
+        gpio_set_pulls(VFO_I2C_SDA_PIN, false, false);
+        gpio_set_pulls(VFO_I2C_SCL_PIN, false, false);
+        gpio_set_function(VFO_I2C_SDA_PIN, GPIO_FUNC_I2C);
+        gpio_set_function(VFO_I2C_SCL_PIN, GPIO_FUNC_I2C);
         i2c_set_slave_mode(VFO_I2C_INSTANCE, false, 0);
         busy_wait_ms(1000);
 
@@ -1823,7 +1823,7 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
         busy_wait_ms(1000);
         digitalWrite(Si5351Pwr, LOW);
         busy_wait_ms(2000);
-        V1_printf("vfo_turn_on re-iinit the I2C0 pins inside loop. tries %d" EOL, tries);
+        V1_printf("vfo_turn_on re-iinit the I2C pins inside loop. tries %d" EOL, tries);
 
         // all clocks off?
         // FIX! what about timeout?
@@ -1863,7 +1863,7 @@ void vfo_turn_on() {
     // Disable all CLK output drivers
     V1_println(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
     vfo_write_clock_en_with_retry(0xff);
-    V1_print(F("vfo_turn_on done trying to init the I2C0 pins in loop" EOL));
+    V1_print(F("vfo_turn_on done trying to init the I2C pins in loop" EOL));
 
     // could disable all OEB pin enable control??
     // (OEB/SSEN pins don't exist on si5351a 3 output)
@@ -2065,8 +2065,8 @@ void vfo_turn_off(void) {
     vfo_set_power_on(false);
 
     // disable the i2c
-    gpio_set_function(VFO_I2C0_SDA_PIN, GPIO_FUNC_NULL);
-    gpio_set_function(VFO_I2C0_SCL_PIN, GPIO_FUNC_NULL);
+    gpio_set_function(VFO_I2C_SDA_PIN, GPIO_FUNC_NULL);
+    gpio_set_function(VFO_I2C_SCL_PIN, GPIO_FUNC_NULL);
     vfo_turn_off_completed = true;
     V1_println(F("vfo_turn_off END"));
 }

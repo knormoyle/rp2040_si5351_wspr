@@ -65,7 +65,7 @@ typedef struct ConfigStruct_ {
 } ConfigStruct;
 
 //************************************************
-// essentiallytt.* stuff is a telemetry data buffer/structure
+// essentially tt.* stuff is a telemetry data buffer/structure
 // all can be extern'ed by a function
 // init to 0 is just in case. Should always be set to something valid before use
 // empty string is not valid
@@ -81,9 +81,11 @@ typedef struct TeleStruct_ {
     // reboot once per day? (starts at 0)
     char tx_count_0[4];
     char temp[7];
-    char pressure[8];
-    char temp_ext[8];
-    char humidity[8];
+
+    char bmp_pressure[7];
+    char bmp_temperature[7];
+    char bmp_altitude[7]; 
+
     char voltage[6];
     char sat_count[3];
     // lat/lon precision: How much to store
