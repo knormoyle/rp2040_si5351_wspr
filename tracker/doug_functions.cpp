@@ -223,6 +223,9 @@ void define_codecBmpMsg() {
         V1_println(F("ERROR: codecBmpMsg.DefineField('Altitude', 0, 60000, 100) not accepted"));
     }
 
+// good expected values here
+// https://www.mide.com/air-pressure-at-altitude-calculator
+
 // programmed channel 391. comes out on 384
 /*
 { "name": "Pressure",    "unit": "Pa", "lowValue": 0,   "highValue": 110000, "stepSize": 1000 },
