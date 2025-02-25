@@ -1345,7 +1345,7 @@ void loop1() {
 
             // FIX! this is loop iterations? could be 20 * 60 secs per loop (20 minutes)
             // or as long as 5 minutes per loop? (100 minutes)
-            if (GpsWatchdogCnt > 20) {
+            if (GpsWatchdogCnt > 15) {
                 // here's a case, where TinyGps++ said gps valid, but the altitude was wrong
                 // Note HDOP was very large, and sat count was 0.
                 // Fix Age is in milliseconds

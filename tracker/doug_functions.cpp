@@ -105,7 +105,7 @@ void define_codecGpsMsg() {
 
 
     // for use in the traquito website
-    /*  
+    /* JSON
 { "name": "SatUSA",       "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
 { "name": "SatChina",     "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
 { "name": "SatRussia",    "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
@@ -228,7 +228,7 @@ void define_codecBmpMsg() {
 
 // size fields at sandbox https://traquito.github.io/pro/codec
 // programmed channel 391. comes out on 384
-/*
+/* JSON
 { "name": "Pressure",    "unit": "Pa", "lowValue": 0,   "highValue": 80000, "stepSize": 5 },
 { "name": "Temperature", "unit": "C",  "lowValue": -60, "highValue": 100,    "stepSize": 2.5 },
 { "name": "Altitude",    "unit": "M",  "lowValue": 0,   "highValue": 55000,  "stepSize": 100 },
