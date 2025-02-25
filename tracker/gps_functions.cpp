@@ -23,7 +23,7 @@ bool SIM65M_BROADCAST_5SECS = false;
 #include "global_structs.h"
 #include <stdlib.h>
 extern ConfigStruct cc;
-int CONSTELLATIONS_GROUP = atoi(cc._const_group);
+int CONSTELLATIONS_GROUP;
 
 // clear these to zero if gps goes off (for PPS tracking)
 extern int32_t PPS_rise_millis;
@@ -560,7 +560,6 @@ void setGpsBroadcast(void) {
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             // no GLL 2/17/25
-            // strncpy(nmeaSentence, "$PAIR062,1,5*3A" CR LF, 62);
             strncpy(nmeaSentence, "$PAIR062,1,0*3F" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
@@ -575,7 +574,6 @@ void setGpsBroadcast(void) {
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             // no VTG 2/17/25
-            // strncpy(nmeaSentence, "$PAIR062,5,5*3E" CR LF, 62);
             strncpy(nmeaSentence, "$PAIR062,5,0*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
@@ -612,7 +610,6 @@ void setGpsBroadcast(void) {
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             // no GLL 2/17/25
-            // strncpy(nmeaSentence, "$PAIR062,1,1*3E" CR LF, 62);
             strncpy(nmeaSentence, "$PAIR062,1,0*3F" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
@@ -627,7 +624,6 @@ void setGpsBroadcast(void) {
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
             // no VTG 2/17/25
-            // strncpy(nmeaSentence, "$PAIR062,5,1*3A" CR LF, 62);
             strncpy(nmeaSentence, "$PAIR062,5,0*3B" CR LF, 62);
             Serial2.print(nmeaSentence);
             busy_wait_us(500);
@@ -1183,6 +1179,7 @@ void GpsINIT(void) {
     updateStatusLED();
     Watchdog.reset();
 
+    CONSTELLATIONS_GROUP = atoi(cc._const_group);
     //****************
     // The gps power pin is floating? likely GPS is off but unknown
     // Should turn gps off before doing init if you know it's been

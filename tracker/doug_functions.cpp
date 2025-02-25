@@ -208,29 +208,30 @@ WsprMessageTelemetryExtendedUserDefined<3> codecBmpMsg;
 void define_codecBmpMsg() {
     V1_print(F("define_codecBmpMsg() START" EOL));
     bool accepted;
-    accepted = codecBmpMsg.DefineField("Pressure", 0.0, 110000.0, 1000);
+    accepted = codecBmpMsg.DefineField("Pressure", 0.0, 80000.0, 5);
     if (!accepted) {
-        V1_println(F("ERROR: codecBmpMsg.DefineField('Pressure', 0.0, 110000.0, 1000) not accepted"));
+        V1_println(F("ERROR: codecBmpMsg.DefineField('Pressure', 0.0, 80000.0, 5) not accepted"));
     }
 
-    accepted = codecBmpMsg.DefineField("Temperature", -60, 100, 1);
+    accepted = codecBmpMsg.DefineField("Temperature", -60, 100, 2.5);
     if (!accepted) {
-        V1_println(F("ERROR: codecBmpMsg.DefineField('Temperature', -60, 100, 1) not accepted"));
+        V1_println(F("ERROR: codecBmpMsg.DefineField('Temperature', -60, 100, 2.5) not accepted"));
     }
 
-    accepted = codecBmpMsg.DefineField("Altitude", 0, 60000, 100);
+    accepted = codecBmpMsg.DefineField("Altitude", 0, 55000, 100);
     if (!accepted) {
-        V1_println(F("ERROR: codecBmpMsg.DefineField('Altitude', 0, 60000, 100) not accepted"));
+        V1_println(F("ERROR: codecBmpMsg.DefineField('Altitude', 0, 55000, 100) not accepted"));
     }
 
 // good expected values here
 // https://www.mide.com/air-pressure-at-altitude-calculator
 
+// size fields at sandbox https://traquito.github.io/pro/codec
 // programmed channel 391. comes out on 384
 /*
-{ "name": "Pressure",    "unit": "Pa", "lowValue": 0,   "highValue": 110000, "stepSize": 1000 },
-{ "name": "Temperature", "unit": "C",  "lowValue": -60, "highValue": 100,    "stepSize": 1 },
-{ "name": "Altitude",    "unit": "M",  "lowValue": 0,   "highValue": 60000,  "stepSize": 100 },
+{ "name": "Pressure",    "unit": "Pa", "lowValue": 0,   "highValue": 80000, "stepSize": 5 },
+{ "name": "Temperature", "unit": "C",  "lowValue": -60, "highValue": 100,    "stepSize": 2.5 },
+{ "name": "Altitude",    "unit": "M",  "lowValue": 0,   "highValue": 55000,  "stepSize": 100 },
 */
 
     // how to form url
