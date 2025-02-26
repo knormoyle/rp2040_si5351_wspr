@@ -2061,8 +2061,10 @@ uint32_t updateGpsDataAndTime(int ms) {
     if (VERBY[1]) DoLogPrint();
 
     // flush so the buffer has 256, so maybe can absorb the prints if we time update??
-    char debugMsg1[] = "updateGpsDataAndTime";
-    realPrintFlush(debugMsg1, false);  // no print
+    if (false) {
+        char debugMsg1[] = "updateGpsDataAndTime";
+        realPrintFlush(debugMsg1, false);  // no print
+    }
 
     // FIX! we could leave here after we get N sentences?
     // we could keep track of how many sentences we get?
@@ -2229,7 +2231,8 @@ uint32_t updateGpsDataAndTime(int ms) {
         // FIX! if the time update took more than 32ms the rx fifo would back up, full
         // in any case, we don't break on this if we did a time update
         // situation probably doesn't happen now.
-        if (timeSinceLastChar_millis >= 25 && !timeUpdateDone) {
+        // was 25 
+        if (timeSinceLastChar_millis >= 10 && !timeUpdateDone) {
             // FIX! could the LED blinking have gotten delayed?
             // we don't check in the available loop above.
             // save the info in the StampPrintf buffer..don't print it yet
@@ -2238,7 +2241,8 @@ uint32_t updateGpsDataAndTime(int ms) {
         }
         if (timeUpdate_sentences >= 2) break;
         // stop the wait early if Serial2.available
-        gpsSleepForMillis(25, true);
+        // was 25
+        gpsSleepForMillis(10, true);
         getChar();
         current_millis = millis();
     }
@@ -2256,13 +2260,15 @@ uint32_t updateGpsDataAndTime(int ms) {
         DoLogPrint(); // dump the StampPrintf if any
     }
 
-    int diff = sentenceStartCnt - sentenceEndCnt;
-    V1_print(F("updateGpsDataAndTime:"));
-    V1_printf(" start_millis %lu current_millis %lu",
-        start_millis, current_millis);
-    V1_printf(" sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
-        sentenceStartCnt, sentenceEndCnt, diff);
-    V1_flush();
+
+    if (false) {
+        int diff = sentenceStartCnt - sentenceEndCnt;
+        V1_print(F("updateGpsDataAndTime:"));
+        V1_printf(" start_millis %lu current_millis %lu",
+            start_millis, current_millis);
+        V1_printf(" sentenceStartCnt %d sentenceEndCnt %d diff %d" EOL,
+            sentenceStartCnt, sentenceEndCnt, diff);
+    }
 
     // This will be lower than a peak rate
     // It includes dead time at start, dead time at end...
@@ -2296,7 +2302,6 @@ uint32_t updateGpsDataAndTime(int ms) {
     V1_printf(
         "NMEA sentences: AvgCharRateSec %.f duration_millis %lu incomingCharCnt %d" EOL,
         AvgCharRateSec, duration_millis, incomingCharCnt);
-    V1_flush();
 
     //******************************
     // checksum errors at TinyGPS?
@@ -2511,7 +2516,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         // print the modulo 1 sec also, if the last PPS was a while ago? (
         // gps being reset or ??
         fix_age = gps.time.age();
-        V1_printf("setTime at elapsed_millis3 %lu %lu from after PPS_rise_cnt %lu",
+        V1_printf("setTime elapsed_millis3 %lu %lu after PPS. PPS_rise_cnt %lu",
             elapsed_millis3, elapsed_millis3_modulo, PPS_rise_cnt);
         V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
 
