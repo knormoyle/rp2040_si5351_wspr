@@ -55,6 +55,7 @@ typedef struct ConfigStruct_ {
     char _morse_also[2];   
     char _solar_tx_power[2];
     char _const_group[2];
+    char _monopole[2];
 
     // decoded stuff from config strings: all can be extern'ed by a function
     // decodes from _Band _U4B_chan

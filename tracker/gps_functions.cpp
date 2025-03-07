@@ -2131,6 +2131,7 @@ uint32_t updateGpsDataAndTime(int ms) {
     bool timeUpdateDone = false;
     while ((current_millis - entry_millis) < (uint64_t) ms) {
         while (charsAvailable > 0) {
+            timeUpdateDone = false;
             // we count all chars, even CR LF etc
             incomingCharCnt++;
             // start the duration timing when we get the first char
@@ -2182,11 +2183,13 @@ uint32_t updateGpsDataAndTime(int ms) {
                 // updated has to transition before we get the next dollar_millis??
                 // we could save dollar_millis in dollarStar_millis, to make sure no race condition
                 if (gps.time.updated) {
+                    // if we get two, we've gone too long on the burst?
+                    timeUpdate_sentences += 1;
+                    if (timeUpdate_sentences >= 2) break;
+
                     checkUpdateTimeFromGps(dollarStar_millis);
                     gps.time.updated = false;
-                    // if we get two, we've gone too long on the burst?
                     // trying to synchronize so GGA is always first
-                    timeUpdate_sentences += 1;
                     timeUpdateDone = true;
                 }
             }
@@ -2212,6 +2215,8 @@ uint32_t updateGpsDataAndTime(int ms) {
             last_serial2_millis = current_millis;
             getChar();
         }
+
+        if (timeUpdate_sentences >= 2) break;
 
         // keep as close as possible to the NMEA sentence arrival?
         // I suppose we'll see gps.time.updated every time?
@@ -2239,7 +2244,7 @@ uint32_t updateGpsDataAndTime(int ms) {
             // if we didn't get any chars, start_millis will be 0, use entry_millis instead
             break;
         }
-        if (timeUpdate_sentences >= 2) break;
+
         // stop the wait early if Serial2.available
         // was 25
         gpsSleepForMillis(10, true);
@@ -2259,7 +2264,6 @@ uint32_t updateGpsDataAndTime(int ms) {
         V1_print(F(EOL));
         DoLogPrint(); // dump the StampPrintf if any
     }
-
 
     if (false) {
         int diff = sentenceStartCnt - sentenceEndCnt;
@@ -2295,8 +2299,8 @@ uint32_t updateGpsDataAndTime(int ms) {
     // $PAIR021,AG3352Q_V2.5.0.AG3352_20230420,S,N,9ec1cc8,2210141406,2ba,3,,,5bebcf5b,2210141404,72555ce,2210141406,,,-15.48,-15.48,-14.02,-15.48,0,1,##,0,0*34
     // $PAIR010,0,1,2354,364955*32
 
-    if (duration_millis > 950) {
-        V1_printf("ERROR: NMEA sentences duration_millis %lu > 950 milliseconds" EOL,
+    if (duration_millis > 1000) {
+        V1_printf("ERROR: NMEA sentences duration_millis %lu > 1000 milliseconds" EOL,
             duration_millis);
     }
     V1_printf(
@@ -2374,40 +2378,28 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     forceUpdate = elapsed_millis2 > (1 * 60 * 1000);
 
     //*****************************
-    uint8_t gps_hundredths = gps.time.centisecond();
     uint32_t fix_age = gps.time.age();
     // try to get as close to the NMEA timestamp as possible
     if (forceUpdate) {
         // always take the first one, to be sure of getting something
         if (timeUpdateCnt != 0) {
-            if (VERBY[1]) {
-                // will get printed at end of nmea burst by caller
-                StampPrintf("setTime forceUpdate. elapsed_millis2 %lu" EOL, elapsed_millis2);
-            }
+            V1_printf("setTime forceUpdate. elapsed_millis2 %lu" EOL, elapsed_millis2);
             // loose fix_age constraint, if we're forcing, just in case?
-            if (fix_age > 500 || gps_hundredths > 100) {
-                if (VERBY[1]) {
-                    // will get printed at end of nmea burst by caller
-                    StampPrintf("WARN: bad setTime forceUpdate. fix_age %lu gps_hundredths %lu" EOL,
-                        fix_age, gps_hundredths);
-                }
+            if (fix_age > 500) {
+                V1_printf("WARN: bad setTime forceUpdate. fix_age %lu" EOL, fix_age);
                 return;
             }
         }
     } else {
-        if (fix_age > 250 || gps_hundredths > 100) {
-            if (VERBY[1]) {
-                // will get printed at end of nmea burst by caller
-                StampPrintf("WARN: bad try. fix_age %lu gps_hundredths %lu" EOL,
-                    fix_age, gps_hundredths);
-            }
+        if (fix_age > 250) {
+            V1_printf("WARN: bad try. fix_age %lu" EOL, fix_age);
             return;
         }
     }
-    DoLogPrint();
 
     // shouldn't use the time if hundredths isn't 0, as PPS skew seems wrong often, then
     // it will go to zero once we get a fix. and stay 0 for the repeated broadcast.
+    uint8_t gps_hundredths = gps.time.centisecond();
     if (gps_hundredths > 0) {
         V1_printf("ERROR: won't setTime because non-zero gps_hundredths %u ..PPS skew is often bad" EOL,
             gps_hundredths);
@@ -2465,14 +2457,6 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // was year range already validated? but do it here too
     // will have to remember to update this in 10 years (and above too!)
     if (gps_year < 2025 && gps_year > 2035) gpsDateTimeBad = true;
-
-    // seems like we occasionally get hundredths from gps time.
-    // before we get a fix?
-    if (gps_hundredths > 99) {
-        V1_printf("ERROR: TinyGPS gps_hundredths %u > 99" EOL,
-            gps_hundredths);
-        gpsDateTimeBad = true;
-    }
 
     // check the days in a month (subtract one from month)
     // if we have a valid month for this array!
@@ -2544,19 +2528,21 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // setTime_millis should always be before or = current millis()
     setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
 
-    V1_print(F("GOOD: system setTime() with"));
-    // V1_printf(" %u gps_month %u gps_year %u",
-    //     gps_month, gps_year);
-    V1_printf(" gps_day %u gps_hour %u gps_minute %u gps_second %u" EOL,
-        gps_day, gps_hour, gps_minute, gps_second);
+    if (false) {
+        V1_print(F("GOOD: system setTime() with"));
+        // V1_printf(" %u gps_month %u gps_year %u",
+        //     gps_month, gps_year);
+        V1_printf(" gps_day %u gps_hour %u gps_minute %u gps_second %u" EOL,
+            gps_day, gps_hour, gps_minute, gps_second);
 
-    V1_print(F("system time before: (should be gps time):"));
-    // V1_printf(" month %d year %d", m, y);
-    V1_printf(" day %d hour %d minute %d second %d", d, hh, mm, ss);
-    V1_printf(" forceUpdate %u now: ", forceUpdate);
-    // this will be current system time
-    printSystemDateTime();
-    V1_print(F(EOL));
+        V1_print(F("system time before: (should be gps time):"));
+        // V1_printf(" month %d year %d", m, y);
+        V1_printf(" day %d hour %d minute %d second %d", d, hh, mm, ss);
+        V1_printf(" forceUpdate %u now: ", forceUpdate);
+        // this will be current system time
+        printSystemDateTime();
+        V1_print(F(EOL));
+    }
 
     int secondDelta = ((int) monthSecs) - ((int) gps_monthSecs);
 
@@ -2564,7 +2550,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // too much drift/error?
     // don't print the first time thru..since that doesn't matter
     if (timeUpdateCnt != 0) {
-        V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
+        // V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
         if (abs(secondDelta) > 1) {
             V1_printf("ERROR: was excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
                 secondDelta, forceUpdate);
@@ -2587,10 +2573,10 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // might give an indication of how long it takes to do all this work
     // show the rx fifo at this point to understand backup!
     int charsAvailable = Serial2.available();
-    if (charsAvailable > 15) {
-        V1_print(F("WARN: rx fifo backup: "));
-    } else if (charsAvailable > 22) {
+    if (charsAvailable > 25) {
         V1_print(F("ERROR: rx fifo backup: "));
+    } else if (charsAvailable > 21) {
+        V1_print(F("WARN: rx fifo backup: "));
     }
     V1_printf("gps fix_age_entry %lu fix_age now %lu charsAvailable %d" EOL,
         fix_age_entry, fix_age, charsAvailable);

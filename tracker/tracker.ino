@@ -423,7 +423,7 @@ uint64_t PLL_FREQ_TARGET = 600000000;
 // symbolAbsoluteError: 0.000003 Hz
 // symbolShiftError: 0.000006 Hz
 // channel 0 symbol 3 actual 28126024.394533 actual_pll_freq 618772536.679732
-// pll_mult 23 pll_num 742154 pll_denom 928919 ms_div 22 r_divisor 1
+// pll_mult 23 pll_num 742154 pll_denom 928919 ms_div 22 
 // uint64_t PLL_FREQ_TARGET = 650000000;
 
 // target PLL freq when making muliplier/divider initial calculations

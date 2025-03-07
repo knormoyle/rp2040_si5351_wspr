@@ -53,7 +53,6 @@ void si5351a_calc_sweep(void) {
     uint32_t pll_mult;
     uint32_t pll_num;
     uint32_t pll_denom;
-    uint32_t r_divisor;
     // sweep 200 * 0.25 hz = 50hz (1/4th the passband)
     // sweep 80 * 1 hz = 80hz
     for (int i = 0; i < 80; i++) {
@@ -78,12 +77,12 @@ void si5351a_calc_sweep(void) {
         // note this will include any correction to SI5351_TCXO_FREQ (already done)
         // everything is 32 bit in and out of this, but 64-bit calcs inside it.
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num, &pll_denom, &r_divisor,
+            &ms_div, &pll_mult, &pll_num, &pll_denom, 
             freq_xxx, false); // don't use PLL_DENOM_OPTIMIZE, calc it if not farey
 
         V1_printf("actual %.6f actual_pll_freq %.6f", actual, actual_pll_freq);
-        V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu",
-            pll_mult, pll_num, pll_denom, ms_div, r_divisor);
+        V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu",
+            pll_mult, pll_num, pll_denom, ms_div);
 
         // not so good if two pll_nums are the same (sequentially)
         if (pll_num == pll_num_last) {
@@ -149,7 +148,6 @@ void si5351a_calc_sweep_band() {
     uint32_t pll_mult;
     uint32_t pll_num_here;
     uint32_t pll_denom;
-    uint32_t r_divisor;
     uint64_t freq_xxx;
 
     char band[3];
@@ -181,12 +179,12 @@ void si5351a_calc_sweep_band() {
         calcSymbolFreq_xxx(&freq_xxx, xmit_freq, symbol);
         // This used to use the current PLL_DENOM_OPTIMIZE, now calcs 
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num_here, &pll_denom, &r_divisor,
+            &ms_div, &pll_mult, &pll_num_here, &pll_denom,
             freq_xxx, false); // don't use PLL_DENOM_OPTIMIZE, calc it if not farey
 
         V1_print(F(EOL));
-        V1_printf("sweep band %s xmit_freq %lu PLL_FREQ_TARGET %" PRIu64 " r_divisor %lu" EOL,
-            band, xmit_freq, PLL_FREQ_TARGET, r_divisor);
+        V1_printf("sweep band %s xmit_freq %lu PLL_FREQ_TARGET %" PRIu64 EOL,
+            band, xmit_freq, PLL_FREQ_TARGET);
         V1_printf("sweep band %s lane %s symbol %u", band, lane, symbol);
         V1_printf(" pll_mult %lu ms_div %lu actual_pll_freq %.6f" EOL,
             pll_mult, ms_div, actual_pll_freq);
@@ -217,7 +215,6 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
     uint32_t pll_mult;
     uint32_t pll_num_here;
     uint32_t pll_denom_here;
-    uint32_t r_divisor;
 
     // stuff that's input to vfo_calc_div_mult_num()
     uint64_t freq_xxx;
@@ -272,14 +269,14 @@ void si5351a_calc_optimize(double *symbolShiftError, double *symbolAbsoluteError
         // This used to use the current PLL_DENOM_OPTIMIZE now in its calcs?
         // will now calc pll_denom or will use Farey if that's enabled
         vfo_calc_div_mult_num(&actual, &actual_pll_freq,
-            &ms_div, &pll_mult, &pll_num_here, &pll_denom_here, &r_divisor,
+            &ms_div, &pll_mult, &pll_num_here, &pll_denom_here,
             freq_xxx, false); // don't use PLL_DENOM_OPTIMIZE
 
         if (print) {
             V1_printf("channel %s symbol %u", cc._U4B_chan, symbol);
             V1_printf(" actual %.6f actual_pll_freq %.6f", actual, actual_pll_freq);
-            V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu r_divisor %lu" EOL,
-                pll_mult, pll_num_here, pll_denom_here, ms_div, r_divisor);
+            V1_printf(" pll_mult %lu pll_num %lu pll_denom %lu ms_div %lu" EOL,
+                pll_mult, pll_num_here, pll_denom_here, ms_div);
         }
         switch (symbol) {
             case 0: symbol0actual = actual; break;
