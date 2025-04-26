@@ -349,21 +349,22 @@ void freeMem() {
     // compiled string stays in flash.
     // does not get copied to SRAM during the C++ initialization
     // string it has the PROGMEM property and runs from flash.
+    // does this ever get a negative number? what does that mean?
     V1_print(F("Free RAM: "));
     V1_print(freeMemory(), DEC);
-    V1_println(F(" byte. Why is this < 0?. Is it's calc wrong?"));
+    V1_println(F(" bytes"));
 
     V1_print(F("Free Heap: "));
     V1_print(rp2040.getFreeHeap(), DEC);
-    V1_println(F(" byte"));
+    V1_println(F(" bytes"));
 
     V1_print(F("Used Heap: "));
     V1_print(rp2040.getUsedHeap(), DEC);
-    V1_println(F(" byte"));
+    V1_println(F(" bytes"));
 
     V1_print(F("Total Heap: "));
     V1_print(rp2040.getTotalHeap(), DEC);
-    V1_println(F(" byte"));
+    V1_println(F(" bytes"));
 
     // https://forum.arduino.cc/t/trying-to-make-sense-of-ram-usage/622666
     // char __stack = 0;

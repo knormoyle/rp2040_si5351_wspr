@@ -1996,9 +1996,17 @@ void invalidateTinyGpsState(void) {
     // do we wait until we turn GpsON() on, beforre clearing GPSInvalidAll
     // we can decrement the count only if gps is on? (in setup1())
     // new public methods created in TinyGPS++.h
+
+    // 4/26/25 hmm. altitude and speed doesn't get flushed.
+    // maybe we should flush those too, in case a valid 0 gets stuck in there?
+    // we don't flush sat count stuff?
     gps.location.flush();
     gps.location.fixQualityFlush();
     gps.location.fixModeFlush();
+
+    gps.speed.flush();
+    gps.altitude.flush();
+
     gps.date.flush();
     gps.time.flush();
     V1_println(F("invalidateTinyGpsState END"));

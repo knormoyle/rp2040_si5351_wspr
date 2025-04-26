@@ -1287,7 +1287,8 @@ void loop1() {
 
         // this just handles led for time/fix and gps reboot check/execution
         uint32_t fix_age = gps.location.age();
-        bool fix_valid = gps.location.isValid() && !GpsInvalidAll;
+        // don't really use this for any action
+        bool fix_valid_2d = gps.location.isValid() && !GpsInvalidAll;
         // isUpdated() indicates whether the object’s value has been updated
         // (not necessarily changed) since the last time you queried it
         bool fix_updated = gps.location.isUpdated();
@@ -1321,7 +1322,7 @@ void loop1() {
         // so we won't update time until we get a valid 3d fix?
         // no..should we keep it looser for time?
         // to update time
-        // fix_valid is a subset (just 2d location) of fix_valid_all.
+        // fix_valid_2d is a subset (just 2d location) of fix_valid_all.
         if (fix_valid_all) {
             setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
         } else {
@@ -1409,7 +1410,7 @@ void loop1() {
         // fix_age will be 4294967295 if not valid
         V1_print(F(EOL));
         V1_printf("fix_valid_all %u" EOL, fix_valid_all);
-        V1_printf("fix_valid %u" EOL, fix_valid);
+        V1_printf("fix_valid_2d %u" EOL, fix_valid_2d);
         V1_printf("fix_age %lu millisecs" EOL, fix_age);
         V1_printf("fix_sat_cnt %lu" EOL, fix_sat_cnt);
         V1_printf("fix_updated %u" EOL, fix_updated);
@@ -1459,7 +1460,7 @@ void loop1() {
             // GpsWatchdog doesn't get cleared unti we got a 3d fix here!
             // so we can get a gps cold reset if we never get here!
             GpsWatchdogCnt = 0;
-            // snapForTelemetry (all thett.* state) right before we do all the WSPRing
+            // snapForTelemetry (all the tt.* state) right before we do all the WSPRing
             // we can update the telemetry buffer any minute we're not tx'ing
 
             // GpsStartTime is reset every time we turn the gps on
@@ -1498,11 +1499,12 @@ void loop1() {
             // we don't check the valid bits again? they could have changed
             // at any time (async) ..so can't really be an atomic grab anyhow?
             // keep the snap close to the valid checks above
-            snapForTelemetry();
 
-            // sets all thett.* strings above
+            // sets all the tt.* strings
             // voltage is captured when we write the buff? So it's before GPS is turned off?
             // should we look at the live voltage instead?
+            snapForTelemetry();
+
             V1_printf("loopCnt %" PRIu64, loopCnt);
             V1_printf(" After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
                 timeStatus(), minute(), second());

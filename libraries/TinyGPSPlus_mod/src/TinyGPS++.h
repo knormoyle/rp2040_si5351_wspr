@@ -167,6 +167,8 @@ public:
    uint32_t age() const    { return valid ? millis() - lastCommitTime : (uint32_t)ULONG_MAX; }
    int32_t value()         { updated = false; return val; }
 
+   void flush() { updated = false; valid = false; val = 0; }
+
    TinyGPSDecimal() : valid(false), updated(false), val(0)
    {}
 
@@ -186,6 +188,8 @@ public:
    bool isUpdated() const  { return updated; }
    uint32_t age() const    { return valid ? millis() - lastCommitTime : (uint32_t)ULONG_MAX; }
    uint32_t value()        { updated = false; return val; }
+
+   void flush() { updated = false; valid = false; val = 0; }
 
    TinyGPSInteger() : valid(false), updated(false), val(0)
    {}
@@ -236,6 +240,8 @@ public:
    bool isValid() const    { return valid; }
    uint32_t age() const    { return valid ? millis() - lastCommitTime : (uint32_t)ULONG_MAX; }
    const char *value()     { updated = false; return buffer; }
+
+   // no flush?
 
 private:
    void commit();

@@ -176,14 +176,12 @@ void snapForTelemetry() {
     if (SPEED_IS_SOLAR_ELEVATION_MODE) {
         // https://stackoverflow.com/questions/29557459/round-to-nearest-multiple-of-a-number
         // https://stackoverflow.com/questions/71499092/generic-function-to-accurately-round-floating-point-to-the-nearest-multiple-of-x
-        // speed = round(solarElevation); // 0 if bad?
 
         // maybe we should report 2x solarElevation? works up to 41. clamp to 41?
         // hack: since knots is 0-82 with precision 2 knots (0-41 is legal speed telemetry)
         // This integer result rounds to nearest degree
-        double t = (2 * solarElevation);
-        // This integer result should reflect round to nearest 2 degrees
-        speed = 2 * round(t / 2.0);
+        int t = round(solarElevation); // 
+        speed = 2 * t;
     } else {
         speed = gps.speed.isValid() ? gps.speed.knots() : 0;
         // this should round to nearest 2 since the telemetry is 2 knot precision
@@ -199,9 +197,25 @@ void snapForTelemetry() {
     snprintf(tt.speed, sizeof(tt.speed), "%d", speed);
 
     // fixing negative altitude values
-    int altitude = (int) gps.altitude.meters();
+    // int altitude = (int) gps.altitude.meters();
+    // 4/26/24
+    // does the isValid go away some times after we got fix_valid_all in tracker.ino
+    // to allow snapForTelemetry() ?
+    int altitude = gps.altitude.isValid() ? (int) gps.altitude.meters() : 0;
     altitude = clamp_int(altitude, 0, 999999);
-    snprintf(tt.altitude, sizeof(tt.altitude), "%d", altitude);
+
+    // FIX! getting 0's for altitude with ATGM336H sometimes
+    // is it not valid? hack: don't chang tt.altitude if new altitude is 0
+    // why we're we look at gps.altitude.isValid to force 0 before 4/26/24
+
+    if (altitude != 0) {
+        snprintf(tt.altitude, sizeof(tt.altitude), "%d", altitude);
+    }
+    else {
+        V1_printf("ERROR: not changing current tt.altitude because altitude==0. Why?"
+            " tt.altitude %d gps.altitude.isValid() %u EOL",
+            tt.altitude, gps.altitude.isValid());
+    }
 
     //*********************************
     // FIX! remove. this result is bogus. does it not work for temp? does temp have a /3 divider
@@ -700,8 +714,6 @@ void solarElevationCalcs(double solarElevation) {
     // < 10 deg 2mA
     // 11 to 20 deg 4mA
     // > 20 8mA
-    // FIX! update this based on solar elevation
-    // extern uint8_t SOLAR_SI5351_TX_POWER;
 
     uint8_t tx_power = 3;
     if (solarElevationInt < 10) {
