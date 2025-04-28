@@ -1197,9 +1197,9 @@ int check_data_validity_and_set_defaults(void) {
     int cg = 0;
     cg = atoi(cc._const_group);
     if (cg < 1 || cg > 7) {
-        V0_printf(EOL "ERROR: cc._const_group %s is not supported/legal, initting to 7" EOL,
+        V0_printf(EOL "ERROR: cc._const_group %s is not supported/legal, initting to 3" EOL,
             cc._const_group);
-        snprintf(cc._const_group, sizeof(cc._const_group), "7");
+        snprintf(cc._const_group, sizeof(cc._const_group), "3");
         write_FLASH();
         result = -1;
     }
@@ -1285,7 +1285,7 @@ void show_commands(void) {
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
     V0_println(F("M: morse_also: 1 tx cw msg after all wspr(default: 0)"));
     V0_println(F("L: solar_tx_power: 1 adjust power from solar elevation(default: 0)"));
-    V0_println(F("E: constellation group: (default: 7)"));
+    V0_println(F("E: constellation group: (default: 3)"));
     V0_println(F("J: monopole: (default: 0)"));
 
     V0_print(F("show_commands END" EOL));
