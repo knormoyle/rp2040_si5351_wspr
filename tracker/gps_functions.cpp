@@ -1594,6 +1594,7 @@ bool GpsFullColdReset(void) {
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         Serial2.begin(9600);
+        busy_wait_ms(500);
         // then up the speed to desired (both gps chip and then Serial2
         // since we're not changing from default 9600 for ATGM336..don't do!
         // setGpsBaud(desiredBaud);
@@ -1733,17 +1734,19 @@ bool GpsWarmReset(void) {
     // should come up in the last programmed baud rate (from cold reset)
     if (USE_SIM65M) {
         // Hmm. did we have failures where it didn't come up in the right baud rate?
-        // it either comes up in desiredBaud from some memory (9600?), or comes up in 115200?
+        // it either comes up in desiredBaud from some memory (9600?), 
+        // or comes up in 115200?
         Serial2.begin(115200);
         gpsSleepForMillis(500, false);  // no early out
         setGpsBaud(desiredBaud);
         Serial2.begin(9600);
         gpsSleepForMillis(500, false);  // no early out
-        setGpsBaud(desiredBaud);
+        // unnecessary? must be desiredBaud
+        // setGpsBaud(desiredBaud);
 
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
-        // we never change ATGM336 baud rate now.
+        // Used to not set ATGM baud rate! now we do..above
         Serial2.begin(9600);
     }
     gpsSleepForMillis(500, false);  // no early out
