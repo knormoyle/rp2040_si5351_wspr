@@ -1311,7 +1311,7 @@ void doFactoryReset() {
     snprintf(cc._use_sim65m, sizeof(cc._use_sim65m), "0");
     snprintf(cc._morse_also, sizeof(cc._morse_also), "0");
     snprintf(cc._solar_tx_power, sizeof(cc._solar_tx_power), "0");
-    snprintf(cc._const_group, sizeof(cc._const_group), "7");
+    snprintf(cc._const_group, sizeof(cc._const_group), "3");
     snprintf(cc._monopole, sizeof(cc._monopole), "0");
 
     // What about the side decodes? Don't worry, just reboot
