@@ -176,7 +176,7 @@ volatile bool PROCEED = false;
 
 //*********************************
 // time of last PPS 0->1 from irq, so we can calc offset duration when we setTIme
-uint32_t PPS_rise_millis = 0; 
+uint32_t PPS_rise_millis = 0;
 uint32_t PPS_rise_micros = 0;
 bool PPS_rise_valid = false;
 uint32_t PPS_rise_cnt = 0;
@@ -212,13 +212,13 @@ TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
 // $GBGSV,1,1,03,35,74,049,36,44,54,226,42,45,23,137,40,1*48
 
 // SIM65M
-TinyGPSCustom ga_sats(gps, "GAGSV", 3); // Galileo
+TinyGPSCustom ga_sats(gps, "GAGSV", 3);  // Galileo
 
 // do both, because config can change USE_SIM65M ??
 // SIM65M
-TinyGPSCustom ggb_sats(gps, "GBGSV", 3); // BeiDou
+TinyGPSCustom ggb_sats(gps, "GBGSV", 3);  // BeiDou
 // ATGM336H
-TinyGPSCustom gbd_sats(gps, "BDGSV", 3); // BeiDou
+TinyGPSCustom gbd_sats(gps, "BDGSV", 3);  // BeiDou
 
 // FIX! do we only get GNGSA ?? ?? don't need?
 // no..was getting. on ATGM336H?
@@ -423,7 +423,7 @@ uint64_t PLL_FREQ_TARGET = 600000000;
 // symbolAbsoluteError: 0.000003 Hz
 // symbolShiftError: 0.000006 Hz
 // channel 0 symbol 3 actual 28126024.394533 actual_pll_freq 618772536.679732
-// pll_mult 23 pll_num 742154 pll_denom 928919 ms_div 22 
+// pll_mult 23 pll_num 742154 pll_denom 928919 ms_div 22
 // uint64_t PLL_FREQ_TARGET = 650000000;
 
 // target PLL freq when making muliplier/divider initial calculations
@@ -470,7 +470,7 @@ extern const int BMP_I2C_SDA_PIN = 2;
 extern const int BMP_I2C_SCL_PIN = 3;
 
 bool BMP_FOUND = false;
-// this default doesn't get right? SDA/SDK? 
+// this default doesn't get right? SDA/SDK?
 Adafruit_BMP280 bmp(&Wire1);
 
 // FIX! used in i2c_functions for test of both i2c0 and i2c1
@@ -1299,15 +1299,15 @@ void loop1() {
         uint32_t elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
         // should we be setting once per interval?
         if (elapsed_setTime_secs > (10 * 60)) {
-            V1_printf("ERROR: elapsed_setTime_secs %lu > (10 * 60)" EOL, 
+            V1_printf("ERROR: elapsed_setTime_secs %lu > (10 * 60)" EOL,
                 elapsed_setTime_secs);
         }
-        bool fix_valid_all = 
+        bool fix_valid_all =
             !GpsInvalidAll &&
             // we got system time synced
-            (setTime_millis != 0) && 
+            (setTime_millis != 0) &&
             // we got system time not too old (30 minutes)
-            (elapsed_setTime_secs < (30 * 60)) && 
+            (elapsed_setTime_secs < (30 * 60)) &&
             gps.date.isValid() &&
             gps.time.isValid() &&
             (gps.date.year() >= 2025 && gps.date.year() <= 2035) &&
@@ -1414,7 +1414,7 @@ void loop1() {
         V1_printf("fix_age %lu millisecs" EOL, fix_age);
         V1_printf("fix_sat_cnt %lu" EOL, fix_sat_cnt);
         V1_printf("fix_updated %u" EOL, fix_updated);
-        V1_printf("elapsed_setTime_secs %lu" EOL, elapsed_setTime_secs); 
+        V1_printf("elapsed_setTime_secs %lu" EOL, elapsed_setTime_secs);
         V1_print(F(EOL));
 
         Watchdog.reset();
@@ -1831,7 +1831,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
         V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
         V1_printf("hf_callsign %-6s" EOL, hf_callsign);
         V1_printf("hf_grid4 %s" EOL, hf_grid4);
-        V1_printf("hf_power %s" EOL, hf_power); 
+        V1_printf("hf_power %s" EOL, hf_power);
         V1_print(F(EOL));
         V1_flush();
 
@@ -1917,7 +1917,7 @@ int alignAndDoAllSequentialTx(uint32_t hf_freq) {
 
 //***********************************************************
 void sleepSeconds(int secs) {
-    // this doesn't have an early out 
+    // this doesn't have an early out
     // although the updateGpsDataAndTime() can so the delay will be >= secs
     V1_println(F("sleepSeconds START"));
     V1_flush();
@@ -2322,7 +2322,8 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
 
     //******************
     // instead of adding delay, just align to 1 sec? since
-    // code delay < 1 sec and we just aligned to 0 sec, this should be best align to 1 sec in?
+    // code delay < 1 sec and we just aligned to 0 sec,
+    // this should be best align to 1 sec in?
     bool ALIGN_TO_1SEC_IN_MODE = false;
     if (ALIGN_TO_1SEC_IN_MODE) {
         // will be looping here no more than 1 sec
@@ -2330,10 +2331,11 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
         int alignSecond = second();
         uint32_t alignLoopCnt = 0;
         if (alignSecond != 0) {
-            V1_printf("ERROR: 1-sec-in alignment started with non-zero second() %d" EOL, alignSecond);
+            V1_printf("ERROR: 1-sec-in alignment started with non-zero second() %d" EOL,
+                alignSecond);
         }
         // just in case, break out if it loops more than 100 times
-        while(alignSecond == 0) {
+        while (alignSecond == 0) {
             alignLoopCnt += 1;
             if (alignLoopCnt > 101) {
                 V1_print(F("ERROR: 1-sec-in alignment looped > 101 times" EOL));

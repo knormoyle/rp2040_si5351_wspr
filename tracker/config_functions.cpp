@@ -492,6 +492,7 @@ void user_interface(void) {
                 get_user_input("Enter U4B channel (0-599): " EOL,
                     cc._U4B_chan, sizeof(cc._U4B_chan));
                 init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
+                process_chan_num(cc._id13, cc._start_minute, cc._lane, cc._Band, cc._U4B_chan);
 
                 write_FLASH();
                 break;
@@ -538,6 +539,7 @@ void user_interface(void) {
                 // since U4B definition changes per band
                 write_FLASH();
                 init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
+                process_chan_num(cc._id13, cc._start_minute, cc._lane, cc._Band, cc._U4B_chan);
                 break;
             case 'B':
                 get_user_input("Enter CW Band (2,10,12,15,17,20):" EOL,
@@ -1228,10 +1230,10 @@ void show_values(void) {
     V0_printf("C: callsign: %s" EOL, cc._callsign);
     V0_printf("U: U4B channel: %s" EOL, cc._U4B_chan);
     V0_printf("A: band: %s (meters)" EOL, cc._Band);
-    V0_printf("B: band for cw: %s (meters)" EOL, cc._Band_cw);
     V0_printf(" (id13: %s", cc._id13);
     V0_printf(" start Minute: %s", cc._start_minute);
     V0_printf(" lane: %s)" EOL, cc._lane);
+    V0_printf("B: band for cw: %s (meters)" EOL, cc._Band_cw);
     V0_printf("P: tx_high: %s" EOL, cc._tx_high);
     V0_printf("V: verbose: %s" EOL, cc._verbose);
     V0_printf("T: ExtTelemetry config: %s" EOL, cc._ExtTelemetry);

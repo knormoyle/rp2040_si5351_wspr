@@ -11,7 +11,7 @@
 extern bool USE_SIM65M;
 // change it if we have the 5sec fix/broadcast on USE_SIM65M
 extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
-extern uint32_t setTime_millis; // last millis() when we setTime()
+extern uint32_t setTime_millis;  // last millis() when we setTime()
 extern bool BALLOON_MODE;
 
 // Don't reconfig if not necessary
@@ -1655,7 +1655,7 @@ bool GpsFullColdReset(void) {
     GpsStartTime = get_absolute_time();  // usecs
     if (sentencesFound) {
         GpsIsOn_state = true;
-        PPS_countEnable(true); // reset
+        PPS_countEnable(true);  // reset
     }
 
     uint32_t duration_millis = millis() - start_millis;
@@ -1734,7 +1734,7 @@ bool GpsWarmReset(void) {
     // should come up in the last programmed baud rate (from cold reset)
     if (USE_SIM65M) {
         // Hmm. did we have failures where it didn't come up in the right baud rate?
-        // it either comes up in desiredBaud from some memory (9600?), 
+        // it either comes up in desiredBaud from some memory (9600?),
         // or comes up in 115200?
         Serial2.begin(115200);
         gpsSleepForMillis(500, false);  // no early out
@@ -1788,7 +1788,7 @@ bool GpsWarmReset(void) {
 
     if (sentencesFound) {
         GpsIsOn_state = true;
-        PPS_countEnable(true); // reset
+        PPS_countEnable(true);  // reset
     }
     GpsStartTime = get_absolute_time();  // usecs
     return sentencesFound;
@@ -2136,7 +2136,7 @@ uint32_t updateGpsDataAndTime(int ms) {
     // the time of the last $..for setting system time to the secs in the nmea sentence
     // with less variation (rather than time at the end of the checksum)
     uint32_t dollar_millis = 0;
-    uint32_t dollarStar_millis = 0; // double buffering to guarantee no race condition with '$'
+    uint32_t dollarStar_millis = 0;  // double buffering so no race condition with '$'
     // only one that causes gps.time.updated
     uint32_t timeUpdate_sentences = 0;
     bool timeUpdateDone = false;
@@ -2220,7 +2220,7 @@ uint32_t updateGpsDataAndTime(int ms) {
 
             // Do we get any unprintable? ignore unprintable chars, just in case.
             if (VERBY[1]) {
-                if (printable) nmeaBufferAndPrint(incomingChar, false); // don't print if full
+                if (printable) nmeaBufferAndPrint(incomingChar, false);  // no print if full
             }
             current_millis = millis();
             last_serial2_millis = current_millis;
@@ -2247,7 +2247,7 @@ uint32_t updateGpsDataAndTime(int ms) {
         // FIX! if the time update took more than 32ms the rx fifo would back up, full
         // in any case, we don't break on this if we did a time update
         // situation probably doesn't happen now.
-        // was 25 
+        // was 25
         if (timeSinceLastChar_millis >= 10 && !timeUpdateDone) {
             // FIX! could the LED blinking have gotten delayed?
             // we don't check in the available loop above.
@@ -2273,7 +2273,7 @@ uint32_t updateGpsDataAndTime(int ms) {
         // print/clear any accumulated NMEA sentence stuff
         nmeaBufferPrintAndClear();
         V1_print(F(EOL));
-        DoLogPrint(); // dump the StampPrintf if any
+        DoLogPrint();  // dump the StampPrintf if any
     }
 
     if (false) {
@@ -2412,7 +2412,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // it will go to zero once we get a fix. and stay 0 for the repeated broadcast.
     uint8_t gps_hundredths = gps.time.centisecond();
     if (gps_hundredths > 0) {
-        V1_printf("ERROR: won't setTime because non-zero gps_hundredths %u ..PPS skew is often bad" EOL,
+        V1_printf("ERROR: won't setTime ..non-zero gps_hundredths %u ..PPS skew often bad" EOL,
             gps_hundredths);
         printGpsDateTime(gps.date, gps.time, true);
         V1_print(F(EOL));
@@ -2537,7 +2537,9 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     }
 
     // setTime_millis should always be before or = current millis()
-    setTimeWithMillis(gps_hour, gps_minute, gps_second, gps_day, gps_month, gps_year, setTime_millis);
+    setTimeWithMillis(gps_hour, gps_minute, gps_second,
+        gps_day, gps_month, gps_year,
+        setTime_millis);
 
     if (false) {
         V1_print(F("GOOD: system setTime() with"));
@@ -2563,17 +2565,17 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     if (timeUpdateCnt != 0) {
         // V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
         if (abs(secondDelta) > 1) {
-            V1_printf("ERROR: was excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
+            V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
                 secondDelta, forceUpdate);
             printSystemDateTime();
             V1_print(F(EOL));
         } else if (abs(secondDelta) == 1) {
-            V1_printf("WARN: was drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
+            V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
                 secondDelta, forceUpdate);
             printSystemDateTime();
             V1_print(F(EOL));
         } else {
-            V1_printf("GOOD: was no drift. secondDelta %d forceUpdate %u ",
+            V1_printf("GOOD: no drift. secondDelta %d forceUpdate %u ",
                 secondDelta, forceUpdate);
             printSystemDateTime();
             V1_print(F(EOL));
