@@ -139,17 +139,19 @@ Channels 200-399: '1'
 Channels 400-599: 'Q'
 
 Third callsign character:
-(channel % 200) / 20
+    (channel % 200) / 20
 
 Frequency discrimination:
-Frequency sector is
-(channel % 20) / 5
+Frequency sector is: (isn't this the same as txSlot?)
+    (channel % 20) / 5
 
-That indicates into the array of transmit audio frequencies: [1420, 1460, 1540, 1580];
+That indicates into the array of transmit audio frequencies: 
+Why is this only 4? should it be 5?
+[1420, 1460, 1540, 1580]
 which are the target transmit frequencies, each in their 5 sectors.
 
 The actual transmit frequency is the standard WSPR USB dial frequency +
-the above mentioned audio frequency;
+the above mentioned audio frequency.
 
 USB dial frequencies:
     [136000, 474200, 1836600, 3568600, 5364700, 7038600, 10138700,
@@ -157,7 +159,9 @@ USB dial frequencies:
     50293000, 70091000, 144489000];
 
 Transmit slot:
-The transmit slot (txSlot) is first calculated as (channel % 5).
+The transmit slot (txSlot) is first calculated as: 
+    (channel % 5).
+
 Then the start time in minutes past the hour, repeated every 10 minutes, is:
     2 * ((txSlot + 2 * txBand) % 5);
 

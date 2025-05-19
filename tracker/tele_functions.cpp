@@ -715,10 +715,12 @@ void solarElevationCalcs(double solarElevation) {
     // 11 to 20 deg 4mA
     // > 20 8mA
 
+    // used to have boundary at 20..changed to 30 for small solar arrays 05/13/25
+    // used to have next boundary at 10..changed to 20 for small solar arrays 05/13/25
     uint8_t tx_power = 3;
-    if (solarElevationInt < 10) {
+    if (solarElevationInt <= 20) {
         tx_power = 0;
-    } else if (solarElevationInt < 20) {
+    } else if (solarElevationInt <= 30) {
         tx_power = 1;
     } else {
         tx_power = 3;
