@@ -1299,7 +1299,7 @@ void loop1() {
         uint32_t elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
         // should we be setting once per interval?
         if (elapsed_setTime_secs > (10 * 60)) {
-            V1_printf("ERROR: elapsed_setTime_secs %lu > (10 * 60)" EOL,
+            V1_printf("ERROR: Should set time every interval? elapsed_setTime_secs %lu > (10 * 60)" EOL,
                 elapsed_setTime_secs);
         }
         bool fix_valid_all =

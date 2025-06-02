@@ -571,8 +571,15 @@ void cw_send_message() {
                 V1_print(F("Wait for a successful wspr tx before switching to 'Z' test" EOL));
                 V1_print(F("snapForTelemetry() will have happened then" EOL));
             }
-            snprintf(cw_msg, sizeof(cw_msg), "CQ CQ CQ DE %s %s BALLOON %s %s %s %s K",
-                tt.callsign, tt.callsign, tt.grid6, tt.grid6, tt.altitude, tt.altitude);
+            
+            // slashed callsign with grid4
+            char grid4[5];
+            // alternately: "%.*s", 4  is  a precision specifier that says the max # of chars taken
+            snprintf(grid4, sizeof(grid4), "%4s", tt.grid6);
+            // snprintf(grid4, sizeof(grid4), "%s", tt.grid6);
+            
+            snprintf(cw_msg, sizeof(cw_msg), "CQ CQ CQ DE %s/%s %s/%s BALLOON %s %s %s %s K",
+                tt.callsign, grid4, tt.callsign, grid4, tt.grid6, tt.grid6, tt.altitude, tt.altitude);
     }
 
     // cw_msg can't be empty here

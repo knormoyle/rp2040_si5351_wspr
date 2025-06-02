@@ -716,7 +716,12 @@ void solarElevationCalcs(double solarElevation) {
     // > 20 8mA
 
     // used to have boundary at 20..changed to 30 for small solar arrays 05/13/25
-    // used to have next boundary at 10..changed to 20 for small solar arrays 05/13/25
+    // used to have next boundary at 10..
+    // changed to 20 for small solar arrays 05/13/25
+    // the 30 transition works good. 
+    // with 7 cells gets us to 22 deg. with atgm336h.
+    // 2 degrees per 10 minutes at low angles. 4.1v
+    // note for testing at home qth, this lowers power at night with negative angles
     uint8_t tx_power = 3;
     if (solarElevationInt <= 20) {
         tx_power = 0;
