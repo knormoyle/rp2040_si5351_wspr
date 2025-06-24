@@ -91,7 +91,12 @@ void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
         BF17M = 18104600UL,
         BF15M = 21094600UL,
         BF12M = 24924600UL,
-        BF10M = 28124600UL,
+        // avg rx spot: seeing +4 to +26 hz with this base freq
+        // BF10M = 28124600UL,
+        // subtract 15 to shift it down (also 3 hz offset for middle freq?)
+        // FIX! default corrections for other bands?
+        // wonder how this relates to load capacitance setting 
+        BF10M = 28124600UL - 15UL,
         BF02M = 144489000UL, 
     };
 
