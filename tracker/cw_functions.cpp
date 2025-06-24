@@ -575,7 +575,10 @@ void cw_send_message() {
             // slashed callsign with grid4
             char grid4[5];
             // alternately: "%.*s", 4  is  a precision specifier that says the max # of chars taken
-            snprintf(grid4, sizeof(grid4), "%4s", tt.grid6);
+             snprintf(grid4, sizeof(grid4), "%.*s", 4,  tt.grid6);
+            // this is no good?
+            // snprintf(grid4, sizeof(grid4), "%4s", tt.grid6);
+            // this is not good?
             // snprintf(grid4, sizeof(grid4), "%s", tt.grid6);
             
             snprintf(cw_msg, sizeof(cw_msg), "CQ CQ CQ DE %s/%s %s/%s BALLOON %s %s %s %s K",

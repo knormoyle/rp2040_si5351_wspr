@@ -19,7 +19,10 @@ const int SI5351A_CLK1_CONTROL =            17;
 const int SI5351A_CLK2_CONTROL =            18;
 const int SI5351A_CLK7_CONTROL =            23;
 
-const int SI5351A_PLLA_BASE =               24; // 8 regs
+// FIXed 6/24/25. was 24! should be 26
+const int SI5351A_CLK3_0_DISABLE_STATE =    24;
+const int SI5351A_CLK7_4_DISABLE_STATE =    25;
+const int SI5351A_PLLA_BASE =               26; // 8 regs
 const int SI5351A_PLLB_BASE =               34; // 8 regs
 const int SI5351A_MULTISYNTH0_BASE =        42; // 8 regs
 const int SI5351A_MULTISYNTH1_BASE =        50; // 8 regs

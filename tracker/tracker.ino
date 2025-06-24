@@ -2212,6 +2212,7 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     // make them globals for use by sendWspr()?
 
     // get the vfo going!
+    // FIX! what is the first power!
     startSymbolFreq(hf_freq, symbol, true, false);  // only_pll_num (expected)
 
     // encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer

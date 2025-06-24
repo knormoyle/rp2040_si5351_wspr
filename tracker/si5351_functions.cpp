@@ -729,6 +729,10 @@ void si5351a_setup_multisynth012(uint32_t div) {
     }
 
     if (cc._monopole[0] == '1') {
+        // FIX! drive it low instead of pdn, if we leave counterpoise on clk1?
+        // assume we use counterpoise on ground, so powerdown.
+        // the CLKx_DIS_STATE is two bits..00 will drive clk to low state when disabled
+        // instead of doing this, just output disable
         force_clk1_powerdown = SI5351A_CLK1_PDN;
     }
 
@@ -1522,6 +1526,7 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     // make PLLA the same (so it locks? Is that better power than unlocked?)
     // maybe PLLA is disabled if not used? unknown
     // HACK. don't setup PLLA 1/10/25
+    // FIX! is reg 24 the clk3-0 Disable State? Could this be why the clks never disable?
     if (false) {
         si5351a_setup_PLL(pll_mult, pll_num, pll_denom, false); // PLLA
     }
@@ -1867,10 +1872,14 @@ void vfo_turn_on() {
     vfo_set_drive_strength(WSPR_TX_CLK_1_NUM, power);
 
     //*********************
+    // set clk3-0 disable state to set to low state when disabled? 
+    // hans u4b says this works for monopole drive counterpoise?
+    // i2cWrite(SI5351A_CLK3_0_DISABLE_STATE, 0x00);
+
     // new 12/27/24: have clock 0:3 disabled state be high impedance
-    i2cWrite(24, 0b10101010);
+    i2cWrite(SI5351A_CLK3_0_DISABLE_STATE, 0b10101010);
     // clk 4-7 ? shouldn't hurt..doesn't exist on si5351a 3 output
-    i2cWrite(25, 0b10101010);
+    i2cWrite(SI5351A_CLK7_4_DISABLE_STATE, 0b10101010);
 
     // FIX! are these just initial values?
     // set PLLA-B for div_16 mode (minimum even integer division)
@@ -1879,10 +1888,10 @@ void vfo_turn_on() {
     // write 8 regs
     // set PLLA for div_16 mode (minimum even integer division)
     Watchdog.reset();
-    i2cWriten(26, (uint8_t *)s_plla_values, 8);
+    i2cWriten(SI5351A_PLLA_BASE, (uint8_t *)s_plla_values, 8);
     // we use pllb only? (write 8 regs)
     // set PLLB for div_16 mode (minimum even integer division)
-    i2cWriten(34, (uint8_t *)s_pllb_values, 8);
+    i2cWriten(SI5351A_PLLB_BASE, (uint8_t *)s_pllb_values, 8);
 
     // set MS0-2 for div_4 mode (min. division)
     const uint8_t s_ms_01_values[] = { 0, 1, 0x0C, 0, 0, 0, 0, 0 };
@@ -1890,11 +1899,11 @@ void vfo_turn_on() {
     // write 8 regs
     // set MS0 for div_4 mode (min. division)
     Watchdog.reset();
-    i2cWriten(42, (uint8_t *)s_ms_01_values, 8);
+    i2cWriten(SI5351A_MULTISYNTH0_BASE, (uint8_t *)s_ms_01_values, 8);
     // set MS1 for div_4 mode (min. division)
-    i2cWriten(50, (uint8_t *)s_ms_01_values, 8);
+    i2cWriten(SI5351A_MULTISYNTH1_BASE, (uint8_t *)s_ms_01_values, 8);
     // set MS2 for div_4 mode (min.division)
-    i2cWriten(58, (uint8_t *)s_ms_2_values, 8);
+    i2cWriten(SI5351A_MULTISYNTH2_BASE, (uint8_t *)s_ms_2_values, 8);
 
     // disable spread spectrum
     // FIX! what is 149? doesn't exist?
