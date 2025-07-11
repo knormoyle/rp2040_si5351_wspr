@@ -1267,7 +1267,7 @@ void show_commands(void) {
     V0_println(F("X: exit config mode and reboot"));
     V0_println(F("*: factory reset all config values"));
     V0_println(F("Z: run wspr 4 tone freq test loop"));
-    V0_println(F("Y: run gps warm rest test loop"));
+    V0_println(F("Y: run gps warm reset test loop"));
     V0_println(F("Q: run cw test loop"));
 
     V0_println(F(EOL "/: reboot to drag/drop new .uf2 (not implemented)"));

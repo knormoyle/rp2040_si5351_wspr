@@ -1,3 +1,6 @@
+// FIX! SIM65M CB labelled parts won't let me change baud rate?
+// SIM65M did?
+
 // Project: https://github.com/knormoyle/rp2040_si5351_wspr
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
@@ -149,6 +152,8 @@ extern bool BALLOON_MODE;
 bool PWM_GPS_POWER_ON_MODE = true;
 
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
+// 7/10/25
+// bool ALLOW_UPDATE_GPS_FLASH_MODE = true;
 // causing intermittent fails if true?
 bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false;
 
@@ -1064,7 +1069,8 @@ void setGpsBaud(int desiredBaud) {
     // have to send CR and LF and correct checksum
     // CR and LF are in print_functions.h. they are not part of the checksum, nor is the $
     // Example: $PMTK251,38400*27<CR><LF>
-    // just pre-calculate the checksums here and hardwire them in the static sentences used.
+    // pre-calculate the checksums here 
+    // hardwire them in the static sentences used.
     // https://www.meme.au/nmea-checksum.html
     // should just get legal ones here
     int usedBaud = checkGpsBaudRate(desiredBaud);
@@ -1074,32 +1080,48 @@ void setGpsBaud(int desiredBaud) {
         switch (usedBaud) {
             // $PAIR860,0,0,37,9600,0*23 means:
             // Open UART0 to NMEA output without flow control.  Baudrate is 9600.
+            case 4800 : // supported or ??
+                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,4800*10" CR LF, 64);
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,4800,0*22" CR LF, 64);
+                break;
             case 9600:
                 // alternate baudrate only but says min is 115200?
                 // yes! 9600 works after boot with 115200!. no buffer overflow
-                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,9600*13" CR LF, 64);
-                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64);
+                // Did this stop working?
+                // strange they don't list all baud rate values for PAIR860 but they do for PAIR864
+                // this worked if default 115200 originally..for SIM65M module. (not SIM65M-CB?)
+                if (false) {
+                    if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,9600*13" CR LF, 64);
+                    else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64);
+                } else {
+                    // try uart1
+                    strncpy(nmeaBaudSentence, "$PAIR860,0,1,37,9600,0*22" CR LF, 64);
+                    // try uart2
+                    // strncpy(nmeaBaudSentence, "$PAIR860,0,2,37,9600,0*21" CR LF, 64);
+                }
                 break;
-            // $PAIR860,0,0,37,19200,0*16
             case 19200:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,19200*26" CR LF, 64);
                 else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,19200,0*16" CR LF, 64);
                 break;
-            // $PAIR860,0,0,37,38400,0*13
             case 38400:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,38400*23" CR LF, 64);
                 else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,38400,0*13" CR LF, 64);
                 break;
-            // $PAIR860,0,0,37,57600,0*18
             case 57600:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,57600*28" CR LF, 64);
                 else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,57600,0*18" CR LF, 64);
                 break;
-            // $PAIR860,0,0,37,115200,0*2B\r\n ==> Open UART0 to NMEA output without flow control.
-            // Baudrate is 115200.
             case 115200:
-                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,115200*1B" CR LF, 64);
-                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,115200,0*2B" CR LF, 64);
+                if (false) {
+                    if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,115200*1B" CR LF, 64);
+                    else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,115200,0*2B" CR LF, 64);
+                } else {
+                    // try uart1
+                    strncpy(nmeaBaudSentence, "$PAIR860,0,1,37,115200,0*2A" CR LF, 64);
+                    // try uart2
+                    // strncpy(nmeaBaudSentence, "$PAIR860,0,2,37,115200,0*29" CR LF, 64);
+                }
                 break;
             default:
                 usedBaud = 9600;
@@ -1147,11 +1169,24 @@ void setGpsBaud(int desiredBaud) {
     Serial2.flush();
     busy_wait_ms(1000);
 
+    //**********************************
     Serial2.print(nmeaBaudSentence);
     Serial2.flush();
     // have to wait for the sentence to get out and complete at the GPS
     busy_wait_ms(1000);
+
+    //**********************************
+
     V1_printf("setGpsBaud for usedBaud %d, sent %s" EOL, usedBaud, nmeaBaudSentence);
+
+    // 7/10/25 spec says to reboot after baud rate change?
+    if (USE_SIM65M) {
+        strncpy(nmeaBaudSentence, "$PAIR023*3B" CR LF, 64);
+        Serial2.print(nmeaBaudSentence);
+        Serial2.flush();
+        busy_wait_ms(1000);
+        V1_printf("setGpsBaud reboot. gps sent %s" EOL, nmeaBaudSentence);
+    }
 
     // Note:
     // Serial2.end() Disables serial communication,
@@ -1166,9 +1201,11 @@ void setGpsBaud(int desiredBaud) {
     Serial2.end();
     // delay between end and begin?
     gpsSleepForMillis(1000, false);
+
+    // false, to see if the command didn't change baud
+    // then have to change Serial2.begin() to agree
     Serial2.begin(usedBaud);
     V1_printf("setGpsBaud did Serial2.begin(%d)" EOL, usedBaud);
-    // then have to change Serial2.begin() to agree
     gpsSleepForMillis(1000, false);
     V1_printf("setGpsBaud END %d" EOL, usedBaud);
 }
@@ -1284,8 +1321,8 @@ void GpsINIT(void) {
     // gps is powered up now
 
     //****************
-    // drain the rx buffer. GPS is off, but shouldn't keep
-    while (Serial2.available()) Serial2.read();
+    // drain the rx buffer.
+    // while (Serial2.available()) Serial2.read();
     gpsSleepForMillis(2000, false);
     V1_println(F("GpsINIT END" EOL));
 }
@@ -1376,7 +1413,8 @@ bool GpsFullColdReset(void) {
     digitalWrite(GPS_ON_PIN, LOW);  // deassert
     digitalWrite(GPS_NRESET_PIN, LOW);  // assert
     digitalWrite(GpsPwr, HIGH);  // deassert
-    Serial2.end();
+    // 7/10/25
+    // Serial2.end();
     // full 2 secs off?
     gpsSleepForMillis(2000, false);
 
@@ -1413,6 +1451,8 @@ bool GpsFullColdReset(void) {
 
     // we still have usb pll on, and default clock frequency at this point?
     GpsStartTime = get_absolute_time();  // usecs
+    // CHANGE: 7/10/25..don't pwm sim65m?
+    // if (PWM_GPS_POWER_ON_MODE && !USE_SIM65M) {
     if (PWM_GPS_POWER_ON_MODE) {
         // this is probably at least 2 secs. let's measure
         uint32_t start_millis2 = millis();
@@ -1591,13 +1631,30 @@ bool GpsFullColdReset(void) {
         // could try it again. might aid recovery
         // then up the speed to desired (both gps chip and then Serial2
         setGpsBaud(desiredBaud);
+
+        // for old chips that are stuck at 9600 that we want to try faster
+        Serial2.begin(9600);
+        busy_wait_ms(500);
+        // since Serial2 was reset by setGpsBaud()..
+        // could try it again. might aid recovery
+        // then up the speed to desired (both gps chip and then Serial2
+        setGpsBaud(desiredBaud);
+
+        // setGpsBaud does this at end
+        // Serial2.begin(desiredBaud);
+        // busy_wait_ms(500);
+        // since Serial2 was reset by setGpsBaud()..
+        // could try it again. might aid recovery
+        // then up the speed to desired (both gps chip and then Serial2
+        // setGpsBaud(desiredBaud);
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         Serial2.begin(9600);
         busy_wait_ms(500);
         // then up the speed to desired (both gps chip and then Serial2
-        // since we're not changing from default 9600 for ATGM336..don't do!
-        // setGpsBaud(desiredBaud);
+        // since we're no longer changing from default 9600 for ATGM336..maybe don't do?
+        // 7/10/25
+        setGpsBaud(desiredBaud);
     }
 
     gpsSleepForMillis(2000, false);
@@ -1739,15 +1796,16 @@ bool GpsWarmReset(void) {
         Serial2.begin(115200);
         gpsSleepForMillis(500, false);  // no early out
         setGpsBaud(desiredBaud);
-        Serial2.begin(9600);
-        gpsSleepForMillis(500, false);  // no early out
-        // unnecessary? must be desiredBaud
-        // setGpsBaud(desiredBaud);
+        // setGpsBaud does this already
+        // Serial2.begin(desiredBaud);
 
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         // Used to not set ATGM baud rate! now we do..above
         Serial2.begin(9600);
+        // 7/10/25
+        gpsSleepForMillis(500, false);  // no early out
+        setGpsBaud(desiredBaud);
     }
     gpsSleepForMillis(500, false);  // no early out
 
@@ -2109,9 +2167,11 @@ uint32_t updateGpsDataAndTime(int ms) {
     getChar();
     // update: treat 30 as full, not 31, just in case arrival while we're starting
     // would be dropped.
-    if (charsAvailable >= 30) {
+    // FIX! 7/10/25 change from 30 to 1, to get more room for 115200 baud of sim65m cb parts?
+    // if (charsAvailable >= 30) {
+    if (charsAvailable >= 1) {
         if (VERBY[1]) {
-            StampPrintf("INFO: initially drained NMEA chars because rx full. uart rx %d" EOL,
+            StampPrintf("INFO: initially drained NMEA chars because rx has stuff. uart rx initially %d" EOL,
                 (int) charsAvailable);
         }
         charsToDrain = charsAvailable;
@@ -2231,8 +2291,6 @@ uint32_t updateGpsDataAndTime(int ms) {
 
         // keep as close as possible to the NMEA sentence arrival?
         // I suppose we'll see gps.time.updated every time?
-        // don't do it here. we should always get more stuff after the GGA above
-        // if (gps.time.updated) checkUpdateTimeFromGps(dollarStar_millis);
 
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
@@ -2585,14 +2643,16 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     fix_age = gps.time.age();
     // might give an indication of how long it takes to do all this work
     // show the rx fifo at this point to understand backup!
+    // FIX! should we drain if > 30 ?
     int charsAvailable = Serial2.available();
     if (charsAvailable > 25) {
-        V1_print(F("ERROR: rx fifo backup: "));
+        V1_print(F("ERROR: rx fifo backup (2): "));
     } else if (charsAvailable > 21) {
-        V1_print(F("WARN: rx fifo backup: "));
+        V1_print(F("WARN: rx fifo backup (2): "));
     }
     V1_printf("gps fix_age_entry %lu fix_age now %lu charsAvailable %d" EOL,
         fix_age_entry, fix_age, charsAvailable);
+
     // seems like it takes 11ms or so max?
     // if chars are arriving 1 per ms, then the rx fifo needs room for 11 when
     // we do time, to absorb char backup?
@@ -2748,8 +2808,8 @@ void kazuClocksSlow() {
     V1_flush();
 
     if (ALLOW_TEMP_12MHZ_MODE) {
-        // We go down to 12 mhz for lowest power no matter what. We just don't
-        // stay at 12 unless ALLOW_KAZU_12MHZ_MODE
+        // We go down to 12 mhz for lowest power no matter what. 
+        // We just don't stay at 12 unless ALLOW_KAZU_12MHZ_MODE
         // maybe on restore, we have to go to 18 before we restore usb?
         // Change clk_sys to be 12MHz
         // the external crystal is 12mhz

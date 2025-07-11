@@ -311,12 +311,16 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 //*********************************************
 // extern const int SIM65M_BAUD_RATE = 4800;
 // what we want to change it too
+
+// 7/10/25 was:
 extern const int SIM65M_BAUD_RATE = 9600;
+
 // extern const int SIM65M_BAUD_RATE = 19200;
 // extern const int SIM65M_BAUD_RATE = 38400;
 // extern const int SIM65M_BAUD_RATE = 57600;
 // default at power up
 // extern const int SIM65M_BAUD_RATE = 115200;
+
 //*********************************************
 
 // legal choices? 9600 (default ATGM336H) 19200 38400
