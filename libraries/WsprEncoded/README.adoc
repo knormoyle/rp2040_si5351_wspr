@@ -1,0 +1,14 @@
+:repository-owner: traquito
+:repository-name: WsprEncoded
+
+= {repository-name} =
+
+image:https://github.com/{repository-owner}/{repository-name}/actions/workflows/check-arduino.yml/badge.svg["Check Arduino status", link="https://github.com/{repository-owner}/{repository-name}/actions/workflows/check-arduino.yml"] +
+image:https://github.com/{repository-owner}/{repository-name}/actions/workflows/compile-examples.yml/badge.svg["Compile Examples status", link="https://github.com/{repository-owner}/{repository-name}/actions/workflows/compile-examples.yml"]
+
+
+This is the repo for standardizing and implementing the design of encoded WSPR messages as used by balloon trackers.
+
+See the website for more details.
+
+https://traquito.github.io/pro/telemetry/code
