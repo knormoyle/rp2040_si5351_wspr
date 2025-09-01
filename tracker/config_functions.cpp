@@ -894,32 +894,33 @@ void write_FLASH(void) {
     V0_print(F("Erasing FLASH target region" EOL));
     uint32_t ints;
     int rc;
-    if (false) {
+    // was false 9/1/2025
+    if (true) {
         rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
         V0_printf("flash_safe_execute call_flash_range_erase rc: %d" EOL, rc);
         // hard_assert(rc == PICO_OK);
-    } else {
-        // was 12/18/2024
-        // don't interrupt..not enough? what about code fetch
-        // uint32_t ints = save_and_disable_interrupts();
-        ints = save_and_disable_interrupts();
-        flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-        // writes 256 bytes (one "page") (16 pages per sector)
     }
+    // was 12/18/2024
+    // don't interrupt..not enough? what about code fetch
+    // uint32_t ints = save_and_disable_interrupts();
+    ints = save_and_disable_interrupts();
+    // 9/1/25 ..??
+    // flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+    // writes 256 bytes (one "page") (16 pages per sector)
 
     V0_print(F("Writing FLASH target region" EOL));
-    if (false) {
+    // was false 9/1/2025
+    if (true) {
         uintptr_t params[] = {FLASH_TARGET_OFFSET, (uintptr_t) udata_chunk};
         // uintptr_t params[] = {FLASH_TARGET_OFFSET, (uint8_t) udata_chunk};
         rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
         V0_printf("flash_safe_execute call_flash_range_program() rc: %d" EOL, rc);
         // hard_assert(rc == PICO_OK);
-    } else {
-        // was 12/18/2024
-        // was this supposed to be FLASH_SECTOR_SIZE?
-        flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
-        restore_interrupts(ints);
     }
+    // was 12/18/2024
+    flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
+    restore_interrupts(ints);
+    
     V1_print(F("write_FLASH END" EOL));
 }
 
@@ -1321,8 +1322,8 @@ void doFactoryReset() {
     V0_println(F("doFactoryReset END"));
 
     // reboot
-    V0_print(F("Goodbye ..rebooting after doFactorReset()" EOL));
-    Watchdog.enable(500);  // milliseconds
+    V0_print(F("Goodbye ..rebooting after doFactoryReset()" EOL));
+    Watchdog.enable(3000);  // milliseconds
     while (true) tight_loop_contents();
 }
 //*****************************************************

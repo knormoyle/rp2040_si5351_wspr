@@ -2611,3 +2611,29 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     return retval;
 }
 
+
+//  interesting thoughts from Andy24
+//  Andy24 02/09/24   #14727   
+//  
+//  I think I figured this out. My code had the following sequence:
+//  - update feedback divider registers
+//  - update output divider registers
+//  - reset PLL
+//  
+//  This somehow gets si5351a into a glitchy initialized state (some probability of either wrong frequency or wrong phase offset between two outputs)
+//  
+//  The correct sequence appears to be:
+//  - update output divider registers
+//  - update feedback divider registers
+//  - reset PLL
+//  
+//  Andy24
+//  02/09/24   #14718   
+//  
+//  Doing experiments with SI5351a (the original version, not MS5351M), I've noticed that the output can be glitchy unless I insert a 1ms delay before resetting the PLL. After some Googling, I've come across rfzero's tutorial (https://rfzero.net/tutorials/si5351a/), which mentions "register settling" in their code:
+//  
+//  // Reset PLLA
+//  delayMicroseconds(500);            // Allow registers to settle before resetting the PLL
+//  WriteRegister(177, 0x20);
+//  
+//  Has anyone needed to use similar delays? Is this documented anywhere?
