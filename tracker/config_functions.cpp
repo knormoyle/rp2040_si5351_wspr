@@ -543,7 +543,7 @@ void user_interface(void) {
                 break;
             case 'B':
                 get_user_input("Enter CW Band (2,10,12,15,17,20):" EOL,
-                    cc._Band_cw, sizeof(cc._Band));
+                    cc._Band_cw, sizeof(cc._Band_cw));
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
                 write_FLASH();
@@ -746,7 +746,6 @@ int read_FLASH(void) {
     strncpy(cc._ExtTelemetry,    flash_target_contents + 7,  4); cc._ExtTelemetry[4] = 0;
     strncpy(cc._clock_speed,     flash_target_contents + 11, 3); cc._clock_speed[3] = 0;
     strncpy(cc._U4B_chan,        flash_target_contents + 14, 3); cc._U4B_chan[3] = 0;
-    // FIX! change tocc._band everywhere?
     strncpy(cc._Band,            flash_target_contents + 17, 2); cc._Band[2] = 0;
     strncpy(cc._tx_high,         flash_target_contents + 19, 1); cc._tx_high[1] = 0;
     strncpy(cc._testmode,        flash_target_contents + 20, 1); cc._testmode[1] = 0;
@@ -891,36 +890,34 @@ void write_FLASH(void) {
     // FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE, FLASH_PAGE_SIZE = 040000x, 4096, 256
     // you could theoretically write 16 pages at once (a whole sector).
 
-    V0_print(F("Erasing FLASH target region" EOL));
     uint32_t ints;
     int rc;
+
     // was false 9/1/2025
-    if (true) {
+    if (false) {
         rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
         V0_printf("flash_safe_execute call_flash_range_erase rc: %d" EOL, rc);
         // hard_assert(rc == PICO_OK);
-    }
-    // was 12/18/2024
-    // don't interrupt..not enough? what about code fetch
-    // uint32_t ints = save_and_disable_interrupts();
-    ints = save_and_disable_interrupts();
-    // 9/1/25 ..??
-    // flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
-    // writes 256 bytes (one "page") (16 pages per sector)
-
-    V0_print(F("Writing FLASH target region" EOL));
-    // was false 9/1/2025
-    if (true) {
         uintptr_t params[] = {FLASH_TARGET_OFFSET, (uintptr_t) udata_chunk};
         // uintptr_t params[] = {FLASH_TARGET_OFFSET, (uint8_t) udata_chunk};
         rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
         V0_printf("flash_safe_execute call_flash_range_program() rc: %d" EOL, rc);
         // hard_assert(rc == PICO_OK);
+    } else {
+        // was 12/18/2024
+        // don't interrupt..not enough? what about code fetch
+        // uint32_t ints = save_and_disable_interrupts();
+        ints = save_and_disable_interrupts();
+        // 9/1/25 ..??
+        V0_print(F("Erasing FLASH target region" EOL));
+        flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
+        // writes 256 bytes (one "page") (16 pages per sector)
+        // was 12/18/2024
+
+        V0_print(F("Writing FLASH target region" EOL));
+        flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
+        restore_interrupts(ints);
     }
-    // was 12/18/2024
-    flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
-    restore_interrupts(ints);
-    
     V1_print(F("write_FLASH END" EOL));
 }
 
