@@ -1090,15 +1090,8 @@ void setGpsBaud(int desiredBaud) {
                 // Did this stop working?
                 // strange they don't list all baud rate values for PAIR860 but they do for PAIR864
                 // this worked if default 115200 originally..for SIM65M module. (not SIM65M-CB?)
-                if (false) {
-                    if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,9600*13" CR LF, 64);
-                    else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64);
-                } else {
-                    // try uart1
-                    strncpy(nmeaBaudSentence, "$PAIR860,0,1,37,9600,0*22" CR LF, 64);
-                    // try uart2
-                    // strncpy(nmeaBaudSentence, "$PAIR860,0,2,37,9600,0*21" CR LF, 64);
-                }
+                if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,9600*13" CR LF, 64);
+                else strncpy(nmeaBaudSentence, "$PAIR860,0,0,37,9600,0*23" CR LF, 64);
                 break;
             case 19200:
                 if (true) strncpy(nmeaBaudSentence, "$PAIR864,0,0,19200*26" CR LF, 64);
