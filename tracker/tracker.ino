@@ -985,8 +985,6 @@ void setup1() {
     SI5351_TCXO_FREQ = doCorrection(SI5351_TCXO_FREQ);
 
     //***************
-
-    //***************
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
     Watchdog.reset();

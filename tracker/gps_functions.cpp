@@ -161,6 +161,7 @@ bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false;
 // occassionally having problems...Not needed?
 // bool ALLOW_USB_DISABLE_MODE = true;
 bool ALLOW_USB_DISABLE_MODE = false;
+
 // true not working with Serial2?
 bool ALLOW_KAZU_12MHZ_MODE = false;
 // is true getting intermittent fails on usbserial (after restore)
@@ -1526,11 +1527,23 @@ bool GpsFullColdReset(void) {
     // remember not to touch Serial if in BALLOON_MODE!!
     if (!BALLOON_MODE) {
         Serial.flush();
+        // gets here
+        // V1_printf("kevin1");
+        // remove 3/8/26..was causing abort with new idea?
+        // Serial.end();
+        busy_wait_ms(500);
+    }
+    if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
+        // maybe only end if in USB disable mode?
         Serial.end();
         busy_wait_ms(500);
     }
-
+    
+    // no
+    // V1_printf("kevin1");
     // includes deinit of the usb pll now?
+    // 3/8/26 test?
+    Watchdog.reset();
     kazuClocksSlow();
 
     // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__pll.html

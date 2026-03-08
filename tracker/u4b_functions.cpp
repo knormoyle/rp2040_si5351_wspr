@@ -84,7 +84,7 @@ void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
     // 136000 474200 1836600 3568600 5364700 7038600 10138700
     // 14095600 18104600 21094600 24924600 28124600
     // 50293000 70091000 144489000
-    // will support 20M, 17M, 15M, 12M, 10M
+    // will support 20M, 17M, 15M, 12M, 10M, 6M, 2M (only with Farey?)
 
     enum BASE_FREQS {
         BF20M = 14095600UL,
@@ -97,6 +97,7 @@ void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
         // FIX! default corrections for other bands?
         // wonder how this relates to load capacitance setting 
         BF10M = 28124600UL - 15UL,
+        BF06M = 50293000UL,
         BF02M = 144489000UL, 
     };
 
@@ -107,6 +108,7 @@ void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
         case 15: base_freq_used = BF15M; break;
         case 12: base_freq_used = BF12M; break;
         case 10: base_freq_used = BF10M; break;
+        case  6: base_freq_used = BF06M; break;
         case  2: base_freq_used = BF02M; break;
         // default to 20M in case of error cases
         default: base_freq_used = BF20M;
@@ -225,7 +227,8 @@ void process_chan_num(char *id13, char *start_minute, char *lane, char *band, ch
         case 15: txBand = 9;  break;  // 15m
         case 12: txBand = 10; break;  // 12m
         case 10: txBand = 11; break;  // 10m
-        case 2:  txBand = 14; break;  // 2m
+        case  6: txBand = 12; break;  // 6m
+        case  2: txBand = 14; break;  // 2m
         default: txBand = 7;  break;  // default to 20M in case of error cases
     }
     // will be char 0, 2, 4, 6 or 8 only

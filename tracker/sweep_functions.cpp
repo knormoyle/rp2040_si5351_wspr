@@ -26,6 +26,7 @@ extern uint64_t PLL_CALC_SHIFT;
 extern uint64_t PLL_FREQ_TARGET;
 
 extern uint32_t PLL_DENOM_OPTIMIZE;
+// FIX! not used here? see si5351_functions.cpp..it's set?
 extern uint32_t PLL_DENOM_OPTIMIZE_calced;
 
 void si5351a_calc_sweep(void) {

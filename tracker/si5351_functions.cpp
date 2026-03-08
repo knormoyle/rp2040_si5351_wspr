@@ -1061,7 +1061,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint64_t pll_mult_here;
     uint64_t ms_div_here;
     bool DEBUG = true;
-    uint8_t MAXTRIAL = 5; // might have to go up 100Mhz?
+    uint8_t MAXTRIAL = 7; // might have to go up 100Mhz?
 
     uint8_t retcode = 0;
     // will get called for all 4 symbol freqs. should redo if any fail? 
@@ -1206,7 +1206,8 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
             retcode = -1;
         }
         // live with it. maybe upgrade to ERROR to not miss with grep?
-        if (int_pll_freq_here < 390000000 || int_pll_freq_here > 900000000) {
+        // if (int_pll_freq_here < 390000000 || int_pll_freq_here > 900000000) {
+        if (int_pll_freq_here < 390000000 || int_pll_freq_here > 1100000000) {
             V1_printf("WARN: integer pll_freq %" PRIu64, int_pll_freq_here);
             V1_print(F(" is outside my 'legal' range" EOL));
             retcode = -1;
@@ -1248,7 +1249,8 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     }
 
     if (trial>=MAXTRIAL) {
-        V1_print(F(EOL "ERROR: fatal..didn't find good pll_remain. Change PLL_TARGET_FREQ" EOL));
+        V1_printf("ERROR: fatal..trial %u MAXTRIAL %u without good pll_remain. Change PLL_TARGET_FREQ" EOL,
+                trial, MAXTRIAL);
         retcode = -1;
     }
 
@@ -2301,6 +2303,8 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
     switch (PLL_FREQ_TARGET) {
         case 900000000:
             switch (b) {
+                // FIX! put in the right number for 6m. what about 2m? can't do?
+                case  6: PLL_DENOM_OPTIMIZE = 986074; break; // div 18 mul 34
                 case 10: PLL_DENOM_OPTIMIZE = 522039; break; // div 34 mul 36
                 case 12: PLL_DENOM_OPTIMIZE = 493037; break; // div 36 mul 34
                 case 15: PLL_DENOM_OPTIMIZE = 422603; break; // div 42 mul 34
@@ -2311,6 +2315,7 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
             break;
         case 700000000:
             switch (b) {
+                // FIX! put in the right number for 6m. what about 2m? can't do?
                 case 10: PLL_DENOM_OPTIMIZE = 739556; break; // div 24 mul 25
                 case 12: PLL_DENOM_OPTIMIZE = 633905; break; // div 28 mul 26
                 case 15: PLL_DENOM_OPTIMIZE = 522039; break; // div 34 mul 27
@@ -2321,6 +2326,7 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
             break;
         case 600000000:
             switch (b) {
+                // FIX! put in the right number for 6m. what about 2m? can't do?
                 case 10: PLL_DENOM_OPTIMIZE = 806788; break; // div 22 mul 23
                 case 12: PLL_DENOM_OPTIMIZE = 739556; break; // div 24 mul 23
                 case 15: PLL_DENOM_OPTIMIZE = 633905; break; // div 28 mul 22
@@ -2331,6 +2337,7 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
             break;
         case 500000000:
             switch (b) {
+                // FIX! put in the right number for 6m. what about 2m? can't do?
                 case 10: PLL_DENOM_OPTIMIZE = 986074; break; // div 18 mul 19
                 case 12: PLL_DENOM_OPTIMIZE = 887467; break; // div 20 mul 19
                 case 15: PLL_DENOM_OPTIMIZE = 739556; break; // div 24 mul 19
@@ -2341,10 +2348,11 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
             break;
         default:
             if (!USE_FAREY_WITH_PLL_REMAINDER) {
-                V1_print(F("ERROR: using unoptimized PLL_DENOM_OPTIMIZE for"));
+                V1_print(F("WARN: using unoptimized PLL_DENOM_OPTIMIZE for"));
                 V1_printf(" PLL_FREQ_TARGET %" PRIu64 EOL, PLL_FREQ_TARGET);
             }
             switch (b) {
+                case  6: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
                 case 10: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
                 case 12: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
                 case 15: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX; break;
@@ -2367,6 +2375,7 @@ void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band) {
             case 15: pll_freq_target = 600000000; break;
             case 12: pll_freq_target = 600000000; break;
             case 10: pll_freq_target = 600000000; break;
+            case  6: pll_freq_target = 600000000; break;
             case  2: pll_freq_target = 600000000; break;
             // default to 20M in case of error cases
             default: pll_freq_target = 600000000;
@@ -2378,7 +2387,8 @@ void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band) {
             case 15: pll_freq_target = 600000000; break;
             case 12: pll_freq_target = 600000000; break;
             case 10: pll_freq_target = 600000000; break;
-            case  2: pll_freq_target = 900000000; break;
+            case  6: pll_freq_target = 900000000; break; // 600, 800 doesn't work?
+            case  2: pll_freq_target = 900000000; break; // doesn't work for 2m?
             // default to 20M in case of error cases
             default: pll_freq_target = 600000000;
         }
@@ -2551,7 +2561,8 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
             retval = 1;
             break;
         }
-        case 3: {  // print valid cache contents for debug
+        case 3: {  
+            // print valid cache contents for debug
             // we can print and validate the cache every tracker.ino loop?
             uint8_t VCC_valid_cnt = 0;
             for (uint8_t i = 0; i < VCC_SIZE; i++) {
@@ -2604,7 +2615,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
     for (uint8_t i = 0; i < VCC_SIZE; i++) {
         if (cache_valid[i]) totalValid += 1;
     }
-// no print on lookup
+    // no print on lookup
     if (operation != 1) {
         V1_printf("vfo_calc_cache END totalValid %u" EOL, totalValid);
     }
@@ -2613,15 +2624,16 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
 
 
 //  interesting thoughts from Andy24
+//  he mentioned delaying for 500 microseconds before resetting the pll, before you realized this
+
 //  Andy24 02/09/24   #14727   
-//  
 //  I think I figured this out. My code had the following sequence:
 //  - update feedback divider registers
 //  - update output divider registers
 //  - reset PLL
 //  
-//  This somehow gets si5351a into a glitchy initialized state (some probability of either wrong frequency or wrong phase offset between two outputs)
-//  
+//  This somehow gets si5351a into a glitchy initialized state 
+//  (some probability of either wrong frequency or wrong phase offset between two outputs)
 //  The correct sequence appears to be:
 //  - update output divider registers
 //  - update feedback divider registers
@@ -2630,10 +2642,14 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
 //  Andy24
 //  02/09/24   #14718   
 //  
-//  Doing experiments with SI5351a (the original version, not MS5351M), I've noticed that the output can be glitchy unless I insert a 1ms delay before resetting the PLL. After some Googling, I've come across rfzero's tutorial (https://rfzero.net/tutorials/si5351a/), which mentions "register settling" in their code:
+// Doing experiments with SI5351a (the original version, not MS5351M), 
+// I've noticed that the output can be glitchy unless I insert a 1ms delay before resetting the PLL. 
+// After some Googling, I've come across rfzero's tutorial (https://rfzero.net/tutorials/si5351a/), 
+// which mentions "register settling" in their code:
 //  
 //  // Reset PLLA
 //  delayMicroseconds(500);            // Allow registers to settle before resetting the PLL
 //  WriteRegister(177, 0x20);
 //  
-//  Has anyone needed to use similar delays? Is this documented anywhere?
+//  Has anyone needed to use similar delays? 
+//  Is this documented anywhere?

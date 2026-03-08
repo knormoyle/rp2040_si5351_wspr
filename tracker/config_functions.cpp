@@ -533,7 +533,7 @@ void user_interface(void) {
 
                 break;
             case 'A':
-                get_user_input("Enter Band (2,10,12,15,17,20):" EOL,
+                get_user_input("Enter Band (2,6,10,12,15,17,20):" EOL,
                     cc._Band, sizeof(cc._Band));
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
@@ -542,7 +542,7 @@ void user_interface(void) {
                 process_chan_num(cc._id13, cc._start_minute, cc._lane, cc._Band, cc._U4B_chan);
                 break;
             case 'B':
-                get_user_input("Enter CW Band (2,10,12,15,17,20):" EOL,
+                get_user_input("Enter CW Band (2,6,10,12,15,17,20):" EOL,
                     cc._Band_cw, sizeof(cc._Band_cw));
                 // redo channel selection if we change bands,
                 // since U4B definition changes per band
@@ -932,6 +932,13 @@ int check_data_validity_and_set_defaults(void) {
     // create 'result' to return
 
     //*****************
+    if (cc._factory_reset_done[0] != '0' &&cc._factory_reset_done[0] != '1') {
+        V0_printf(EOL "ERROR: cc._factory_reset_done %s is not supported/legal .. will doFactoryReset" EOL,
+            cc._factory_reset_done);
+        doFactoryReset();  // no return, reboots
+    }
+
+    //*****************
     // do full legal callsign check? (including spaces at end)
     // be sure to null terminate so we can print the callsign
     // space is not legal in the callsign here? but can have nulls.
@@ -1094,6 +1101,7 @@ int check_data_validity_and_set_defaults(void) {
     // null returns 0
     switch (atoi(cc._Band)) {
         case 2: break;
+        case 6: break;
         case 10: break;
         case 12: break;
         case 15: break;
@@ -1114,6 +1122,7 @@ int check_data_validity_and_set_defaults(void) {
     // null returns 0
     switch (atoi(cc._Band_cw)) {
         case 2: break;
+        case 6: break;
         case 10: break;
         case 12: break;
         case 15: break;
@@ -1169,12 +1178,6 @@ int check_data_validity_and_set_defaults(void) {
         snprintf(cc._use_sim65m, sizeof(cc._use_sim65m), "0");
         write_FLASH();
         result = -1;
-    }
-    //*****************
-    if (cc._factory_reset_done[0] != '0' &&cc._factory_reset_done[0] != '1') {
-        V0_printf(EOL "ERROR: cc._factory_reset_done %s is not support/legal .. will doFactoryReset" EOL,
-            cc._factory_reset_done);
-        doFactoryReset();  // no return, reboots
     }
     //*****************
     if (cc._morse_also[0] != '0' &&cc._morse_also[0] != '1') {
@@ -1268,7 +1271,7 @@ void show_commands(void) {
     V0_println(F("Y: run gps warm reset test loop"));
     V0_println(F("Q: run cw test loop"));
 
-    V0_println(F(EOL "/: reboot to drag/drop new .uf2 (not implemented)"));
+    V0_println(F(EOL "/: reboot to drag/drop new .uf2 ..also good for arduino ide flash"));
     V0_println(F("@: write current gps config, no broadcast, 1 constellation to GPS Flash (for boot)"));
     V0_println(F("V: verbose (0 for no messages, 9 for all)"));
     V0_println(F("D: TESTMODE (current: sweep telemetry values) (default: 0)"));
