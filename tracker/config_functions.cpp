@@ -154,6 +154,9 @@ void get_user_input(const char *prompt, char *input_variable, int max_length) {
 
         ch = Serial.read();
         if (ch == '\n' || ch == '\r') {  // Enter key pressed
+            if (index == 0) {
+                V0_printf("Need command or data before you press <enter>" EOL);
+            }
             break;
         // Backspace key pressed (127 for most Unix, 8 for Windows)
         } else if (ch == 127 || ch == 8) {
@@ -410,12 +413,20 @@ void user_interface(void) {
             while (true) tight_loop_contents();
         }
 
-        // make char capital either way
-        if (c_char > 90) c_char -= 32;
+        // make lower case char capital
+        // not for 127 backspace?
+        if (c_char != 127 && c_char > 90) c_char -= 32;
 
         // FIX! can we case the int32_t to char. we might lost data with the cast
         char confirm[2] = { 0 };
         switch ( c_char ) {
+            case 127: // backspace for most unix
+            case 8: // backspace for windows
+            case '\n': // <enter> 10
+            case '\r': // <enter> 13
+                V0_printf("Need command before you press <enter>" EOL);
+                break;
+
             case 'Z':
                 do_someTest();
                 break;
@@ -435,9 +446,10 @@ void user_interface(void) {
                 V0_print(F(EOL));
                 get_user_input("Y to confirm, Anything else like <newline> to abort" EOL, confirm, sizeof(confirm));
                 convertToUpperCase(confirm);
-                if (false) {
                 // Y is 89
                 // if (confirm[0] == 'Y') {
+                // don't do, for now.
+                if (false) {
                     V0_print(F("Copying config to GPS flash, no broadcast enabled (config for gps cold reset?)" EOL));
                     V0_flush();
                     // this changes constellations to just GPS
@@ -596,13 +608,12 @@ void user_interface(void) {
                    cc._monopole, sizeof(cc._monopole));
                 write_FLASH();
                 break;
-            case 13:  break;
-            case 10:  break;
             default:
                 V0_printf("You pressed: %c - (0x%02x), invalid choice!" EOL, c_char, c_char);
                 V0_print(F(CLEAR_SCREEN));
                 sleep_ms(1000);
                 break;
+                V0_printf("Need command or data before you press <enter>" EOL);
         }
         int result = check_data_validity_and_set_defaults();
         if (result == -1) {

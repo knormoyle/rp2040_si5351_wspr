@@ -62,6 +62,12 @@
 // https://qrpguys.com/wp-content/uploads/2021/06/afp_fsk_061921.pdf
 //****************************************************
 
+// alternated methods using gcds ??
+// but doesn't really come from the shift error minimization point of view
+// really is like farey when he talks gcd? but we need 4 freqs
+// and we don't want to do pll reset in between?
+// https://gist.github.com/maqifrnswa/f83bdcf1bf73b5f656a3053282db4de3
+
 #include <Arduino.h>
 #include <stdlib.h>
 #include <cstring>
@@ -171,7 +177,7 @@ static uint32_t s_PLLA_pll_denom_prev = 0;
 // https://github.com/lkoepsel/I2C/blob/main/Arduino/Pico/I2C_Scanner/I2C_Scanner.ino
 //****************************************************
 void vfo_init(void) {
-    V1_println(F("vfo_init START"));
+    V1_print(F("vfo_init START" EOL));
     Watchdog.reset();
 
     // clear any old remembered state we have outside of the si5351
@@ -216,7 +222,7 @@ void vfo_init(void) {
     gpio_set_pulls(VFO_I2C_SCL_PIN, false, false);
     gpio_set_function(VFO_I2C_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(VFO_I2C_SCL_PIN, GPIO_FUNC_I2C);
-    V1_println(F("vfo_init END"));
+    V1_print(F("vfo_init END" EOL));
     Watchdog.reset();
 }
 
@@ -674,11 +680,14 @@ void si5351a_setup_PLL(uint8_t mult, uint32_t num, uint32_t denom, bool do_pllb)
 
 //****************************************************
 // swapping pointers instead of memcpy:
-// both should be static or global, so no mem allocaiton issue
+// both should be static or global, so no mem allocation issue
 // https://stackoverflow.com/questions/8403447/swapping-pointers-in-c-char-int
 // best/obvious to just memcpy for just 8 bytes
 
 //****************************************************
+// FIX! should I init SI5351A_PLL_INPUT_SRC to 0 somewhere?
+// i2cWrite(SI5351A_PLL_INPUT_SRC, 0);
+
 // div must be even number
 void si5351a_setup_multisynth012(uint32_t div) {
     // this ignores the state of PDN. PDN==0 will always allow clocks on!
@@ -735,6 +744,35 @@ void si5351a_setup_multisynth012(uint32_t div) {
         // instead of doing this, just output disable
         force_clk1_powerdown = SI5351A_CLK1_PDN;
     }
+
+    
+    // disabling the unused PLL
+    // google ai tells me:
+    // The Si5351A does not have a single register bit to "turn off" a PLL
+    // To effectively disable the second PLL (PLLB) on the Si5351A, 
+    // Reconfigure the Multisynth dividers (MS0-MS5) for all active outputs to use only the first PLL (PLLA). 
+    // The PLL s disabled by removing its connection to any output stage (Multisynth) 
+    // and powering down that PLL. 
+
+    // Set the MSx_SRC bit to 0 for all MS0-MS2 to force them to use PLLA, 
+    // then clear the PLLA/B power-down bits in the PLL control registers (see AN619, registers 16-23).
+    // AN619
+    // https://www.skyworksinc.com/-/media/Skyworks/SL/documents/public/application-notes/AN619.pdf
+
+    // PLL Power Down Bits (Register 15)
+    // HMMM is this wrong spec somewhere?
+    // The power-down controls for the PLLs are located in Register 15 SI53151_PLL_INPUT_SRC (PLL Input Source). 
+    // ??? isn't this the CLKIN input divider? 0: /1, 1: /2, 2: /4, 3: /8
+    // 5:4 Reserved. leave as default. 1:0 Reserved. leave as default
+    // 
+    // where did this come from? not true?
+    // PLLA Power Down: Register 15, Bit 7.
+    // PLLB Power Down: Register 15, Bit 6.
+
+    // Powering Down PLLs (Registers 16-23):
+    // To power down the PLLs or specific MultiSynths in the Si5351A, 
+    // Must use the individual register settings for each MultiSynth (Registers 16-23). 
+    // Setting the MSx_PDN bit to 1 in the corresponding multisynth register will power down that specific component
 
     i2cWriten(SI5351A_MULTISYNTH0_BASE, s_regs, 8);
     // was 1/10/25 why was this here? it was sort of working?
@@ -872,7 +910,7 @@ void si5351a_power_down_clk01(bool print) {
 // how long does a pll reset take? (B or default A?)
 void si5351a_reset_PLLB(bool print) {
     if (print) {
-        V1_println(F(EOL "si5351a_reset_PLLB START"));
+        V1_print(F(EOL "si5351a_reset_PLLB START" EOL));
         V1_flush();
     }
     // why does example say to write reg 177 = 0xAC for 'soft' reset of PLLA and PLLB?
@@ -916,7 +954,7 @@ void si5351a_reset_PLLB(bool print) {
         V1_printf(" reg %02x val %02x res %d" EOL, reg, val, res);
         V1_flush();
 
-        V1_println(F("si5351a_reset_PLLB END" EOL));
+        V1_print(F("si5351a_reset_PLLB END" EOL));
     }
 }
 
@@ -925,7 +963,7 @@ void si5351a_reset_PLLB(bool print) {
 // so maybe we shouldn't do reset_PLLA, then reset_PLLB ?
 void si5351a_reset_PLLA(bool print) {
     if (print) {
-        V1_println(F(EOL "si5351a_reset_PLLA START"));
+        V1_print(F(EOL "si5351a_reset_PLLA START" EOL));
         V1_flush();
     }
 
@@ -971,7 +1009,7 @@ void si5351a_reset_PLLA(bool print) {
         V1_printf(" reg %02x val %02x res %d" EOL, reg, val, res);
         V1_flush();
 
-        V1_println(F("si5351a_reset_PLLA END" EOL));
+        V1_print(F("si5351a_reset_PLLA END" EOL));
     }
 }
 
@@ -1061,7 +1099,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     uint64_t pll_mult_here;
     uint64_t ms_div_here;
     bool DEBUG = true;
-    uint8_t MAXTRIAL = 7; // might have to go up 100Mhz?
+    uint8_t MAXTRIAL = 15; // might have to go up 100Mhz?
 
     uint8_t retcode = 0;
     // will get called for all 4 symbol freqs. should redo if any fail? 
@@ -1069,9 +1107,13 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
     while (trial < MAXTRIAL) {
         retcode = 0;
         // the choice of 25Mhz for stepping pll target is arbitrary. 
+        // 3/8/26 change to 12.5Mhz with more trials??
+
         // (relates to mul/div/tcxo and output freq)
         // no need to do 1e6 shift down mode here
-        uint64_t pll_freq_target_trial = PLL_FREQ_TARGET + (25000000 * trial);
+        // was 3/8/26
+        // uint64_t pll_freq_target_trial = PLL_FREQ_TARGET + (25000000 * trial);
+        uint64_t pll_freq_target_trial = PLL_FREQ_TARGET + (125000000 * trial);
         uint64_t aaa = pll_freq_target_trial << PLL_CALC_SHIFT;
 
         // we're only outputting freqs up to 29Mhz, so no chance of losing bits here!
@@ -1159,7 +1201,7 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
             V1_printf(EOL "ERROR: pll_mult %" PRIu64 " is out of range 15 to 90." EOL,
                 pll_mult_here);
             V1_print(F("ERROR: Need to pick another target pll freq" EOL));
-            V1_printf("int_pll_freq_here %" PRIu64 " tcxo_freq %" PRIu64 EOL,
+            V1_printf("int_pll_freq %" PRIu64 " tcxo_freq %" PRIu64 EOL,
                 int_pll_freq_here, tcxo_freq);
 
             // Would this work. forcing the boundary cases?
@@ -1283,6 +1325,9 @@ uint8_t vfo_calc_div_mult_num(double *actual, double *actual_pll_freq,
         // (1e-12 * 26e6 (tcxo)) / 15  (divisor) = 1.73e-6
         // so we need to shift at least 12 bits for the _xxx shifted-integer stuff?
         V1_print(F(EOL));
+        if (!USE_FAREY_WITH_PLL_REMAINDER) {
+            V1_print(F("Farey just testing, not using" EOL));
+        }
         V1_printf("Farey target %.16f" EOL, target);
 
         // Using a si5351a fractional feedback, With a 26mhz tcxo,
@@ -1471,7 +1516,7 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     double actual_pll_freq;
     double actual;
     if (clk_num != 0) {
-        V1_println("ERROR: vfo_set_freq_xxx should only be called with clk_num 0");
+        V1_print(F("ERROR: vfo_set_freq_xxx should only be called with clk_num 0" EOL));
         // I guess force clk_num, although code is broken somewhere
         clk_num = 0;
         // note we only have one s_PLLB_ms_div_prev copy state also
@@ -1509,13 +1554,26 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     //*****************************************************
     // hmm. does ms5351m need this when both numerator and denominator change a lot?
     // do we always need it when we do the Farey num/denom? why?
-    // bool do_pll_reset = ((pll_denom != s_PLLB_pll_denom_prev) || USE_FAREY_WITH_PLL_REMAINDER);
+    // wouldn't want this for a denominator shift algo?
+    // 
+    // 3/8/26 do we need this for Farey?
+    bool do_pll_reset = false;
+    // should I set do_pll_reset and use to pll reset below?
+    // bool do_pll_reset_warning = ((pll_denom != s_PLLB_pll_denom_prev) || USE_FAREY_WITH_PLL_REMAINDER);
+    bool do_pll_reset_warning = pll_denom != s_PLLB_pll_denom_prev;
+    if (do_pll_reset_warning) {
+        V1_print(F("WARN: not doing pll reset"));
+        V1_printf(" but pll_denom %lu changed. s_PLLB_pll_denom_prev %lu" EOL,
+            pll_denom, s_PLLB_pll_denom_prev);
+        V1_print(F(" should do (but not doing) si5351a_reset_PLLB() after this?" EOL));
+    }
 
     // don't need to turn off?
     // actually better not to, no popping?
     if (false) {
         vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, false);
     }
+
 
     // for numerator-shift algo:
     // calcs were done to show that only pll_num needs to change for symbols 0 to 3
@@ -1526,11 +1584,12 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     si5351a_setup_PLL(pll_mult, pll_num, pll_denom, true); // PLLB
 
     // make PLLA the same (so it locks? Is that better power than unlocked?)
-    // maybe PLLA is disabled if not used? unknown
+    // maybe PLLA is disabled if not used? supposedly yes
     // HACK. don't setup PLLA 1/10/25
     // FIX! is reg 24 the clk3-0 Disable State? Could this be why the clks never disable?
+
     if (false) {
-        si5351a_setup_PLL(pll_mult, pll_num, pll_denom, false); // PLLA
+        si5351a_setup_PLL(pll_mult, pll_num, pll_denom, false); // false means PLLA
     }
 
     // we don't check if the pll_mult has changed
@@ -1570,15 +1629,14 @@ uint8_t vfo_set_freq_xxx(uint8_t clk_num, uint64_t freq_xxx, bool only_pll_num, 
     // hmm. does ms5351m need this when both numerator and denominator change (a lot?)
     // if (do_pll_reset)
     // FIX! do we always need this? why?
-    if (true) {
+    if (do_pll_reset) {
         // we might need this if doing Farey with numerator plus denominator change
-
-        if (false && USE_FAREY_WITH_PLL_REMAINDER) si5351a_reset_PLLB(false);
-        // apparently don't need to write this if on and just changing numerator?
-        // it's weird that I seem to need clk turn on, but turn off doesn't always disable?
-        vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
-        
+        si5351a_reset_PLLB(false);
     }
+    // apparently don't need to write this if on and just changing numerator?
+    // it's weird that I seem to need clk turn on, but turn off doesn't always disable?
+    // FIX! do we always need this? why?
+    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, false);
 
     s_PLLB_pll_mult_prev = pll_mult;
     s_PLLA_pll_mult_prev = pll_mult;
@@ -1623,7 +1681,7 @@ void vfo_turn_on_clk_out(uint8_t clk_num, bool print) {
     }
 
     if (print) {
-        V1_println(F("vfo_turn_on_clk_out END"));
+        V1_print(F("vfo_turn_on_clk_out END" EOL));
         V1_flush();
     }
 }
@@ -1754,7 +1812,7 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
     V1_printf("vfo_turn_on first res %d of i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL" EOL , res);
     while (res != 2) {
         if (tries > 5) {
-            V1_println("Rebooting because couldn't init VFO_I2C_INSTANCE after 5 tries");
+            V1_print(F("Rebooting because couldn't init VFO_I2C_INSTANCE after 5 tries" EOL));
             V1_flush();
             Watchdog.enable(1000);
             // milliseconds
@@ -1765,7 +1823,7 @@ void vfo_write_clock_en_with_retry(uint8_t val) {
         }
         Watchdog.reset();
         tries++;
-        V1_println("VFO_I2C_INSTANCE trying re-init, after trying a i2cWrite and it failed");
+        V1_print(F("VFO_I2C_INSTANCE trying re-init, after trying a i2cWrite and it failed" EOL));
         V1_flush();
 
         // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__i2c.html
@@ -1829,7 +1887,7 @@ void vfo_turn_on() {
     sleep_ms(2000);
 
     // Disable all CLK output drivers
-    V1_println(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff"));
+    V1_print(F("vfo_turn_on trying to i2cWrite SI5351A_OUTPUT_ENABLE_CONTROL with 0xff" EOL));
     vfo_write_clock_en_with_retry(0xff);
     V1_print(F("vfo_turn_on done trying to init the I2C pins in loop" EOL));
 
@@ -1837,9 +1895,9 @@ void vfo_turn_on() {
     // (OEB/SSEN pins don't exist on si5351a 3 output)
     i2cWrite(9, 0xFF);
 
-    // 12/28/24 new writes below here are good
-    // new: pll input source is XTAL for PLLA and PLLB
-    i2cWrite(15, 0x00);
+    // pll input source is XTAL for PLLA and PLLB
+    // 3/8/26 use constant for 15
+    i2cWrite(SI5351A_PLL_INPUT_SRC, 0);
 
     // init:
     // Power Down, Fractional Mode. PLLB source to MultiSynth. Not inverted.
@@ -1974,7 +2032,11 @@ void vfo_turn_on() {
     uint32_t hf_freq = XMIT_FREQUENCY;
     uint64_t freq_xxx_with_symbol;
     calcSymbolFreq_xxx(&freq_xxx_with_symbol, hf_freq, 0);
-    vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM, freq_xxx_with_symbol, false, false);
+    // FIX! don't do anything with retcode
+    uint8_t retcode = vfo_set_freq_xxx(WSPR_TX_CLK_0_NUM, freq_xxx_with_symbol, false, false);
+    if (retcode != 0) {
+        V1_printf("ERROR: vfo_turn_on retcode %u is not 0" EOL, retcode);
+    }
 
     // does PLLA matter? these print the lock status by doing i2c reads
     if (false) si5351a_reset_PLLA(true);
@@ -2010,9 +2072,9 @@ uint32_t doCorrection(uint32_t freq) {
 }
 //****************************************************
 void vfo_turn_off(void) {
-    V1_println(F(EOL "vfo_turn_off START"));
+    V1_print(F(EOL "vfo_turn_off START" EOL));
     if (vfo_is_off()) { 
-        V1_println(F("vfo_turn_off END already off"));
+        V1_print(F("vfo_turn_off END already off" EOL));
         return;
     }
     vfo_turn_on_completed = false;
@@ -2040,7 +2102,7 @@ void vfo_turn_off(void) {
     gpio_set_function(VFO_I2C_SDA_PIN, GPIO_FUNC_NULL);
     gpio_set_function(VFO_I2C_SCL_PIN, GPIO_FUNC_NULL);
     vfo_turn_off_completed = true;
-    V1_println(F("vfo_turn_off END"));
+    V1_print(F("vfo_turn_off END" EOL));
 }
 
 //**********************************
@@ -2289,7 +2351,7 @@ uint8_t startSymbolFreq(uint32_t hf_freq, uint8_t symbol, bool only_pll_num, boo
 
 //*********************************************************************************
 void set_PLL_DENOM_OPTIMIZE(char *band) {
-    V1_println(F("set_PLL_DENOM_OPTIMIZE START"));
+    V1_print(F("set_PLL_DENOM_OPTIMIZE START" EOL));
     // FIX! hack! we should have fixed values per band? do they vary by freq bin?
     uint32_t PLL_DENOM_MAX = 1048575;
     V1_print(F("Sets PLL_DENOM_OPTIMIZE with hard-wired values. May not be used." EOL));
@@ -2361,7 +2423,7 @@ void set_PLL_DENOM_OPTIMIZE(char *band) {
                 default: PLL_DENOM_OPTIMIZE = PLL_DENOM_MAX;
             }
     }
-    V1_println(F("set_PLL_DENOM_OPTIMIZE END"));
+    V1_print(F("set_PLL_DENOM_OPTIMIZE END" EOL));
 }
 
 //****************************************************
@@ -2387,7 +2449,7 @@ void init_PLL_freq_target(uint64_t *PLL_FREQ_TARGET, char *band) {
             case 15: pll_freq_target = 600000000; break;
             case 12: pll_freq_target = 600000000; break;
             case 10: pll_freq_target = 600000000; break;
-            case  6: pll_freq_target = 900000000; break; // 600, 800 doesn't work?
+            case  6: pll_freq_target = 900000000; break; // 300, 450, 600, 800 doesn't work?
             case  2: pll_freq_target = 900000000; break; // doesn't work for 2m?
             // default to 20M in case of error cases
             default: pll_freq_target = 600000000;
@@ -2530,8 +2592,8 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         // FIX! we could check the num/denum for range also?
 
                     if (badCache) {
-                        V1_println(F("ERROR: fatal. valid cache entry had 0 or freq_xxx 0."));
-                        V1_println(F("ERROR: won't use anything from this cache entry"));
+                        V1_print(F("ERROR: fatal. valid cache entry had 0 or freq_xxx 0." EOL));
+                        V1_print(F("ERROR: won't use anything from this cache entry" EOL));
                         found = false;
                     } else {
                         found = true;
@@ -2593,7 +2655,7 @@ uint8_t vfo_calc_cache(double *actual, double *actual_pll_freq,
                         (freq_xxx_here == 0);    // we should never lookup freq_xxx
 
                     if (badCache) {
-                        V0_println(F("ERROR: fatal, reboot. valid cache had 0 or freq_xxx 0." EOL));
+                        V0_print(F("ERROR: fatal, reboot. valid cache had 0 or freq_xxx 0." EOL));
                         V0_flush();
                         Watchdog.enable(5000);  // milliseconds
                         while (true) tight_loop_contents();

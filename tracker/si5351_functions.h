@@ -14,6 +14,8 @@ const int SI5351A_DEVICE_STATUS =           0;
 const int SI5351A_INTERRUPT_STATUS_STICKY = 1;
 const int SI5351A_OUTPUT_ENABLE_CONTROL =   3;
 
+const int SI5351A_PLL_INPUT_SRC =           15;
+
 const int SI5351A_CLK0_CONTROL =            16;
 const int SI5351A_CLK1_CONTROL =            17;
 const int SI5351A_CLK2_CONTROL =            18;

@@ -97,7 +97,7 @@ void init_rf_freq(uint32_t *xmit_freq, char *band, char *lane) {
         // FIX! default corrections for other bands?
         // wonder how this relates to load capacitance setting 
         BF10M = 28124600UL - 15UL,
-        BF06M = 50293000UL,
+        BF06M = 50293000UL - 8UL, // just adjust after looking at one result on my sdr
         BF02M = 144489000UL, 
     };
 
