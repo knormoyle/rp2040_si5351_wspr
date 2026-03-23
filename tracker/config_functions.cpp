@@ -277,21 +277,20 @@ void show_ExtTelemetry_msg() {
 }
 
 //********************************************
-// 'Y' command causes this to execute
-void do_gpsResetTest() {
-    // FIX! currently don't have cold reset test
-
-    V0_print(F(EOL "do_gpsResetTest START" EOL));
+// 'Y' or 'W' command causes this to execute
+void do_gpsResetTest(bool GpsColdReset) {
+    V0_printf(EOL "do_gpsResetTest START %u" EOL, GpsColdReset);
     Watchdog.reset();
     while (true)  {
-        gpsResetTest();
+        gpsResetTest(GpsColdReset);
         V0_print(F(EOL "<enter> within 2 secs to abort test loop, otherwise repeats" EOL));
         char c_char = getOneChar(2000);  // 2 secs
         if (c_char != 0) break;
     }
     Watchdog.reset();
-    V0_print(F("do_gpsResetTest END" EOL));
+    V0_printf("do_gpsResetTest END %u EOL", GpsColdReset);
 }
+
 //********************************************
 void do_cwTest(void) {
     // picks a good HF freq for the config'ed cc._Band
@@ -305,6 +304,7 @@ void do_cwTest(void) {
         if (c_char != 0) break;
     }
 }
+
 // 'Z' command causes this to execute
 void do_someTest(void) {
     V0_print(F(EOL "do_someTest START"));
@@ -431,8 +431,12 @@ void user_interface(void) {
                 do_someTest();
                 break;
 
-            case 'Y':
-                do_gpsResetTest();
+            case 'W': // gps warm reset
+                do_gpsResetTest(false);
+                break;
+
+            case 'Y': // gps cold reset
+                do_gpsResetTest(true);
                 break;
 
             case 'Q':
@@ -1279,7 +1283,8 @@ void show_commands(void) {
     V0_println(F("X: exit config mode and reboot"));
     V0_println(F("*: factory reset all config values"));
     V0_println(F("Z: run wspr 4 tone freq test loop"));
-    V0_println(F("Y: run gps warm reset test loop"));
+    V0_println(F("Y: run gps cold reset test loop"));
+    V0_println(F("W: run gps warm reset test loop"));
     V0_println(F("Q: run cw test loop"));
 
     V0_println(F(EOL "/: reboot to drag/drop new .uf2 ..also good for arduino ide flash"));

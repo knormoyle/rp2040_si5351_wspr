@@ -780,8 +780,8 @@ void disableGpsBroadcast(void) {
 // re: GSV nmea sentences from SIM65M
 // Depending on the number of satellites tracked,
 // multiple messages of GSV data may be required.
-// In some software versions, maximum number of satellites reported as visible
-// is limited to 12, even though more may be visible
+// In some software versions, maximum number of satellites reported as visible is limited to 12, 
+// even though more may be visible
 // Hmm: is this fully compatible with max number expected by TinyGPS++ parsing?
 
 //************************************************
@@ -2686,8 +2686,22 @@ void gpsDebug() {
     // FIX! don't have GpsInvalidAll in these
     bool validG = gps.date.isValid();
     bool validH = gps.time.isValid();
-    V1_printf("gps valids: %u %u %u %u %u %u %u %u %u" EOL,
-        !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH);
+    // don't have valid bits, just enum encoded for invalid
+    // enum fq {Invalid = '0', GPS = '1', DGPS = '2', PPS = '3', RTK = '4', 
+    //  FloatRTK = '5', Estimated = '6', Manual = '7', Simulated = '8' };
+    // enum fm { N = 'N', A = 'A', D = 'D', E = 'E'};
+
+    // can use this? gpsDebug will print the char?
+    // is there no isValid() for these?
+    bool validI = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
+    bool validJ = (gps.location.FixMode() != TinyGPSLocation::Mode::N);
+
+    // can compare char and int? 
+    // bool validI = gps.location.FixQuality() != '0';
+    // bool validJ = gps.location.FixMode() != 'N';
+
+    V1_printf("gps valids: %u %u %u %u %u %u %u %u %u %u %u" EOL,
+        !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH, validI, validJ);
 
     printStr("Sats", true, 5);
     printStr("HDOP", true, 5);
@@ -2705,6 +2719,9 @@ void gpsDebug() {
     printStr("ChrsRx", true, 10);
     printStr("SentsWfix", true, 10);
     printStr("failCksum", true, 10);
+    printStr("fixQual", true, 7);
+    printStr("fixMode", true, 7);
+
     V1_print(F(EOL));
 
     char debugMsg1[] = "Before printInt/Float/String gpsDebug prints";
@@ -2728,6 +2745,17 @@ void gpsDebug() {
         // FIX! does this just wrap wround if it's more than 10 digits?
         printInt(gps.sentencesWithFix(), true, 10);
         printInt(gps.failedChecksum(), true, 10);
+
+        // FIX! use the enums?
+        // enum Quality { Invalid = '0', GPS = '1', DGPS = '2', PPS = '3', RTK = '4', FloatRTK = '5', Estimated = '6', Manual = '7', Simulated = '8' };
+        // enum Mode { N = 'N', A = 'A', D = 'D', E = 'E'};
+        char fq[2] = { 0 };
+        fq[0] = gps.location.FixQuality();
+        printStr(fq, true, 7);
+
+        char fm[2] = { 0 };
+        fm[0] = gps.location.FixMode();
+        printStr(fm, true, 7);
     }
     V1_print(F(EOL));
     V1_print(F(EOL));

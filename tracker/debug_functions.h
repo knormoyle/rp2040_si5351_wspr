@@ -16,11 +16,13 @@ void DoLogPrint();
 void measureMyFreqs(void);
 void realPrintFlush(char *debugMsg, bool print);
 
+// 3/22/26
+// calling with FixMode or FixQuality didn't work if const char?
 void printStr(const char *str, bool valid, int len);
 void printFloat(double val, bool valid, int len, int prec);
 void printInt(uint64_t val, bool valid, int len);
 
 void freeMem(void);
-void gpsResetTest();
+void gpsResetTest(bool GpsColdReset);
 
 #endif

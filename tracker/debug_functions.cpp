@@ -387,27 +387,36 @@ void freeMem() {
 
 //**********************************
 extern const int GPS_WAIT_FOR_NMEA_BURST_MAX; 
-void gpsResetTest() {
+// true for gps cold reset
+void gpsResetTest(bool gpsColdReset) {
     static uint32_t count = 0;
     // FIX! currently don't have cold reset support
-    V0_print(F("do_gpsResetTest START" EOL));
+    V0_printf("gpsResetTest START %u" EOL, gpsColdReset);
+
+    Watchdog.reset();
+    // void GpsON(bool GpsColdReset) {
 
     if (count == 0) {
         V0_print(F("need gps init and cold reset once to fully setup gps"));
         GpsINIT();
         GpsOFF();
-        GpsON(false);   // no gps cold reset
+        GpsON(gpsColdReset); 
         GpsOFF();
         count += 1;
-        V0_print(F("do_gpsResetTest END"));
+        V0_printf("gpsResetTest END %u" EOL, gpsColdReset);
         V0_flush();
         return;
     }
 
+    Watchdog.reset();
+
+    uint32_t start_millis = millis();
+
+    GpsON(gpsColdReset); 
+
     bool fix_valid_all = false;
     uint32_t tries = 0;
     uint32_t duration_millis = 0;
-    uint32_t start_millis = millis();
     uint32_t elapsed_setTime_secs;
 
     while (!fix_valid_all) {
@@ -417,10 +426,11 @@ void gpsResetTest() {
         updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
         elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
         if (elapsed_setTime_secs > (10 * 60)) {
-            V1_printf("ERROR: elapsed_setTime_secs %lu > (10 * 60)" EOL, 
-                elapsed_setTime_secs);
+            V1_printf("ERROR: gpsResetTest %u elapsed_setTime_secs %lu > (10 * 60)" EOL, 
+                gpsColdReset, elapsed_setTime_secs);
         }
 
+        // FIX! note this is same as tracker.ino. no use of FixMode or FixQuality though?
         fix_valid_all = 
             !GpsInvalidAll &&
             // we got system time synced
@@ -439,8 +449,8 @@ void gpsResetTest() {
 
         duration_millis = millis() - start_millis;
         if (duration_millis > 240000) {  // 4 * 60 = 240 secs
-            V0_printf("ERROR: gpsResetTest %lu: no fix after %lu millisecs" EOL, 
-                count, duration_millis);
+            V0_printf("ERROR: gpsResetTest %u %lu: no fix after %lu millisecs" EOL, 
+                gpsColdReset, count, duration_millis);
             break;
         }
         // by not sleeping, we should get better timing accuracy?
@@ -450,25 +460,26 @@ void gpsResetTest() {
         // could be negative
         int32_t wait_millis =  1000 - (int32_t) duration_millis;
         if (wait_millis > 0) {
-            V0_printf("will sleep for wait_millis %lu" EOL, wait_millis);
+            V0_printf("gpsResetTest %u will sleep for wait_millis %lu" EOL, 
+                gpsColdReset, wait_millis);
             sleep_ms(wait_millis);
         }
     }
 
     if (fix_valid_all) {
         if (duration_millis < 60000) { // 60 secs
-            V0_printf("GOOD: gpsResetTest %lu: fix took %lu millisecs" EOL, 
-                count, duration_millis);
+            V0_printf("GOOD: gpsResetTest %u %lu: fix took %lu millisecs" EOL, 
+                gpsColdReset, count, duration_millis);
         } else {
-            V0_printf("ERROR: gpsResetTest %lu: fix (too slow) took %lu millisecs" EOL, 
-                count, duration_millis);
+            V0_printf("ERROR: gpsResetTest %u %lu: fix (too slow) took %lu millisecs" EOL, 
+                gpsColdReset, count, duration_millis);
         }
         // prints out the summary info
         gpsDebug();
     }
     GpsOFF();
     count += 1;
-    V0_print(F("do_gpsResetTest END"));
+    V0_printf("gpsResetTest END %u" EOL, gpsColdReset);
     V0_flush();
 }
 

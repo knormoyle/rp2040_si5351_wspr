@@ -27,7 +27,7 @@ void get_user_input(const char *prompt, char *input_variable, int max_length);
 
 void convertToUpperCase(char *str);
 void do_someTest(void);
-void do_gpsResetTest();
+void do_gpsResetTest(bool gpsColdReset);
 void doFactoryReset();
 
 #endif

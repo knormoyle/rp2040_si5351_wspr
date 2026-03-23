@@ -1299,11 +1299,25 @@ void loop1() {
         uint32_t fix_sat_cnt = gps.satellites.value();
 
         uint32_t elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
-        // should we be setting once per interval?
+        // Should we be setting once per 10 minutes?
+        // if we're in test mode sending wspr almost every 2 minutes
+        // we might have a longer delay? Just WARNING
         if (elapsed_setTime_secs > (10 * 60)) {
-            V1_printf("ERROR: Should set time every interval? elapsed_setTime_secs %lu > (10 * 60)" EOL,
+            V1_printf("WARNING: Should set time every interval? elapsed_setTime_secs %lu > (10 * 60)" EOL,
                 elapsed_setTime_secs);
         }
+        // FIX! 3/22/26. what about including looking at the values of these to say it's a 3d fix?
+        // FIX! what values can these have?
+        // see the enums
+        // gps.location.FixQuality()
+        // gps.location.FixMode()
+        
+        // Invalid GPS DGPS PPS RTK FloatRTK Estimated Manual Simulated
+        // can use this? gpsDebug will print the char?
+        // bool hasFix = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
+        // N A D E
+        // bool hasMode = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
+        
         bool fix_valid_all =
             !GpsInvalidAll &&
             // we got system time synced
