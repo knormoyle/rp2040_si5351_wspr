@@ -2719,8 +2719,8 @@ void gpsDebug() {
     printStr("ChrsRx", true, 10);
     printStr("SentsWfix", true, 10);
     printStr("failCksum", true, 10);
-    printStr("fixQual", true, 7);
-    printStr("fixMode", true, 7);
+    printStr("FixQual", true, 7);
+    printStr("FixMode", true, 7);
 
     V1_print(F(EOL));
 
