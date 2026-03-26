@@ -392,6 +392,7 @@ void gpsResetTest(bool gpsColdReset) {
     static uint32_t count = 0;
     // FIX! currently don't have cold reset support
     V0_printf("gpsResetTest START %u" EOL, gpsColdReset);
+    V0_print(F("WARN: checking sats >=5 as test here, tracker.ino uses >= 3" EOL));
 
     Watchdog.reset();
     // void GpsON(bool GpsColdReset) {
@@ -440,7 +441,11 @@ void gpsResetTest(bool gpsColdReset) {
             gps.date.isValid() &&
             gps.time.isValid() &&
             (gps.date.year() >= 2025 && gps.date.year() <= 2035) &&
-            gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
+    
+            // FIX! we check for 3 or more in tracker.ino
+            // check for 5 or more as test here
+            // gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
+            gps.satellites.isValid() && (gps.satellites.value() >= 5) &&
             gps.hdop.isValid() &&
             gps.altitude.isValid() &&
             gps.location.isValid() &&
