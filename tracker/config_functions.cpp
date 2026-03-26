@@ -277,8 +277,9 @@ void show_ExtTelemetry_msg() {
 }
 
 //********************************************
-// 'Y' or 'W' command causes this to execute
+// 'Y', 'W', 'H' commands causes this to execute
 void do_gpsResetTest(bool GpsColdReset) {
+    // FIX! should we have int 0,1,2 values for GpsColdReset (2 is warm or ??)
     V0_printf(EOL "do_gpsResetTest START %u" EOL, GpsColdReset);
     Watchdog.reset();
     while (true)  {
@@ -400,7 +401,8 @@ void user_interface(void) {
         // no comma to concat strings
         // F() to keep string in flash, not ram
         V0_println(F("Enter single char command: "));
-        V0_println(F(" Q, Z, *, @, /, X, C, U, V, T, K, A, B, P, D, R, G, S, M, L, E, J"));
+        V0_println(F("X, *, Z, Y, W, H, Q, /, @, V, D, G, C, U, A, B, P, T, K, R, S, M, L, E, J"));
+
         V0_print(F(UNDERLINE_OFF NORMAL));
         Watchdog.reset();
         char c_char = getOneChar(60000);  // wait 60 secs
@@ -431,7 +433,13 @@ void user_interface(void) {
                 do_someTest();
                 break;
 
-            case 'W': // gps warm reset
+            case 'H': // gps hot reset. 
+                do_gpsResetTest(false);
+                break;
+
+            case 'W': // gps warm reset. Not supported yet. Use gps hot reset
+                // support would mean sending the warm reset command that clears ephemeris
+                // maybe not much different than cold reset?
                 do_gpsResetTest(false);
                 break;
 
@@ -1284,7 +1292,8 @@ void show_commands(void) {
     V0_println(F("*: factory reset all config values"));
     V0_println(F("Z: run wspr 4 tone freq test loop"));
     V0_println(F("Y: run gps cold reset test loop"));
-    V0_println(F("W: run gps warm reset test loop"));
+    V0_println(F("W: run gps warm reset test loop ..FIX! just uses hot reset test loop now"));
+    V0_println(F("H: run gps hot reset test loop"));
     V0_println(F("Q: run cw test loop"));
 
     V0_println(F(EOL "/: reboot to drag/drop new .uf2 ..also good for arduino ide flash"));

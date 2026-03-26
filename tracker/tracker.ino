@@ -346,7 +346,7 @@ extern const int SIM65M_BAUD_RATE = 9600;
 // 670 chars with 396 ms duration. going back to 9600
 
 // lets try 4800. is power less at power on?
-// hmm something was not working with gps warm reset with 4800. back to 9600
+// hmm something was not working with gps hot reset with 4800. back to 9600
 
 // seem to leave the polling for NMEA data too soon at 4800..miss some chars
 // extern const int ATGM336H_BAUD_RATE = 4800;
@@ -1204,7 +1204,7 @@ uint16_t  BATT_WAIT = 1;  // secs
 
 // Definitely do this. having a 70 sec old fix allowed, is good for lower power
 // but then we could take a long time to get a cold fix going? doing force cold reset
-// warm fix should be fast in GpsON()
+// hot fix should be fast in GpsON()
 
 // FIX! if we have a good fix, and good age, should we turn gps off
 // and only turn it on again when the age is bad?
@@ -1403,7 +1403,7 @@ void loop1() {
 
                 V1_println(F("ERROR: loop1() GpsWatchdogCnt > 20 ..gps full cold reset"));
                 // FIX! have to send cold gps reset, in case ephemeris is corrupted?
-                // since vbat is always there.. otherwise this is a warm reset?
+                // since vbat is always there.. otherwise this is a hot reset?
                 GpsOFF();
 
                 // note that GpsOFF() has public access to TinyGPS++ now and

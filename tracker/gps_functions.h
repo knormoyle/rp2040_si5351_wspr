@@ -10,7 +10,7 @@
 bool GpsIsOn(void);
 void GpsINIT(void);
 bool GpsFullColdReset(void);
-bool GpsWarmReset(void);
+bool GpsHotReset(void);
 // why did this not compile if void in param?
 void invalidateTinyGpsState();
 void GpsON(bool GpsColdReset);

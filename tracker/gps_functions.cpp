@@ -20,7 +20,7 @@ extern bool BALLOON_MODE;
 // Don't reconfig if not necessary
 // what if we lose config because vbat glitches?
 // not worth the risk to avoid reconfig
-bool WARM_RESET_REDO_CONFIG = true;
+bool HOT_RESET_REDO_CONFIG = true;
 bool SIM65M_BROADCAST_5SECS = false;
 
 #include "global_structs.h"
@@ -324,7 +324,7 @@ int checkGpsBaudRate(int desiredBaud) {
 //************************************************
 bool getInitialGpsOutput(void) {
     V1_println(F("getInitialGpsOutput START"));
-    // there can be a lot of bogus chars after warm/cold reset, like over 200
+    // there can be a lot of bogus chars after hot/cold reset, like over 200
     // if we can get effective 900 chars/sec, probably want 5x that
     V1_println(F("Look for some Serial2 bytes for 5 secs or 5000 chars or 2 sentences"));
     char incomingChar = { 0 };
@@ -869,7 +869,7 @@ void setGpsConstellations(int desiredConstellations) {
         }
     }
     // SIM65M
-    // huh. this is like causing another GPS reset? (will be warm reset?)
+    // huh. this is like causing another GPS reset? (will be hot reset?)
     // Packet Type:066
     // PAIR_COMMON_SET_GNSS_SEARCH_MODE
     // Configure the receiver to start searching for satellites.
@@ -1061,7 +1061,7 @@ void setupSIM65M(int desiredBaud) {
 //************************************************
 void setGpsBaud(int desiredBaud) {
     // Assumes we can talk to gps already at some existing agreed
-    // on Serial2/gps chip setup (setup by int/warm reset/full cold reset)
+    // on Serial2/gps chip setup (setup by int/hot reset/full cold reset)
     V1_printf("setGpsBaud START %d" EOL, desiredBaud);
     updateStatusLED();
     Watchdog.reset();
@@ -1303,7 +1303,7 @@ void GpsINIT(void) {
 
     // full cold reset, set baud to target baud rate, and setGpsBalloonMode done
     // FIX! hmm will sim65 reset to 9600?
-    // will it stay at the new baud rate thru warm reset and cold reset
+    // will it stay at the new baud rate thru hot reset and cold reset
     // like ATGM366N (weird) or will it default to 115200 again.
     GpsFullColdReset();
     // gps is powered up now
@@ -1723,7 +1723,16 @@ bool GpsFullColdReset(void) {
 }
 
 //************************************************
-bool GpsWarmReset(void) {
+bool GpsHotReset(void) {
+    // FIX! this doesn't have option of doing warm reset nmea command to gps chip. 
+    // would have to do that to support a warm reset that only clears ephemeris
+    // right now, we just have hot and cold
+    // we do send the warm reset command and retry if the hot reset doesn't get any sentences back
+
+    // so it's returning from backup power on?
+    // Hot start: No initialization information is used and all the data is valid
+    // Warm start: Do not use initialization information and clear ephemeris.
+
     GpsIsOn_state = false;
     PPS_countDisable();
     // FIX! SIM65M spec says when the power supply is off, settings
@@ -1731,13 +1740,13 @@ bool GpsWarmReset(void) {
     // on next power up
     // I suppose we should just switch to idle mode instead of powering
     // gps chip off?
-    V1_println(F(EOL "GpsWarmReset START"));
+    V1_println(F(EOL "GpsHotReset START"));
     uint32_t start_millis = millis();
 
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
 
-    // warm reset doesn't change baud rate from prior config?
+    // hot reset doesn't change baud rate from prior config?
     // but what if we lost VBAT and config isn't preserved?
     // turn it off first. may be off or on currently
     // turn off the serial
@@ -1745,7 +1754,7 @@ bool GpsWarmReset(void) {
 
     // don't assert reset during power off
     // FIX! what if we power on with GPS_ON_PIN LOW and GPS_NRESET_PIN HIGH
-    V1_println(F("Doing Gps WARM POWER_ON (GPS_ON_PIN off with power off-on)"));
+    V1_println(F("Doing Gps HOT POWER_ON (GPS_ON_PIN off with power off-on)"));
     // NOTE: should we start with NRESET_PIN low also until powered (latchup?)?
     // NOTE: do we need to start low until powered to avoid latchup of LNA?
 
@@ -1754,7 +1763,7 @@ bool GpsWarmReset(void) {
     digitalWrite(GPS_NRESET_PIN, HIGH);
     digitalWrite(GpsPwr, HIGH);
     Serial2.end();
-    // 2/16/2025 try faster for faster gps warm reset
+    // 2/16/2025 try faster for faster gps hot reset
     gpsSleepForMillis(1000, false);  // no early out
 
     // match the pwm that's done for cold reset
@@ -1772,7 +1781,7 @@ bool GpsWarmReset(void) {
         gpsSleepForMillis(500, false);
     }
 
-    // 2/16/2025 try faster for faster gps warm reset
+    // 2/16/2025 try faster for faster gps hot reset
     gpsSleepForMillis(1000, false);  // no early out
     // now assert the on/off pin
     digitalWrite(GPS_ON_PIN, HIGH);
@@ -1809,7 +1818,7 @@ bool GpsWarmReset(void) {
     }
     gpsSleepForMillis(500, false);  // no early out
 
-    if (WARM_RESET_REDO_CONFIG) {
+    if (HOT_RESET_REDO_CONFIG) {
         //****************************
         setGpsConstellations(CONSTELLATIONS_GROUP);
         // we don't need no ZDA/TXT
@@ -1823,11 +1832,11 @@ bool GpsWarmReset(void) {
     }
 
     if (USE_SIM65M) {
-        // always read it to make sure it's right thru warm reset
+        // always read it to make sure it's right thru hot reset
         V1_println(F("Read the navigation mode: $PAIR081*33"));
         // Packet Type:081 PAIR_COMMON_GET_NAVIGATION_MODE
         Serial2.print("$PAIR081*33" CR LF);
-        // 2/16/2025 try faster for faster gps warm reset
+        // 2/16/2025 try faster for faster gps hot reset
         nmeaBufferFastPoll(1500, true);  // duration_millis, printIfFull
         // we could change the default config to power up with GNSS off?
         // so always do this?
@@ -1840,7 +1849,7 @@ bool GpsWarmReset(void) {
     invalidateTinyGpsState();
 
     uint32_t duration_millis = millis() - start_millis;
-    V1_print(F("GpsWarmReset END"));
+    V1_print(F("GpsHotReset END"));
     V1_printf(" sentencesFound %u", sentencesFound);
     V1_printf(" duration_millis %lu" EOL, duration_millis);
 
@@ -1874,7 +1883,7 @@ void writeGpsConfigNoBroadcastToFlash() {
 
     // risk: do we ever power on and not do this full cold reset
     // that sets up broadcast?
-    // the warm gps reset shouldn't get new state from config?
+    // the hot gps reset shouldn't get new state from config?
 
     // HMM! should we change it to no broadcast, in the FLASH,
     // so cold reset power on might try to do no broadcast
@@ -1942,7 +1951,7 @@ void GpsON(bool GpsColdReset) {
     const uint32_t max_tryCnt = 3;
 
     if (!GpsColdReset && GpsIsOn()) {
-        // fake this to avoid doing a gps warm reset if successfully on?
+        // fake this to avoid doing a gps hot reset if successfully on?
         V1_println(F("do nothing because GpsIsOn()"));
         sentencesFound = true;
     }
@@ -1957,7 +1966,7 @@ void GpsON(bool GpsColdReset) {
                 V1_print(F(EOL));
                 break;
             } else {
-                V1_print(F("ERROR: tryCnt 3 on GpsWarmReset.. switch to trying GpsColdReset "));
+                V1_print(F("ERROR: tryCnt 3 on GpsHotReset.. switch to trying GpsColdReset "));
                 printSystemDateTime();
                 V1_print(F(EOL));
 
@@ -1968,7 +1977,7 @@ void GpsON(bool GpsColdReset) {
         if (GpsColdReset) {
             sentencesFound = GpsFullColdReset();
         } else {
-            sentencesFound = GpsWarmReset();
+            sentencesFound = GpsHotReset();
         }
 
         // try sending the software command for SIM65M if the
@@ -1978,17 +1987,23 @@ void GpsON(bool GpsColdReset) {
             if (USE_SIM65M) {
                 if (GpsColdReset) {
                     // Packet Type:007 PAIR_GNSS_SUBSYS_FULL_COLD_START
+                    V1_print(F("ERROR: no sentencesFound, send command for PAIR_GNS_SUBSYS_FULL_COLD_START"));
                     Serial2.print("$PAIR001,007,0*3C" CR LF);
                 } else {
                     // Packet Type:005 PAIR_GNSS_SUBSYS_WARM_START
+                    // this will clear ephemeris, unlike normal hot starts
+                    V1_print(F("ERROR: no sentencesFound, send command for PAIR_GNS_SUBSYS_WARM_START (clear ephemeris)"));
                     Serial2.print("$PAIR001,005,0*3E" CR LF);
                 }
             } else {
                 if (GpsColdReset) {
                     // PCAS10 factory start
+                    V1_print(F("ERROR: no sentencesFound, send command PCAS10 factory start"));
                     Serial2.print("$PCAS10,3*1F" CR LF);
                 } else {
-                    // PCAS10 warm start
+                    // PCAS10 warm start. 
+                    // This will clear ephemeris, unlike normal hot starts
+                    V1_print(F("ERROR: no sentencesFound, send command PCAS10 warm start (clear ephemeris)"));
                     Serial2.print("$PCAS10,1*1D" CR LF);
                     Serial2.print("" CR LF);
                 }
