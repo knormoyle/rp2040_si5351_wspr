@@ -2712,7 +2712,8 @@ void gpsDebug() {
     bool validJ = (gps.location.FixMode() != TinyGPSLocation::Mode::N);
 
     // can compare char and int? 
-    // bool validI = gps.location.FixQuality() != '0';
+    // this includes Estimated as valid?
+    // bool validI = gps.location.FixQuality() != 0;
     // bool validJ = gps.location.FixMode() != 'N';
 
     V1_printf("gps valids: %u %u %u %u %u %u %u %u %u %u %u" EOL,
@@ -2821,8 +2822,7 @@ void gpsDebug() {
 
 // Magic sequence to turn the LNA into a toaster is:
 // 1) Have the 3V3 power off;
-// 2) Enable the ON_OFF pin
-//   (HIGH signal from an STM32 - powered by separate 3.0V LDO linear regulator);
+// 2) Enable the ON_OFF pin (HIGH signal from an STM32 - powered by separate 3.0V LDO linear regulator);
 // 3) Turn 3V3 power on.
 // 4) Hot LNA!
 // After that, the only thing that cools down the LNA is turning 3V3 off again.
@@ -2843,7 +2843,6 @@ void gpsDebug() {
 // With these higher value gate resistors,
 // measured the source voltage dropping to only ~3.0 V
 // when the GPS is turned on (~250 mV).
-
 
 //************************************************
 void kazuClocksSlow() {

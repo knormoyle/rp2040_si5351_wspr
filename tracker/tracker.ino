@@ -1644,10 +1644,13 @@ void loop1() {
         "t_grid6: %s "
         "t_power: %s "
         "t_sat_count: %s "
+        "t_fixMode: %s"
+        "t_fixQual: %s"
         "GpsTimeToLastFix %lu "
         "GpsWatchdogCnt %lu" EOL,
         loopCnt, tt.tx_count_0, tt.callsign, tt.temp, tt.voltage,
         tt.altitude, tt.grid6, tt.power, tt.sat_count,
+        tt.fixMode, tt.fixQual,
         GpsTimeToLastFix, GpsWatchdogCnt);
 
     V1_println(F(EOL));

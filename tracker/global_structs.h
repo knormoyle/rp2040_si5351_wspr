@@ -109,6 +109,10 @@ typedef struct TeleStruct_ {
 
     char sats[3];
     char hdop[4];
+
+    char fixMode[2];
+    char fixQual[2];
+
     char gp_sats[3];
     char gb_sats[3];
     char gl_sats[3];

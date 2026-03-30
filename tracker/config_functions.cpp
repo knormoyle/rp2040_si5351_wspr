@@ -1225,7 +1225,7 @@ int check_data_validity_and_set_defaults(void) {
     if (cg < 1 || cg > 7) {
         V0_printf(EOL "ERROR: cc._const_group %s is not supported/legal, initting to 3" EOL,
             cc._const_group);
-        snprintf(cc._const_group, sizeof(cc._const_group), "3");
+        snprintf(cc._const_group, sizeof(cc._const_group), "7");
         write_FLASH();
         result = -1;
     }
@@ -1313,7 +1313,7 @@ void show_commands(void) {
     V0_println(F("S: sim65m: 1 sim65m, 0 atgm3365n-31 (default: 0)"));
     V0_println(F("M: morse_also: 1 tx cw msg after all wspr(default: 0)"));
     V0_println(F("L: solar_tx_power: 1 adjust power from solar elevation(default: 0)"));
-    V0_println(F("E: constellation group: (default: 3)"));
+    V0_println(F("E: constellation group: (default: 7)"));
     V0_println(F("J: monopole: (default: 0)"));
 
     V0_print(F("show_commands END" EOL));
@@ -1339,7 +1339,7 @@ void doFactoryReset() {
     snprintf(cc._use_sim65m, sizeof(cc._use_sim65m), "0");
     snprintf(cc._morse_also, sizeof(cc._morse_also), "0");
     snprintf(cc._solar_tx_power, sizeof(cc._solar_tx_power), "0");
-    snprintf(cc._const_group, sizeof(cc._const_group), "3");
+    snprintf(cc._const_group, sizeof(cc._const_group), "7");
     snprintf(cc._monopole, sizeof(cc._monopole), "0");
 
     // What about the side decodes? Don't worry, just reboot

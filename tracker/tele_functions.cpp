@@ -405,6 +405,20 @@ void snapForTelemetry() {
     tt.ExtTelemetry2_val1 = ExtTelemetry2_val1;
     tt.ExtTelemetry2_val2 = ExtTelemetry2_val2;
 
+    // just one byte of char?
+    // FIX! use the enums?
+    // enum Quality { Invalid = '0', GPS = '1', DGPS = '2', PPS = '3', RTK = '4', FloatRTK = '5', Estimated = '6', Manual = '7', Simulated = '8' };
+    // enum Mode { N = 'N', A = 'A', D = 'D', E = 'E'};
+
+    // these are chars?
+    // FIX! can we go directly just using %c in snprintf
+    char fq[2] = { 0 };
+    fq[0] = gps.location.FixQuality();
+    char fm[2] = { 0 }; 
+    fm[0] = gps.location.FixMode();
+    snprintf(tt.fixMode, sizeof(tt.fixMode), "%s", fm);
+    snprintf(tt.fixQual, sizeof(tt.fixQual), "%s", fq);
+
     bool validA = gps.satellites.isValid() && !GpsInvalidAll;
     // bool validB = gps.hdop.isValid() && !GpsInvalidAll;
     bool validB_gp = gp_sats.isValid() && !GpsInvalidAll;
@@ -466,6 +480,21 @@ void snapForTelemetry() {
     s = clamp_uint32_t(s, 0, 999);
     snprintf(tt.gpsLockSecsAvg, sizeof(tt.gpsLockSecsAvg), "%u", s);
 
+    // don't have valid bits, just enum encoded for invalid
+    // enum fq {Invalid = '0', GPS = '1', DGPS = '2', PPS = '3', RTK = '4', 
+    //  FloatRTK = '5', Estimated = '6', Manual = '7', Simulated = '8' };
+    // enum fm { N = 'N', A = 'A', D = 'D', E = 'E'};
+
+    // can use this? gpsDebug will print the char?
+    // is there no isValid() for these?
+    // bool validI = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
+    // bool validJ = (gps.location.FixMode() != TinyGPSLocation::Mode::N);
+
+    // can compare char and int? 
+    // this includes Estimated as valid?
+    // bool validI = gps.location.FixQuality() != 0;
+    // bool validJ = gps.location.FixMode() != 'N';
+
     //*********************************
     V1_printf("************" EOL);
     V1_printf("tt.tx_count_0 %s " EOL, tt.tx_count_0);
@@ -489,10 +518,14 @@ void snapForTelemetry() {
     // V1_printf("tt.ExtTelemetry2_val1 %d " EOL, tt.ExtTelemetry2_val1);
     // V1_printf("tt.ExtTelemetry2_val2 %d " EOL, tt.ExtTelemetry2_val2);
 
+    V1_printf("tt.fixMode %s " EOL, tt.fixMode);
+    V1_printf("tt.fixQual %s " EOL, tt.fixQual);
+
     V1_printf("tt.gp_sats %s " EOL, tt.gp_sats);
     V1_printf("tt.gb_sats %s " EOL, tt.gb_sats);
     V1_printf("tt.gl_sats %s " EOL, tt.gl_sats);
     V1_printf("tt.ga_sats %s " EOL, tt.ga_sats);
+
     V1_printf("tt.gpsLockSecs %s " EOL, tt.gpsLockSecs);
     V1_printf("tt.gpsLockSecsMin %s " EOL, tt.gpsLockSecsMin);
     V1_printf("tt.gpsLockSecsMax %s " EOL, tt.gpsLockSecsMax);
