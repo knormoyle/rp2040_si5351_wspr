@@ -603,131 +603,140 @@ int read_FLASH_result2 = 0;
 
 //***********************************************************
 void setup() {
-    // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
-    // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
-    // Initialize a core such that the other core can lock it out during flash_safe_execute.
-    // see the dire need at the link above (around flash access)
-    // flash_safe_execute_core_init();
+    // -----------------------------------------------------------------------
+    // Flash / SMP safety references (not yet enabled):
+    //   flash_safe_execute_core_init() — lets the other core lock this one out
+    //   during flash_safe_execute(). See dire warnings at:
+    //   https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
+    //
+    // Thread-safety notes for time primitives (from same source):
+    //   sleep_us            — Depends on children; NOT fully resolved (sleep_until)
+    //   absolute_time_diff_us, get_absolute_time — Looks SMP/thread safe
+    //   to_ms_since_boot, to_us_since_boot       — Looks SMP/thread safe
+    //   time_reached, busy_wait_until             — Looks SMP/thread safe
+    //
+    // USB/watchdog edge case:
+    //   FIX! If USB is connected on boot, some printing occurs, then USB is
+    //   unplugged — does the watchdog correctly detect the Serial hang and reboot?
+    //   Likely reboots from power loss anyway. Thread safety of Watchdog TBD.
+    //   Ref: https://forums.raspberrypi.com/viewtopic.php?t=370841
+    // -----------------------------------------------------------------------
 
-    // FIX! what if we start with usb connected, boot, do some printing or keyboard
-    // and then reboot and unplug usb. Or unplug usb and leave running
-    // will it reboot when watch dog timer detects hang on Serial?
-    // no it will reboot because of power going away and coming back?
-    // what things are thread safe?
-    // https://forums.raspberrypi.com/viewtopic.php?t=370841
-    // sleep_us (Depends on Children, Unsolved due to "sleep_until")
-
-    // absolute_time_diff_us (Depends on Children, Looks SMP Safe/Thread Safe)
-    // get_absolute_time (Depends on Children, Looks SMP Safe/Thread Safe)
-
-    // to_ms_since_boot (absolute_time_t t)
-    // Convert a timestamp into a number of milliseconds since boot.
-
-    // to_us_since_boot (Looks SMP Safe/Thread Safe)
-
-    // static bool time_reached (absolute_time_t t)
-    // Check if the specified timestamp has been reached.
-
-    // time_reached (Depends on Children, Looks SMP Safe/Thread Safe)
-    // busy_wait_until (Depends on Children, Looks SMP Safe/Thread Safe)
-
-    // FIX! in case user is frantically trying to get to the config menu
-    // to avoid setting clock speed or ??
-    // if anything was found by incomingByte above, go to the config menu
-    // (potentially a balloon weird case would timeout)
     BALLOON_MODE = false;
     decodeVERBY();
 
+    // -----------------------------------------------------------------------
+    // Early init: LED and watchdog
+    // -----------------------------------------------------------------------
     Watchdog.enable(30000);
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+
+    // -----------------------------------------------------------------------
+    // Wait up to 15 seconds for a USB serial connection.
+    // If none appears, fall through and decide on BALLOON_MODE below.
+    // FIX! Do we detect Serial if power+data USB is connected but no terminal opened?
+    // FIX! In case user is frantically reaching for the config menu, any byte
+    //      received above should route directly there.
+    // -----------------------------------------------------------------------
     while (!Serial) {
-        // hmmm.. is Watchdog threadsafe? maybe watch out for that!
-        Watchdog.reset();
+        Watchdog.reset();   // FIX! verify Watchdog is thread-safe here
         updateStatusLED();
-        // No race here with anyone looking at it
-        // millis since running this program
-        // wait for 15 seconds before deciding to switch to balloon mode..
-        // no serial
         if (millis() > 15000) break;
         sleep_ms(1000);
     }
+
     uint32_t sieValue = get_sie_status();
-    // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
     V1_printf("SETUP() after finding Serial.* sieValue %" PRIx32 EOL, sieValue);
+    // Ref for printing hex from uint32_t:
+    // https://stackoverflow.com/questions/43028865/how-to-print-hex-from-uint32-t
+
     Watchdog.reset();
     updateStatusLED();
-    // FIX! do we detect Serial if we never open putty, and data + power is connected on USB?
-    // eventually we'll time out in config menu and reboot
-    // detecting usb is connected
-    // read the nvram and decode VERBY and TESTMODE. This will control printing
+
+    // -----------------------------------------------------------------------
+    // Read config from flash (NVRAM).
+    // VERBY and TESTMODE are decoded from this; they control all subsequent printing.
+    // Retry once on failure — errors are reset to defaults on the retry.
+    // -----------------------------------------------------------------------
     read_FLASH_result1 = read_FLASH();
     if (read_FLASH_result1 == -1) {
-        // oneliner
-        V1_print(F("SETUP() WARN: first read_FLASH_result1 -1 ..retrying"));
-        V1_println(F("redo. ..errors were fixed to default"));
+        V1_println(F("SETUP() WARN: first read_FLASH_result1 -1 ..retrying. errors fixed to default"));
         read_FLASH_result2 = read_FLASH();
     }
+
     Watchdog.reset();
     if (read_FLASH_result2 == -1) {
         V1_println(F("SETUP() ERROR: retry read_FLASH_result2 -1 , ignore"));
     }
+
     show_values();
 
-    // Get the SIE_STATUS to see if we're connected or what?
-    // this is what I see when I'm using the putty window
-    // SIE_STATUS:0x40050009
+    // -----------------------------------------------------------------------
+    // Determine USB connection state.
+    // SIE_STATUS 0x40050009 is what appears when Putty is open and active.
+    // FIX! Is checking 'Serial' alone sufficient? It may be true before a
+    //      terminal window is actually opened.
+    // -----------------------------------------------------------------------
     bool usbConnected = Serial && get_sie_connected();
     V0_printf("SETUP() usbConnected %u" EOL, usbConnected);
 
-    // FIX! is 'Serial" sufficient? it's not formed putty window not opened?
-    // FORCE_BALLLON_MODE is test mode:
-    // guarantees balloon mode for debug when plugged into USB power
-    if (FORCE_BALLOON_MODE | !usbConnected) {
+    // -----------------------------------------------------------------------
+    // BALLOON_MODE vs. USB-connected (interactive) mode
+    //
+    // FORCE_BALLOON_MODE is a debug flag that forces balloon mode even when
+    // plugged into USB power, so normal field operation can be simulated.
+    //
+    // Note: once enabled, the RP2040 watchdog CANNOT be disabled.
+    //   Watchdog.disable() is a no-op — do not rely on it.
+    // -----------------------------------------------------------------------
+    if (FORCE_BALLOON_MODE || !usbConnected) {
         V0_print(F(EOL "SETUP() set BALLOON_MODE true" EOL));
         BALLOON_MODE = true;
-        decodeVERBY();
-        // BALLOON_MODE forces all false, so no point in printing here?
-        // Watch out! Once enabled, the RP2040's Watchdog Timer can NOT be disabled.
-        // Watchdog.disable();
-        // just make it very long?
+        decodeVERBY();  // BALLOON_MODE forces all VERBY false; reprinting is harmless
+
+        // Extend watchdog timeout for balloon operation (cannot disable it)
         Watchdog.enable(60000);
-        // Watchdog.reset();
-        // Serial on core1 is only used for printing (no keyboard input)
-        // so okay to manage that with VERBY
+
+        // core1 handles Watchdog.reset() and serial printing from here on;
+        // no keyboard input is expected in balloon mode.
         CORE1_PROCEED = true;
+
     } else {
         BALLOON_MODE = false;
         decodeVERBY();
         V0_print(F(EOL "SETUP() ..Found usb serial. set BALLOON_MODE false" EOL));
+
         Watchdog.reset();
-        // hmm IGNORE_KEYBOARD_CHARS is not factored into this.
-        // should always be false at this point?
-        // char incomingByte = drainSerialTo_CRorNL(1000);
-        // only drain for 10ms.. in case user hits <enter>
-        char incomingByte = drainSerialTo_CRorNL(10);
-        // CR or LF to interrupt?
-        if (incomingByte == 10 || incomingByte == 13) {
-            // do this branching BEFORE setting clock speed in case of bad clock speed setting!
+
+        // Drain serial briefly to catch an immediate <Enter> keypress.
+        // IGNORE_KEYBOARD_CHARS should always be false at this point.
+        // FIX! IGNORE_KEYBOARD_CHARS is not factored into this path.
+        char incomingByte = drainSerialTo_CRorNL(10);  // 10 ms drain
+
+        if (incomingByte == '\n' || incomingByte == '\r') {
+            // Enter pressed immediately — go to config UI before any clock speed
+            // changes take effect, in case the clock speed setting is bad.
             V0_print(F(EOL "LEAVING SETUP() TO GO TO user_interface() (1)" EOL EOL));
             user_interface();
-            // won't return here, since all exits from user_interface reboot
+            // user_interface() never returns — all exits reboot the device.
         } else {
             V0_print(F(EOL "Hit <enter> to go to config mode."));
             V0_print(F(" Either before gps cold reset, or wait until after" EOL));
             V0_print(F("otherwise it's running (1)" EOL EOL));
-            // we drained but it wasn't CR or LF at the end
-            // core1 takes over Watchdog.reset() at this point
+
+            // core1 takes over Watchdog.reset() from here; setup() hangs are
+            // acceptable since we only lose keyboard input, not balloon operation.
+            // FIX! avoid calling Watchdog.reset() from setup()/loop() once core1 is running.
             CORE1_PROCEED = true;
         }
     }
-    // FIX! shouldn't do Watchdog.reset() from here on in, unless core1 is stopped?
-    // from here on, if this code hangs, we just don't get keyboard input
-    // but that's not an issue if BALLOON_MODE
+
     if (VERBY[1]) {
         V1_print(F("setup() freeMem()" EOL));
         freeMem();
     }
+
     V1_print(F(EOL "LEAVING SETUP() (2)" EOL EOL));
     V0_print(F(EOL "Hit <enter> to go to config mode. otherwise it's running (2)" EOL EOL));
 }
@@ -778,262 +787,237 @@ absolute_time_t loop_us_start = 0;
 // FIX! is there a watchdog for this core?
 bool core1_idled = false;
 void loop() {
+    // -----------------------------------------------------------------------
+    // BALLOON_MODE: core0 has nothing to do — core1 runs the tracker.
+    // Just keep core0 alive with periodic sleeps.
+    // FIX! Do we need to service any interrupts here?
+    // FIX! Can a long sleep here cause USB printing to stall?
+    // -----------------------------------------------------------------------
     if (BALLOON_MODE) {
-        // just sleep. hmm do we have any interrupts to deal with
-        // hmm can we lose usb printing if we delay too long here?
-        // sleep_ms(100000); // 100 secs
-        // try just 30 secs
-        // sleep_ms(100000);
         sleep_ms(30000);
-        // hmm could just return, loop will be called again
-        // return;
+        return;
     }
 
-    // FIX! musing: should never get any usb/serial input while balloon is flying
-    // Could disable this if we knew we're flying.
-    // How? equivalent to cutting off USB connector.
-    // Shouldn't be necessary?
-    // if garbage serial arrived, and we went to config mode, eventually we'd timeout/reboot
-
+    // -----------------------------------------------------------------------
+    // USB serial keyboard monitor (ground/bench mode only)
+    //
+    // Watches for a CR/LF keypress and, when found, idles core1 and hands
+    // control to the interactive config UI.
+    //
+    // Notes:
+    //   - In flight this code is unreachable (BALLOON_MODE is true).
+    //   - IGNORE_KEYBOARD_CHARS is set by core1 around GPS cold resets to
+    //     suppress spurious serial input from USB power glitches.
+    //   - Watchdog.reset() deliberately avoided here — not thread-safe with core1.
+    //   - rp2040.idleOtherCore() is safe because only core0 modifies config state;
+    //     core1 stops promptly when idled.
+    //   - user_interface() never returns; all its exit paths reboot the device,
+    //     so rp2040.resumeOtherCore() is never needed.
+    //   FIX! Is checking Serial.available() sufficient, or do we need more?
+    //   FIX! Odd chars can arrive on USB data+power lines with no terminal open —
+    //        verify we don't accidentally enter config mode from those.
+    // -----------------------------------------------------------------------
     bool usbConnected = get_sie_connected();
     while (!BALLOON_MODE && usbConnected && !IGNORE_KEYBOARD_CHARS) {
-        // detect the transition of 1 -> 0 on IGNORE_KEYBOARD_CHARS (by core1)
-        // and drain all garbage chars in serial.
-        // Should only happen around gps cold reset
-        // and it's low power nonsense: turning usb off/on
-        if (IGNORE_KEYBOARD_CHARS_last & !IGNORE_KEYBOARD_CHARS) {
-            // drain it of everything..garbage during gps cold reset
-            // should have a limited number of ?? chars
+
+        // On the falling edge of IGNORE_KEYBOARD_CHARS (core1 cleared it after
+        // a GPS cold reset), drain any garbage chars that accumulated.
+        bool ignoreJustCleared = IGNORE_KEYBOARD_CHARS_last && !IGNORE_KEYBOARD_CHARS;
+        if (ignoreJustCleared) {
             while (Serial.available()) Serial.read();
         }
-        // don't use watchog reset..not thread safe?
-        if (core1_idled) {
-            // hmm..don't do any fetch from nvram with F()
-            V1_print(F(EOL "loop() LOOPING WITH core1_idled()" EOL EOL));
-            sleep_ms(1000);
-        } else {
-            // Serial.print(F(EOL "loop() LOOPING QUICKLY WITH !core1_idled()" EOL EOL));
-            // with a 1 sec sleep..most of the time we're sleeping this core?
-            // we couldn't sleep that long if we were updating leds? or ??
-            sleep_ms(1000);
-        }
-
-        // This core can handle modifying config state, not the other core
-        // so the other core can just be timely in stopping normal balloon work
-        // wen it gets rp2040.idleOtherCore()
-        bool usbConnected = get_sie_connected();
-        // FIX! is 'charsAvailable" sufficient?
-        int charsAvailable = (int) Serial.available();
-        if (usbConnected && !IGNORE_KEYBOARD_CHARS && charsAvailable) {
-            // CR or LF to interrupt?
-            // odd chars while plugged into USB power with data, but no serial window?
-            char incomingByte = drainSerialTo_CRorNL(1000);
-            // random CR or LF if using usb plug with data and no serial window?
-            // hopefully not!
-            if (incomingByte == 10 || incomingByte == 13) {
-                V0_print(F(EOL "CR or LF detected: Core 0 WILL TRY TO TAKE OVER" EOL EOL));
-                Watchdog.enable(30000);
-                rp2040.idleOtherCore();
-                core1_idled = true;
-                V0_print(F(EOL "Core 1 IDLED" EOL EOL));
-                // we own the led's and the watch dog interface now
-                Watchdog.reset();
-                // FIX! this is a just-in-case we had temporarily slowed the clock to 18Mhz
-                // during the first gps cold reset, and keyboard interrupted that?
-                // this will make the clock right again
-                initPicoClock(PLL_SYS_MHZ);
-                initStatusLED();
-                setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
-                updateStatusLED();
-                V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
-                V0_print(F(EOL "Core 0 IS CURRENTLY DOING NOTHING" EOL EOL));
-                V0_println(F("tracker.ino: (A) Going to user_interface() from loop()"));
-                user_interface();
-                // won't return here, since all exits from user_interface reboot
-                // so will never resume the other core if we idled it?
-                // rp2040.resumeOtherCore();
-            }
-        }
         IGNORE_KEYBOARD_CHARS_last = IGNORE_KEYBOARD_CHARS;
+
+        // Pace the loop regardless of core1 state.
+        // 1-second sleep keeps this core mostly idle while core1 does real work.
+        if (core1_idled) {
+            // core1 is stopped; avoid F() / NVRAM fetches while idled
+            V1_print(F(EOL "loop() LOOPING WITH core1_idled()" EOL EOL));
+        }
+        sleep_ms(1000);
+
+        // Re-check connection state after sleeping
+        usbConnected = get_sie_connected();
+
+        // Check for incoming keypress
+        int charsAvailable = (int)Serial.available();
+        if (!usbConnected || IGNORE_KEYBOARD_CHARS || !charsAvailable) continue;
+
+        // Drain until CR or LF; ignore anything else
+        char incomingByte = drainSerialTo_CRorNL(1000);
+        bool enterPressed = (incomingByte == '\n' || incomingByte == '\r');
+        if (!enterPressed) continue;
+
+        // ---- CR/LF received: take over from core1 and enter config UI ----
+        V0_print(F(EOL "CR or LF detected: Core 0 WILL TRY TO TAKE OVER" EOL EOL));
+
+        Watchdog.enable(30000);
+        rp2040.idleOtherCore();
+        core1_idled = true;
+
+        V0_print(F(EOL "Core 1 IDLED" EOL EOL));
+
+        // Core0 now owns the LED and watchdog interfaces
+        Watchdog.reset();
+
+        // FIX! Just-in-case fix: if core1 was mid-GPS-cold-reset and had slowed
+        // the clock to 18 MHz, restore the correct clock speed before UI work.
+        initPicoClock(PLL_SYS_MHZ);
+        initStatusLED();
+        setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
+        updateStatusLED();
+
+        V0_print(F(EOL "Core 0 TOOK OVER AFTER SUCCESSFULLY IDLING Core 1" EOL EOL));
+        V0_println(F("tracker.ino: Going to user_interface() from loop()"));
+
+        user_interface();
+        // Never reached — user_interface() reboots on all exit paths
     }
 }
 //***********************************************************
 void setup1() {
-    // CORE1_PROCEED should start false, so no need to wait?
+    // -----------------------------------------------------------------------
+    // Core1 startup: wait for core0 to signal readiness.
+    //
+    // CORE1_PROCEED starts false, so we spin here until setup() on core0
+    // has finished flash/config reads and set it true.
+    //
+    // Flash / SMP safety (not yet enabled):
+    //   flash_safe_execute_core_init() — lets core0 lock out core1 during
+    //   flash_safe_execute(). See:
+    //   https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
+    //
+    // No printing inside the spin loop — BALLOON_MODE and VERBY may not be
+    // configured yet. LED is held on as a visual "waiting" indicator.
+    // FIX! core0 setup() also drives the LED here; thread-safety unclear.
+    // -----------------------------------------------------------------------
     sleep_ms(1000);
-    // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
-    // Initialize a core such that the other core can lock it out during flash_safe_execute.
-    // see the dire need at the link above (around flash access)
-    // flash_safe_execute_core_init();
 
     while (!CORE1_PROCEED) {
-        // no printing inside this..potentially BALLOON_MODE/VERBY not setup yet?
-        // updateStatusLED();
-        // debug: just keep it turning it on until we get a CORE1_PROCEED?
-        // hmm. FIX! the setup() will be messing with LED blinking at same time?
-        // do we care? (thread-safety?)
         turnOnLED(true);
         sleep_ms(10);
     }
-    // take over watchdog and LED from core0
-    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+
+    // -----------------------------------------------------------------------
+    // Take over watchdog and LED from core0
+    // -----------------------------------------------------------------------
     Watchdog.enable(30000);
     Watchdog.reset();
-    V1_println(F("setup1() START"));
-
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
-    //*************************************
-    Watchdog.reset();
-    Watchdog.enable(30000);
-    Watchdog.reset();
+    V1_println(F("setup1() START"));
 
     V0_flush();
-    blockingLongBlinkLED(8);
+    blockingLongBlinkLED(8);  // visual "setup1 running" indicator
 
+    // -----------------------------------------------------------------------
+    // Hardware init
+    //
+    // VFO (si5351a) is NOT initialised here — no reason to power it up during
+    // setup; it will be initialised on first use.
+    // Wire / I2C pin notes:
+    //   Wire  default: SDA=4,  SCL=5  (wrong for our ISC1)
+    //   Wire1 default: SDA=26, SCL=27 (matches our ISC0)
+    //   Pins would be set via Wire1.setSDA / Wire1.setSCL before Wire1.begin().
+    //   Not currently used since BMP and GPS use their own init paths.
+    // -----------------------------------------------------------------------
     adc_INIT();
     Watchdog.reset();
 
-    // was 12/26/24
-    // no reason to turn si5351a on during the setup init?
-    // but need it on during the repeated inits
-    // just get rid of the vfo_init in setup!
-    // vfo_init();
-
-    //**********************
-    // Some notes in case we ever use Wire
-    // https://arduino-pico.readthedocs.io/en/latest/wire.html
-    // are the si5351 pins okay (ISC0) for Wire? (ISC1) pins are for Wire1?
-
-    // https://github.com/earlephilhower/arduino-pico/blob/master/docs/pins.rst
-    // doc had
-    // bool setSDA(pin_size_t VFO_I2C_SDA_PIN);
-    // bool setSCL(pin_size_t VFO_I2C_SCL_PIN);
-    // now says
-    // Wire.setSDA(pin_size_t VFO_I2C_SDA_PIN);
-    // Wire.setSCL(pin_size_t VFO_I2C_SCL_PIN);
-    // per May 2022 forum post
-
-    // Watchdog.reset();
-    // Wire1.setSDA(BMP_I2C_SDA_PIN);
-    // Wire1.setSCL(BMP_I2C_SCL_PIN);
-    // Wire1.setClock(BMP_I2C_SCL_HZ);
-    // Wire1.begin();
-
     bmp_init();
-
-    // I don't use Wire, so this shouldn't matter
-    // https://docs.arduino.cc/language-reference/en/functions/communication/wire/
-    // default pins for Wire  are SDA=4 SCL=5 (not right for our ISC1? or ??)
-    // default pins for Wire1 are SDA=26 SCL=27 ..wants to be our ISC0
-
     Watchdog.reset();
 
-    // also turns on and checks for output
-    // does a full gps cold reset now?
-    // 12/7/24. the GpsINIT covers GpsON() now?
+    // GpsINIT() includes a full GPS cold reset and covers GpsON() internally.
+    // Do NOT call GpsON() separately after this — cold reset already done.
     GpsINIT();
     tinyGpsCustomInit();
-    // BALLOON_MODE is set by not
     gpsPPS_init();
-    // we have this object in gps_functions.cpp for Extended Telemetry
-    // WsprMessageTelemetryExtendedUserDefined<5> codecGpsMsg;
-    // define it once. time slot is set later
+
+    // Initialise extended-telemetry codec objects (time slot set later)
     define_codecGpsMsg();
     define_codecBmpMsg();
 
-    // usb power means vbat is always on. so a hot reset!
-    // we already did a cold reset in the GpsINIT() ..don't do it again!
-
-    if (!BALLOON_MODE) {
-        if (!Serial) {
-            // V1_println("Why can't we see Serial from setup1()..rebooting");
-            setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
-            // we're going to have to reboot..even balloon needs Serial created?
-            // If serial data output buf is full, we just overflow it (on balloon)
-            Watchdog.enable(10000);  // milliseconds
-            while (true) {
-                // maybe just force it off?
-                // (after always on above)?
-                // show we're gonna reboot with long 1 sec on, 1 sec off
-                blockingLongBlinkLED(5);
-                // updateStatusLED();
-            }
-        }
+    // -----------------------------------------------------------------------
+    // Serial check (non-balloon mode only)
+    //
+    // Balloon mode overflows the serial output buffer silently, which is fine.
+    // In bench/ground mode, missing Serial is a fatal error — blink and reboot.
+    // -----------------------------------------------------------------------
+    if (!BALLOON_MODE && !Serial) {
+        setStatusLEDBlinkCount(LED_STATUS_REBOOT_NO_SERIAL);
+        Watchdog.enable(10000);  // reboot after 10 seconds
+        while (true) blockingLongBlinkLED(5);  // 1 sec on / 1 sec off until reboot
     }
 
-    // back to blinking
+    // -----------------------------------------------------------------------
+    // RF frequency and clock configuration
+    // -----------------------------------------------------------------------
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-
     Watchdog.reset();
-    // sets minute/lane/id from chan number.
-    // FIX! is it redundant at this point?..remove?
+
+    // Derive TX frequency, minute, lane, and ID from the configured channel.
+    // FIX! May be redundant at this point — consider removing.
     init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
-    // 1/11/25 NEW: set PLL_FREQ_TARGET by band
-    init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
 
+    // Set PLL target frequency for the configured band.
+    init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
     Watchdog.reset();
-    // FIX! do we really have to read flash again. No..I don't think so!
-    // keeps the read_FLASH in core1() always? no worries about "safe" access to flash
-    // (interrupts and fetch out of nvram?)
+
+    // Log flash read results from core0 (no re-read needed here;
+    // keeping flash access on core1 avoids "safe execute" concerns).
     V0_printf("prior read_FLASH() results: read_FLASH_result1: %d read_FLASH_result2: %d" EOL,
         read_FLASH_result1, read_FLASH_result2);
     show_values();
 
-    // This gets undone if we have kazu slow clocks in gps_functions.cpp
-    // (during cold reset)
+    // Set system clock. May be temporarily overridden to 18 MHz by
+    // GpsINIT() (Kazu slow-clock GPS cold reset); this restores it.
     initPicoClock(PLL_SYS_MHZ);
-    // figure out tcxo correction once. here.
-    // Remember we reboot after any config change ..i.e. correction..
-    // so don't have to worry about the propagation when cc._correction changes
+
+    // Apply TCXO frequency correction once at boot.
+    // Config changes always reboot, so correction never needs re-propagation.
     SI5351_TCXO_FREQ = doCorrection(SI5351_TCXO_FREQ);
 
-    //***************
-    setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-    updateStatusLED();
-    Watchdog.reset();
-
-    //***************
-    // have the last one be the current PLL_SYS_MHZ,
-    // so we could just use PMW_DIV, PWM_WRAP_CNT to set below
-    // FIX! I didn't test all the different frequencies. But 18 is better with 1
-    // 125/133 was probably tested with 8. some fuzziness okay cause
-    // PWM_DIV/PWM_WRAP_CNT have some range to vary
-    if (PLL_SYS_MHZ <= 18) INTERRUPTS_PER_SYMBOL = 1;
-    else if (PLL_SYS_MHZ <= 33) INTERRUPTS_PER_SYMBOL = 2;
-    else if (PLL_SYS_MHZ <= 66) INTERRUPTS_PER_SYMBOL = 4;
+    // -----------------------------------------------------------------------
+    // PWM symbol-timing configuration
+    //
+    // INTERRUPTS_PER_SYMBOL scales with clock speed to keep interrupt rate
+    // manageable. Tested values: 18 MHz→1, 125/133 MHz→8.
+    // FIX! Not all frequency/interrupt combinations have been fully tested.
+    // -----------------------------------------------------------------------
+    if      (PLL_SYS_MHZ <=  18) INTERRUPTS_PER_SYMBOL = 1;
+    else if (PLL_SYS_MHZ <=  33) INTERRUPTS_PER_SYMBOL = 2;
+    else if (PLL_SYS_MHZ <=  66) INTERRUPTS_PER_SYMBOL = 4;
     else if (PLL_SYS_MHZ <= 133) INTERRUPTS_PER_SYMBOL = 8;
-    else INTERRUPTS_PER_SYMBOL = 16;
-
-    // calculate for different PLL_SYS_MHZ
-    // just to see if we get a good PWM div/wrap cnt for different freqs.
-    if (false) {
-        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 18);
-        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 60);
-        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 100);
-        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 125);
-        calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, 133);
-    }
+    else                          INTERRUPTS_PER_SYMBOL = 16;
 
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
-    V1_printf("calcPwmDivAndWrap() using");
-    V1_printf(" PLL_SYS_MHZ %lu PWM_DIV %lu PWM_WRAP_CNT %lu INTERRUPTS_PER_SYMBOL %lu " EOL,
-        PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL);
+    V1_printf("calcPwmDivAndWrap(): PLL_SYS_MHZ %lu PWM_DIV %lu PWM_WRAP_CNT %lu"
+              " INTERRUPTS_PER_SYMBOL %lu" EOL,
+              PLL_SYS_MHZ, PWM_DIV, PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL);
 
-    //***************
-    // varies by band PLL_FREQ_TARGET
+    // -----------------------------------------------------------------------
+    // PLL denominator and symbol frequency optimisation
+    //
+    // Disabled sweep/search blocks below are retained for occasional manual
+    // testing. The active path restores known-good values then optimises the
+    // 4 channel symbols.
+    //
+    // FIX! si5351a_calc_sweep / _band / denom_optimize_search: verify whether
+    //      vfo_calc_cache_flush() is needed before and/or after each call.
+    // FIX! Should we pre-calculate all 4 symbol frequencies here?
+    // -----------------------------------------------------------------------
+
+    // Disabled: manual sweep diagnostics (uncomment to run)
     if (false && VERBY[1]) {
         set_PLL_DENOM_OPTIMIZE(cc._Band);
-        // FIX! is this needed? do we look in the cache or install it during sweep?
         vfo_calc_cache_flush();
         si5351a_calc_sweep();
         vfo_calc_cache_flush();
     }
     if (false && VERBY[1]) {
         vfo_calc_cache_flush();
-        // FIX! is this needed? do we look in the cache or install it during sweep?
         si5351a_calc_sweep_band();
         vfo_calc_cache_flush();
     }
@@ -1043,33 +1027,29 @@ void setup1() {
         vfo_calc_cache_flush();
     }
 
-    //***************
-    // restore to know fixed values per band
+    // Restore known-good per-band PLL values, then optimise for the 4 TX symbols
     set_PLL_DENOM_OPTIMIZE(cc._Band);
     init_PLL_freq_target(&PLL_FREQ_TARGET, cc._Band);
 
-    // do this to sweep the symbols for the u4b channel in use and
-    // /fill the cache for Farey results?
-    // FIX! should we calc the 4 symbols?
-    double symbolShiftError;
-    double symbolAbsoluteError;
+    double   symbolShiftError;
+    double   symbolAbsoluteError;
     uint32_t pll_num;
     uint32_t pll_denom;
-    // this walks thru the 4 symbols we're going to use
     si5351a_calc_optimize(&symbolShiftError, &symbolAbsoluteError, &pll_num, &pll_denom, true);
+
     if (USE_FAREY_WITH_PLL_REMAINDER) {
         V1_print(F("Using Farey optimal calculated num and denom:"));
     } else {
         V1_print(F("Using Numerator-Shift with either hard-wired or calculated denom:"));
     }
-
     V1_printf(" pll_denom %lu pll_num %lu", pll_denom, pll_num);
     V1_printf(" symbolAbsoluteError %.8f symbolShiftError %.8f" EOL,
-        symbolAbsoluteError, symbolShiftError);
+              symbolAbsoluteError, symbolShiftError);
 
-    int sse_1e6 = roundf(1e6 * symbolShiftError);
-    int sse_1e5 = roundf(1e5 * symbolShiftError);
-    int sse_1e4 = roundf(1e4 * symbolShiftError);
+    // Report symbol shift error precision (target: better than 1e-4 Hz)
+    int sse_1e6 = roundf(1e6f * symbolShiftError);
+    int sse_1e5 = roundf(1e5f * symbolShiftError);
+    int sse_1e4 = roundf(1e4f * symbolShiftError);
     if (sse_1e6 == 0) {
         V1_print(F("GOOD: symbolShiftError is better than 1e-6 Hz precision." EOL));
     } else if (sse_1e5 == 0) {
@@ -1081,16 +1061,16 @@ void setup1() {
         V1_printf(" Fix by changing PLL_FREQ_TARGET? %" PRIu64 EOL, PLL_FREQ_TARGET);
     }
 
-    //***************
+    // -----------------------------------------------------------------------
+    // setup1() complete
+    // -----------------------------------------------------------------------
     V1_println(F(EOL "setup1() END"));
-    // show we're done with setup1() with long 2 sec on, 2 sec off
-    // the other core won't be messing with led's at this time
-    // unless it goes to user config?
+
     Watchdog.reset();
-    blockingLongBlinkLED(3);
-    // back to non-blocking blinking
+    blockingLongBlinkLED(3);  // 2 sec on / 2 sec off: visual "setup1 done" indicator
     initStatusLED();
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+
     if (VERBY[1]) {
         V1_print(F("setup1() freeMem()" EOL));
         freeMem();
@@ -1237,425 +1217,325 @@ int GPS_WAIT_FOR_NMEA_BURST_MAX = 1200;
 
 //*************************************************************************
 void loop1() {
-    // used to ignore TinyGps++ state for couple of iterations of GPS burst
-    // gathering after turning Gps off then on.
+    // -----------------------------------------------------------------------
+    // GPS invalidation countdown
+    // After turning GPS off then on, ignore TinyGPS++ state for a few iterations
+    // to allow it to transition cleanly on fresh NMEA sentences (within ~2 secs).
+    // -----------------------------------------------------------------------
     if (GpsIsOn() && GpsInvalidAllCnt > 0) GpsInvalidAllCnt--;
-    GpsInvalidAll = GpsInvalidAllCnt > 0;
+    GpsInvalidAll = (GpsInvalidAllCnt > 0);
 
-    // FIX! updated to have a global static int global GpsInvalidateAll
-    // I count that down during loop1() iterations and ignore all gps until it's zero.
-    // TinyGPS++ state should have transitioned by then based on new NMEA sentences.
-    // (should transition cleanly within 2 secs?)
-    // if we were ready to go but not aligned,
-    // this is a computed delay into the next minute to align better
-    // (not so good if we're only tx starting every 10 minutes
-    // but good for test mode cc._go_when_ready that disables
-    // channel starting minute requirement.
-
-    int SMART_WAIT;
-
-    // FIX! should change baud back to 9600 (lower power?)
-    // only getting 1800 baud during 300-400ms
-    // when looking for data for slight >1 sec time period
-    // (all broadcasts are at 1 sec intervals)
-    // they all go in a burst together? so all within one sec,
-    // and actually a tighter burst.
     loopCnt++;
     Watchdog.reset();
     V1_printf(EOL "loopCnt %" PRIu64 " loop1() START" EOL, loopCnt);
 
-    // copied from loop_us_end while in the loop (at bottom)
     if (loop_us_start == 0) loop_us_start = get_absolute_time();
     updateStatusLED();
 
-    // always make sure tx is off when we're expecting to be doing Gps fix.
-    // does nothing if already off
-    // FIX! why are we turning off.
-    // Is this just a double-check in case of bugs?
+    // Always turn off TX before GPS work (double-check against bugs).
     vfo_turn_off();
     GpsON(false);  // no full cold reset
 
-    // is our solar/battery good?
-    float solarVoltage;
-    solarVoltage = readVoltage();
-    if ( solarVoltage <= BattMin || solarVoltage <= GpsMinVolt ) {
+    // -----------------------------------------------------------------------
+    // Bail early if battery/solar voltage is too low
+    // -----------------------------------------------------------------------
+    float solarVoltage = readVoltage();
+    if (solarVoltage <= BattMin || solarVoltage <= GpsMinVolt) {
         sleepSeconds(BATT_WAIT);
+        return;
+    }
+    V1_printf("loop1() good solarVoltage %.f" EOL, solarVoltage);
+
+    // -----------------------------------------------------------------------
+    // Pull a burst of NMEA data and update GPS state.
+    // FIX! unload for 2 secs to capture 1-sec broadcast intervals.
+    // NMEA checksums handle buffer overrun corruption.
+    // FIX! should change baud back to 9600 (lower power?)
+    //   only getting ~1800 baud during 300-400ms window
+    // -----------------------------------------------------------------------
+    updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
+    gpsDebug();
+    tinyGpsCustom();
+
+    // -----------------------------------------------------------------------
+    // Snapshot GPS fix status
+    // -----------------------------------------------------------------------
+    uint32_t fix_age     = gps.location.age();
+    uint32_t fix_sat_cnt = gps.satellites.value();
+    int      fix_altitude = (int)gps.altitude.meters();  // double in TinyGPS++
+
+    // fix_mode / fix_qual are single chars:
+    //   fix_qual: Invalid DGPS PPS RTK FloatRTK Estimated Manual Simulated
+    //   fix_mode: N A D E
+    char fix_mode = gps.location.FixMode();
+    char fix_qual = gps.location.FixQuality();
+
+    // isUpdated() = value refreshed since last query (not necessarily changed)
+    bool fix_updated = gps.location.isUpdated();
+    gps.location.updated = false;
+
+    // fix_valid_2d: bare 2D location check (subset of fix_valid_all)
+    bool fix_valid_2d = gps.location.isValid() && !GpsInvalidAll;
+
+    // How long since we last synced system time?
+    uint32_t elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
+    if (elapsed_setTime_secs > (10 * 60)) {
+        V1_printf(
+            "WARNING: Should set time every interval? elapsed_setTime_secs %lu > (10 * 60)" EOL,
+            elapsed_setTime_secs);
+    }
+
+    // -----------------------------------------------------------------------
+    // Full validity check for a 3D fix.
+    // Notes:
+    //   - fix_age is NOT included here; checked separately below.
+    //   - GPS chips commonly emit bogus dates (2080-01-01, 2000-00-00) when
+    //     not yet locked; year range 2025-2035 guards against that.
+    //   - Requiring sat count >= 3 prevents false fixes with high HDOP/0 sats.
+    //   - FIX! 3/22/26: consider using FixQuality/FixMode enums directly.
+    // -----------------------------------------------------------------------
+    bool date_year_sane = (gps.date.year() >= 2025 && gps.date.year() <= 2035);
+
+    bool fix_valid_all =
+        !GpsInvalidAll                                    &&
+        (setTime_millis != 0)                             &&  // system time synced
+        (elapsed_setTime_secs < (30 * 60))                &&  // system time fresh (<30 min)
+        gps.date.isValid()                                &&
+        gps.time.isValid()                                &&
+        date_year_sane                                    &&
+        gps.satellites.isValid() && (fix_sat_cnt >= 3)    &&
+        gps.hdop.isValid()                                &&
+        gps.altitude.isValid()                            &&
+        gps.location.isValid()                            &&
+        gps.speed.isValid()                               &&
+        gps.course.isValid();
+
+    // -----------------------------------------------------------------------
+    // GPS watchdog: reboot GPS if we go too many iterations without a fix.
+    // FIX! loop iterations vary in length (could be 5–20+ mins each),
+    //      so GpsWatchdogCnt > 15 may represent a large real-time span.
+    // -----------------------------------------------------------------------
+    if (fix_valid_all) {
+        GpsWatchdogCnt = 0;  // cleared only on confirmed 3D fix
+        setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
     } else {
-        V1_printf("loop1() good solarVoltage %.f" EOL, solarVoltage);
-        // FIX! this can set time and unload NMEA sentences?
-        // unload for 2 secs to make sure we get 1 sec broadcasts?
-        // actually just need a little over 1 sec.
+        GpsWatchdogCnt++;
+        V1_printf("loop1() GpsWatchdogCnt++ %lu" EOL, GpsWatchdogCnt);
 
-        // Also: what about corruption if buffer overrun?)
-        // NMEA checksum will handle that? okay if we have overrun?
-        updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
-        gpsDebug();
-        tinyGpsCustom();
+        // Show time-only status if date looks valid, else show no-GPS
+        if (date_year_sane)
+            setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
+        else
+            setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
 
-        // this just handles led for time/fix and gps reboot check/execution
-        uint32_t fix_age = gps.location.age();
-        // don't really use this for any action
-        bool fix_valid_2d = gps.location.isValid() && !GpsInvalidAll;
-        // isUpdated() indicates whether the object’s value has been updated
-        // (not necessarily changed) since the last time you queried it
-        bool fix_updated = gps.location.isUpdated();
-        gps.location.updated = false;
-
-        // single chars?
-        char fix_mode = gps.location.FixMode();
-        char fix_qual = gps.location.FixQuality();
-
-        uint32_t fix_sat_cnt = gps.satellites.value();
-
-        uint32_t elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
-        // Should we be setting once per 10 minutes?
-        // if we're in test mode sending wspr almost every 2 minutes
-        // we might have a longer delay? Just WARNING
-        if (elapsed_setTime_secs > (10 * 60)) {
-            V1_printf("WARNING: Should set time every interval? elapsed_setTime_secs %lu > (10 * 60)" EOL,
-                elapsed_setTime_secs);
+        if (GpsWatchdogCnt > 15) {
+            // Seen in the wild: TinyGPS++ reports "valid" but altitude wrong,
+            // HDOP huge, sat count 0. A cold reset clears stale ephemeris.
+            // (VBAT is always present, so without a cold reset this would be
+            //  a warm/hot reset only.)
+            V1_println(F("ERROR: loop1() GpsWatchdogCnt > 15 ..gps full cold reset"));
+            GpsOFF();
+            Watchdog.reset();
+            sleep_ms(1000);
+            GpsON(true);   // cold reset
+            GpsWatchdogCnt = 0;
+            setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
+            return;
         }
-        // FIX! 3/22/26. what about including looking at the values of these to say it's a 3d fix?
-        // FIX! what values can these have?
-        // see the enums
-        // gps.location.FixQuality()
-        // gps.location.FixMode()
-        
-        // Invalid GPS DGPS PPS RTK FloatRTK Estimated Manual Simulated
-        // can use this? gpsDebug will print the char?
-        // bool hasFix = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
-        // N A D E
-        // bool hasMode = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
-        
-        // fix_age isn't included in this
-        bool fix_valid_all =
-            !GpsInvalidAll &&
-            // we got system time synced
-            (setTime_millis != 0) &&
-            // we got system time not too old (30 minutes)
-            (elapsed_setTime_secs < (30 * 60)) &&
-            gps.date.isValid() &&
-            gps.time.isValid() &&
-            (gps.date.year() >= 2025 && gps.date.year() <= 2035) &&
-            gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
-            gps.hdop.isValid() &&
-            gps.altitude.isValid() &&
-            gps.location.isValid() &&
-            gps.speed.isValid() &&
-            gps.course.isValid();
+    }
 
-        // fix_valid_all includes sat cnt >= 3 now.
-        // so we won't update time until we get a valid 3d fix?
-        // no..should we keep it looser for time?
-        // to update time
-        // fix_valid_2d is a subset (just 2d location) of fix_valid_all.
+    updateStatusLED();
+
+    // -----------------------------------------------------------------------
+    // Fix summary log
+    // fix_age == 4294967295 when location is not valid.
+    // See: https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps
+    // Grep "fix_used" to trace which fixes were actually consumed.
+    // -----------------------------------------------------------------------
+    bool fix_used = fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX);
+
+    V1_print(F(EOL));
+    V1_printf("fix_used %u"            EOL, fix_used);
+    V1_printf("fix_valid_all %u"       EOL, fix_valid_all);
+    V1_printf("fix_valid_2d %u"        EOL, fix_valid_2d);
+    V1_printf("fix_updated %u"         EOL, fix_updated);
+    V1_printf("fix_age %lu millisecs"  EOL, fix_age);
+    V1_printf("fix_sat_cnt %lu"        EOL, fix_sat_cnt);
+    V1_printf("fix_altitude %d"        EOL, fix_altitude);
+    V1_printf("fix_mode %c"            EOL, fix_mode);
+    V1_printf("fix_qual %c"            EOL, fix_qual);
+    V1_printf("elapsed_setTime_secs %lu" EOL, elapsed_setTime_secs);
+    V1_print(F(EOL));
+
+    Watchdog.reset();
+
+    // -----------------------------------------------------------------------
+    // Branch on fix quality and decide whether to transmit WSPR
+    // -----------------------------------------------------------------------
+
+    // Helper: sleep 20 seconds into the next minute (used in several cases)
+    // FIX! SMART_WAIT is not so good for 10-minute TX intervals; fine for
+    //      test mode (cc._go_when_ready) which disables the channel-minute check.
+    #define SLEEP_INTO_NEXT_MINUTE(caseNum) \
+        do { \
+            int SMART_WAIT = (60 - second() + 20); \
+            V1_printf("loopCnt %" PRIu64 " case %d: sleepSeconds() 20 secs into next minute" \
+                      " SMART_WAIT %d" EOL, loopCnt, caseNum, SMART_WAIT); \
+            sleepSeconds(SMART_WAIT); \
+        } while (0)
+
+    if (!fix_used) {
+        // ---- Case 4 / 5: no usable fix ----
         if (fix_valid_all) {
-            setStatusLEDBlinkCount(LED_STATUS_GPS_FIX);
+            V1_printf("loopCnt %" PRIu64
+                      " WARN: GPS issue: valid but fix_age %lu millisecs" EOL,
+                      loopCnt, fix_age);
         } else {
-            // FIX! at what rate is this incremented? ..once per loop iteration (time varies)
-            GpsWatchdogCnt++;
-            V1_printf("loop1() GpsWatchdogCnt++ %lu" EOL, GpsWatchdogCnt);
-
-            // why doesn't this year check get included in determining valid gps fix?
-            // if gps time is valid, we constantly (each NMEA burst grab)
-
-            // it is common for gps chips to send out 1/1/2080 dates when invalid
-            // I see 2080-01-01 2080-01-07 in SIM65M. 2000-00-00 ? in ATGM336
-            // (is month/day wrong?)
-            // On 1/2/25 ~19:00 I saw this: 2080-01-05 23:59:50
-            // although time sees okay? (utc time)
-            // this is a check for validity
-            if (gps.date.year() >= 2025 && gps.date.year() <= 2035)
-                setStatusLEDBlinkCount(LED_STATUS_GPS_TIME);
-            else
-                setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-
-            // FIX! this is loop iterations? could be 20 * 60 secs per loop (20 minutes)
-            // or as long as 5 minutes per loop? (100 minutes)
-            if (GpsWatchdogCnt > 15) {
-                // here's a case, where TinyGps++ said gps valid, but the altitude was wrong
-                // Note HDOP was very large, and sat count was 0.
-                // Fix Age is in milliseconds
-
-                // Here's an interesting tidbit about deciding whether a "fix" is good,
-                // using TinyGPS++ arduino libray
-
-                // Interestingly, I saw that there are cases where you would think
-                // you have a fix, but HDOP is high and satellite count is 0.
-                // So either qualifying the notion of "fix" as to having 3 or more sats,
-                // or a reasonable non-zero altitude or a reasonable HDOP, seems necessary.
-                // Requiring sat count > 3 seems like the right tradeoff.
-
-                // Background
-                // TinyGps++ has these methods that return info,
-                // that reflects the accumulated info from the NMEA data
-                // you've sent it (as individual chars, which it interprets as sentences)
-                //
-                // The long print at the bottom uses these methods,
-                // qualified by the relevant isValid() ..note therre are different ones.
-                // gps.date
-                // gps.time
-                // gps.satellites.value() qualified by gps.satellites.isValid()
-                // gps.hdop.value() qualified by gps.hdop.isValid()
-                // gps.altitude.meters() qualified by gps.altitude.isValid()
-                // gps.location.lat() qualified by gps.location.isValid()
-                // gps.location.lng() qualified by gps.location.isValid()
-                // gps.location.age() qualified by gps.location.isValid()
-                //
-                // // heading
-                // gps.course.deg() qualified by gps.course.isValid()
-                // gps.course.value() qualified by gps.course.isValid()
-                // gps.speed.kmph() qualified by gps.speed.isValid()
-                //
-                // gps.charsProcessed()
-                // gps.sentencesWithFix()
-                // gps.failedChecksum()
-
-                V1_println(F("ERROR: loop1() GpsWatchdogCnt > 20 ..gps full cold reset"));
-                // FIX! have to send cold gps reset, in case ephemeris is corrupted?
-                // since vbat is always there.. otherwise this is a hot reset?
-                GpsOFF();
-
-                // note that GpsOFF() has public access to TinyGPS++ now and
-                // update: it uses some hacked-in public methods to flush, now
-                Watchdog.reset();
-                sleep_ms(1000);
-                // also do gps cold reset.
-                GpsON(true);
-                GpsWatchdogCnt = 0;
-                setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-                // https://forum.arduino.cc/t/possible-to-continue-the-main-loop/95541/5
-                return;
-            }
+            V1_printf("loopCnt %" PRIu64 " WARN: invalid GPS fix." EOL, loopCnt);
         }
-        updateStatusLED();
+        // Turn off RF (reduces noise for GPS), flush stale TinyGPS++ state, keep GPS on.
+        vfo_turn_off();
+        invalidateTinyGpsState();
+        GpsON(false);
+        SLEEP_INTO_NEXT_MINUTE(4);
 
-        //*********************
-        // some detail on TinyGPS. precision?
-        // https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps
-        // fix_age will be 4294967295 if not valid
-        // these lines will be good for grepping to see the used fix. 
-        // if it's too old it won't be used
-        // plus note some other non-use cases
-        V1_print(F(EOL));
-        // doesn't include fix_age. includes sat_cnt
-        bool fix_used = fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX);
-        // altitude is a double in TinyGPS
-        int fix_altitude = (int) gps.altitude.meters();
+    } else if (fix_sat_cnt <= 3) {
+        // ---- Case 5: 2D fix only (too few satellites) ----
+        V1_printf("loopCnt %" PRIu64
+                  " WARN: GPS fix issue: only %lu sats ..2d fix only" EOL,
+                  loopCnt, fix_sat_cnt);
+        vfo_turn_off();
+        invalidateTinyGpsState();
+        GpsON(false);
+        SLEEP_INTO_NEXT_MINUTE(5);
 
-        V1_printf("fix_used %u" EOL, fix_used);
-        V1_printf("fix_valid_all %u" EOL, fix_valid_all);
-        V1_printf("fix_valid_2d %u" EOL, fix_valid_2d);
-        V1_printf("fix_updated %u" EOL, fix_updated);
-        V1_printf("fix_age %lu millisecs" EOL, fix_age);
-        V1_printf("fix_sat_cnt %lu" EOL, fix_sat_cnt);
-        V1_printf("fix_altitude %lu" EOL, fix_altitude);
-        // single chars?
-        V1_printf("fix_mode %c" EOL, fix_mode);
-        V1_printf("fix_qual %c" EOL, fix_qual);
-        V1_printf("elapsed_setTime_secs %lu" EOL, elapsed_setTime_secs);
-        V1_print(F(EOL));
+    } else {
+        // ---- Good 3D fix: proceed toward WSPR TX ----
+        V1_printf("loopCnt %" PRIu64 " Good recent 3d fix" EOL, loopCnt);
 
+        // Record time-to-first-fix stats (set once per GPS on→off→on cycle)
+        if (GpsTimeToLastFix == 0) {
+            GpsTimeToLastFix =
+                absolute_time_diff_us(GpsStartTime, get_absolute_time()) / 1000ULL;
+
+            V1_printf("loopCnt %" PRIu64
+                      " first Gps Fix after off->on! GpsTimeToLastFix %lu ms" EOL,
+                      loopCnt, GpsTimeToLastFix);
+
+            if (GpsTimeToLastFix < GpsTimeToLastFixMin) {
+                GpsTimeToLastFixMin = GpsTimeToLastFix;
+                V1_printf("loopCnt %" PRIu64 " New GpsTimeToLastFixMin %lu ms" EOL,
+                          loopCnt, GpsTimeToLastFixMin);
+            }
+            if (GpsTimeToLastFix > GpsTimeToLastFixMax) {
+                GpsTimeToLastFixMax = GpsTimeToLastFix;
+                V1_printf("loopCnt %" PRIu64 " New GpsTimeToLastFixMax %lu ms" EOL,
+                          loopCnt, GpsTimeToLastFixMax);
+            }
+
+            GpsTimeToLastFixSum += (uint64_t)GpsTimeToLastFix;
+            GpsTimeToLastFixCnt += 1;
+            GpsTimeToLastFixAvg = (uint32_t)(GpsTimeToLastFixSum / GpsTimeToLastFixCnt);
+            V1_printf("loopCnt %" PRIu64 " New GpsTimeToLastFixAvg %lu ms" EOL,
+                      loopCnt, GpsTimeToLastFixAvg);
+        }
+
+        // Snapshot telemetry (all tt.* strings) as close to the valid-fix checks as possible.
+        // Voltage is captured at this point, before GPS is turned off.
+        snapForTelemetry();
+
+        V1_printf("loopCnt %" PRIu64
+                  " After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
+                  loopCnt, timeStatus(), minute(), second());
 
         Watchdog.reset();
-        if ( !(fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX)) ) {
-            if (fix_valid_all) {
-                V1_printf("loopCnt %" PRIu64, loopCnt);
-                V1_printf(" WARN: GPS issue: valid but fix_age %lu millisecs" EOL, fix_age);
-            } else {
-                // invalid gps should have this fix_age
-                V1_printf("loopCnt %" PRIu64 " WARN: invalid GPS fix.", loopCnt);
-                if (false && fix_age != 4294967295) {
-                    V1_printf(" Why unexpected fix_age %lu ? (millis)", fix_age);
-                }
-                V1_print(F(EOL));
-            }
-            // Be sure vfo is off (rf noise?), and flush TinyGPS++ state.
-            // Then make sure gps is on.
-            vfo_turn_off();
-            invalidateTinyGpsState();
-            GpsON(false);  // no gps cold reset
-            SMART_WAIT = (60 - second() + 20);
-            V1_printf("loopCnt %" PRIu64, loopCnt);
-            V1_print(F(" case 4: sleepSeconds() 20 secs into the next minute"));
-            V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
-            sleepSeconds(SMART_WAIT);
 
-        } else if (fix_sat_cnt <= 3) {
-            V1_printf("loopCnt %" PRIu64, loopCnt);
-            V1_printf(" WARN: GPS fix issue: only %lu sats ..2d fix only" EOL, fix_sat_cnt);
-            // Be sure vfo is off (rf noise?), and flush TinyGPS++ state.
-            // Then make sure gps is on.
-            vfo_turn_off();
-            invalidateTinyGpsState();
-            GpsON(false);  // no gps cold reset
-            SMART_WAIT = (60 - second() + 20);
-            V1_printf("loopCnt %" PRIu64, loopCnt);
-            V1_print(F(" case 5: sleepSeconds() 20 secs into the next minute"));
-            V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
-            sleepSeconds(SMART_WAIT);
+        // ---- Voltage check before transmitting ----
+        float voltageBeforeWSPR = readVoltage();
+        if (voltageBeforeWSPR < WsprBattMin) {
+            V1_printf(EOL "loopCnt %" PRIu64
+                      " WARN: no send: voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
+                      loopCnt, voltageBeforeWSPR, WsprBattMin);
+            SLEEP_INTO_NEXT_MINUTE(3);  // case 3: low battery wait
 
         } else {
-            V1_printf("loopCnt %" PRIu64 " Good recent 3d fix" EOL, loopCnt);
-            // GpsWatchdog doesn't get cleared unti we got a 3d fix here!
-            // so we can get a gps cold reset if we never get here!
-            GpsWatchdogCnt = 0;
-            // snapForTelemetry (all the tt.* state) right before we do all the WSPRing
-            // we can update the telemetry buffer any minute we're not tx'ing
+            // ---- Minute alignment check ----
+            // FIX! HF prep starts one minute before TX minute.
+            // TX minute is determined by channel starting minute - 1 (mod 10).
+            // e.g., at minutes 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53, 57.
+            // alignMinute(-1) checks we are in the minute preceding TX.
+            bool in_pre_tx_minute = alignMinute(-1);
 
-            // GpsStartTime is reset every time we turn the gps on
-            // cleared every time we turn it off (don't care)
-            // Should this is also cleared when we turn gps off? no?
-            // GpsStartTime is set by gps_functions.cpp
+            if (!in_pre_tx_minute) {
+                V1_printf(EOL "loopCnt %" PRIu64
+                          " OKAY: wspr no send."
+                          " minute() %d second: %d alignMinute(-1) %u" EOL,
+                          loopCnt, minute(), second(), in_pre_tx_minute);
+                // Sleep instead of busy-waiting to avoid spinning on alignment.
+                SLEEP_INTO_NEXT_MINUTE(0);
 
-            if (GpsTimeToLastFix == 0) {  // don't set again until we clear it
-                GpsTimeToLastFix = (
-                    absolute_time_diff_us(GpsStartTime, get_absolute_time()) ) / 1000ULL;
-                V1_printf("loopCnt %" PRIu64, loopCnt);
-                V1_print(F(" first Gps Fix, after off->on!"));
-                V1_printf(" GpsTimeToLastFix %lu ms" EOL,
-                    GpsTimeToLastFix);
+            } else if (second() > 40) {
+                // Too late in the pre-TX minute; skip this cycle.
+                V1_printf(EOL "loopCnt %" PRIu64
+                          " WARN: wspr no send, past 40 secs in pre-minute:"
+                          " minute: %d second: %d alignMinute(-1) %u" EOL,
+                          loopCnt, minute(), second(), in_pre_tx_minute);
+                SLEEP_INTO_NEXT_MINUTE(1);
 
-                if (GpsTimeToLastFix < GpsTimeToLastFixMin) {
-                    GpsTimeToLastFixMin = GpsTimeToLastFix;
-                    V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_printf(" New GpsTimeToLastFixMin %lu ms" EOL,
-                        GpsTimeToLastFixMin);
-                }
-                if (GpsTimeToLastFix > GpsTimeToLastFixMax) {
-                    GpsTimeToLastFixMax = GpsTimeToLastFix;
-                    V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_printf(" New GpsTimeToLastFixMax %lu ms" EOL,
-                        GpsTimeToLastFixMax);
-                }
-                GpsTimeToLastFixSum += (uint64_t) GpsTimeToLastFix;
-                GpsTimeToLastFixCnt += 1;
-                GpsTimeToLastFixAvg = (uint32_t) GpsTimeToLastFixSum / GpsTimeToLastFixCnt;
-                V1_printf("loopCnt %" PRIu64, loopCnt);
-                V1_printf(" New GpsTimeToLastFixAvg %lu ms" EOL, GpsTimeToLastFixAvg);
-            }
-
-            // we know we have a good 3d fix at this point
-            // we don't check the valid bits again? they could have changed
-            // at any time (async) ..so can't really be an atomic grab anyhow?
-            // keep the snap close to the valid checks above
-
-            // sets all the tt.* strings
-            // voltage is captured when we write the buff? So it's before GPS is turned off?
-            // should we look at the live voltage instead?
-            snapForTelemetry();
-
-            V1_printf("loopCnt %" PRIu64, loopCnt);
-            V1_printf(" After snapTelemetry() timeStatus(): %u minute: %u second: %u" EOL,
-                timeStatus(), minute(), second());
-
-            // FIX! it should depend on the channel starting minute - 1 (modulo 10)
-            // preparations for HF starts one minute before TX time
-            // at minute 3, 7, 13, 17, 23, 27, 33, 37, 43, 47, 53 or 57.
-
-            // FIX! why not look at seconds here?
-            // it will stall until lined up on secs below
-            // align to somewhere in the minute before the callsign starting minute
-
-            // so we can start the vfo 20 seconds before needed
-            // if we're in the minute before sending..just live with gps fix
-            // because it might take a minute to have another one?
-            Watchdog.reset();
-            // make sure readVoltage always returns postive # (> 0)
-            // readVoltage can return 0
-            float voltageBeforeWSPR = readVoltage();
-            if (voltageBeforeWSPR >= WsprBattMin) {
-                if (!alignMinute(-1)) {
-                    // oneliner
-                    V1_printf(EOL "loopCnt %" PRIu64 " OKAY: wspr no send.", loopCnt);
-                    V1_printf(" because minute() %d second: %d *alignMinute(-1) %u*" EOL,
-                        minute(), second(), alignMinute(-1));
-                    // we fall thru and can get another gps fix or just try again.
-                    // sleep because we don't want to cycle endlessly waiting to align
-                    SMART_WAIT = (60 - second() + 20);
-                    V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_print(F(" case 0: sleepSeconds() 20 secs into the next minute"));
-                    V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
-                    sleepSeconds(SMART_WAIT);
-                } else {
-                    V1_printf("loopCnt %" PRIu64, loopCnt);
-                    V1_printf(" wspr good alignMinute(-1) and voltageBeforeWSPR %.f" EOL,
-                        voltageBeforeWSPR);
-                    if (second() > 40) {
-                        // to late..don't try to send
-                        // minute() second() come from Time.h as ints
-                        V1_printf(EOL "loopCnt %" PRIu64, loopCnt);
-                        V1_print(F(" WARN: wspr no send, past 40 secs in pre-minute:"));
-                        V1_printf(" minute: %d *second: %d* alignMinute(-1) %u" EOL,
-                            minute(), second(), alignMinute(-1));
-                        SMART_WAIT = (60 - second() + 20);
-                        V1_printf("loopCnt %" PRIu64, loopCnt);
-                        V1_print(F(" case 1: sleepSeconds() 20 secs into the next minute"));
-                        V1_printf(" with SMART_WAIT %d" EOL, SMART_WAIT);
-                        sleepSeconds(SMART_WAIT);
-                    } else {
-                        V1_printf("loopCnt %" PRIu64, loopCnt);
-                        V1_print(F(" wspr: wait until 20 secs before starting minute"));
-                        V1_printf(" now: minute: %d *second: %d*" EOL, minute(), second());
-                        while (second() < 40) {
-                            Watchdog.reset();
-                            delay(10);  // 10 millis
-                            updateStatusLED();
-                        }
-                        V1_printf("loopCnt %" PRIu64, loopCnt);
-                        V1_print(F(" wspr: 20 secs until starting minute."));
-                        V1_print(F(" wspr: vfo turn on for warmup."));
-                        V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
-
-                        // will call this with less than or equal to 20 secs to go
-                        uint32_t hf_freq = XMIT_FREQUENCY;
-                        int res = alignAndDoAllSequentialTx(hf_freq);
-                        if (res == -1) {
-                            // FIX! gps should be off at this point and not firing data? or ?
-                            SMART_WAIT = (60 - second() + 20);
-                            // oneliner
-                            V1_printf("loopCnt %" PRIu64, loopCnt);
-                            V1_print(F(" case 2: sleepSeconds() 20 secs into the next minute"));
-                            V1_printf(" sleep with SMART_WAIT %d" EOL, SMART_WAIT);
-                            sleepSeconds(SMART_WAIT);
-                        }
-                    }
-                }
             } else {
-                // this line will print a lot if we're failing because of this?
-                // but we have the min at 0.0 for now
-                V1_printf(EOL "loopCnt %" PRIu64, loopCnt);
-                V1_printf(" WARN: no send: voltageBeforeWSPR %.f WsprBattMin %.f" EOL,
-                    voltageBeforeWSPR, WsprBattMin);
-                V1_printf("loopCnt %" PRIu64, loopCnt);
-                V1_print(F(" case 3: sleepSeconds() BATT_WAIT"));
-                V1_printf(" sleep with BATT_WAIT %d" EOL, BATT_WAIT);
-                sleepSeconds(BATT_WAIT);
+                // ---- Wait until 40 seconds into the pre-TX minute, then warm up VFO ----
+                V1_printf("loopCnt %" PRIu64
+                          " wspr: waiting until second 40; now: minute: %d second: %d" EOL,
+                          loopCnt, minute(), second());
+
+                while (second() < 40) {
+                    Watchdog.reset();
+                    delay(10);
+                    updateStatusLED();
+                }
+
+                V1_printf("loopCnt %" PRIu64
+                          " wspr: 20 secs until TX minute. Turning on VFO for warmup."
+                          " minute: %d second: %d" EOL,
+                          loopCnt, minute(), second());
+
+                uint32_t hf_freq = XMIT_FREQUENCY;
+                int txResult = alignAndDoAllSequentialTx(hf_freq);
+
+                if (txResult == -1) {
+                    // TX did not complete cleanly; sleep to next minute.
+                    SLEEP_INTO_NEXT_MINUTE(2);
+                }
+                // txResult == 0: success, fall through to bottom of loop1()
             }
         }
     }
 
-    //*****************************************************************
-    // should have 5 entries after the first looping. problem if less than that?
-    // can print an error here if not 5
+    #undef SLEEP_INTO_NEXT_MINUTE
+
+    // -----------------------------------------------------------------------
+    // VFO calibration cache sanity check
+    // Expected entries after first TX:
+    //   4  if WSPR only
+    //   5  if WSPR + CW (cc._morse_also[0] == '1')
+    // -----------------------------------------------------------------------
     uint8_t VCC_valid_cnt = vfo_calc_cache_print_and_check();
-    // should be 4 if just sending wspr. 5 if sending cw too
-    // won't get any until first wspr tx goes out
-    if (tx_cnt_0 > 0)  {
-        if (cc._morse_also[0] == '1') {
-            if (VCC_valid_cnt != 5)
-                V1_printf("WARN: loop1() VCC_valid_cnt %u != 5" EOL, VCC_valid_cnt);
-        } else {
-            if (VCC_valid_cnt != 4)
-                V1_printf("ERROR: loop1() VCC_valid_cnt %u != 4" EOL, VCC_valid_cnt);
+    if (tx_cnt_0 > 0) {
+        bool morse_also = (cc._morse_also[0] == '1');
+        uint8_t expected = morse_also ? 5 : 4;
+        const char* severity = morse_also ? "WARN" : "ERROR";
+        if (VCC_valid_cnt != expected) {
+            V1_printf("%s: loop1() VCC_valid_cnt %u != %u" EOL,
+                      severity, VCC_valid_cnt, expected);
         }
     }
-    //*****************************************************************
 
-    absolute_time_t loop_us_end = get_absolute_time();
-    int64_t loop_us_elapsed = absolute_time_diff_us(loop_us_start, loop_us_end);
-    // floor divide to get milliseconds
-    int64_t loop_ms_elapsed = loop_us_elapsed / 1000ULL;
+    // -----------------------------------------------------------------------
+    // Loop timing
+    // -----------------------------------------------------------------------
+    absolute_time_t loop_us_end   = get_absolute_time();
+    int64_t loop_us_elapsed       = absolute_time_diff_us(loop_us_start, loop_us_end);
+    int64_t loop_ms_elapsed       = loop_us_elapsed / 1000ULL;
 
     V1_println(F(EOL));
     V1_printf(
@@ -1668,11 +1548,12 @@ void loop1() {
         "t_grid6: %s "
         "t_power: %s "
         "t_sat_count: %s "
-        "t_fixMode: %s"
-        "t_fixQual: %s"
+        "t_fixMode: %s "
+        "t_fixQual: %s "
         "GpsTimeToLastFix %lu "
         "GpsWatchdogCnt %lu" EOL,
-        loopCnt, tt.tx_count_0, tt.callsign, tt.temp, tt.voltage,
+        loopCnt,
+        tt.tx_count_0, tt.callsign, tt.temp, tt.voltage,
         tt.altitude, tt.grid6, tt.power, tt.sat_count,
         tt.fixMode, tt.fixQual,
         GpsTimeToLastFix, GpsWatchdogCnt);
@@ -1682,369 +1563,452 @@ void loop1() {
         "loopCnt %" PRIu64 " "
         "t_tx_count_0: %s "
         "_Band %s "
-        "loop_ms_elapsed: %" PRIu64 " millisecs "
+        "loop_ms_elapsed: %" PRId64 " millisecs "
         "loop_us_start: %llu microsecs "
         "loop_us_end: %llu microsecs" EOL,
-        loopCnt, tt.tx_count_0, cc._Band, loop_ms_elapsed, loop_us_start, loop_us_end);
+        loopCnt, tt.tx_count_0, cc._Band,
+        loop_ms_elapsed, loop_us_start, loop_us_end);
 
     updateStatusLED();
 
-    // next start is this end
-    loop_us_start = loop_us_end;
+    loop_us_start = loop_us_end;  // next loop's start = this loop's end
 
-    // FIX! does this cause a reboot?
     if (VERBY[1]) {
         V1_print(F("loop1() freeMem()" EOL));
         freeMem();
     }
 
-    // whenever we have spin loops we need to updateStatusLED()
     V1_printf("loopCnt %" PRIu64 " loop1() END" EOL, loopCnt);
 }
-
 //*******************************************************
+
+// =============================================================================
+// alignAndDoAllSequentialTx
+// -----------------------------------------------------------------------------
+// Aligns to a WSPR transmit window and sends a sequence of transmissions:
+//   txNum 0: WSPR callsign
+//   txNum 1: WSPR telemetry (u4b standard)
+//   txNum 2: WSPR telen1   (sent only if slot 3 or slot 4 is enabled)
+//   txNum 3: WSPR telen2   (sent only if telen2 is enabled)
+//   txNum 4: CW message    (sent only if cc._morse_also[0] == '1')
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// Helpers (kept as static inlines so the main flow reads top-to-bottom)
+// -----------------------------------------------------------------------------
+
+// Wait (with watchdog kicks) until we're past second 40 of the current minute.
+// We could end up waiting for up to ~40 secs.
+static void waitUntilPastSecond40(void) {
+    while (second() < 40) {
+        Watchdog.reset();
+        sleep_ms(50);
+        updateStatusLED();
+    }
+}
+
+// Turn off the WSPR clock output(s) before we actually need to drive RF.
+// new 1/9/25: we used to have the clocks on here.
+static void disableWsprClocksIfConfigured(void) {
+    if (!DO_CLK_OFF_FOR_WSPR_MODE) return;
+
+    if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
+        // FIX! does this work on ms5351m. do we care?
+        // print. this does a pllb reset too
+        si5351a_power_down_clk01(true);
+    } else {
+        // no print. clk0/1 both affected
+        vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true);
+    }
+}
+
+// Quickly cycle through all 4 WSPR symbols so the Farey-algo cache is primed.
+// This avoids per-symbol latency the first time each symbol is used.
+// End with symbol 0 so the VFO is left on the right symbol.
+// Returns true on success, false if any startSymbolFreq() returned non-zero.
+static bool primeSymbolFreqCache(uint32_t hf_freq) {
+    uint8_t rc3 = startSymbolFreq(hf_freq, 3, false, true);
+    uint8_t rc2 = startSymbolFreq(hf_freq, 2, false, true);
+    uint8_t rc1 = startSymbolFreq(hf_freq, 1, false, true);
+    uint8_t rc0 = startSymbolFreq(hf_freq, 0, false, false);
+
+    if (rc3 == 0 && rc2 == 0 && rc1 == 0 && rc0 == 0) return true;
+
+    V1_print(F(EOL "ERROR: fatal. bad retcode(s) from startSymbolFREQ" EOL));
+    V1_printf("retcode 0: %u 1: %u 2: %u 3: %u" EOL, rc0, rc1, rc2, rc3);
+    V1_printf("Need to adjust PLL_FREQ_TARGET" EOL);
+    return false;
+}
+
+// Build the left-justified callsign, 4-char grid, and power strings used
+// by JTEncode and friends.
+//
+// BUG: reported by Rob KC3LBR
+// JTEncode walks thru chars 0-12, so we really need a 14 char array with
+// null term for hf_callsign.
+static void buildCallsignGridPower(char *hf_callsign, size_t cs_size,
+                                   char *hf_grid4,
+                                   char *hf_power, size_t pwr_size) {
+    // left-justify (pad with spaces) for what JTEncode expects
+    snprintf(hf_callsign, cs_size, "%-13s", tt.callsign);
+
+    double lat_double = atof(tt.lat);
+    double lon_double = atof(tt.lon);
+
+    // get_mh_6 uses the first arg as pointer to a char array for the return data
+    char hf_grid6[7] = { 0 };
+    get_mh_6(hf_grid6, lat_double, lon_double);
+    // just the first 4 chars
+    for (int i = 0; i < 4; i++) hf_grid4[i] = hf_grid6[i];
+    hf_grid4[4] = 0;
+
+    snprintf(hf_power, pwr_size, "%s", tt.power);
+}
+
+// Print the "WSPR txNum N Prepared..." block we emit before each tx.
+static void printPreparedBlock(int txNum,
+                               const char *hf_callsign,
+                               const char *hf_grid4,
+                               const char *hf_power) {
+    V1_print(F(EOL));
+    V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
+    V1_printf("hf_callsign %-6s" EOL, hf_callsign);
+    V1_printf("hf_grid4 %s" EOL, hf_grid4);
+    V1_printf("hf_power %s" EOL, hf_power);
+    V1_print(F(EOL));
+    V1_flush();
+}
+
+// Encode a telen slot using either the GPS or BMP codec, based on the
+// ExtTelemetry config char ('0' = GPS, '1' = BMP).
+// `defaultIsBmp` selects the codec used when the char is unrecognized,
+// matching the original switch defaults for slot 2 (GPS) vs slot 3 (BMP).
+static void encodeTelenSlot(int txNum, uint8_t slot, char cfg, bool defaultIsBmp,
+                            char *hf_callsign, char *hf_grid4, char *hf_power) {
+    bool useBmp;
+    switch (cfg) {
+        case '0': useBmp = false; break;
+        case '1': useBmp = true;  break;
+        default:  useBmp = defaultIsBmp; break;
+    }
+
+    if (useBmp) {
+        V1_printf("WSPR txNum %d Preparing with encode_codecBmpMsg() slot %u" EOL,
+                  txNum, slot);
+        encode_codecBmpMsg(hf_callsign, hf_grid4, hf_power, slot);
+    } else {
+        V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
+                  txNum, slot);
+        encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
+    }
+}
+
+// Log "<label> Tx sent. ..." plus the current minute/second, if VERBY[1].
+static void logTxSent(const char *label) {
+    if (!VERBY[1]) return;
+    StampPrintf("%s Tx sent. minute: %d second: %d" EOL,
+                label, minute(), second());
+    DoLogPrint();
+}
+
+
+// -----------------------------------------------------------------------------
+// Main entry point
+// -----------------------------------------------------------------------------
 int alignAndDoAllSequentialTx(uint32_t hf_freq) {
     V1_print(F(EOL "alignAndDoAllSequentialTX START"));
     V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
 
-    // if we called this too early, just return so we don't wait 10 minutes here
-    // it should loop around in loop1() ..after how much of a wait? smartWait?
+    // If we were called too early, bail out so we don't sit here for ~10 minutes.
+    // It should loop around in loop1() ..after how much of a wait? smartWait?
     // (calculated delay above?)
-    // at most wait up to a minute if called the minute before start time)
+    // At most we wait up to a minute if called the minute before start time.
     if (!alignMinute(-1)) {
         V1_print(F("FAIL: alignAndDoAllSequentialTX END early out: alignment wrong!"));
         V1_printf(" now: minute: %d second: %d" EOL, minute(), second());
         return -1;
     }
 
-    while (second() < 40)  {
-        Watchdog.reset();
-        sleep_ms(50);  //
-        // we could end up waiting for 40 secs
-        updateStatusLED();
-    }
+    waitUntilPastSecond40();
 
-    // don't want gps power and tx power together
+    // Don't want GPS power and TX power active at the same time.
     GpsOFF();
 
-    // start the vfo 20 seconds before needed
-    // if off beforehand, it will have no clocks running
-    // we could turn it off, then on,
-    // to guarantee always starting from reset state?
+    // Start the VFO ~20 seconds before it's needed.
+    // If it was off beforehand it has no clocks running.
+    // We could turn it off then on to guarantee always starting from reset state.
     vfo_turn_on();
     sleep_ms(1000);
 
-    if (DO_CLK_OFF_FOR_WSPR_MODE) {
-        // new 1/9/25: we used to have the clocks on here
-        if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
-            // FIX! does this work on ms5351m. do we care?
-            si5351a_power_down_clk01(true);  // print. this does a pllb reset too
-        } else {
-            // no print. clk0/1 both affected
-            vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true);
-        }
-    }
+    disableWsprClocksIfConfigured();
 
-    //**************************
+    // -------------------------------------------------------------------------
+    // Prime the symbol frequency cache (timed for diagnostics).
+    // -------------------------------------------------------------------------
     absolute_time_t start_usecs_1 = get_absolute_time();
 
-    // will print programming if false, since we have time
-    // how many in cache to start?
+    // Will print programming if false, since we have time.
+    // How many entries are in the cache to start?
+    // (was getting 14MDA printed if I cycled these with RF?
+    //  these are just filling the cache.)
     uint8_t VCC_init_valid_cnt = vfo_calc_cache_print_and_check();
-    // was getting 14MDA printed if I cycled these with RF?
-    // these are just filling the cache
 
-    // Quickly cycle thru all 4 symbols to see the cache with the Farey algo results
-    // to avoid adding latency due to the iterations when the symbol is first used
-    // End with symbol 0
-    uint8_t retcode3 = startSymbolFreq(hf_freq, 3, false, true);
-    uint8_t retcode2 = startSymbolFreq(hf_freq, 2, false, true);
-    uint8_t retcode1 = startSymbolFreq(hf_freq, 1, false, true);
-    uint8_t retcode0 = startSymbolFreq(hf_freq, 0, false, false);
-
-    if (retcode3 != 0 || retcode2 != 0 || retcode1 != 0 || retcode0 != 0) {
-        V1_print(F(EOL "ERROR: fatal. bad retcode(s) from startSymbolFREQ" EOL));
-        V1_printf("retcode 0: %u 1: %u 2: %u 3: %u" EOL,
-            retcode0, retcode1, retcode2, retcode3);
-        V1_printf("Need to adjust PLL_FREQ_TARGET" EOL);
-    }
+    primeSymbolFreqCache(hf_freq);  // logs its own error on failure
 
     absolute_time_t end_usecs_1 = get_absolute_time();
     int64_t elapsed_usecs_1 = absolute_time_diff_us(start_usecs_1, end_usecs_1);
     float elapsed_millisecs_1 = (float)elapsed_usecs_1 / 1000.0;
-    V1_printf("VCC cache initially had %u valid entries\n" EOL,
-        VCC_init_valid_cnt);
+    V1_printf("VCC cache initially had %u valid entries\n" EOL, VCC_init_valid_cnt);
     V1_print(F("Time to calc/lookup, 4 symbol freq si5351 reg values:"));
     V1_printf(" %.4f millisecs" EOL, elapsed_millisecs_1);
 
-    //**************************
+    // -------------------------------------------------------------------------
+    // Build callsign / grid / power strings used by all the WSPR txs below.
+    // -------------------------------------------------------------------------
     setStatusLEDBlinkCount(LED_STATUS_TX_WSPR);
 
-    // BUG: reported by Rob KC3LBR
-    // JTEncode walks thru chars 0-12.
-    // so we really need a 14 char array with null term
-    char hf_callsign[14] = {0};
-    // left justify..i.e. pad with space for what JTEncode gets
-    snprintf(hf_callsign, sizeof(hf_callsign), "%-13s", tt.callsign);
-
-    double lat_double = atof(tt.lat);
-    double lon_double = atof(tt.lon);
-
-    // get_mh_6 users the first arg as pointer to a char array for the return data
-    char hf_grid6[7] = { 0 };
-    char hf_grid4[5] = "AA00";
-    get_mh_6(hf_grid6, lat_double, lon_double);
-    // just the first 4 chars
-    for (int i = 0; i < 4; i++) hf_grid4[i] = hf_grid6[i];
-    hf_grid4[4] = 0;
-
-    char hf_power[3] = { 0 };
-    snprintf(hf_power, sizeof(hf_power), "%s", tt.power);
+    char hf_callsign[14] = { 0 };
+    char hf_grid4[5]    = "AA00";
+    char hf_power[3]    = { 0 };
+    buildCallsignGridPower(hf_callsign, sizeof(hf_callsign),
+                           hf_grid4,
+                           hf_power, sizeof(hf_power));
     Watchdog.reset();
 
-    // will sync up to the right minute and second == 0
+    // -------------------------------------------------------------------------
+    // txNum 0: callsign
+    // syncAndSendWspr will sync up to the right minute and second == 0.
+    // -------------------------------------------------------------------------
     int txNum = 0;
-    V1_print(F(EOL));
-    V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
-    V1_printf("hf_callsign %-6s" EOL, hf_callsign);
-    V1_printf("hf_grid4 %s" EOL, hf_grid4);
-    V1_printf("hf_power %s" EOL, hf_power);
-    V1_print(F(EOL));
-    V1_flush();
-    // init to all zeroes just so we know what the encode is doing, when
+    printPreparedBlock(txNum, hf_callsign, hf_grid4, hf_power);
+
+    // init to all zeroes just so we know what the encode is doing,
     // if we get bad symbols when we send the symbols
     bool vfoOffAtEnd = false;
-    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
+    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer,
+                    hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
     tx_cnt_0 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
-    if (VERBY[1]) {
-        StampPrintf("WSPR callsign Tx sent. now: minute: %d second: %d" EOL, minute(), second());
-        DoLogPrint();
-    }
+    logTxSent("WSPR callsign");
 
-    // we don't loop around again caring about gps fix, because we've saved
-    // telemetry (and sensor data in there) right before the callsign tx
+    // We don't loop around again caring about gps fix, because we've saved
+    // telemetry (and sensor data in there) right before the callsign tx.
+
+    // -------------------------------------------------------------------------
+    // txNum 1: standard u4b telemetry
+    // -------------------------------------------------------------------------
     setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
 
-    // output: modifies globals: hf_callsign, hf_grid4, hf_power
     txNum = 1;
     V1_printf("WSPR txNum %d Preparing with u4b_encode_std().." EOL, txNum);
     V1_flush();
 
+    // output: modifies globals: hf_callsign, hf_grid4, hf_power
     u4b_encode_std(hf_callsign, hf_grid4, hf_power,
-        tt.grid6, tt.altitude, tt.temp, tt.voltage, tt.speed, cc._id13);
-    V1_print(F(EOL));
-    V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
-    V1_printf("hf_callsign %-6s" EOL, hf_callsign);
-    V1_printf("hf_grid4 %s" EOL, hf_grid4);
-    V1_printf("hf_power %s" EOL, hf_power);
-    V1_print(F(EOL));
-    V1_flush();
+                   tt.grid6, tt.altitude, tt.temp, tt.voltage, tt.speed, cc._id13);
+    printPreparedBlock(txNum, hf_callsign, hf_grid4, hf_power);
 
-    vfoOffAtEnd = cc._ExtTelemetry[0] == '-' && cc._ExtTelemetry[1] == '-';
-    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
+    vfoOffAtEnd = (cc._ExtTelemetry[0] == '-' && cc._ExtTelemetry[1] == '-');
+    syncAndSendWspr(hf_freq, txNum, hf_tx_buffer,
+                    hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
     tx_cnt_1 += 1;
     // we have 10 secs or so at the end of WSPR to get this off?
-    if (VERBY[1]) {
-        StampPrintf("WSPR telemetry Tx sent. minute: %d second: %d" EOL, minute(), second());
-        DoLogPrint();
-    }
+    logTxSent("WSPR telemetry");
 
-    // have to send this if slot 3 or slot 4 is enabled
-    if ( (cc._ExtTelemetry[0] != '-' || cc._ExtTelemetry[1] != '-') ) {
+    // -------------------------------------------------------------------------
+    // txNum 2: telen1 -- only if slot 3 or slot 4 is enabled
+    // -------------------------------------------------------------------------
+    if (cc._ExtTelemetry[0] != '-' || cc._ExtTelemetry[1] != '-') {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
 
         txNum = 2;
         uint8_t slot = 2;
-        switch (cc._ExtTelemetry[0]) {
-            default:
-            case '0':
-                V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
-                    txNum, slot);
-                encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
-                break;
-            case '1':
-                V1_printf("WSPR txNum %d Preparing with encode_codecBmpMsg() slot %u" EOL,
-                    txNum, slot);
-                encode_codecBmpMsg(hf_callsign, hf_grid4, hf_power, slot);
-                break;
-        }
+        // slot 2 default in the original switch was GPS (defaultIsBmp = false)
+        encodeTelenSlot(txNum, slot, cc._ExtTelemetry[0], /*defaultIsBmp=*/false,
+                        hf_callsign, hf_grid4, hf_power);
+        printPreparedBlock(txNum, hf_callsign, hf_grid4, hf_power);
 
-        V1_print(F(EOL));
-        V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
-        V1_printf("hf_callsign %-6s" EOL, hf_callsign);
-        V1_printf("hf_grid4 %s" EOL, hf_grid4);
-        V1_printf("hf_power %s" EOL, hf_power);
-        V1_print(F(EOL));
-        V1_flush();
-
-        vfoOffAtEnd = cc._ExtTelemetry[1] == '-';
-        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
+        vfoOffAtEnd = (cc._ExtTelemetry[1] == '-');
+        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer,
+                        hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
         tx_cnt_2 += 1;
-        if (VERBY[1]) {
-            StampPrintf("WSPR telen1 Tx sent. minute: %d second: %d" EOL, minute(), second());
-            DoLogPrint();
-        }
+        logTxSent("WSPR telen1");
     }
-    // have to send this if telen2 is enabled
+
+    // -------------------------------------------------------------------------
+    // txNum 3: telen2 -- only if telen2 is enabled
+    // -------------------------------------------------------------------------
     if (cc._ExtTelemetry[1] != '-') {
         setStatusLEDBlinkCount(LED_STATUS_TX_TELEMETRY);
-        // output: modifies globals: hf_callsign, hf_grid4, hf_power
-        // input: ExtTelemetry2_val1/2 are ints?
+
         txNum = 3;
         V1_printf("WSPR txNum %d Preparing." EOL, txNum);
         V1_flush();
 
-        // all the hf_* is a char array
+        // output: modifies globals: hf_callsign, hf_grid4, hf_power
+        // input: ExtTelemetry2_val1/2 are ints?
+        // (legacy alternative kept for reference)
         // u4b_encode_telen(hf_callsign, hf_grid4, hf_power,
         //     ExtTelemetry1_val1, ExtTelemetry1_val2, false, cc._id13);
-        uint8_t slot = 3;
-        switch (cc._ExtTelemetry[1]) {
-            case '0':
-                V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
-                    txNum, slot);
-                encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
-                break;
-            default:
-            case '1':
-                V1_printf("WSPR txNum %d Preparing with encode_codecBmpMsg() slot %u" EOL,
-                    txNum, slot);
-                encode_codecBmpMsg(hf_callsign, hf_grid4, hf_power, slot);
-                break;
-        }
 
-        V1_print(F(EOL));
-        V1_printf("WSPR txNum %d Prepared.." EOL, txNum);
-        V1_printf("hf_callsign %-6s" EOL, hf_callsign);
-        V1_printf("hf_grid4 %s" EOL, hf_grid4);
-        V1_printf("hf_power %s" EOL, hf_power);
-        V1_print(F(EOL));
-        V1_flush();
+        uint8_t slot = 3;
+        // slot 3 default in the original switch was BMP (defaultIsBmp = true)
+        encodeTelenSlot(txNum, slot, cc._ExtTelemetry[1], /*defaultIsBmp=*/true,
+                        hf_callsign, hf_grid4, hf_power);
+        printPreparedBlock(txNum, hf_callsign, hf_grid4, hf_power);
+
         vfoOffAtEnd = true;
-        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer, hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
+        syncAndSendWspr(hf_freq, txNum, hf_tx_buffer,
+                        hf_callsign, hf_grid4, hf_power, vfoOffAtEnd);
         tx_cnt_3 += 1;
         // we have 10 secs or so at the end of WSPR to get this off?
-        if (VERBY[1]) {
-            StampPrintf("WSPR telen2 Tx sent. minute: %d second: %d" EOL, minute(), second());
-            DoLogPrint();
-        }
+        logTxSent("WSPR telen2");
     }
 
+    // -------------------------------------------------------------------------
+    // txNum 4: CW -- only if morse_also is enabled
+    // -------------------------------------------------------------------------
     if (cc._morse_also[0] == '1') {
         setStatusLEDBlinkCount(LED_STATUS_TX_CW);
+
         txNum = 4;
         V1_printf("CW txNum %d using cw_send_message().." EOL, txNum);
         V1_flush();
-        // picks a good HF freq for the config'ed cc._Band.
-        // usestt.callsign a andtt.grid6 in the message
-        // NOTE: turns GPS back on at the end..so it's assuming it's last after wspr
+
+        // Picks a good HF freq for the configured cc._Band.
+        // Uses tt.callsign and tt.grid6 in the message.
+        // NOTE: turns GPS back on at the end, so it's assuming it's last after wspr.
         cw_send_message();
-        // restore the wspr XMIT_FREQUENCY since cw changed it
-        // sets minute/lane/id from chan number.
+
+        // Restore the wspr XMIT_FREQUENCY since cw changed it.
+        // Sets minute/lane/id from chan number.
         // FIX! is it redundant at this point?..remove?
         init_rf_freq(&XMIT_FREQUENCY, cc._Band, cc._lane);
         tx_cnt_4 += 1;
-        if (VERBY[1]) {
-            StampPrintf("CW Tx sent. minute: %d second: %d" EOL, minute(), second());
-            DoLogPrint();
-        }
+        logTxSent("CW");
     }
 
+    // -------------------------------------------------------------------------
+    // Cleanup
+    // -------------------------------------------------------------------------
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
-    // Now: don't turn GPS back on until beginning of loop
-    // reset the fix time variables also (on the off -> on transition))
+    // Now: don't turn GPS back on until beginning of loop.
+    // Reset the fix time variables also (on the off -> on transition).
     GpsTimeToLastFix = 0;
+
     V1_print(F("alignAndDoAllSequentialTX END" EOL));
     return 0;  // success
 }
 
 //***********************************************************
 void sleepSeconds(int secs) {
-    // this doesn't have an early out
-    // although the updateGpsDataAndTime() can so the delay will be >= secs
+    // No early exit — sleep duration is guaranteed >= secs.
+    // updateGpsDataAndTime() may extend individual iterations slightly.
     V1_println(F("sleepSeconds START"));
     V1_flush();
-    uint32_t start_millis = millis();
-    uint32_t current_millis = start_millis;
-    uint32_t duration_millis = (uint64_t) secs * 1000;
 
-    float solarVoltage;
-    uint32_t gdt_millis = 0;
-    uint32_t increasingWait = 0;
+    uint32_t start_millis    = millis();
+    uint32_t duration_millis = (uint32_t)secs * 1000;  // secs fits in uint32_t
+
+    float    solarVoltage    = 0.0f;
+    uint32_t gdt_millis      = 0;
+    uint32_t increasingWait  = 0;  // back-off added when GPS yields nothing
+
+    // -----------------------------------------------------------------------
+    // Sleep loop: keep GPS alive and serviced until duration has elapsed.
+    // We are moving, so we want continuous GPS tracking after first fix.
+    // -----------------------------------------------------------------------
     do {
         Watchdog.reset();
-        // can power off gps depending on voltage
-        // normally keep gps on, tracking after first fix. we are moving!
-        // uint32_t usec = time_us_32();
-        GpsON(false);
 
+        GpsON(false);  // keep GPS on; no cold reset
         solarVoltage = readVoltage();
-        if (solarVoltage < BattMin || solarVoltage < GpsMinVolt) {
+
+        // Turn GPS off if voltage is too low to sustain it.
+        bool voltageLow = (solarVoltage < BattMin || solarVoltage < GpsMinVolt);
+        if (voltageLow) {
             V1_printf("sleepSeconds() bad solarVoltage %.f ..(1) turn gps off" EOL,
                 solarVoltage);
             GpsOFF();
         }
-        // FIX! should we unload/use GPS data during this?
-        // gps could be on or off, so no?
-        // whenever we have spin loops we need to updateStatusLED()
+
+        // Always service the status LED in spin loops.
         updateStatusLED();
+
         if (GpsIsOn()) {
-            // does this have a updateStatusLED() ??
-            // long enough to catch all NMEA during the broadcast interval of 1 sec
-            // 1050: was this causing rx buffer overrun (21 to 32)
-            // 1500 was good for 9600 and up
-            // not long enough for 4800?
-            // arg is milliseconds
+            // Drain a full NMEA broadcast burst (~1 sec interval).
+            // Tested thresholds:
+            //   1050 ms: caused RX buffer overrun (21–32 chars lost)
+            //   1500 ms: reliable at 9600 baud and above
+            //   may not be enough at 4800 baud
+            // FIX! should we parse/use GPS data here, or just drain?
+            //   GPS may be on or off across iterations, so deferred for now.
             gdt_millis = updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
-            // randomize an increasing delay if the gdt_millis < 100 (didn't get anything)
-            if (gdt_millis < 100) {
-                uint32_t randnum = random(20, 25);
-                increasingWait = increasingWait + randnum;
-                if (increasingWait > (uint32_t) GPS_WAIT_FOR_NMEA_BURST_MAX) increasingWait = 0;
+
+            // If we got very little data, the GPS may not have a lock yet.
+            // Add a randomised increasing back-off to avoid hammering it.
+            // Back-off resets to zero once it reaches GPS_WAIT_FOR_NMEA_BURST_MAX.
+            bool gpsBurstEmpty = (gdt_millis < 100);
+            if (gpsBurstEmpty) {
+                uint32_t jitter     = random(20, 25);
+                increasingWait     += jitter;
+                if (increasingWait > (uint32_t)GPS_WAIT_FOR_NMEA_BURST_MAX)
+                    increasingWait = 0;
                 sleep_ms(increasingWait);
             }
         } else {
+            // GPS is off; just wait out the equivalent burst window.
             sleep_ms(GPS_WAIT_FOR_NMEA_BURST_MAX);
         }
-        current_millis = millis();
-    } while ((current_millis - start_millis) < duration_millis);
+
+    } while ((millis() - start_millis) < duration_millis);
 
     Watchdog.reset();
 
-
-    // hmm. maybe we just toggle the current state
-    // if it's off, we turn it on. If it's on, we turn it off
-    // that should be good for power
-    if (solarVoltage < BattMin || solarVoltage < GpsMinVolt) {
+    // -----------------------------------------------------------------------
+    // Post-sleep GPS state
+    // GPS is left OFF if voltage was low at any point during the loop.
+    // -----------------------------------------------------------------------
+    bool voltageLowAtEnd = (solarVoltage < BattMin || solarVoltage < GpsMinVolt);
+    if (voltageLowAtEnd) {
         V1_printf("sleepSeconds() bad solarVoltage %.f ..(2) turn gps off" EOL,
             solarVoltage);
         GpsOFF();
     } else {
-        // I suppose we really want to know how long it's been off
-        // shouldn't keep it off if we don't have a valid fix
-        // and shouldn't keep it off for more than 1 minute.
-        if (!GpsIsOn()) GpsON(false);  // don't keep TinyGps state
-
-        // all the data should be valid to consider it a good fix.
-        // this doesn't need qualification on whether we got a good date/time
-        // since we check that first, before we do any looking for a 3d fix
-
-        // Should we keep keep on if we don't have a solid fix
-        // otherwise save power for a cycle?
-        // FIX! not worth it..power spike when turned back on?
-        // better to just stay on except duing RF?
-        // should hot fix within secs after we turn it back on?
+        // Turn GPS back on if it went off mid-loop; don't preserve stale TinyGPS++ state.
+        // FIX! worth considering: keep GPS off between cycles to save power?
+        //   Pro: saves idle draw.
+        //   Con: power spike on restart; should hot-fix within seconds anyway.
+        //   Current policy: stay on except during RF TX.
+        if (!GpsIsOn()) GpsON(false);  // no cold reset; don't restore TinyGPS++ state
     }
 
-    // Gps gets left off it the voltage was low at any point
     V1_println(F("sleepSeconds END"));
 }
-
-//***********************************************************
+// =============================================================================
+// alignMinute
 // -1 is returned if anything illegal
 // FIX! should check what caller does if -1
+// -----------------------------------------------------------------------------
+// Returns true if the current wall-clock minute matches the WSPR/u4b
+// transmit-window minute (channel config start minute, shifted by `offset`).
+//
+// `offset` selects which slot in the sequence we're aligning to:
+//   -1            : prep window (telemetry/sensor capture, etc.)
+//    0, 2, 4, 6   : the four 2-minute WSPR transmit slots
+//    1, 3, 5      : (accepted but unused in normal flow -- see comment below)
+//
+// If the system clock isn't set, this returns true so the caller proceeds
+// (FIX! see note below -- returning false might be safer).
+// =============================================================================
+
+// Channel config _start_minute must be one of these (as a numeric string):
+// "0", "2", "4", "6", or "8".
+static bool isValidStartMinute(int m) {
+    return (m == 0 || m == 2 || m == 4 || m == 6 || m == 8);
+}
+
 bool alignMinute(int offset) {
-    bool aligned = false;
     // FIX! need good time. Does returning false help (i.e. not do any TX)
     if (timeStatus() != timeSet) return true;
 
@@ -2055,36 +2019,30 @@ bool alignMinute(int offset) {
         offset = 0;
     }
 
-    // this should have been only set to be char strs 0, 2, 4, 6, or 8
-    // this it the channel config minute to align to, plus an offset
-    // we only use offsets -1, 0, 2, 4, 6
-    // the telemetry and other prep is al done during -1.
-    // the u4b channel minutes should all be
+    // The u4b channel config minute to align to, before the offset is applied.
+    // This should only ever be the char string "0", "2", "4", "6", or "8".
+    // We only use offsets -1, 0, 2, 4, 6 in practice.
+    // The telemetry and other prep is all done during offset == -1.
     int align_minute = atoi(cc._start_minute);
-    switch (align_minute) {
-        case 0: {;}
-        case 2: {;}
-        case 4: {;}
-        case 6: {;}
-        case 8: {
-            // add 10 to cover the wrap of 0 to -1 with offset -1 (goes to 9)
-            align_minute = (10 + align_minute + offset) % 10;
-            break;
-        }
-        default:
-            V1_printf("ERROR: Illegal align_minute %d for u4b channel" EOL, align_minute);
-            align_minute = 0;
+
+    if (isValidStartMinute(align_minute)) {
+        // Add 10 so the modulo handles the wrap from 0 to -1 when offset == -1
+        // (which would otherwise go to 9).
+        align_minute = (10 + align_minute + offset) % 10;
+    } else {
+        V1_printf("ERROR: Illegal align_minute %d for u4b channel, using 0" EOL, align_minute);
+        align_minute = (10 + 0 + offset) % 10;
     }
 
     // WARN: make sure cc._go_when_rdy is cleared before real balloon flight!
+    // In "go when ready" mode we align on a 2-minute cadence instead of 10.
     if (cc._go_when_rdy[0] == '1') {
-        // add 2 to cover the wrap of 0 to -1 with offset -1 (goes to 1)
+        // Add 2 to cover the wrap of 0 to -1 with offset -1 (goes to 1).
         align_minute = (2 + offset) % 2;
-        aligned = (minute() % 2) == align_minute;
-    } else {
-        aligned = (minute() % 10) == align_minute;
+        return (minute() % 2) == align_minute;
     }
-    return aligned;
+
+    return (minute() % 10) == align_minute;
 }
 
 //********************************************
@@ -2092,271 +2050,261 @@ bool alignMinute(int offset) {
 // if not in the minute before starting minute,
 // it will wait until the right starting minute (depends on txNum)
 // txNum can be 0, 1, 2, 3, or 4 for cw
+// Expected to be called at least 10 secs before the starting minute.
+// If not already in the minute before the starting minute,
+// it will wait until the right starting minute (depends on txNum).
+// txNum can be 0, 1, 2, 3, or 4 for CW.
 void sendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer, bool vfoOffAtEnd) {
     V1_print(F(EOL "sendWspr START now: "));
     printSystemDateTime();
     V1_print(F(EOL));
 
-    if (VERBY[2]) {
-        // do a StampPrintf, so we can measure usec duration from here to the first symbol
-        // remember, it's usec running time, it's not aligned to the gps time.
+    // StampPrintf gives usec-resolution timing from this point to first symbol.
+    // Note: usec wall-clock, NOT aligned to GPS time.
+    if (VERBY[2])
         StampPrintf("sendWspr START now: minute: %d second: %d" EOL, minute(), second());
-    }
 
     Watchdog.reset();
-    uint8_t symbol_count = WSPR_SYMBOL_COUNT;
-    uint8_t i;
-    absolute_time_t wsprStartTime = get_absolute_time();  // usecs
-    for (i = 0; i < symbol_count; i++) {
+
+    // -----------------------------------------------------------------------
+    // Transmit all 162 WSPR symbols
+    //
+    // Symbol rate: exactly 12000/8192 Hz = 1.4648... baud
+    // Symbol duration: 8192/12000 = 0.68266... secs (256/375 secs)
+    // Total transmission: 162 * 256/375 = 110.592 secs
+    //
+    // Timing strategy: coarse sleep (wsprSleepForMillis) then spin on PROCEED.
+    //   wsprSleepForMillis(645) = coarse wait slightly under one symbol period.
+    //   PROCEED (set by interrupt handler) signals exact symbol boundary.
+    //   645 ms chosen empirically; WSJT-X SDR DT reports confirm alignment.
+    //   We use 10 ms granularity here, so slop is subtracted accordingly.
+    //   Could sleep up to ~660 ms (< 682 ms symbol) then spin — same effect.
+    //   Ref: https://ghubcoder.github.io/posts/awaking-the-pico/
+    //
+    // Logging notes:
+    //   - StampPrintf log buffer capped at 4096 bytes due to RAM constraints.
+    //     Exceeding it corrupts jtencode symbols (see jtencode README warning).
+    //   - Only log every 10th symbol + symbol 161 to limit TX-time slowdown.
+    //   - V3 dots logged every symbol for post-run timing analysis (deltatime.sh).
+    //   - updateStatusLED() intentionally omitted inside the loop — may affect
+    //     symbol timing; LEDs won't blink correctly during TX. 15–20 ms spin only.
+    //
+    // FIX! Measure usec-level drift impact of StampPrintf on SDR DT.
+    // FIX! Kazu's library achieves ~75 usec alignment to GPS-corrected RTC.
+    // -----------------------------------------------------------------------
+
+    const uint8_t symbol_count = WSPR_SYMBOL_COUNT;
+    absolute_time_t wsprStartTime = get_absolute_time();
+
+    for (uint8_t i = 0; i < symbol_count; i++) {
         uint8_t symbol = hf_tx_buffer[i];
-        switch (symbol) {
-            case 0: {;}
-            case 1: {;}
-            case 2: {;}
-            case 3: break;
-            default:
-                V1_printf("ERROR: bad symbol i %u 0x%02x" EOL, i, symbol);
-                symbol = 0;
+
+        // Validate symbol is in range 0–3.
+        // Symbols go corrupt if RAM is tight (jtencode issue); this catches it.
+        if (symbol > 3) {
+            V1_printf("ERROR: bad symbol i %u 0x%02x" EOL, i, symbol);
+            symbol = 0;
         }
 
-        // FIX! Does this affect drift at sdr?
-        // We can get more timing info?
-        // i.e. usec accuracy, but not aligned to gps-correct rtc)
-        // kazu has his special library to get usec level detail..
-        // with 75usec alignment to rtc?
-        // these are amount the few VERBY[2] controlled prints
-        if (VERBY[2])
-            if ((i % 10 == 0) || i == 161) StampPrintf("b" EOL);
+        // Log symbol index at start of boundary (VERBY[2] only, sparse)
+        if (VERBY[2] && ((i % 10 == 0) || i == 161))
+            StampPrintf("b" EOL);
 
-        // HACK to see the symbol
-        // V2_printf("%d", symbol);
+        // Set the transmit frequency for this symbol (changes PLL numerator only)
+        startSymbolFreq(hf_freq, symbol, false, false);
 
-        startSymbolFreq(hf_freq, symbol, false, false);  // symbol 0 to 3, just change pll_num
+        // Log symbol index after freq set (VERBY[2] only, sparse)
+        if (VERBY[2] && ((i % 10 == 0) || i == 161))
+            StampPrintf("sym: %d" EOL, i);
 
-        // Don't make StampPrintf log buffer bigger to try to save more
-        // deferred printing during a whole wspr message, to avoid the slowdown
-        // effects of printing here.
-        // Can't make it bigger than 4096 because of ram problems!
-        // With jtencode symbols going bad if so.
-
-        // Checking the symbols (when we use them) for valid 0-3 detects the fail case..
-        // they go bad if ram space issues!
-        // jtencode github readme warns about this issue and corruption.
-
-        // With this reduced rate printing, everything is good enough for the tx.
-        // only log every 10 symbols and the last three (160 161)
-
-        // FIX! Does this affect drift at sdr?
-        // these are amount the few VERBY[2] controlled prints
-        if (VERBY[2])
-            if ((i % 10 == 0) || i == 161) StampPrintf("sym: %d" EOL, i);
-
+        // Coarse sleep: slightly under one symbol period (645 ms empirical).
+        // wsprSleepForMillis also resets the watchdog.
         PROCEED = false;
-        // Ideally we sleep during the symbol time. (a little less than symbol time)
-        // hardwired 645 based on tweaking and seeing what SDR DT is reported by WSJT-X
-        // we only use 10ms granularity in this routine, so need that slop subtracted
-        // here..plus a little more?
-        // basically this is a 'coarse', then 'very fine' alignment strategy.
-        // resets watchdog too?
+        wsprSleepForMillis(645);  // was 645 as of 1/9/25
 
-        // 1/9/25 was (645)
-        wsprSleepForMillis(645);
-
-        // Will watchdog reset if we don't get PROCEED, which would mean
-        // something went wrong with the interrupt handler
-
-        // FIX! we could sleep for a little less than the expected symbol time here
-        // that would work..then check PROCEED on wakeup (spin loop here)
-        // i.e. sleep a little less than this.
-        // The symbol rate is approximately 1.4648 baud (4FSK symbols per second),
-        // or exactly 12,000 Hz / 8192
-        // 8192 / 12000 = 0.6826666.. secs. So could sleep for 660 millisecs ?
-
-        // on sleeping: https://ghubcoder.github.io/posts/awaking-the-pico/
-        // low cost sleep: waking and re-checking time on every processor event (WFE)
-        // These functions should not be called from an IRQ handler.
-
-        // static __always_inline void tight_loop_contents ( void )
-        // No-op function intended to be called by any tight hardware polling loop.
-        // Using this ubiquitously makes it much easier to find tight loops,
-        // #ifdef-ed support for lockup debugging might be added
-
-        // Whenever we have spin loops we need to updateStatusLED()
-        // Leave it out for now, just in case it affects symbols
-        // we know we're done coarse/very-fine split here. so maybe just 15-20 ms spin
-        // leds won't blink right during tx?
-        // updateStatusLED();
+        // Fine alignment: spin until interrupt handler signals symbol boundary.
+        // Watchdog will fire if PROCEED never comes (interrupt handler failure).
         Watchdog.reset();
         while (!PROCEED) tight_loop_contents();
-        // hmm. not updating led during this
-        // another VERBY[3] (or above) print (only VERBY[3] so far)
-        if ((i % 10) == 1) V3_print(".");  // one per symbol
+
+        // V3 dot per symbol — use deltatime.sh to check symbol timing distribution
+        if ((i % 10) == 1) V3_print(".");
+
         Watchdog.reset();
     }
-    // use deltatime.sh to check the symbol timing distribution after running with V3
-    // EOL the dots
-    V2_print(F(EOL));
 
-    absolute_time_t wsprEndTime = get_absolute_time();  // usecs
-    int64_t wsprDuration = absolute_time_diff_us(wsprStartTime, wsprEndTime);
-    // WSPR transmission consists of 162 symbols, each has a duration of 256/375 seconds.
-    // 0.68266666666
-    // 162 * 256/375 = 110.592 secs total. Compare our duration to that
-    float wsprDurationSecs = (float) wsprDuration / 1000000UL;
+    V2_print(F(EOL));  // terminate the V3 dot line
 
-    if (wsprDurationSecs < 110.0 || wsprDurationSecs > 111.0) {
-        V1_print(F(EOL "ERROR: 100.592 secs goal:"));
+    // -----------------------------------------------------------------------
+    // Verify total transmission duration
+    // Target: 162 * 256/375 = 110.592 secs
+    // -----------------------------------------------------------------------
+    absolute_time_t wsprEndTime   = get_absolute_time();
+    int64_t wsprDuration_us       = absolute_time_diff_us(wsprStartTime, wsprEndTime);
+    float   wsprDurationSecs      = (float)wsprDuration_us / 1000000.0f;
+
+    if (wsprDurationSecs < 110.0f || wsprDurationSecs > 111.0f) {
+        V1_print(F(EOL "ERROR: 110.592 secs goal:"));
         V1_printf(EOL "wsprDurationSecs %.5f seems too big or small" EOL, wsprDurationSecs);
-        V1_printf("ERROR: wsprDuration %" PRIu64 " usecs" EOL EOL, wsprDuration);
+        V1_printf("ERROR: wsprDuration %" PRId64 " usecs" EOL EOL, wsprDuration_us);
     }
 
-    // if we gathered stuff to log above at VERBY[2] level
+    // Flush any deferred VERBY[2] log entries accumulated during TX
     if (VERBY[2]) DoLogPrint();
+
     disablePwmInterrupts();
 
-    // FIX! leave on if we're going to do more telemetry?  or always turn off?
+    // -----------------------------------------------------------------------
+    // Post-TX VFO / clock output state
+    // -----------------------------------------------------------------------
     if (vfoOffAtEnd) {
         vfo_turn_off();
-    } else {
-        if (DO_CLK_OFF_FOR_WSPR_MODE) {
-            // FIX! if we leave RF on, should we set it to symbol 0 so every transition to
-            // good message looks the same? But we're turning off the clock now,
-            // so it shouldn't matter?
-            if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
-                // FIX! does this work on ms5351m. do we care?
-                si5351a_power_down_clk01(true);  // print. this does a pllb reset too
-            } else {
-                // print. clk0/1 both affected
-                vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true);  // print. clk0/1 both affected.
-            }
+    } else if (DO_CLK_OFF_FOR_WSPR_MODE) {
+        // FIX! Should we set frequency to symbol 0 before clock-off so every
+        // subsequent transition into a new message looks identical?
+        // Probably moot since we're powering the clock down now.
+        if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
+            // FIX! Confirm this works on ms5351m (may not matter in practice)
+            si5351a_power_down_clk01(true);  // also performs PLLB reset; prints
+        } else {
+            vfo_turn_off_clk_out(WSPR_TX_CLK_0_NUM, true);  // affects clk0 and clk1; prints
         }
     }
 
     Watchdog.reset();
     V1_println(F("sendWspr END"));
 }
-
 //**********************************
 void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
     char *hf_callsign, char *hf_grid4, char *hf_power, bool vfoOffAtEnd) {
+
     V1_printf("syncAndSendWSPR START now: minute: %d second: %d" EOL, minute(), second());
+
+    // -----------------------------------------------------------------------
+    // Validate txNum (0–3 for WSPR, 0–4 for CW)
+    // -----------------------------------------------------------------------
     if (txNum < 0 || txNum > 3) {
         V1_printf("syncAndSendWSPR() bad txNum %d, using 0" EOL, txNum);
         txNum = 0;
     }
 
-    // actual freq for symbol 0 in the log buffer, eventually it will get printed
-    // when we're not sending wspr, by something above
-    // all the other starting freqs are symbol 3 too
-    uint8_t symbol = 0;  // can only be 0, 1, 2 or 3
-    // don't need the symbol_freq for anything..just want a print here
-    // FIX! we could pre-calc the 4 symbol freqs during the first warmup symbol.
-    // so if only_pll_num, use the calc'ed freqs.
-    // make them globals for use by sendWspr()?
+    // -----------------------------------------------------------------------
+    // Start VFO at symbol 0 frequency for warmup.
+    // The actual symbol frequency for each of the 4 FSK tones could be
+    // pre-calculated here during warmup and stored as globals for sendWspr().
+    // FIX! what is the initial power level?
+    // FIX! pre-calc all 4 symbol freqs during first warmup symbol if only_pll_num.
+    // -----------------------------------------------------------------------
+    uint8_t warmupSymbol = 0;  // valid range: 0–3
+    startSymbolFreq(hf_freq, warmupSymbol, true, false);  // only_pll_num (expected)
 
-    // get the vfo going!
-    // FIX! what is the first power!
-    startSymbolFreq(hf_freq, symbol, true, false);  // only_pll_num (expected)
-
-    // encode into 162 symbols (4 value? 4-FSK) for hf_tx_buffer
-    // https://stackoverflow.com/questions/27260304/equivalent-of-atoi-for-unsigned-integers
+    // Encode callsign/grid/power into 162 4-FSK symbols in hf_tx_buffer.
+    // atoi() used for power since hf_power arrives as a string.
+    // Ref: https://stackoverflow.com/questions/27260304/equivalent-of-atoi-for-unsigned-integers
     set_hf_tx_buffer(hf_tx_buffer, hf_callsign, hf_grid4, (uint8_t)atoi(hf_power));
 
-    // this should be fine even if we wait a long time
-    // hmm. variable amount of time clock is on before the message
-    int i = 2 * txNum;  // 0, 2, 4, 6
-    // FIX! in debug, why aren't we aligning to any even minute?
-    V1_printf("waiting for alignMinute(%d) && second()==0)" EOL, i);
-    V1_flush();  // so we'll have room in tx buffer going forward.
+    // -----------------------------------------------------------------------
+    // Minute alignment
+    // Each txNum maps to an even-minute TX slot: txNum 0→min 0, 1→min 2, etc.
+    // We align to (2*txNum), waiting in the minute before (2*txNum - 1).
+    // FIX! in debug mode, why aren't we aligning to any even minute?
+    // -----------------------------------------------------------------------
+    int txMinute     = 2 * txNum;       // 0, 2, 4, or 6
+    int preTxMinute  = txMinute - 1;    // minute before TX; alignMinute() interprets mod-10
 
-    bool clk01_turned_on = false;
-    //*****************************************
-    // This is the turn on of clk0/1 (and final sync) before the real wspr message
-    // for debug/checking/consistency..report how long RF is on before we need it here!
-    // I guess we should always have clocks off when we hit here..even if
-    // multiple wspr messages (check how we end a wspr message)
-    absolute_time_t start_usecs_2 = 0;
+    V1_printf("waiting for alignMinute(%d) && second()==0)" EOL, txMinute);
+    V1_flush();  // clear TX buffer before the tight loops ahead
 
-    // we better do the loop iteration at least once!
-    while (!(alignMinute(i-1))) {
+    // Phase 1: wait until we are in the minute before the TX minute.
+    // Must execute at least once.
+    while (!alignMinute(preTxMinute)) {
         Watchdog.reset();
         updateStatusLED();
         sleep_ms(20);
     }
-    while (!clk01_turned_on || !(alignMinute(i) && (second() == 0))) {
-        Watchdog.reset();
-        // whenever we have spin loops we need to updateStatusLED()
-        updateStatusLED();
-        // must have come in here right before we're aligned
-        // so could look at millis() being > 900 and
-        // will be 100 millis before the alignment to sec?
-        // that should cover any turn-on glitch
-        // just do it once!
 
-        // we better get here 1 sec before needed!
-        // we shouldn't be here more than 1 minute before needed?
+    // -----------------------------------------------------------------------
+    // Phase 2: turn on clk0/1 once, then spin until the TX minute at second 0.
+    //
+    // We should always arrive here with clocks off — whether this is the first
+    // or a subsequent WSPR message (check how sendWspr() leaves the clocks).
+    //
+    // Clock turn-on notes:
+    //   - PDN-bit disable requires a PLL reset to stay in phase.
+    //   - Hans G0UPL noted ~2 ms of garbage RF at PLL reset.
+    //   - We turn on ~1 sec before TX and log how long RF is hot before use.
+    //   - ms5351m: si5351a CLK power-down may not work; clocks may always be on.
+    // FIX! Measure/verify turn-on glitch at SDR.
+    // FIX! Could check millis() > 900 to ensure we're ~100 ms before alignment.
+    // -----------------------------------------------------------------------
+    bool clk01_turned_on       = false;
+    absolute_time_t clkOnTime  = 0;
+
+    while (!clk01_turned_on || !(alignMinute(txMinute) && (second() == 0))) {
+        Watchdog.reset();
+        updateStatusLED();
+
         if (!clk01_turned_on) {
-            // if we used the PDN bit to disable the clocks, we'd need a pll reset.
-            // to stay in phase
-            // FIX! how fast or slow is this?
-            // are we glitching our RF at the start of sending?
-            // (hans mentioned 2ms garbage due to the pll reset)
             if (DO_CLK_OFF_FOR_WSPR_MODE) {
                 if (USE_SI5351A_CLK_POWERDOWN_FOR_WSPR_MODE) {
-                    // this doesn't work on ms5351m? clocks always on?
-                    si5351a_power_up_clk01(true);  // print. does pll reset
+                    si5351a_power_up_clk01(true);   // prints; performs PLL reset
                 } else {
-                    // don't print. does pll reset
-                    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, true);
+                    vfo_turn_on_clk_out(WSPR_TX_CLK_0_NUM, true);  // silent; performs PLL reset
                 }
             }
-            // for debug/checking/consistency..
-            // report how long RF is on before we need it here!
-            start_usecs_2 = get_absolute_time();
+            clkOnTime       = get_absolute_time();
             clk01_turned_on = true;
         }
+
         busy_wait_ms(10);
     }
+
+    // -----------------------------------------------------------------------
+    // Sanity checks and RF-on duration log
+    // -----------------------------------------------------------------------
     if (!clk01_turned_on) {
         V1_print(F("ERROR: syncAndSendWspr big problem, no clk01_turned_on"));
-    } else {
-        if (DO_CLK_OFF_FOR_WSPR_MODE) {
-            // for debug/checking/consistency..report how long RF is on before we need it here!
-            if (start_usecs_2 == 0) {
-                V1_printf("ERROR: syncAndSendWspr why is start_usecs_2 == 0 here?");
-            }
-            absolute_time_t end_usecs_2 = get_absolute_time();
-            uint64_t elapsed_usecs_2 = absolute_time_diff_us(start_usecs_2, end_usecs_2);
-            float elapsed_millisecs_2 = (float)elapsed_usecs_2 / 1000.0;
+    } else if (DO_CLK_OFF_FOR_WSPR_MODE) {
+        if (clkOnTime == 0) {
+            V1_printf("ERROR: syncAndSendWspr why is clkOnTime == 0 here?");
+        } else {
+            float rfOnMs = (float)absolute_time_diff_us(clkOnTime, get_absolute_time()) / 1000.0f;
             V1_printf("syncAndSendWspr rf is on for %.3f millisecs before real wspr msg" EOL,
-                elapsed_millisecs_2);
+                rfOnMs);
         }
     }
 
-    // make sure the LED is not stuck on during wspr tx
-    turnOnLED(false);
+    turnOnLED(false);   // ensure LED is not stuck on during WSPR TX
     Watchdog.reset();
 
-    // Now align to 1 seconds in?
-    // We could adjust this so the wspr starts EXACTLY at 1 sec in or 2 sec in
-    // we know we should have still second()==0 at this point
+    // -----------------------------------------------------------------------
+    // Sub-second alignment before first symbol
+    //
+    // We are at second() == 0 of the TX minute. WSPR convention starts symbols
+    // ~1 sec into the minute. Two strategies:
+    //
+    // A) ALIGN_TO_1SEC_IN_MODE (spin until second() transitions to 1):
+    //    - Most accurate in theory.
+    //    - Loop guard of 101 iterations (~1010 ms) prevents infinite spin.
+    //    - Error if we don't enter at second() == 0.
+    //
+    // B) Fixed busy-wait (EXTRA_DELAY_AFTER_ZERO_SEC ms):
+    //    - Empirically tuned against WSJT-X reported DT.
+    //    - millis()/usec counters are NOT GPS-aligned (they run from boot),
+    //      so we cannot use them for absolute time offset.
+    //    - Tuning history (target DT = 0.0):
+    //        SIM65M:  900 ms → DT 0.2  (2/16/25)
+    //                 700 ms  (2/17/25)
+    //                 650 ms  (2/18/25)  occasionally late
+    //                 700 ms  current
 
-    // can't align by looking for usec offset from realtime
-    // the usecs (or millis() we can read is not aligned to realtime gps time.
-    // those are "since program started running"
-
-    // different way to cause delay to align
-    // supposed to be 1 sec in.
+    //        ATGM336: 800 ms → DT 0.2  (2/16/25)
+    //                 750 ms → DT 0.1  (2/16/25)
+    //                 700 ms  (2/17/25)  occasionally early
+    //                 700 ms  current
+    // -----------------------------------------------------------------------
     static int EXTRA_DELAY_AFTER_ZERO_SEC;
-    // 900 gave 0.2 2/16/25
-    // was 700 2/17/25
-    // 700 was a little late sometimes?
-    // was 650 2/18/25
-    if (USE_SIM65M) EXTRA_DELAY_AFTER_ZERO_SEC = 700;  // milliseconds
-    // 800 gave 0.2 2/16/25
-    // 750 gave 0.1 2/16/25
-    // was 700 2/17/25. a little early sometimes
-    else EXTRA_DELAY_AFTER_ZERO_SEC = 700;
+    EXTRA_DELAY_AFTER_ZERO_SEC = 700;  // ms; same value for both GPS modules currently
 
     if (EXTRA_DELAY_AFTER_ZERO_SEC < 0 || EXTRA_DELAY_AFTER_ZERO_SEC > 1000) {
         V1_printf("ERROR: bad EXTRA_DELAY_AFTER_ZERO_SEC %d.. setting to 0" EOL,
@@ -2364,24 +2312,20 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
         EXTRA_DELAY_AFTER_ZERO_SEC = 0;
     }
 
-    //******************
-    // instead of adding delay, just align to 1 sec? since
-    // code delay < 1 sec and we just aligned to 0 sec,
-    // this should be best align to 1 sec in?
     bool ALIGN_TO_1SEC_IN_MODE = false;
+
     if (ALIGN_TO_1SEC_IN_MODE) {
-        // will be looping here no more than 1 sec
-        // second should still be zero
-        int alignSecond = second();
+        // Spin until second() rolls over from 0 to 1 (at most ~1 sec / 100 iters)
+        int      alignSecond  = second();
         uint32_t alignLoopCnt = 0;
+
         if (alignSecond != 0) {
             V1_printf("ERROR: 1-sec-in alignment started with non-zero second() %d" EOL,
                 alignSecond);
         }
-        // just in case, break out if it loops more than 100 times
+
         while (alignSecond == 0) {
-            alignLoopCnt += 1;
-            if (alignLoopCnt > 101) {
+            if (++alignLoopCnt > 101) {
                 V1_print(F("ERROR: 1-sec-in alignment looped > 101 times" EOL));
                 break;
             }
@@ -2389,42 +2333,51 @@ void syncAndSendWspr(uint32_t hf_freq, int txNum, uint8_t *hf_tx_buffer,
             alignSecond = second();
         }
     } else {
-        // hmm. not updating led during this
-        // this should be adjusted to give us DT=0 with PROCEEDS_TO_SYNC=0
         busy_wait_ms(EXTRA_DELAY_AFTER_ZERO_SEC);
     }
 
-    // PWM_WRAP_CNT is full period value.
-    // -1 before it's set as the wrap top value.
+    // -----------------------------------------------------------------------
+    // Arm PWM interrupt and transmit
+    //
+    // PWM_WRAP_CNT is the full period value (-1 before set as wrap top).
+    // We reset PROCEED and reinitialise the PWM divider/wrap for every WSPR
+    // message so the first interrupt is a known distance from our position now.
+    // -----------------------------------------------------------------------
     PROCEED = false;
-    // we constantly reset this for every wspr message,
-    // so we know the first interrupt is a little ways
-    // out from where we are now, then?
     setPwmDivAndWrap(PWM_DIV, PWM_WRAP_CNT);
     sendWspr(hf_freq, txNum, hf_tx_buffer, vfoOffAtEnd);
+
     V1_println(F("syncAndSendWSPR END"));
 }
-
 //**********************************
+// wspr_encode() signature for reference:
+//   wspr_encode(const char *call, const char *loc, const uint8_t dbm, uint8_t *symbols)
+//   call    - Callsign (12 chars max; we guarantee 6 max)
+//   loc     - Maidenhead grid locator (6 chars max; we pass 4)
+//   dbm     - Output power in dBm, passed as uint8_t
+//   symbols - Caller-allocated array of at least WSPR_SYMBOL_COUNT uint8_t
+// Produces a Type 1, 2, or 3 WSPR symbol table.
+// Ref: https://github.com/robertostling/wspr-tools  (useful Python cross-check)
 void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
     char *hf_callsign, char *hf_grid4, uint8_t hf_power) {
 
     V1_println(F("set_hf_tx_buffer START"));
-    // Clear out the transmit buffer
-    memset(hf_tx_buffer, 0, 162);  // same number of bytes as hf_tx_buffer is declared
 
-    //******************
+    memset(hf_tx_buffer, 0, 162);  // 162 == WSPR_SYMBOL_COUNT
+
     bool fatalErrorReboot = false;
-    // hf_power needs to be passed as uint8_t
-    // were any spaces on the left due to snprintf to hf_callsign?
-    // (starting at hf_callsign[0])
 
-    // shouldn't be any spaces in hf_callsign. possible due to wrong use of snprintf()
-    // already checked for any other badness
-    // UPDATE: we space pad on the right now for JTEncode bug
-    // so change check to error only if any non-space after space
-    bool spaceFound = false;
+    // -----------------------------------------------------------------------
+    // Validate hf_callsign
+    //
+    // No leading spaces expected (would indicate wrong snprintf() usage).
+    // Trailing spaces are intentional — we right-pad to work around a JTEncode
+    // bug — so spaces are only an error if a non-space character follows one.
+    // Valid non-space length: 3–6 characters.
+    // -----------------------------------------------------------------------
+    bool    spaceFound  = false;
     uint8_t notspaceCnt = 0;
+
     for (uint8_t i = 0; i < sizeof(hf_callsign); i++) {
         if (hf_callsign[i] == ' ') {
             spaceFound = true;
@@ -2434,9 +2387,10 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
                     hf_callsign, i);
                 fatalErrorReboot = true;
             }
-            notspaceCnt += 1;
+            notspaceCnt++;
         }
     }
+
     V1_printf("length check: hf_callsign %s before jtencode had notspaceCnt %d" EOL,
         hf_callsign, notspaceCnt);
 
@@ -2446,16 +2400,20 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
         fatalErrorReboot = true;
     }
 
-    //******************
-    // no checks on hf_power uint8_t
-    //******************
-    int l = strlen(hf_grid4);
-    V1_printf("length check: hf_grid4 %s before jtencode was strlen %d" EOL,
-        hf_grid4, l);
+    // -----------------------------------------------------------------------
+    // Validate hf_grid4
+    //
+    // Must be exactly 4 characters with no spaces.
+    // hf_power (uint8_t) needs no range check here.
+    // -----------------------------------------------------------------------
+    int gridLen = strlen(hf_grid4);
 
-    if (l != 4) {
+    V1_printf("length check: hf_grid4 %s before jtencode was strlen %d" EOL,
+        hf_grid4, gridLen);
+
+    if (gridLen != 4) {
         V1_printf("ERROR: bad length: hf_grid4 %s before jtencode was strlen %d" EOL,
-            hf_grid4, l);
+            hf_grid4, gridLen);
         fatalErrorReboot = true;
     }
 
@@ -2466,34 +2424,24 @@ void set_hf_tx_buffer(uint8_t *hf_tx_buffer,
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Halt and reboot on any validation failure.
+    // Corrupt inputs produce bad jtencode symbols and a broken transmission.
+    // Also: jtencode corrupts symbols silently if RAM is tight — catching bad
+    // inputs here rules out one source of symbol errors before encoding.
+    // -----------------------------------------------------------------------
     if (fatalErrorReboot) {
-        V0_println(F("ERROR: set_hf_tx_buffer() fatal error, rebooting." EOL));
+        V0_println(F("ERROR: set_hf_tx_buffer() fatal error, rebooting."));
         V0_flush();
-        Watchdog.enable(5000);  // milliseconds
+        Watchdog.enable(5000);  // trigger reboot after 5 seconds
         while (true) tight_loop_contents();
     }
 
-    //******************
-    // wspr_encode(const char *call, const char *loc, const uint8_t dbm, uint8_t *symbols)
-    // Takes a callsign, grid locator, and power level and returns a WSPR symbol
-    // table for a Type 1, 2, or 3 message.
-    // call - Callsign (12 characters maximum.. we guarantee 6 max).
-    // loc - Maidenhead grid locator (6 characters maximum).
-    // dbm - Output power in dBm.
-    // symbols - Array of channel symbols to transmit returned by the method.
-    // Ensure that you pass a uint8_t array of at least size WSPR_SYMBOL_COUNT
-    if (false) {
-        V1_print(F("Before jtencode.wspr_encode() freeMem()" EOL));
-        freeMem();
-    }
+    // -----------------------------------------------------------------------
+    // Encode into 162 4-FSK channel symbols
+    // -----------------------------------------------------------------------
     jtencode.wspr_encode(hf_callsign, hf_grid4, hf_power, hf_tx_buffer);
-    if (false) {
-        V1_print(F("After jtencode.wspr_encode() freeMem()" EOL));
-        freeMem();
-    }
 
-    // maybe useful python for testing wspr encoding
-    // https://github.com/robertostling/wspr-tools/blob/master/README.md
     V1_println(F("set_hf_tx_buffer END"));
 }
 
