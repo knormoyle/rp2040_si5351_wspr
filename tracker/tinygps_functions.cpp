@@ -16,16 +16,23 @@ extern bool USE_SIM65M;
 
 // FIX! why do we have to declare in tracker.ino and extern here?
 extern TinyGPSCustom gp_sats;
+extern TinyGPSCustom gp_mode_op;
+extern TinyGPSCustom gp_mode_nav;
 extern TinyGPSCustom gp_pdop;
 extern TinyGPSCustom gp_hdop;
 extern TinyGPSCustom gp_vdop;
 
 extern TinyGPSCustom gbd_sats;
+// special for SIM65M?
 extern TinyGPSCustom ggb_sats;
+extern TinyGPSCustom gb_mode_op;
+extern TinyGPSCustom gb_mode_nav;
 extern TinyGPSCustom gb_pdop;
 extern TinyGPSCustom gb_hdop;
 extern TinyGPSCustom gb_vdop;
 
+extern TinyGPSCustom gl_mode_op;
+extern TinyGPSCustom gl_mode_nav;
 extern TinyGPSCustom gl_sats;
 extern TinyGPSCustom gl_pdop;
 extern TinyGPSCustom gl_hdop;
@@ -136,17 +143,25 @@ void tinyGpsCustom() {
         printStr("gp_sats", true, 8);
         printStr("gb_sats", true, 8);
         printStr("gl_sats", true, 8);
+
         // SIM65M
         printStr("ga_sats", true, 8);
 
+        printStr("gp_mode_op", true, 8);
+        printStr("gp_mode_nav", true, 8);
         printStr("gp_hdop", true, 8);
         printStr("gp_vdop", true, 8);
         printStr("gp_pdop", true, 8);
 
+
+        printStr("gb_mode_op", true, 8);
+        printStr("gb_mode_nav", true, 8);
         printStr("gb_hdop", true, 8);
         printStr("gb_vdop", true, 8);
         printStr("gb_pdop", true, 8);
 
+        printStr("gl_mode_op", true, 8);
+        printStr("gl_mode_nav", true, 8);
         printStr("gl_hdop", true, 8);
         printStr("gl_vdop", true, 8);
         printStr("gl_pdop", true, 8);
@@ -176,14 +191,20 @@ void tinyGpsCustom() {
             printStr(ga_sats.value(), validB_ga, 8);
 
             // if it's empty, it will be blank
+            printStr(gp_mode_op.value(), validB_gp, 8);
+            printStr(gp_mode_nav.value(), validB_gp, 8);
             printStr(gp_hdop.value(), validB_gp, 8);
             printStr(gp_vdop.value(), validB_gp, 8);
             printStr(gp_pdop.value(), validB_gp, 8);
 
+            printStr(gb_mode_op.value(), validB_gb, 8);
+            printStr(gb_mode_nav.value(), validB_gb, 8);
             printStr(gb_hdop.value(), validB_gb, 8);
             printStr(gb_vdop.value(), validB_gb, 8);
             printStr(gb_pdop.value(), validB_gb, 8);
 
+            printStr(gl_mode_op.value(), validB_gl, 8);
+            printStr(gl_mode_nav.value(), validB_gl, 8);
             printStr(gl_hdop.value(), validB_gl, 8);
             printStr(gl_vdop.value(), validB_gl, 8);
             printStr(gl_pdop.value(), validB_gl, 8);

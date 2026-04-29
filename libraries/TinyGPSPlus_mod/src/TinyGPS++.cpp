@@ -232,13 +232,19 @@ bool TinyGPSPlus::endOfTermHandler()
   // the first term determines the sentence type
   if (curTermNumber == 0)
   {
-    if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _RMCterm))
+    // add BDRMC/BDGGA/BDGSV single constellation possibilities. GLRMC/GLGGA/GLGSV possibilities were already there
+    // allow D in the 2nd char
+    // if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _RMCterm))
+    if (strchr("GB", term[0]) != NULL && strchr("DPNABL", term[1]) != NULL && !strcmp(term + 2, _RMCterm))
       curSentenceType = GPS_SENTENCE_RMC;
-    else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _GGAterm))
+    // else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _GGAterm))
+    else if (strchr("GB", term[0]) != NULL && strchr("DPNABL", term[1]) != NULL && !strcmp(term + 2, _GGAterm))
       curSentenceType = GPS_SENTENCE_GGA;
-    else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _ZDAterm))
+    // else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _ZDAterm))
+    else if (strchr("GB", term[0]) != NULL && strchr("DPNABL", term[1]) != NULL && !strcmp(term + 2, _ZDAterm))
       curSentenceType = GPS_SENTENCE_ZDA;
-    else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _GSTterm))
+    // else if (term[0] == 'G' && strchr("PNABL", term[1]) != NULL && !strcmp(term + 2, _GSTterm))
+    else if (strchr("GB", term[0]) != NULL && strchr("DPNABL", term[1]) != NULL && !strcmp(term + 2, _GSTterm))
       curSentenceType = GPS_SENTENCE_GST;
     else
       curSentenceType = GPS_SENTENCE_OTHER;

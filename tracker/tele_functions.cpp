@@ -201,6 +201,7 @@ void snapForTelemetry() {
     // 4/26/24
     // does the isValid go away some times after we got fix_valid_all in tracker.ino
     // to allow snapForTelemetry() ?
+    // altitude is a double in TinyGPS
     int altitude = gps.altitude.isValid() ? (int) gps.altitude.meters() : 0;
     altitude = clamp_int(altitude, 0, 999999);
 
@@ -410,14 +411,9 @@ void snapForTelemetry() {
     // enum Quality { Invalid = '0', GPS = '1', DGPS = '2', PPS = '3', RTK = '4', FloatRTK = '5', Estimated = '6', Manual = '7', Simulated = '8' };
     // enum Mode { N = 'N', A = 'A', D = 'D', E = 'E'};
 
-    // these are chars?
-    // FIX! can we go directly just using %c in snprintf
-    char fq[2] = { 0 };
-    fq[0] = gps.location.FixQuality();
-    char fm[2] = { 0 }; 
-    fm[0] = gps.location.FixMode();
-    snprintf(tt.fixMode, sizeof(tt.fixMode), "%s", fm);
-    snprintf(tt.fixQual, sizeof(tt.fixQual), "%s", fq);
+    // these are single chars?
+    snprintf(tt.fixMode, sizeof(tt.fixMode), "%c", gps.location.FixMode());
+    snprintf(tt.fixQual, sizeof(tt.fixQual), "%c", gps.location.FixQuality());
 
     bool validA = gps.satellites.isValid() && !GpsInvalidAll;
     // bool validB = gps.hdop.isValid() && !GpsInvalidAll;

@@ -24,6 +24,7 @@
 #include "debug_functions.h"
 #include "led_functions.h"
 #include "gps_functions.h"
+#include "tinygps_functions.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
 // for TinyGPSDate definition
@@ -420,6 +421,7 @@ void gpsResetTest(bool gpsColdReset) {
     uint32_t duration_millis = 0;
     uint32_t elapsed_setTime_secs;
 
+    uint32_t print_millis = start_millis + 5000;
     while (!fix_valid_all) {
         Watchdog.reset();
         tries += 1;
@@ -443,21 +445,38 @@ void gpsResetTest(bool gpsColdReset) {
             (gps.date.year() >= 2025 && gps.date.year() <= 2035) &&
     
             // FIX! we check for 3 or more in tracker.ino
+            gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
             // check for 5 or more as test here
-            // gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
-            gps.satellites.isValid() && (gps.satellites.value() >= 5) &&
+            // gps.satellites.isValid() && (gps.satellites.value() >= 5) &&
             gps.hdop.isValid() &&
             gps.altitude.isValid() &&
             gps.location.isValid() &&
             gps.speed.isValid() &&
-            gps.course.isValid();
+            gps.course.isValid() && 
+            // 4/25/26.. add not N and not E !
+            // we allow E in the normal tracker.ino fix? 
+            gps.location.FixMode() != 'N' &&
+            gps.location.FixMode() != 'E';
+
 
         duration_millis = millis() - start_millis;
-        if (duration_millis > 240000) {  // 4 * 60 = 240 secs
-            V0_printf("ERROR: gpsResetTest %u %lu: no fix after %lu millisecs" EOL, 
+        if (millis() > print_millis) {  // print every 5 secs?
+            // prints out the summary info that we have so far?
+            V0_printf("ERROR: gpsResetTest %u %lu: gpsDebug print, but no fix at %lu millisecs interval" EOL, 
+                gpsColdReset, count, duration_millis);
+            gpsDebug();
+            tinyGpsCustom();
+
+            print_millis = millis() + 5000;
+        }
+
+        // Glonass-only was missing ?
+        else if (duration_millis > 240000) {  // 4 * 60 = 240 secs
+            V0_printf("ERROR: gpsResetTest %u %lu: no fix after %lu millisecs duration" EOL, 
                 gpsColdReset, count, duration_millis);
             break;
         }
+
         // by not sleeping, we should get better timing accuracy?
         // maybe check that at least 1 sec has elapsed for each loop iteration
         V0_flush();
@@ -481,6 +500,7 @@ void gpsResetTest(bool gpsColdReset) {
         }
         // prints out the summary info
         gpsDebug();
+        tinyGpsCustom();
     }
     GpsOFF();
     count += 1;

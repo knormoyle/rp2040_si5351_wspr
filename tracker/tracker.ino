@@ -204,6 +204,10 @@ bool USE_SIM65M = false;
 
 TinyGPSCustom gp_sats(gps, "GPGSV", 3);
 // FIX! do we only get GNGSA ?? ?? don't need?
+TinyGPSCustom gp_mode_op(gps, "GPGSA", 1);
+TinyGPSCustom gp_mode_nav(gps, "GPGSA", 2);
+// the CASIC spec says different fields?
+// $GPGSA,A,3,01,03,04,16,,,,,,,,,4.7,2.7,3.9*3F
 TinyGPSCustom gp_pdop(gps, "GPGSA", 15);
 TinyGPSCustom gp_hdop(gps, "GPGSA", 16);
 TinyGPSCustom gp_vdop(gps, "GPGSA", 17);
@@ -227,12 +231,16 @@ TinyGPSCustom gbd_sats(gps, "BDGSV", 3);  // BeiDou
 // $GPGSA,A,3,10,18,27,32,,,,,,,,,3.8,1.9,3.3*3D
 
 // SIM65M and ATGM336H ?
+TinyGPSCustom gb_mode_op(gps, "BDGSA", 1);
+TinyGPSCustom gb_mode_nav(gps, "BDGSA", 2);
 TinyGPSCustom gb_pdop(gps, "BDGSA", 15);
 TinyGPSCustom gb_hdop(gps, "BDGSA", 16);
 TinyGPSCustom gb_vdop(gps, "BDGSA", 17);
 
 TinyGPSCustom gl_sats(gps, "GLGSV", 3);
 // FIX! do we only get GNGSA ?? ?? don't need?
+TinyGPSCustom gl_mode_op(gps, "GLGSA", 1);
+TinyGPSCustom gl_mode_nav(gps, "GLGSA", 2);
 TinyGPSCustom gl_pdop(gps, "GLGSA", 15);
 TinyGPSCustom gl_hdop(gps, "GLGSA", 16);
 TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
@@ -257,8 +265,6 @@ TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
 #include "doug_functions.h"
 #include "global_structs.h"
 #include "pps_functions.h"
-
-//*********************************
 
 //*********************************
 JTEncode jtencode;
@@ -1223,12 +1229,11 @@ extern const uint32_t GPS_LOCATION_AGE_MAX = 30000;
 // needs to be at least 1 sec (a little more) since it
 // wants to grab a full burst, and we don't know where we are in the repeating
 // burst behavior when we start (idle or in the middle of a burst?)
-// extern const int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
-
 // with all the constellations on SIM65M, seems like we should wait longer to get
 // full set of NMEA sentences for a burst (plus the burst is only every 5 secs no)
-// adjust this to be 2000 if USE_SIM65M (in config_functions.cpp)
-int GPS_WAIT_FOR_NMEA_BURST_MAX = 1500;
+
+// this is adjusted in gps_functions.cpp, depending on broadcast interval
+int GPS_WAIT_FOR_NMEA_BURST_MAX = 1200;
 
 //*************************************************************************
 void loop1() {
@@ -1296,6 +1301,10 @@ void loop1() {
         bool fix_updated = gps.location.isUpdated();
         gps.location.updated = false;
 
+        // single chars?
+        char fix_mode = gps.location.FixMode();
+        char fix_qual = gps.location.FixQuality();
+
         uint32_t fix_sat_cnt = gps.satellites.value();
 
         uint32_t elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
@@ -1318,6 +1327,7 @@ void loop1() {
         // N A D E
         // bool hasMode = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
         
+        // fix_age isn't included in this
         bool fix_valid_all =
             !GpsInvalidAll &&
             // we got system time synced
@@ -1424,14 +1434,28 @@ void loop1() {
         // some detail on TinyGPS. precision?
         // https://sites.google.com/site/wayneholder/self-driving-rc-car/getting-the-most-from-gps
         // fix_age will be 4294967295 if not valid
+        // these lines will be good for grepping to see the used fix. 
+        // if it's too old it won't be used
+        // plus note some other non-use cases
         V1_print(F(EOL));
+        // doesn't include fix_age. includes sat_cnt
+        bool fix_used = fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX);
+        // altitude is a double in TinyGPS
+        int fix_altitude = (int) gps.altitude.meters();
+
+        V1_printf("fix_used %u" EOL, fix_used);
         V1_printf("fix_valid_all %u" EOL, fix_valid_all);
         V1_printf("fix_valid_2d %u" EOL, fix_valid_2d);
+        V1_printf("fix_updated %u" EOL, fix_updated);
         V1_printf("fix_age %lu millisecs" EOL, fix_age);
         V1_printf("fix_sat_cnt %lu" EOL, fix_sat_cnt);
-        V1_printf("fix_updated %u" EOL, fix_updated);
+        V1_printf("fix_altitude %lu" EOL, fix_altitude);
+        // single chars?
+        V1_printf("fix_mode %c" EOL, fix_mode);
+        V1_printf("fix_qual %c" EOL, fix_qual);
         V1_printf("elapsed_setTime_secs %lu" EOL, elapsed_setTime_secs);
         V1_print(F(EOL));
+
 
         Watchdog.reset();
         if ( !(fix_valid_all && (fix_age <= GPS_LOCATION_AGE_MAX)) ) {

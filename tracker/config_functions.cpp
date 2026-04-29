@@ -878,6 +878,7 @@ static void call_flash_range_program(void *param) {
 void write_FLASH(void) {
     Watchdog.reset();
     V1_print(F("write_FLASH START" EOL));
+    V1_flush();
     // Flash is initially all zeroes
     char data_chunk[FLASH_BYTES_USED] = { 0 };  // enough to cover what we use here
     uint8_t udata_chunk[FLASH_PAGE_SIZE] = { 0 };  // 256 bytes
@@ -918,6 +919,13 @@ void write_FLASH(void) {
 
     // was false 9/1/2025
     if (false) {
+        // FIX! why am I getting rc = -4 with these
+        // Flash is "execute in place" and so will be in use when any code that is stored in flash runs, e.g. an interrupt handler
+        // or code running on a different core.
+        // Calling flash_range_erase or flash_range_program at the same time as flash is running code would cause a crash.
+        // flash_safe_execute disables interrupts and tries to cooperate with the other core to ensure flash is not in use
+        // See the documentation for flash_safe_execute and its assumptions and limitations
+        // https://www.raspberrypi.com/documentation/pico-sdk/hardware.html
         rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
         V0_printf("flash_safe_execute call_flash_range_erase rc: %d" EOL, rc);
         // hard_assert(rc == PICO_OK);
@@ -933,15 +941,21 @@ void write_FLASH(void) {
         ints = save_and_disable_interrupts();
         // 9/1/25 ..??
         V0_print(F("Erasing FLASH target region" EOL));
+        V0_flush();
+
+
         flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
         // writes 256 bytes (one "page") (16 pages per sector)
         // was 12/18/2024
 
         V0_print(F("Writing FLASH target region" EOL));
+        V0_flush();
+
         flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
         restore_interrupts(ints);
     }
     V1_print(F("write_FLASH END" EOL));
+    V1_flush();
 }
 
 
