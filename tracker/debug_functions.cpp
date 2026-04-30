@@ -1,5 +1,4 @@
-// Project: https://github.com/knormoyle/rp2040_si5351_wspr
-// Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
+// Project: https://github.com/knormoyle/rp2040_si5351_wspr // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
 //********************************************
@@ -24,6 +23,7 @@
 #include "debug_functions.h"
 #include "led_functions.h"
 #include "gps_functions.h"
+#include "si5351_functions.h"
 #include "tinygps_functions.h"
 #include <Adafruit_SleepyDog.h>  // https://github.com/adafruit/Adafruit_SleepyDog
 
@@ -387,7 +387,7 @@ void freeMem() {
 }
 
 //**********************************
-extern const int GPS_WAIT_FOR_NMEA_BURST_MAX; 
+extern const uint32_t GPS_WAIT_FOR_NMEA_BURST_MAX; 
 // true for gps cold reset
 void gpsResetTest(bool gpsColdReset) {
     static uint32_t count = 0;
@@ -400,6 +400,10 @@ void gpsResetTest(bool gpsColdReset) {
 
     if (count == 0) {
         V0_print(F("need gps init and cold reset once to fully setup gps"));
+
+        // make sure si5351a is off
+        vfo_turn_off();
+
         GpsINIT();
         GpsOFF();
         GpsON(gpsColdReset); 

@@ -34,7 +34,7 @@
 // ATGM336N if false
 extern bool USE_SIM65M;
 // change it if we have the 5sec fix/broadcast on USE_SIM65M
-extern int GPS_WAIT_FOR_NMEA_BURST_MAX;
+extern uint32_t GPS_WAIT_FOR_NMEA_BURST_MAX;
 extern uint32_t setTime_millis;  // last millis() when we setTime()
 extern bool BALLOON_MODE;
 
@@ -112,6 +112,7 @@ extern bool PPS_rise_valid;
 #include "print_functions.h"
 #include "time_functions.h"
 #include "pps_functions.h"
+#include "slow_clock_functions.h"
 
 // enums for voltage at:
 // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
@@ -167,24 +168,20 @@ extern bool IGNORE_KEYBOARD_CHARS;
 // we make RP2040 to 18mhz during the long gps cold reset fix time
 // then restore to this
 extern uint32_t PLL_SYS_MHZ;  // decode of _clock_speed
-extern bool BALLOON_MODE;
 
 //************************************************
 // false and true work here
 bool PWM_GPS_POWER_ON_MODE = true;
-
 bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 // 7/10/25
 // bool ALLOW_UPDATE_GPS_FLASH_MODE = true;
-// causing intermittent fails if true?
-bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false;
 
 // does this close putty if true?
-bool ALLOW_USB_DISABLE_MODE = false;
-
-bool ALLOW_KAZU_12MHZ_MODE = false;
-// should work with new code for slow/restore? (but we assume restore to 18Mhz or above)
-bool ALLOW_TEMP_12MHZ_MODE = true;
+extern bool ALLOW_USB_DISABLE_MODE;
+extern bool ALLOW_KAZU_12MHZ_MODE;
+extern bool ALLOW_TEMP_12MHZ_MODE;
+// causing intermittent fails if true?
+extern bool ALLOW_LOWER_CORE_VOLTAGE_MODE;
 
 //************************************************
 static bool GpsIsOn_state = false;
@@ -318,7 +315,6 @@ void nmeaBufferAndPrint(const char charToAdd, bool printIfFull) {
     nmeaBuffer[n + 1] = 0;
 }
 
-
 // =============================================================================
 // gpsSleepForMillis
 // -----------------------------------------------------------------------------
@@ -383,7 +379,6 @@ int checkGpsBaudRate(int desiredBaud) {
     return usedBaud;
 }
 
-//************************************************
 // =============================================================================
 // getInitialGpsOutput
 // -----------------------------------------------------------------------------
@@ -417,17 +412,14 @@ int checkGpsBaudRate(int desiredBaud) {
 static bool drainSerial2AndCount(uint32_t *charCount, uint32_t *sentenceCount) {
     while (Serial2.available()) {
         char incomingChar = Serial2.read();
-
         // skip any non-printable, as we won't be able to dos2unix the
         // putty.log if those are in there
         if (!isprint((unsigned char)incomingChar)) continue;
-
         // buffer it up like we do normally below, so we can see sentences
         nmeaBufferAndPrint(incomingChar, true);  // print if full
         *charCount += 1;
         if (incomingChar == '$') *sentenceCount += 1;
     }
-
     if (*charCount >= GPS_INITIAL_OUTPUT_MAX_CHARS) return true;
     if (*sentenceCount >= GPS_INITIAL_OUTPUT_MIN_NMEA) return true;
     return false;
@@ -439,34 +431,27 @@ static bool drainSerial2AndCount(uint32_t *charCount, uint32_t *sentenceCount) {
 bool getInitialGpsOutput(void) {
     V1_println(F("getInitialGpsOutput START"));
     V1_println(F("Look for some Serial2 bytes for 5 secs or 5000 chars or 2 sentences"));
-
     uint32_t incomingCharCnt     = 0;
     uint32_t incomingSentenceCnt = 0;
     uint32_t start_millis = millis();
-
     while ((millis() - start_millis) < GPS_INITIAL_OUTPUT_TIMEOUT_MS) {
         Watchdog.reset();
-
         // Drain whatever's waiting. If we hit an early-exit threshold
         // (enough chars or enough sentences), break out.
         if (Serial2.available()) {
             if (drainSerial2AndCount(&incomingCharCnt, &incomingSentenceCnt)) break;
         }
-
         // Sleep up to 1 sec, returning early if Serial2 has data again.
         gpsSleepForMillis(1000, true);
     }
-
     nmeaBufferPrintAndClear();
     updateStatusLED();
     Watchdog.reset();
-
     V1_println(F("getInitialGpsOutput END"));
     return (incomingSentenceCnt >= GPS_INITIAL_OUTPUT_MIN_NMEA);
 }
 
 //************************************************
-
 void setGpsBalloonMode(void) {
     V1_println(F("setGpsBalloonMode START"));
     //************************
@@ -1016,7 +1001,6 @@ void setGpsConstellations(int desiredConstellations) {
     V1_printf("setGpsConstellations END %d" EOL, desiredConstellations);
 }
 
-
 //************************************************
 void setupSIM65M(int desiredBaud) {
     // Currently nothing?
@@ -1462,9 +1446,7 @@ void GpsINIT(void) {
     V1_println(F(EOL "GpsINIT START"));
     updateStatusLED();
     Watchdog.reset();
-
     CONSTELLATIONS_GROUP = atoi(cc._const_group);
-
     // -------------------------------------------------------------------------
     // GPIO setup -- power, reset, on/off
     // -------------------------------------------------------------------------
@@ -1473,7 +1455,6 @@ void GpsINIT(void) {
     initGpsOnPin();
     // Drive pins to known starting state (power off, reset deasserted, on=LOW).
     driveGpsPinsToInitialState();
-
     // -------------------------------------------------------------------------
     // UART setup
     // -------------------------------------------------------------------------
@@ -1481,9 +1462,7 @@ void GpsINIT(void) {
     // FIX! is it okay that RX is powered on while gps chip is powered off?
     Serial2.setRX(GPS_UART1_RX_PIN);
     Serial2.setTX(GPS_UART1_TX_PIN);
-
     beginSerial2AtDefaultBaud();
-
     // -------------------------------------------------------------------------
     // Full cold reset: also sets baud to the target rate and applies
     // setGpsBalloonMode. After this returns, the GPS is powered up.
@@ -1493,7 +1472,6 @@ void GpsINIT(void) {
     // like ATGM366N (weird), or will it default to 115200 again?
     // -------------------------------------------------------------------------
     GpsFullColdReset();
-
     // Drain the rx buffer.
     // while (Serial2.available()) Serial2.read();
     gpsSleepForMillis(2000, false);
@@ -1540,7 +1518,6 @@ static void gpsPwrOn_weakPulldown(void) {
     // Assumed current GpsPwr state on entry (the GPIO driving the mosfet
     // for the GPS chip power):
     //   output, driven with 1, with pullup (set by init) -> active deassert.
-
     pinMode(GpsPwr, INPUT);
     // Pulldown is 50 to 80 kohms on the rp2040 (so is pullup).
     gpio_pull_down(GpsPwr);  // this also disables the pullup
@@ -1550,7 +1527,6 @@ static void gpsPwrOn_weakPulldown(void) {
     pinMode(GpsPwr, OUTPUT);
     gpio_put(GpsPwr, LOW);
 }
-
 
 // -----------------------------------------------------------------------------
 // Strategy B: bit-banged PWM that ramps from low duty to high duty over ~2s.
@@ -1789,10 +1765,6 @@ static void enterLowPowerForGpsBringup(void) {
     // voltage enums:
     // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_vreg/include/hardware/vreg.h
 
-    // FIX! we never restore from this core voltage. assuming we stay at 18 Mhz.
-    if (ALLOW_LOWER_CORE_VOLTAGE_MODE && PLL_SYS_MHZ == 18) {
-        vreg_set_voltage(VREG_VOLTAGE_0_95);  // 0_85 crashes for him. 0.90 worked for him
-    }
 }
 
 // -----------------------------------------------------------------------------
@@ -1801,7 +1773,6 @@ static void enterLowPowerForGpsBringup(void) {
 static void exitLowPowerAfterGpsBringup(uint32_t pll_sys_mhz_restore) {
     Watchdog.reset();
     busy_wait_ms(500);
-
     // FIX! this restores/keeps sys clk to 12mhz and sys pll off.
     // The problem is _clock_speed doesn't have 12Mhz, and we need PLL_SYS_MHZ correct 
     // for PWM div/wrap calcs. 
@@ -1810,7 +1781,6 @@ static void exitLowPowerAfterGpsBringup(uint32_t pll_sys_mhz_restore) {
     kazuClocksRestore(pll_sys_mhz_restore, currentGpsBaud);
     // V1_print(F("Restored core voltage back to 1.1v" EOL));
     V1_flush();
-
     bool slowUsedKazu12MhzMode = ALLOW_KAZU_12MHZ_MODE;
     // not used
     // bool slowDisabledUsbPLL = !BALLOON_MODE && ALLOW_USB_DISABLE_MODE;
@@ -1913,7 +1883,6 @@ static void maybeWriteGpsConfigToFlash(void) {
     writeGpsConfigNoBroadcastToFlash();
     // restores to desired constellations and broadcast
 }
-
 
 // -----------------------------------------------------------------------------
 // Main entry point
@@ -2070,7 +2039,6 @@ bool GpsFullColdReset(void) {
 // -----------------------------------------------------------------------------
 static void hotResetPowerCycle(void) {
     V1_println(F("Doing Gps HOT POWER_ON (GPS_ON_PIN off with power off-on)"));
-
     // Off (don't assert reset during power off)
     digitalWrite(GPS_ON_PIN, LOW);
     digitalWrite(GPS_NRESET_PIN, HIGH);
@@ -2168,7 +2136,6 @@ static void hotResetSIM65MPostConfig(void) {
     setGnssOn_SIM65M();
 }
 
-
 // -----------------------------------------------------------------------------
 // Main entry point
 // -----------------------------------------------------------------------------
@@ -2181,26 +2148,21 @@ bool GpsHotReset(void) {
 
     setStatusLEDBlinkCount(LED_STATUS_NO_GPS);
     updateStatusLED();
-
     // turn off the serial
     V1_flush();
-
     // -------------------------------------------------------------------------
     // Power-cycle the GPS (no reset assertion)
     // -------------------------------------------------------------------------
     hotResetPowerCycle();
-
     // -------------------------------------------------------------------------
     // Serial2 + baud
     // -------------------------------------------------------------------------
     hotResetBringUpSerial2();
-
     // -------------------------------------------------------------------------
     // Optional reconfig
     // -------------------------------------------------------------------------
     hotResetReapplyConfig();
     hotResetSIM65MPostConfig();
-
     // -------------------------------------------------------------------------
     // Read initial NMEA, decide whether the GPS is alive
     // -------------------------------------------------------------------------
@@ -2617,23 +2579,18 @@ uint32_t updateGpsDataAndTime(int ms) {
     bool     finished             = false;
 
     while (!finished && (millis() - entry_millis) < (uint64_t)ms) {
-
         while (!finished && charsAvailable > 0) {
             uint32_t now = millis();
-
             // start the duration timing when we get the first char
             if (start_millis == 0) start_millis = now;
             last_char_millis = now;
-
             // we count all chars, even CR LF etc
             incomingCharCnt++;
             timeUpdateDone = false;
-
             // shouldn't happen any more?
             if (VERBY[1] && charsAvailable >= 31)
                 StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL,
                     (int)charsAvailable, incomingCharCnt);
-
             char c      = incomingChar;
             bool isCrlf = (c == '\r' || c == '\n');
 
@@ -2644,14 +2601,12 @@ uint32_t updateGpsDataAndTime(int ms) {
             // a punctuation character !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ,
             // or <space>, or any character classified as printable by the current C locale.
             bool isPrint = !isCrlf && isprint(c);
-
             // always strip non-printable, non-CRLF chars here and continue the loop
             // CR and LF isprint() is false
             if (!isPrint && !isCrlf) {
                 getChar();
                 continue;
             }
-
             // Update sentence-alignment and timing state.
             // crlf falls through to gps.encode() below but isPrint stays false,
             // so it won't be written to the nmea buffer for printing.
@@ -2669,6 +2624,7 @@ uint32_t updateGpsDataAndTime(int ms) {
                     sentenceEndCnt++;
                     // clear time updated state, right before any TinyGPS term/commit event
                     // always need checksum before a commit event
+                    // we use date in the routine. so both should be updated?
                     gps.time.updated = false;
                     timeUpdateDone   = false;
                     // save dollar_millis to avoid race condition with next '$'
@@ -2687,11 +2643,14 @@ uint32_t updateGpsDataAndTime(int ms) {
             gps.encode(c);
             // updated has to transition before we get the next dollar_millis??
             // we use dollarStar_millis to make sure no race condition with '$'
-            if (gps.time.updated) {
+            // RMC should be last sentence in the burst? has date.
+            // GGA is first in the burst. we use that for time.
+            if (gps.time.updated && gps.date.updated) {
                 // if we get two, we've gone too long on the burst
                 timeUpdate_sentences++;
                 checkUpdateTimeFromGps(dollarStar_millis);
                 gps.time.updated = false;
+                gps.date.updated = false;
                 // trying to synchronize so GGA is always first
                 timeUpdateDone = true;
                 if (timeUpdate_sentences >= 2) finished = true;
@@ -2707,12 +2666,10 @@ uint32_t updateGpsDataAndTime(int ms) {
         // keep as close as possible to the NMEA sentence arrival?
         // I suppose we'll see gps.time.updated every time?
         updateStatusLED();
-
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
         // break out when we don't get the next char right away
         uint32_t gapMs = last_char_millis ? (millis() - last_char_millis) : 0;
-
         // FIX! should the two delays used be dependent on baud rate?
         // if we got slowed down by doing a timeUpdate, don't do this
         // FIX! if the time update took more than 32ms the rx fifo would back up, full
@@ -2720,13 +2677,11 @@ uint32_t updateGpsDataAndTime(int ms) {
         // situation probably doesn't happen now.
         // was 25
         if (gapMs >= 10 && !timeUpdateDone) break;
-
         // stop the wait early if Serial2.available
         // was 25
         gpsSleepForMillis(10, true);
         getChar();
     }
-
     
     // Reporting
     uint32_t duration_millis = start_millis ? (millis() - start_millis) : 0;
@@ -2846,7 +2801,6 @@ static bool fixAgeIsAcceptable(bool forceUpdate, uint32_t timeUpdateCnt) {
         }
         return true;
     }
-
     if (fix_age > 250) {
         V1_printf("WARN: bad try. fix_age %lu" EOL, fix_age);
         return false;
@@ -2914,18 +2868,15 @@ static void updateBestGuessSkewFromPPS(uint32_t setTime_millis,
                   *bestGuessSkewFromPPS);
         return;
     }
-
     // we should be using this at least once per rollover.
     uint32_t elapsed_millis3 = setTime_millis - PPS_rise_millis;
     uint32_t elapsed_millis3_modulo = elapsed_millis3 % 1000;
-
     // print the modulo 1 sec also, if the last PPS was a while ago
     // (gps being reset or ?)
     uint32_t fix_age = gps.time.age();
     V1_printf("setTime elapsed_millis3 %lu %lu after PPS. PPS_rise_cnt %lu",
               elapsed_millis3, elapsed_millis3_modulo, PPS_rise_cnt);
     V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
-
     // range check it..otherwise leave as it was (default 100 on first call)
     if (elapsed_millis3_modulo > 10 && elapsed_millis3_modulo < 500) {
         *bestGuessSkewFromPPS = elapsed_millis3_modulo;
@@ -2944,7 +2895,6 @@ static void updateBestGuessSkewFromPPS(uint32_t setTime_millis,
 // -----------------------------------------------------------------------------
 static void reportDrift(int secondDelta, bool forceUpdate, uint32_t timeUpdateCnt) {
     if (timeUpdateCnt == 0) return;
-
     // V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
     if (abs(secondDelta) > 1) {
         V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
@@ -2993,15 +2943,12 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
 
     // positive skew. make negative when adjusting millis time.
     static uint32_t bestGuessSkewFromPPS = 100;
-
     uint32_t fix_age_entry = gps.time.age();
-
     // -------------------------------------------------------------------------
     // Early-out gate 1: GPS year/date/time validity
     // -------------------------------------------------------------------------
     // can't do anything if this isn't good!
     if (!gpsTimeIsUsableForUpdate()) return;
-
     // -------------------------------------------------------------------------
     // Early-out gate 2: rate limit -- once per burst at most.
     // We modified TinyGPS to only use GGA to commit time so we always see
@@ -3009,16 +2956,16 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // -------------------------------------------------------------------------
     uint32_t elapsed_millis1 = millis() - lastCheck_millis;
     lastCheck_millis = millis();
-    if (elapsed_millis1 < (uint32_t) 1 * GPS_WAIT_FOR_NMEA_BURST_MAX) return;
-
+    // but this burst max time is slightly bigger than the burst interval
+    // so we'll only update every other at most?
+    if (elapsed_millis1 < GPS_WAIT_FOR_NMEA_BURST_MAX) return;
     // -------------------------------------------------------------------------
     // Decide whether this is a forced update.
-    // Force at least every 1 minute. With 2 wsprs plus cw, this could
+    // Force at least every burst. (1 or 5 secs?) With 2 wsprs plus cw, this could
     // otherwise be delayed up to every 5-6 minutes easily.
     // -------------------------------------------------------------------------
     uint32_t elapsed_millis2 = millis() - lastUpdate_millis;
-    forceUpdate = elapsed_millis2 > (1 * 60 * 1000);
-
+    forceUpdate = elapsed_millis2 > GPS_WAIT_FOR_NMEA_BURST_MAX;
     if (forceUpdate && timeUpdateCnt != 0) {
         V1_printf("setTime forceUpdate. elapsed_millis2 %lu" EOL, elapsed_millis2);
     }
@@ -3028,7 +2975,6 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // Try to get as close to the NMEA timestamp as possible.
     // -------------------------------------------------------------------------
     if (!fixAgeIsAcceptable(forceUpdate, timeUpdateCnt)) return;
-
     // -------------------------------------------------------------------------
     // Early-out gate 4: hundredths must be 0.
     // PPS skew seems wrong often if not -- it goes to zero once we get a fix
@@ -3134,20 +3080,17 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // -------------------------------------------------------------------------
     int secondDelta = ((int) monthSecs) - ((int) gps_monthSecs);
     reportDrift(secondDelta, forceUpdate, timeUpdateCnt);
-
     // -------------------------------------------------------------------------
     // Diagnostic: rx fifo backup at this point. Might give an indication of
     // how long it takes to do all this work.
     // -------------------------------------------------------------------------
     reportRxFifoBackup(fix_age_entry);
-
     // -------------------------------------------------------------------------
     // Bookkeeping
     // -------------------------------------------------------------------------
     lastUpdate_millis = millis();
     forceUpdate = false;
     timeUpdateCnt += 1;
-
     V1_print(EOL);
     // FIX! does the uart rx fifo get backed up when we update and do all this printing?
 }
@@ -3314,396 +3257,3 @@ void gpsDebug() {
 // With these higher value gate resistors,
 // measured the source voltage dropping to only ~3.0 V
 // when the GPS is turned on (~250 mV).
-
-
-//#***************************************************************************
-// The function now writes three handshake booleans that kazuClocksRestore will read:
-// static bool kazu_slow_didDeinitSysPll       = false;
-// static bool kazu_slow_didDeinitUsbPll        = false;
-// static bool kazu_slow_didRetargetPeripherals = false;
-
-// Each step that actually ran flips its corresponding bool to true. 
-// Steps gated off by config leave their bool at false. 
-// At the top of the function, all three are reset to false so a stale value from a prior cycle can't lie to the restore side.
-
-// The restore side reads these statics to decide what to do:
-// kazu_slow_didDeinitSysPll && !ALLOW_KAZU_12MHZ_MODE ...Restore pll_sys / clk_sys
-// kazu_slow_didDeinitUsbPll... Restore pll_usb and Serial
-// kazu_slow_didRetargetPeripherals and !ALLOW_KAZU_12MHZ_MODE ...Restore clk_peri / clk_adc / clk_rtc
-
-// The !ALLOW_KAZU_12MHZ_MODE checks on restore handle the "stay at 12 MHz" case, 
-// where we deliberately don't undo the slow steps even though they happened.
-//#***************************************************************************
-
-
-
-// =============================================================================
-// kazuClocksSlow
-// -----------------------------------------------------------------------------
-// Aggressive RP2040 power reduction. Three independent steps gated by config:
-//
-//   ALLOW_TEMP_12MHZ_MODE   -- drop clk_sys to 12 MHz (XOSC) and deinit pll_sys.
-//                              We always go down to 12 MHz for lowest power;
-//                              whether we *stay* there is governed by the
-//                              ALLOW_KAZU_12MHZ_MODE flag below.
-//
-//   ALLOW_USB_DISABLE_MODE  -- deinit pll_usb (kills printing). Skipped in
-//                              BALLOON_MODE because it causes a reboot
-//                              (no usb).
-//
-//   ALLOW_KAZU_12MHZ_MODE   -- also reroute clk_peri / clk_rtc / clk_adc to
-//                              XOSC so they survive pll_sys being off. Only
-//                              do this if we're staying at 12 MHz, since we
-//                              otherwise restore to a pll_sys value and the
-//                              peripherals should go back exactly as they were.
-//
-// Records what it actually did into module-level statics so kazuClocksRestore
-// can do the right thing without the caller threading state through.
-// Contract:
-//   - Each kazuClocksSlow() is paired with exactly one kazuClocksRestore()
-//     before the next kazuClocksSlow().
-//   - Nothing else writes to the kazu_slow_did* statics.
-// =============================================================================
-
-// -----------------------------------------------------------------------------
-// Handshake state -- written here, read by kazuClocksRestore.
-// -----------------------------------------------------------------------------
-static bool kazu_slow_didDeinitSysPll        = false;
-static bool kazu_slow_didDeinitUsbPll        = false;
-static bool kazu_slow_didRetargetPeripherals = false;
-
-// -----------------------------------------------------------------------------
-// Drop clk_sys to the 12 MHz external crystal and power down pll_sys.
-// -----------------------------------------------------------------------------
-static void switchClkSysTo12MhzXosc(void) {
-    // Change clk_sys to be 12MHz (the external crystal is 12mhz).
-    clock_configure(clk_sys,
-        CLOCKS_CLK_SYS_CTRL_SRC_VALUE_CLKSRC_CLK_SYS_AUX,
-        CLOCKS_CLK_SYS_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        12 * MHZ);
-    // now can turn off pll sys to save power
-    pll_deinit(pll_sys);
-}
-
-// -----------------------------------------------------------------------------
-// Power down pll_usb. Caller is responsible for the BALLOON_MODE / disable
-// guards -- skipping pll_usb deinit in BALLOON_MODE avoids a reboot, and
-// once it's off we lose the ability to print.
-// -----------------------------------------------------------------------------
-static void disableUsbPll(void) {
-    pll_deinit(pll_usb);
-}
-
-// -----------------------------------------------------------------------------
-// Reroute clk_peri / clk_rtc / clk_adc onto the XOSC so they keep running
-// after pll_sys is off and we stay at 12 MHz indefinitely.
-// CLK peri is clocked from clk_sys, so we need to change clk_peri's freq.
-// -----------------------------------------------------------------------------
-static void retargetPeripheralClocksToXosc(void) {
-    // clk_peri = XOSC 12 MHz
-    clock_configure(clk_peri,
-        0,  // No GLMUX
-        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        12 * MHZ);
-        // tried also:
-        // 48 * MHZ,
-        // 8 * MHZ);  // should this be 8 per the link above?
-
-    // clk_rtc = XOSC 12 MHz / 256 = 46875 Hz
-    // FIX! this should be usb clk / 1024 ?? around
-    // https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/pico_runtime_init/runtime_init_clocks.c
-    clock_configure(clk_rtc,
-        0,  // No GLMUX
-        CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        46875);
-
-    // clk_adc = XOSC 12 MHz / 1 = 12 MHz
-    clock_configure(clk_adc,
-        0,  // No GLMUX
-        CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_XOSC_CLKSRC,
-        12 * MHZ,
-        12 * MHZ);
-}
-
-
-// -----------------------------------------------------------------------------
-// Main entry point
-// -----------------------------------------------------------------------------
-void kazuClocksSlow(void) {
-    V1_println(F("kazuClocksSlow START" EOL));
-    V1_flush();
-
-    // Reset handshake state. Whatever a previous slow/restore cycle did is
-    // no longer relevant -- only what THIS call does matters to the matching
-    // kazuClocksRestore().
-    kazu_slow_didDeinitSysPll        = false;
-    kazu_slow_didDeinitUsbPll        = false;
-    kazu_slow_didRetargetPeripherals = false;
-
-    // -------------------------------------------------------------------------
-    // Step 1: drop clk_sys to XOSC 12 MHz and power down pll_sys.
-    // -------------------------------------------------------------------------
-    if (ALLOW_TEMP_12MHZ_MODE) {
-        switchClkSysTo12MhzXosc();
-        kazu_slow_didDeinitSysPll = true;
-    }
-
-    // -------------------------------------------------------------------------
-    // Step 2: power down pll_usb (kills printing).
-    // Skipped in BALLOON_MODE: deiniting pll_usb causes a reboot (no usb).
-    // -------------------------------------------------------------------------
-    if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
-        disableUsbPll();
-        kazu_slow_didDeinitUsbPll = true;
-    }
-
-    // Visual marker so we can confirm we got here even with serial dead.
-    blockingLongBlinkLED(3);
-
-    // -------------------------------------------------------------------------
-    // Step 3: retarget clk_peri / clk_rtc / clk_adc to XOSC.
-    // Only when we plan to STAY at 12 MHz. If we're going to restore to a
-    // pll_sys value later, leave these alone -- they should go back just
-    // the same as before.
-    // -------------------------------------------------------------------------
-    if (ALLOW_KAZU_12MHZ_MODE) {
-        retargetPeripheralClocksToXosc();
-        kazu_slow_didRetargetPeripherals = true;
-    }
-
-    // can't print without USB now
-    // V1_println(F("kazuClocksSlow END" EOL));
-}
-
-// =============================================================================
-// kazuClocksRestore
-// -----------------------------------------------------------------------------
-// Undo what kazuClocksSlow() did. Reads the kazu_slow_did* handshake statics
-// (set by kazuClocksSlow) to decide which steps need undoing -- caller does
-// NOT thread state through.
-//
-// Note: kazuClocksSlow declares the handshake statics:
-//   static bool kazu_slow_didDeinitSysPll;
-//   static bool kazu_slow_didDeinitUsbPll;
-//   static bool kazu_slow_didRetargetPeripherals;
-// They must be visible to this function (same .c file is the simplest setup).
-//
-// Restore order matters:
-//   1. Restore pll_sys / clk_sys (if slow killed pll_sys AND not staying at 12 MHz)
-//   2. Restore pll_usb / Serial (if slow killed pll_usb)         -- before step 3
-//   3. Restore clk_peri / clk_adc / clk_rtc (if slow retargeted them
-//      AND not staying at 12 MHz)                                -- needs pll_usb
-//   4. Reinit Serial2 if clk_peri's effective frequency changed
-//
-// Step 2 must come before step 3 because step 3's clk_adc and clk_rtc are
-// sourced from pll_usb after the restore.
-//
-// Note: VERBY is NOT cleared while USB was off, so it'd be tempting to
-// V1_print at the top of this function -- but don't, USB hasn't been
-// re-inited yet.
-//
-// SDK reference for clocks:
-// https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__clocks.html#gae78816cc6112538a12adcc604be4b344
-// =============================================================================
-
-// -----------------------------------------------------------------------------
-// Restore pll_sys / clk_sys to the requested frequency. set_sys_clock_khz()
-// re-inits pll_sys internally if it was deinited.
-// -----------------------------------------------------------------------------
-static void restoreSysPll(uint32_t freq_khz) {
-    busy_wait_ms(500);
-    set_sys_clock_khz(freq_khz, true);
-    PLL_SYS_MHZ = freq_khz / 1000UL;
-}
-
-// -----------------------------------------------------------------------------
-// Bring pll_usb back up to 48 MHz and re-initialize the USB stack and the
-// debug Serial.
-//
-// pll_init signature:
-//   void pll_init(PLL pll, uint ref_div, uint vco_freq,
-//                 uint post_div1, uint post_div2);
-//   pll        pll_sys or pll_usb
-//   ref_div    Input clock divider.
-//   vco_freq   Requested output from the VCO (voltage controlled oscillator)
-//   post_div1  Post Divider 1 -- range 1-7. Must be >= post_div2
-//   post_div2  Post Divider 2 -- range 1-7
-//
-// 1440 MHz VCO / 6 / 5 = 48 MHz USB reference clock.
-// -----------------------------------------------------------------------------
-static void restoreUsbAndSerial(void) {
-    pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
-    busy_wait_ms(1500);
-
-    // High-level Adafruit TinyUSB init code, does many things to get USB
-    // back online.
-    tusb_init();
-    Serial.begin(115200);
-    busy_wait_ms(500);
-    V1_print(F("Restored USB pll to 48Mhz, and did Serial.begin()" EOL));
-}
-
-// -----------------------------------------------------------------------------
-// Restore clk_peri / clk_adc / clk_rtc to their normal sources. Only needed
-// if kazuClocksSlow's retargetPeripheralClocksToXosc actually ran.
-//
-// clk_peri  <- clk_sys      (UART baud rates scale with the system clock)
-// clk_adc   <- pll_usb @ 48 MHz
-// clk_rtc   <- pll_usb / 1024 = 46875 Hz
-//
-// Caller must have already restored pll_usb before calling this (clk_adc and
-// clk_rtc both source from pll_usb).
-// -----------------------------------------------------------------------------
-static void restorePeripheralClockSourcesToNormal(uint32_t freq_khz) {
-    uint32_t freq_hz = freq_khz * 1000UL;
-
-    clock_configure(clk_peri,
-        0,
-        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
-        freq_hz,
-        freq_hz);
-
-    clock_configure(clk_adc,
-        0,
-        CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
-        48 * MHZ,
-        48 * MHZ);
-
-    clock_configure(clk_rtc,
-        0,
-        CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
-        48 * MHZ,
-        46875);
-}
-
-// -----------------------------------------------------------------------------
-// Reinit Serial2 to force its UART baud divider to be recomputed against
-// the new clk_peri.
-// -----------------------------------------------------------------------------
-static void reinitSerial2ForNewClkPeri(int currentGpsBaud) {
-    Serial2.end();
-    busy_wait_ms(10);
-    Serial2.begin(currentGpsBaud);
-}
-
-// -----------------------------------------------------------------------------
-// Main entry point
-// -----------------------------------------------------------------------------
-//
-// `PLL_SYS_MHZ_restore` -- target sys clock in MHz (e.g. 18, 50, 125)
-// `currentGpsBaud`      -- baud the GPS chip is currently at; used to
-//                          re-begin Serial2. (You can drop this and let the
-//                          caller re-begin Serial2 itself if you'd rather.)
-// -----------------------------------------------------------------------------
-void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore, int currentGpsBaud) {
-    // Don't print here -- USB might still be off (see header comment).
-    // V1_println(F("kazuClocksRestore START" EOL));
-    // V1_flush();
-
-    // -------------------------------------------------------------------------
-    // Step 1: restore pll_sys / clk_sys, unless caller wants to STAY at
-    // kazu 12 MHz.
-    // -------------------------------------------------------------------------
-    uint32_t freq_khz = PLL_SYS_MHZ_restore * 1000UL;
-    if (ALLOW_KAZU_12MHZ_MODE) {
-        // ? have to force this? but will we try to set_freq_hz in tracker.ino?
-        // where do we calc the pwm dividers? Recalc?
-        PLL_SYS_MHZ = 12;
-        // shouldn't be used
-        freq_khz = 12000;
-    } else if (kazu_slow_didDeinitSysPll) {
-        restoreSysPll(freq_khz);
-    }
-    busy_wait_ms(500);
-
-    // -------------------------------------------------------------------------
-    // Step 2: restore pll_usb (and TinyUSB / Serial) if slow took it down.
-    // Must come before step 3 since clk_adc and clk_rtc source from pll_usb.
-    // -------------------------------------------------------------------------
-    if (kazu_slow_didDeinitUsbPll) {
-        restoreUsbAndSerial();
-        kazu_slow_didDeinitUsbPll = false;
-    }
-
-    // -------------------------------------------------------------------------
-    // Step 3: undo peripheral clock retargeting if slow did it AND we are
-    // not staying at kazu 12 MHz.
-    // (If staying at 12 MHz, leave clk_peri/adc/rtc on XOSC -- that's the
-    //  whole point of "kazu 12 MHz mode".)
-    // -------------------------------------------------------------------------
-    if (kazu_slow_didRetargetPeripherals && !ALLOW_KAZU_12MHZ_MODE) {
-        restorePeripheralClockSourcesToNormal(freq_khz);
-        kazu_slow_didRetargetPeripherals = false;
-    }
-
-    // -------------------------------------------------------------------------
-    // Step 4: reinit Serial2 if clk_peri's effective frequency changed.
-    // That happens whenever we restored pll_sys (clk_peri follows clk_sys
-    // in normal config) or whenever we undid the peripheral retarget.
-    // -------------------------------------------------------------------------
-    bool clkPeriChanged =
-        (kazu_slow_didDeinitSysPll && !ALLOW_KAZU_12MHZ_MODE) ||      // sys restored
-        (kazu_slow_didRetargetPeripherals && !ALLOW_KAZU_12MHZ_MODE); // peri restored
-
-    if (clkPeriChanged) {
-        reinitSerial2ForNewClkPeri(currentGpsBaud);
-    }
-
-    // Clear the remaining handshake bit now that we've consumed it.
-    if (!ALLOW_KAZU_12MHZ_MODE) {
-        kazu_slow_didDeinitSysPll = false;
-    }
-
-    // -------------------------------------------------------------------------
-    // Status print. By this point USB is up (if it's coming up at all).
-    // -------------------------------------------------------------------------
-    V1_print(F("After long sleep,"));
-
-    if (ALLOW_KAZU_12MHZ_MODE) {
-        V1_printf(" left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL, PLL_SYS_MHZ);
-    } else {
-        V1_printf(" Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
-    }
-    V1_println(F("kazuClocksRestore END" EOL));
-
-    // Serial communication uses the same system clock as everything else.
-    // Baud rate of the serial communication is derived from this main clock
-    // frequency. (At 12 MHz Serial2 may misbehave if dividers weren't
-    // recalculated -- that's what reinitSerial2ForNewClkPeri is for.)
-}
-
-//************************************************
-// blurb on pll_usb -> clk_peri uart 48 Mhz (clk_peri) and i2c can be different
-// https://github.com/raspberrypi/pico-sdk/issues/841
-// rosc @ 1-12 MHz
-//
-// xosc @ 12 MHz
-//     |
-//     \-- clk_ref @ 12 MHz
-//             |
-//             \-- watchdog tick 1:12, @ 1 Mhz
-//             |       |
-//             |       \-- timer/alarm: get_absolute_time() in micro seconds
-//             |
-//             \-- pll_sys @ 125 MHz
-//             |       |
-//             |       \-- clk_sys @ 125 MHz
-//             |
-//             \-- pll_usb @ 48 MHz
-//                   |
-//                   \-- clk_peri @ 48 MHz, for UART but not I2C
-//                   |       |
-//                   |       \-- DMA pacing timers
-//                   |
-//                   \-- clk_usb
-//                   |
-//                   \-- clk_adc
-//                   |
-//                   \-- clk_rtc 1:1024 @ 46,875 Hz
-//                             |
-//                             \-- RTC 1:46875 @ 1Hz
-
-

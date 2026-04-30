@@ -252,12 +252,12 @@ TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
 #include "mh_functions.h"
 #include "adc_functions.h"
 #include "wspr_functions.h"
-#include "si5351_functions.h"
 #include "u4b_functions.h"
 #include "bmp_functions.h"
 #include "led_functions.h"
 #include "keyboard_functions.h"
 #include "gps_functions.h"
+#include "si5351_functions.h"
 #include "time_functions.h"
 #include "tinygps_functions.h"
 #include "cw_functions.h"
@@ -326,6 +326,14 @@ extern const int SIM65M_BAUD_RATE = 9600;
 // extern const int SIM65M_BAUD_RATE = 57600;
 // default at power up
 // extern const int SIM65M_BAUD_RATE = 115200;
+
+// does this close putty if true?
+bool ALLOW_USB_DISABLE_MODE = false;
+bool ALLOW_KAZU_12MHZ_MODE = false;
+bool ALLOW_TEMP_12MHZ_MODE = true;
+// causing intermittent fails if true?
+// maybe okay now with proper sequencing in slow_clock_functions.c
+bool ALLOW_LOWER_CORE_VOLTAGE_MODE = true;
 
 //*********************************************
 
@@ -1217,7 +1225,7 @@ extern const uint32_t GPS_LOCATION_AGE_MAX = 30000;
 // full set of NMEA sentences for a burst (plus the burst is only every 5 secs no)
 
 // this is adjusted in gps_functions.cpp, depending on broadcast interval
-int GPS_WAIT_FOR_NMEA_BURST_MAX = 1200;
+uint32_t GPS_WAIT_FOR_NMEA_BURST_MAX = 1200;
 
 //*************************************************************************
 void loop1() {
