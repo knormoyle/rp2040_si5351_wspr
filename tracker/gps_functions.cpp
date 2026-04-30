@@ -682,6 +682,7 @@ void setGpsBroadcast(void) {
         };
 
         // all the same size?
+        // compiler adds a null terminator to each of these
         static const char *pair062_5sec[] = {
             "$PAIR062,0,5*3B" CR LF,  // GGA on
             "$PAIR062,1,0*3F" CR LF,  // GLL off (2/17/25)
@@ -704,8 +705,11 @@ void setGpsBroadcast(void) {
             : sizeof(pair062_1sec)/sizeof(*pair062_1sec);
 
         for (size_t i = 0; i < n; i++) {
-            Serial2.print(cmds[i]);
+            // could get away without this
+            strncpy(nmeaSentence, cmds[i], 62);
+            Serial2.print(nmeaSentence);
             busy_wait_us(500);
+            V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
         }
 
         // 4/26/26 try enabling NAV-STATUS binary output
@@ -780,9 +784,9 @@ void setGpsBroadcast(void) {
         Serial2.flush();
         busy_wait_us(2000);
         GPS_WAIT_FOR_NMEA_BURST_MAX = ATGM336H_BROADCAST_5SECS ? 5200 : 1200;
+        V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
     }
 
-    V1_printf("setGpsBroadcast sent %s" EOL, nmeaSentence);
     V1_print(F("setGpsBroadcast END" EOL));
 }
 //************************************************
@@ -806,11 +810,11 @@ void disableGpsBroadcast(void) {
             };
 
             for (size_t i = 0; i < sizeof(pair062_all_off)/sizeof(*pair062_all_off); i++) {
-                Serial2.print(pair062_all_off[i]);
+                strncpy(nmeaSentence, pair062_all_off[i], 62);
+                Serial2.print(nmeaSentence);
                 busy_wait_us(500);
             }
             busy_wait_us(1500);
-
     } else {
         // checksum from https://www.meme.au/nmea-checksum.html
         strncpy(nmeaSentence, "$PCAS03,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0*02" CR LF, 64);
@@ -1913,17 +1917,14 @@ bool GpsFullColdReset(void) {
     // -------------------------------------------------------------------------
     uint32_t PLL_SYS_MHZ_restore = PLL_SYS_MHZ;
     enterLowPowerForGpsBringup();
-
     // -------------------------------------------------------------------------
     // Phase 3a: power GPS back on
     // -------------------------------------------------------------------------
     applyGpsPower();
-
     // -------------------------------------------------------------------------
     // Phase 3b: deassert NRESET (okay in both normal and experimental case)
     // -------------------------------------------------------------------------
     deassertGpsReset();
-
     // Finally turn on the GPS here (if we didn't already above in
     // experimental mode).
     digitalWrite(GPS_ON_PIN, HIGH);  // assert
@@ -1931,14 +1932,11 @@ bool GpsFullColdReset(void) {
     // FIX! still getting intermittent cases where we don't come back
     // (running 60Mhz). This should have no printing either.
     gpsSleepForMillis(5000, false);  // 5 secs
-
     // -------------------------------------------------------------------------
     // Phase 4: restore RP2040 clocks
     // -------------------------------------------------------------------------
     exitLowPowerAfterGpsBringup(PLL_SYS_MHZ_restore);
-
     Watchdog.reset();
-
     // -------------------------------------------------------------------------
     // Phase 5: Serial2 up, set baud, configure modes
     // -------------------------------------------------------------------------
