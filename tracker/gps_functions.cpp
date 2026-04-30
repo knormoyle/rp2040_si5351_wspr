@@ -1144,7 +1144,6 @@ void setupSIM65M(int desiredBaud) {
     // hopefully default for uart0/1/2 is NMEA output
 }
 
-//************************************************
 // =============================================================================
 // setGpsBaud
 // -----------------------------------------------------------------------------
@@ -1167,8 +1166,9 @@ void setupSIM65M(int desiredBaud) {
 
 // Set to false to use the older $PAIR860 sentences instead of $PAIR864.
 // PAIR864 is preferred -- strange that the spec doesn't list all baud rate
-// values for PAIR860 but does for PAIR864. Tried PAIR860 again 9/1/25.
-#define SIM65M_USE_PAIR864 true
+// values for PAIR860 but does for PAIR864. 
+// PAIR860 and PAIR864 work for SIM65M 9600 baud 4/30/26
+#define SIM65M_USE_PAIR864 false
 
 // -----------------------------------------------------------------------------
 // Pick the SIM65M baud-change NMEA sentence for a given baud.
@@ -1178,14 +1178,19 @@ static void buildSIM65MBaudSentence(int *usedBaud, char *out, size_t outSize) {
     // $PAIR860,0,0,37,9600,0*23 means:
     // Open UART0 to NMEA output without flow control.  Baudrate is 9600.
     // PAIR864 lists alternate baudrates only but says min is 115200?
+
     // Yes! 9600 works after boot with 115200! (no buffer overflow)
     // Did this stop working?
     // This worked if default 115200 originally..for SIM65M module. (not SIM65M-CB?)
     const char *s;
     switch (*usedBaud) {
+        // they say the SIM65M-C uses $PAIR864 for setting baud
+        // but 115200 minimum?
+        // 2.3.147 Packet Type:860 PAIR_IO_OPEN_PORT Open a GNSS data port
+        // PAIR860 checksum was wrong! try again 4/30/26
         case 4800:   // supported or ??
             s = SIM65M_USE_PAIR864 ? "$PAIR864,0,0,4800*10"   CR LF
-                                   : "$PAIR860,0,0,37,4800,0*22" CR LF; break;
+                                   : "$PAIR860,0,0,37,4800,0*20" CR LF; break;
         case 9600:
             s = SIM65M_USE_PAIR864 ? "$PAIR864,0,0,9600*13"   CR LF
                                    : "$PAIR860,0,0,37,9600,0*23" CR LF; break;
@@ -1307,7 +1312,7 @@ void setGpsBaud(int desiredBaud) {
     gpsSleepForMillis(1000, false);
     V1_printf("setGpsBaud END %d" EOL, usedBaud);
 }
-//************************************************
+
 // =============================================================================
 // GpsINIT
 // -----------------------------------------------------------------------------
@@ -1688,8 +1693,7 @@ static void deassertGpsReset(void) {
 // -----------------------------------------------------------------------------
 static void enterLowPowerForGpsBringup(void) {
     Watchdog.reset();
-    // don't bother in balloon mode
-    if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
+    if (!BALLOON_MODE) measureMyFreqs();
 
     V1_print(F("GPS power demand high during cold reset..try to minimize rp2040 power" EOL));
 
@@ -1781,10 +1785,7 @@ static void exitLowPowerAfterGpsBringup(uint32_t pll_sys_mhz_restore) {
     kazuClocksRestore(pll_sys_mhz_restore, currentGpsBaud);
     // V1_print(F("Restored core voltage back to 1.1v" EOL));
     V1_flush();
-    bool slowUsedKazu12MhzMode = ALLOW_KAZU_12MHZ_MODE;
-    // not used
-    // bool slowDisabledUsbPLL = !BALLOON_MODE && ALLOW_USB_DISABLE_MODE;
-    if (slowUsedKazu12MhzMode) measureMyFreqs();
+    if (!BALLOON_MODE) measureMyFreqs();
     IGNORE_KEYBOARD_CHARS = false;
 }
 
@@ -1808,37 +1809,14 @@ static void bringUpSerial2AndSetBaud(void) {
 
     // FIX! does SIM65M sometimes come up in 115200 and sometimes in the
     // last BAUD_RATE set? Do both?
-    if (USE_SIM65M) {
-        // it either comes up in desiredBaud from some memory, or comes up in 115200?
-        Serial2.begin(115200);
-        busy_wait_ms(500);
-        // since Serial2 was reset by setGpsBaud()..
-        // could try it again. might aid recovery
-        // then up the speed to desired (both gps chip and then Serial2)
-        setGpsBaud(desiredBaud);
+    // it either comes up in desiredBaud from some memory, or comes up in 115200?
+    beginSerial2AtDefaultBaud();
+    setGpsBaud(desiredBaud);
 
+    if (USE_SIM65M) {
         // for old chips that are stuck at 9600 that we want to try faster
         Serial2.begin(9600);
         busy_wait_ms(500);
-        // since Serial2 was reset by setGpsBaud()..
-        // could try it again. might aid recovery
-        // then up the speed to desired (both gps chip and then Serial2)
-        setGpsBaud(desiredBaud);
-
-        // setGpsBaud does this at end
-        // Serial2.begin(desiredBaud);
-        // busy_wait_ms(500);
-        // since Serial2 was reset by setGpsBaud()..
-        // could try it again. might aid recovery
-        // then up the speed to desired (both gps chip and then Serial2)
-        // setGpsBaud(desiredBaud);
-    } else {
-        // it either comes up in desiredBaud from some memory, or comes up in 9600?
-        Serial2.begin(9600);
-        busy_wait_ms(500);
-        // then up the speed to desired (both gps chip and then Serial2)
-        // since we're no longer changing from default 9600 for ATGM336..maybe don't do?
-        // 7/10/25
         setGpsBaud(desiredBaud);
     }
 
@@ -1949,10 +1927,6 @@ bool GpsFullColdReset(void) {
     // Finally turn on the GPS here (if we didn't already above in
     // experimental mode).
     digitalWrite(GPS_ON_PIN, HIGH);  // assert
-
-    // Not worth doing if USB is disabled (no print). But if we can't
-    // disable/deinit USB (see above), we can.
-    if (false && !BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
 
     // FIX! still getting intermittent cases where we don't come back
     // (running 60Mhz). This should have no printing either.
@@ -2086,13 +2060,10 @@ static void hotResetBringUpSerial2(void) {
         Serial2.begin(115200);
         gpsSleepForMillis(500, false);  // no early out
         setGpsBaud(desiredBaud);
-        // setGpsBaud does this already
-        // Serial2.begin(desiredBaud);
     } else {
         // it either comes up in desiredBaud from some memory, or comes up in 9600?
         // Used to not set ATGM baud rate! now we do..above
         Serial2.begin(9600);
-        // 7/10/25
         gpsSleepForMillis(500, false);  // no early out
         setGpsBaud(desiredBaud);
     }
@@ -2572,9 +2543,14 @@ uint32_t updateGpsDataAndTime(int ms) {
     uint32_t dollar_millis     = 0;
     // double buffering so no race condition with '$'
     uint32_t dollarStar_millis = 0;
+    uint32_t time_dollarStar_millis = 0;
     // only one that causes gps.time.updated
+    bool     doDelayedTimeUpdate  = false;
     uint32_t timeUpdate_sentences = 0;
-    bool     timeUpdateDone       = false;
+    // bool     timeUpdateDone       = false;
+    gps.time.updated = false;
+    gps.date.updated = false;
+
     // replaces multi-level break: set when we have enough time updates
     bool     finished             = false;
 
@@ -2586,7 +2562,7 @@ uint32_t updateGpsDataAndTime(int ms) {
             last_char_millis = now;
             // we count all chars, even CR LF etc
             incomingCharCnt++;
-            timeUpdateDone = false;
+            // timeUpdateDone = false;
             // shouldn't happen any more?
             if (VERBY[1] && charsAvailable >= 31)
                 StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL,
@@ -2626,7 +2602,7 @@ uint32_t updateGpsDataAndTime(int ms) {
                     // always need checksum before a commit event
                     // we use date in the routine. so both should be updated?
                     gps.time.updated = false;
-                    timeUpdateDone   = false;
+                    // timeUpdateDone   = false;
                     // save dollar_millis to avoid race condition with next '$'
                     dollarStar_millis = dollar_millis;
                     break;
@@ -2646,14 +2622,10 @@ uint32_t updateGpsDataAndTime(int ms) {
             // RMC should be last sentence in the burst? has date.
             // GGA is first in the burst. we use that for time.
             if (gps.time.updated && gps.date.updated) {
-                // if we get two, we've gone too long on the burst
-                timeUpdate_sentences++;
-                checkUpdateTimeFromGps(dollarStar_millis);
-                gps.time.updated = false;
-                gps.date.updated = false;
-                // trying to synchronize so GGA is always first
-                timeUpdateDone = true;
-                if (timeUpdate_sentences >= 2) finished = true;
+                // TinyGPS should be setup so only one time update trigger per burst
+                doDelayedTimeUpdate = true;
+                // save the earlies millis from the time update
+                time_dollarStar_millis = dollarStar_millis;
             }
             // Note we disabled the GPTXT broadcast to reduce the NMEA load (for here)
             // Do we get any unprintable? ignore unprintable chars, just in case.
@@ -2670,17 +2642,34 @@ uint32_t updateGpsDataAndTime(int ms) {
         // we wait until we get at least one char or go past the ms total wait
         // break out when we don't get the next char right away
         uint32_t gapMs = last_char_millis ? (millis() - last_char_millis) : 0;
+
         // FIX! should the two delays used be dependent on baud rate?
         // if we got slowed down by doing a timeUpdate, don't do this
         // FIX! if the time update took more than 32ms the rx fifo would back up, full
         // in any case, we don't break on this if we did a time update
         // situation probably doesn't happen now.
         // was 25
-        if (gapMs >= 10 && !timeUpdateDone) break;
+        // if (gapMs >= 10 && !timeUpdateDone) break;
+        // no more timeUpdate delay in the loop
+        if (gapMs >= 10) break;
+
         // stop the wait early if Serial2.available
         // was 25
         gpsSleepForMillis(10, true);
         getChar();
+    }
+
+    // how long does a burst take? 1 sec? this could e done one sec late relative to gps time
+    if (doDelayedTimeUpdate) {
+        // if we get two, we've gone too long on the burst
+        timeUpdate_sentences++;
+        checkUpdateTimeFromGps(time_dollarStar_millis);
+        gps.time.updated = false;
+        gps.date.updated = false;
+        // trying to synchronize so GGA is always first
+        // timeUpdateDone = true;
+        // should only be one time update trigger now
+        if (timeUpdate_sentences >= 2) finished = true;
     }
     
     // Reporting

@@ -320,6 +320,7 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 
 // 7/10/25 was:
 extern const int SIM65M_BAUD_RATE = 9600;
+// extern const int SIM65M_BAUD_RATE = 115200;
 
 // extern const int SIM65M_BAUD_RATE = 19200;
 // extern const int SIM65M_BAUD_RATE = 38400;
@@ -364,7 +365,7 @@ bool ALLOW_LOWER_CORE_VOLTAGE_MODE = true;
 
 // seem to leave the polling for NMEA data too soon at 4800..miss some chars
 // extern const int ATGM336H_BAUD_RATE = 4800;
-// works down to 50 Mhz fine? what's the lowest SYS_PLL_MHZ that works?
+
 extern const int ATGM336H_BAUD_RATE = 9600;
 // extern const int ATGM336H_BAUD_RATE = 19200;
 
@@ -372,11 +373,13 @@ extern const int ATGM336H_BAUD_RATE = 9600;
 // full cold reset not working?
 // need to unplug usb to get back to 9600
 
+// okay
 // extern const int ATGM336H_BAUD_RATE = 38400;
 
 // this is too fast. I can't keep up with incoming data
 // GPS burst: duration is 165 millisecs for 646 chars. 3954 baud effective
 // extern const int ATGM336H_BAUD_RATE = 57600;
+
 // don't use. rx buffer overruns
 // extern const int ATGM336H_BAUD_RATE = 115200;
 
@@ -842,7 +845,7 @@ void loop() {
         // 1-second sleep keeps this core mostly idle while core1 does real work.
         if (core1_idled) {
             // core1 is stopped; avoid F() / NVRAM fetches while idled
-            V1_print(F(EOL "loop() LOOPING WITH core1_idled()" EOL EOL));
+            V1_print(EOL "loop() LOOPING WITH core1_idled()" EOL EOL);
         }
         sleep_ms(1000);
 
@@ -873,6 +876,9 @@ void loop() {
         // FIX! Just-in-case fix: if core1 was mid-GPS-cold-reset and had slowed
         // the clock to 18 MHz, restore the correct clock speed before UI work.
         // FIX! doesn't work if ALLOW_KAZU_12MHZ_MODE forces/keeps 12MHZ (gps_functions.cpp)
+        // ah..we can do because we block with IGNORE_KEYBOARD_CHARS while in 12MHZ
+
+        // FIX! need to restore the clocks assuming it could have been in 12MHZ!
         initPicoClock(PLL_SYS_MHZ);
         initStatusLED();
         setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);

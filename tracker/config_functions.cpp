@@ -1,4 +1,4 @@
-// Project: https://github.com/knormoyle/rp2040_si5351_wspr
+// // Project: https://github.com/knormoyle/rp2040_si5351_wspr
 // Distributed with MIT License: http://www.opensource.org/licenses/mit-license.php
 // Author/Gather: Kevin Normoyle AD6Z initially 11/2024
 // See acknowledgements.txt for the lengthy list of contributions/dependencies.
@@ -36,7 +36,17 @@
 
 // FIX! is the program bigger than 1M ?
 // Once done, we can access this at XIP_BASE + FLASH_TARGET_OFFSET
-#define FLASH_TARGET_OFFSET (4 * 256 * 1024)
+
+// The RP2040 has 2MB of flash (on most boards like Pico), mapped at:
+// 0x10000000  — start of flash (XIP base)
+// 0x101FFFFF  — end of flash (2MB)
+
+// #define FLASH_TARGET_OFFSET (4 * 256 * 1024)
+// #define FLASH_SIZE (2 * 1024 * 1024) // 2MB
+// #define FLASH_TARGET_OFFSET (FLASH_SIZE - (4 * FLASH_SECTOR_SIZE))  // last 16KB
+
+// 04/30/26
+#define FLASH_TARGET_OFFSET (6 * 256 * 1024)
 
 // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html
 // https://k1.spdns.de/Develop/Projects/pico/pico-sdk/build/docs/doxygen/html/group__pico__flash.html#ga2ad3247806ca16dec03e655eaec1775f
@@ -915,9 +925,9 @@ void write_FLASH(void) {
     // you could theoretically write 16 pages at once (a whole sector).
 
     uint32_t ints;
-    int rc;
 
     // was false 9/1/2025
+    Watchdog.reset();
     if (false) {
         // FIX! why am I getting rc = -4 with these
         // Flash is "execute in place" and so will be in use when any code that is stored in flash runs, e.g. an interrupt handler
@@ -926,33 +936,66 @@ void write_FLASH(void) {
         // flash_safe_execute disables interrupts and tries to cooperate with the other core to ensure flash is not in use
         // See the documentation for flash_safe_execute and its assumptions and limitations
         // https://www.raspberrypi.com/documentation/pico-sdk/hardware.html
-        rc = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
-        V0_printf("flash_safe_execute call_flash_range_erase rc: %d" EOL, rc);
+        V0_print("flash_safe_execute call_flash_range_erase" EOL);
+
+        int rc1 = flash_safe_execute(call_flash_range_erase, (void*)FLASH_TARGET_OFFSET, UINT32_MAX);
         // hard_assert(rc == PICO_OK);
         uintptr_t params[] = {FLASH_TARGET_OFFSET, (uintptr_t) udata_chunk};
         // uintptr_t params[] = {FLASH_TARGET_OFFSET, (uint8_t) udata_chunk};
-        rc = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
-        V0_printf("flash_safe_execute call_flash_range_program() rc: %d" EOL, rc);
+        int rc2 = flash_safe_execute(call_flash_range_program, params, UINT32_MAX);
+
+        V0_printf("flash_safe_execute call_flash_range_erase rc: %d" EOL, rc1);
+        V0_printf("flash_safe_execute call_flash_range_program() rc: %d" EOL, rc2);
+        V0_flush();
+        sleep_ms(1000);
         // hard_assert(rc == PICO_OK);
     } else {
         // was 12/18/2024
         // don't interrupt..not enough? what about code fetch
         // uint32_t ints = save_and_disable_interrupts();
-        ints = save_and_disable_interrupts();
+
         // 9/1/25 ..??
+        // can't have this while interrupts are disabled. interrupt-driven tx buffers
         V0_print(F("Erasing FLASH target region" EOL));
         V0_flush();
+        // can't have this while interrupts are disabled. need alarms
+        // seems to be key to have this wait after the flush to preven hang on the erase?
+        sleep_ms(1000);
 
+        // the other core could be fetching from flash, when the erase/program suspends the XIP bus
+        // disable other core first
+        // is it core 0 or core 1? config runs on ? what about initial boot?
 
+        // idleOtherCore() works by sending an inter-core FIFO message and waiting 
+        // for the other core to acknowledge it and stop. 
+        // If the other core is blocked and not processing the FIFO 
+        // (e.g. stuck in a long operation or spin-loop without yielding), 
+        // idleOtherCore() will hang waiting for the acknowledgement. 
+        // Make sure core 1's main loop isn't holding the FIFO or blocking indefinitely.
+        // FIX! could multicore_lockout_victim_init() be used on core 0 (or 1?)
+        // as long as not in tight spin over there, should be okay.
+        // The other core's loop must never block for longer than you're willing to 
+        // wait in idleOtherCore(). 
+        // If core 1 does any long polling, serial waits, or sensor reads, break them into small non-blocking chunks so the FIFO is serviced frequently.
+        Watchdog.reset();
+        // rp2040.idleOtherCore();
+
+        // doesn't work: because the "victim" core must first call multicore_lockout_victim_init().
+        // multicore_lockout_start_blocking();
+        ints = save_and_disable_interrupts();
         flash_range_erase(FLASH_TARGET_OFFSET, FLASH_SECTOR_SIZE);
         // writes 256 bytes (one "page") (16 pages per sector)
-        // was 12/18/2024
-
-        V0_print(F("Writing FLASH target region" EOL));
-        V0_flush();
-
         flash_range_program(FLASH_TARGET_OFFSET, udata_chunk, FLASH_PAGE_SIZE);
         restore_interrupts(ints);
+
+        Watchdog.reset();
+        // rp2040.resumeOtherCore();
+        // multicore_lockout_end_blocking();
+
+        V0_print(F("Wrote FLASH target region" EOL));
+        V0_flush();
+        sleep_ms(1000);
+
     }
     V1_print(F("write_FLASH END" EOL));
     V1_flush();
@@ -969,7 +1012,8 @@ int check_data_validity_and_set_defaults(void) {
     // create 'result' to return
 
     //*****************
-    if (cc._factory_reset_done[0] != '0' &&cc._factory_reset_done[0] != '1') {
+    // FIX! hack allowing ' ' # ?
+    if (cc._factory_reset_done[0] != '0' && cc._factory_reset_done[0] != '1') {
         V0_printf(EOL "ERROR: cc._factory_reset_done %s is not supported/legal .. will doFactoryReset" EOL,
             cc._factory_reset_done);
         doFactoryReset();  // no return, reboots
@@ -1349,7 +1393,7 @@ void doFactoryReset() {
     snprintf(cc._go_when_rdy, sizeof(cc._go_when_rdy), "0");
     // when we read_FLASH, if this is 0, we set everything to default
     // or if user command is '*'
-    snprintf(cc._factory_reset_done, sizeof(cc._go_when_rdy), "1");
+    snprintf(cc._factory_reset_done, sizeof(cc._factory_reset_done), "1");
     snprintf(cc._use_sim65m, sizeof(cc._use_sim65m), "0");
     snprintf(cc._morse_also, sizeof(cc._morse_also), "0");
     snprintf(cc._solar_tx_power, sizeof(cc._solar_tx_power), "0");
