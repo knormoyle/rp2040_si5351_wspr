@@ -208,45 +208,66 @@ void getChar() {
     if (charsAvailable) incomingChar = Serial2.read();
     else incomingChar = '0';
 }
-//************************************************
-// tries to get all data from gps without losing any, for a blocking period of time
-// loops as fast as possible into a ram buffer
+// =============================================================================
+// nmeaBufferFastPoll
+// -----------------------------------------------------------------------------
+// Tries to get all data from the GPS without losing any over a blocking
+// window of `duration_millis`. Loops as fast as possible, draining all
+// available characters into a RAM buffer each pass.
+//
+// Filters out spaces and null characters and anything non-printable (CR/LF
+// included -- those are unprintable). We add appropriate EOLs when printing
+// the buffer, so dropping CR/LF from the captured stream is intentional and
+// saves buffer room.
+//
+// FIX! will there be enough garbage visible when baud rate is wrong that
+// we'll still see bad baud rate issues?
+// =============================================================================
+
+// -----------------------------------------------------------------------------
+// True if `c` is a character we want to capture into the buffer.
+// We drop spaces, NULs, and anything non-printable.
+// -----------------------------------------------------------------------------
+static bool shouldCaptureChar(char c) {
+    if (c == '\0') return false;
+    if (c == ' ')  return false;
+    return isprint((unsigned char)c) != 0;
+}
+
+// -----------------------------------------------------------------------------
+// Drain all characters currently available from the GPS UART into the buffer,
+// filtering on the way. Uses the existing globals: incomingChar, charsAvailable.
+// -----------------------------------------------------------------------------
+static void drainAvailableCharsIntoBuffer(bool printIfFull) {
+    // set globals: incomingChar, charsAvailable
+    getChar();
+    while (charsAvailable) {
+        if (shouldCaptureChar(incomingChar)) {
+            nmeaBufferAndPrint(incomingChar, printIfFull);
+        }
+        getChar();
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Main entry point
+// -----------------------------------------------------------------------------
 void nmeaBufferFastPoll(uint32_t duration_millis, bool printIfFull) {
     V1_println(F(EOL "nmeaBufferFastPoll START"));
-    uint32_t start_millis = millis();
-    // nmeaBuffer should be empty the first time we use this?
-    // should be no harm (delay) in checking here?
+
+    // nmeaBuffer should be empty the first time we use this; should be no
+    // harm (delay) in checking here.
     nmeaBufferPrintAndClear();
-    bool spaceChar, nullChar, printable;
+
+    uint32_t start_millis = millis();
     while (millis() - start_millis < duration_millis) {
-        // set globals: incomingChar, charsAvailable
-        getChar();
-        while (charsAvailable) {
-            // do we get any null chars?
-            // are CR LF unprintable? yes
-            spaceChar = false;
-            nullChar = false;
-            printable = isprint(incomingChar);
-            // good to eliminate garbage to save buffer room
-            // we'll add appropriate EOLs when printing buffer
-            // FIX! will there be enough garbage visible when baud rate is wrong
-            // that we'll still see bad baud rate issues?
-            switch (incomingChar) {
-                case '\0': nullChar = true; break;
-                case ' ':  spaceChar = true; break;
-                default: { ; }
-            }
-            if (!spaceChar && !nullChar && printable) {
-                nmeaBufferAndPrint(incomingChar, printIfFull);
-            }
-            getChar();
-        }
+        drainAvailableCharsIntoBuffer(printIfFull);
         busy_wait_ms(1);  // just wait 1 milli?
     }
+
     nmeaBufferPrintAndClear();
     V1_println(F("nmeaBufferFastPoll END"));
 }
-
 //***************************************************
 // Outputs the content of the nmea buffer to stdio (UART and/or USB)
 void nmeaBufferPrintAndClear(void) {
@@ -297,34 +318,56 @@ void nmeaBufferAndPrint(const char charToAdd, bool printIfFull) {
     nmeaBuffer[n + 1] = 0;
 }
 
-// ************************************************
+
+// =============================================================================
+// gpsSleepForMillis
+// -----------------------------------------------------------------------------
+// Sleep approximately `n` milliseconds in 10ms increments. While sleeping:
+//   - Kicks the watchdog and updates the status LED every 100ms
+//     (every 10 ticks of 10ms each), regardless of total duration.
+//   - Optionally exits early if Serial2 has data available (a GPS character
+//     arrived).
+//
+// `n` must be in [0, 120000]. Out-of-range values are silently clamped/ignored
+// because this function is called while USB is disabled, and BALLOON_MODE /
+// VERBY don't protect us from accidental prints in that state -- so we just
+// don't print at all here.
+// =============================================================================
+
+#define GPS_SLEEP_MAX_MILLIS         120000
+#define GPS_SLEEP_TICK_MILLIS        10
+#define GPS_SLEEP_TICKS_PER_SERVICE  10  // service LED/watchdog every 10 ticks (~100ms)
+
 void gpsSleepForMillis(int n, bool enableEarlyOut) {
     // FIX! should we do this here or where?
     Watchdog.reset();
-    if (n < 0 || n > 120000) {
+
+    if (n < 0 || n > GPS_SLEEP_MAX_MILLIS) {
         // V1_printf("ERROR: gpsSleepForMillis() n %d too big (120000 max)" EOL, n);
         // n = 1000;
-        // UPDATE: this is used while USB is disabled,
-        // but BALLOON_MODE/VERBY don't protect us ..just don't print here
+        // UPDATE: this is used while USB is disabled, but BALLOON_MODE/VERBY
+        // don't protect us ..just don't print here.
     }
-    int milliDiv = n / 10;
-    // sleep approx. n millisecs
-    for (int i = 0; i < milliDiv ; i++) {
-        if (enableEarlyOut) {
-            if (Serial2.available()) break;
-        }
+
+    // Number of 10ms ticks we need.
+    int tickCount = n / GPS_SLEEP_TICK_MILLIS;
+
+    for (int i = 0; i < tickCount; i++) {
+        // Early-out on incoming GPS data, if the caller asked for it.
+        if (enableEarlyOut && Serial2.available()) break;
+
+        // every 100ms kick watchdog and update the LED.
+        // No prints here -- USB may be disabled.
         // https://docs.arduino.cc/language-reference/en/functions/time/delay/
-        // check for update every 10 milliseconds
-        if ((milliDiv % 10) == 0) {
-            // no prints in this
+        if ((i % GPS_SLEEP_TICKS_PER_SERVICE) == 0) {
             updateStatusLED();
             Watchdog.reset();
         }
+
         // faster recovery with delay?
-        busy_wait_ms(10);
+        busy_wait_ms(GPS_SLEEP_TICK_MILLIS);
     }
 }
-
 //************************************************
 int checkGpsBaudRate(int desiredBaud) {
     int usedBaud = desiredBaud;
@@ -3591,7 +3634,6 @@ void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore, int currentGpsBaud) {
     // frequency. (At 12 MHz Serial2 may misbehave if dividers weren't
     // recalculated -- that's what reinitSerial2ForNewClkPeri is for.)
 }
-
 
 //************************************************
 // blurb on pll_usb -> clk_peri uart 48 Mhz (clk_peri) and i2c can be different
