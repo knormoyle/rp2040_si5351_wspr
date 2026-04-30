@@ -33,6 +33,7 @@ void disableGpsBroadcast(void);
 void setGpsConstellations(int desiredConstellations);
 void setGpsBaud(int desiredBaud);
 void kazuClocksSlow(void);
-void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore);
+void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore, int currentGpsBaud);
+
 
 #endif // GPS_FUNCTIONS_H

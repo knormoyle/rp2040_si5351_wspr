@@ -179,15 +179,12 @@ bool ALLOW_UPDATE_GPS_FLASH_MODE = false;
 // causing intermittent fails if true?
 bool ALLOW_LOWER_CORE_VOLTAGE_MODE = false;
 
-// why isn't this true 12/15/24..true now. works (18Mhz)
-// occassionally having problems...Not needed?
-// bool ALLOW_USB_DISABLE_MODE = true;
+// does this close putty if true?
 bool ALLOW_USB_DISABLE_MODE = false;
 
-// true not working with Serial2?
 bool ALLOW_KAZU_12MHZ_MODE = false;
-// is true getting intermittent fails on usbserial (after restore)
-bool ALLOW_TEMP_12MHZ_MODE = false;
+// should work with new code for slow/restore? (but we assume restore to 18Mhz or above)
+bool ALLOW_TEMP_12MHZ_MODE = true;
 
 //************************************************
 static bool GpsIsOn_state = false;
@@ -1723,15 +1720,18 @@ static void exitLowPowerAfterGpsBringup(uint32_t pll_sys_mhz_restore) {
     busy_wait_ms(500);
 
     // FIX! this restores/keeps sys clk to 12mhz and sys pll off.
-    // The problem is _clock_speed doesn't have 12Mhz, and we need
-    // PLL_SYS_MHZ correct for PWM div/wrap calcs. Can we just change
-    // PLL_SYS_MHZ here?
-    // NOTE: doesn't include the usb pll.
-    kazuClocksRestore(pll_sys_mhz_restore);
-
+    // The problem is _clock_speed doesn't have 12Mhz, and we need PLL_SYS_MHZ correct 
+    // for PWM div/wrap calcs. 
+    // Can we just change PLL_SYS_MHZ here?
+    int currentGpsBaud = USE_SIM65M ? SIM65M_BAUD_RATE : ATGM336H_BAUD_RATE;
+    kazuClocksRestore(pll_sys_mhz_restore, currentGpsBaud);
     // V1_print(F("Restored core voltage back to 1.1v" EOL));
     V1_flush();
-    if (!BALLOON_MODE && !ALLOW_USB_DISABLE_MODE) measureMyFreqs();
+
+    bool slowUsedKazu12MhzMode = ALLOW_KAZU_12MHZ_MODE;
+    // not used
+    // bool slowDisabledUsbPLL = !BALLOON_MODE && ALLOW_USB_DISABLE_MODE;
+    if (slowUsedKazu12MhzMode) measureMyFreqs();
     IGNORE_KEYBOARD_CHARS = false;
 }
 
@@ -2025,7 +2025,6 @@ static void hotResetPowerCycle(void) {
 // reality has been less reliable than that -- so we always re-set baud here.
 // -----------------------------------------------------------------------------
 static void hotResetBringUpSerial2(void) {
-    // not used?
     int BAUD_RATE = USE_SIM65M ? SIM65M_BAUD_RATE : ATGM336H_BAUD_RATE;
     int desiredBaud = checkGpsBaudRate(BAUD_RATE);
 
@@ -3233,28 +3232,62 @@ void gpsDebug() {
 // measured the source voltage dropping to only ~3.0 V
 // when the GPS is turned on (~250 mV).
 
+
+//#***************************************************************************
+// The function now writes three handshake booleans that kazuClocksRestore will read:
+// static bool kazu_slow_didDeinitSysPll       = false;
+// static bool kazu_slow_didDeinitUsbPll        = false;
+// static bool kazu_slow_didRetargetPeripherals = false;
+
+// Each step that actually ran flips its corresponding bool to true. 
+// Steps gated off by config leave their bool at false. 
+// At the top of the function, all three are reset to false so a stale value from a prior cycle can't lie to the restore side.
+
+// The restore side reads these statics to decide what to do:
+// kazu_slow_didDeinitSysPll && !ALLOW_KAZU_12MHZ_MODE ...Restore pll_sys / clk_sys
+// kazu_slow_didDeinitUsbPll... Restore pll_usb and Serial
+// kazu_slow_didRetargetPeripherals and !ALLOW_KAZU_12MHZ_MODE ...Restore clk_peri / clk_adc / clk_rtc
+
+// The !ALLOW_KAZU_12MHZ_MODE checks on restore handle the "stay at 12 MHz" case, 
+// where we deliberately don't undo the slow steps even though they happened.
+//#***************************************************************************
+
+
+
 // =============================================================================
 // kazuClocksSlow
 // -----------------------------------------------------------------------------
 // Aggressive RP2040 power reduction. Three independent steps gated by config:
 //
-//   ALLOW_TEMP_12MHZ_MODE  -- drop clk_sys to 12 MHz (XOSC) and deinit pll_sys.
-//                             We always go down to 12 MHz for lowest power;
-//                             whether we *stay* there is governed by the
-//                             ALLOW_KAZU_12MHZ_MODE flag below.
-//                             (Maybe on restore, we have to go to 18 before
-//                             we restore usb?)
+//   ALLOW_TEMP_12MHZ_MODE   -- drop clk_sys to 12 MHz (XOSC) and deinit pll_sys.
+//                              We always go down to 12 MHz for lowest power;
+//                              whether we *stay* there is governed by the
+//                              ALLOW_KAZU_12MHZ_MODE flag below.
 //
-//   ALLOW_USB_DISABLE_MODE -- deinit pll_usb (kills printing). Skipped in
-//                             BALLOON_MODE because it causes a reboot
-//                             (no usb).
+//   ALLOW_USB_DISABLE_MODE  -- deinit pll_usb (kills printing). Skipped in
+//                              BALLOON_MODE because it causes a reboot
+//                              (no usb).
 //
-//   ALLOW_KAZU_12MHZ_MODE  -- also reroute clk_peri / clk_rtc / clk_adc to
-//                             XOSC so they survive pll_sys being off. Only
-//                             do this if we're staying at 12 MHz, since we
-//                             otherwise restore to a pll_sys value and the
-//                             peripherals should go back exactly as they were.
+//   ALLOW_KAZU_12MHZ_MODE   -- also reroute clk_peri / clk_rtc / clk_adc to
+//                              XOSC so they survive pll_sys being off. Only
+//                              do this if we're staying at 12 MHz, since we
+//                              otherwise restore to a pll_sys value and the
+//                              peripherals should go back exactly as they were.
+//
+// Records what it actually did into module-level statics so kazuClocksRestore
+// can do the right thing without the caller threading state through.
+// Contract:
+//   - Each kazuClocksSlow() is paired with exactly one kazuClocksRestore()
+//     before the next kazuClocksSlow().
+//   - Nothing else writes to the kazu_slow_did* statics.
 // =============================================================================
+
+// -----------------------------------------------------------------------------
+// Handshake state -- written here, read by kazuClocksRestore.
+// -----------------------------------------------------------------------------
+static bool kazu_slow_didDeinitSysPll        = false;
+static bool kazu_slow_didDeinitUsbPll        = false;
+static bool kazu_slow_didRetargetPeripherals = false;
 
 // -----------------------------------------------------------------------------
 // Drop clk_sys to the 12 MHz external crystal and power down pll_sys.
@@ -3282,25 +3315,7 @@ static void disableUsbPll(void) {
 // -----------------------------------------------------------------------------
 // Reroute clk_peri / clk_rtc / clk_adc onto the XOSC so they keep running
 // after pll_sys is off and we stay at 12 MHz indefinitely.
-//
 // CLK peri is clocked from clk_sys, so we need to change clk_peri's freq.
-// 12/15/24 hmm maybe clk_peri needs to be 48 Mhz ?
-// nope 48 doesn't help Serial2.
-// maybe it needs the ..AUXSRC_VALUE_XOSC_CLKSRC ? seems legal here:
-// https://github.com/raspberrypi/pico-sdk/blob/master/src/rp2_common/hardware_clocks/include/hardware/clocks.h
-//
-// this guy had similar issues:
-// https://github.com/raspberrypi/pico-sdk/issues/1037
-//
-// He reinits uart after changing clk_peri:
-//   stdio_init_all();
-//   // Fixes baudrate from unchanged clock. 48MHz / 8MHz = 6
-//   uart_set_baudrate(uart0, 115200/6);
-//
-// Original clk_peri source was:
-//   CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
-// We tried 48 MHz / 8 MHz (per the link above) and XOSC; XOSC at 12/12 is
-// what's enabled here.
 // -----------------------------------------------------------------------------
 static void retargetPeripheralClocksToXosc(void) {
     // clk_peri = XOSC 12 MHz
@@ -3330,6 +3345,7 @@ static void retargetPeripheralClocksToXosc(void) {
         12 * MHZ);
 }
 
+
 // -----------------------------------------------------------------------------
 // Main entry point
 // -----------------------------------------------------------------------------
@@ -3337,88 +3353,108 @@ void kazuClocksSlow(void) {
     V1_println(F("kazuClocksSlow START" EOL));
     V1_flush();
 
+    // Reset handshake state. Whatever a previous slow/restore cycle did is
+    // no longer relevant -- only what THIS call does matters to the matching
+    // kazuClocksRestore().
+    kazu_slow_didDeinitSysPll        = false;
+    kazu_slow_didDeinitUsbPll        = false;
+    kazu_slow_didRetargetPeripherals = false;
+
+    // -------------------------------------------------------------------------
+    // Step 1: drop clk_sys to XOSC 12 MHz and power down pll_sys.
+    // -------------------------------------------------------------------------
     if (ALLOW_TEMP_12MHZ_MODE) {
         switchClkSysTo12MhzXosc();
+        kazu_slow_didDeinitSysPll = true;
     }
 
-    // Turn off pll_usb to save power.
+    // -------------------------------------------------------------------------
+    // Step 2: power down pll_usb (kills printing).
     // Skipped in BALLOON_MODE: deiniting pll_usb causes a reboot (no usb).
-    // Note: once this runs we lose the ability to print until restored.
+    // -------------------------------------------------------------------------
     if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
         disableUsbPll();
+        kazu_slow_didDeinitUsbPll = true;
     }
+
     // Visual marker so we can confirm we got here even with serial dead.
     blockingLongBlinkLED(3);
 
-    // Only retarget peripheral clocks if we plan to STAY at 12 MHz.
-    // If we're going to restore to a pll_sys value later, leave clk_peri /
-    // clk_rtc / clk_adc alone -- they should go back just the same as before.
+    // -------------------------------------------------------------------------
+    // Step 3: retarget clk_peri / clk_rtc / clk_adc to XOSC.
+    // Only when we plan to STAY at 12 MHz. If we're going to restore to a
+    // pll_sys value later, leave these alone -- they should go back just
+    // the same as before.
+    // -------------------------------------------------------------------------
     if (ALLOW_KAZU_12MHZ_MODE) {
         retargetPeripheralClocksToXosc();
+        kazu_slow_didRetargetPeripherals = true;
     }
 
     // can't print without USB now
     // V1_println(F("kazuClocksSlow END" EOL));
 }
+
 // =============================================================================
 // kazuClocksRestore
 // -----------------------------------------------------------------------------
-// Undo (some of) what kazuClocksSlow() did:
-//   - Restore pll_sys back to the requested MHz, unless we're staying at
-//     kazu 12 MHz (ALLOW_KAZU_12MHZ_MODE).
-//   - Restore pll_usb to 48 MHz and re-init TinyUSB / Serial, if we
-//     deinited USB on the way down.
+// Undo what kazuClocksSlow() did. Reads the kazu_slow_did* handshake statics
+// (set by kazuClocksSlow) to decide which steps need undoing -- caller does
+// NOT thread state through.
 //
-// We don't touch clk_peri / clk_rtc / clk_adc here. kazuClocksSlow() only
-// retargets those when ALLOW_KAZU_12MHZ_MODE is set (i.e. we're staying at
-// 12 MHz), and in that case we don't restore -- so they're either still
-// correct or were never changed.
+// Note: kazuClocksSlow declares the handshake statics:
+//   static bool kazu_slow_didDeinitSysPll;
+//   static bool kazu_slow_didDeinitUsbPll;
+//   static bool kazu_slow_didRetargetPeripherals;
+// They must be visible to this function (same .c file is the simplest setup).
 //
-// Open question (from original): if kazuClocksRestore() is only used after
-// kazuClocksSlow(), why do we need it? It's not changing anything except
-// restoring USB if not balloon mode.
+// Restore order matters:
+//   1. Restore pll_sys / clk_sys (if slow killed pll_sys AND not staying at 12 MHz)
+//   2. Restore pll_usb / Serial (if slow killed pll_usb)         -- before step 3
+//   3. Restore clk_peri / clk_adc / clk_rtc (if slow retargeted them
+//      AND not staying at 12 MHz)                                -- needs pll_usb
+//   4. Reinit Serial2 if clk_peri's effective frequency changed
+//
+// Step 2 must come before step 3 because step 3's clk_adc and clk_rtc are
+// sourced from pll_usb after the restore.
 //
 // Note: VERBY is NOT cleared while USB was off, so it'd be tempting to
 // V1_print at the top of this function -- but don't, USB hasn't been
-// re-inited yet. The `kazuClocksRestore START` print is intentionally
-// commented out for that reason.
+// re-inited yet.
 //
 // SDK reference for clocks:
 // https://cec-code-lab.aps.edu/robotics/resources/pico-c-api/group__hardware__clocks.html#gae78816cc6112538a12adcc604be4b344
-//
-// hmm we're not getting Serial2 when we use the Kazu 12 Mhz past here.
-// Just reinit the sys pll to PLL_SYS_MHZ? (PLL_SYS_MHZ = 12;)
 // =============================================================================
 
 // -----------------------------------------------------------------------------
-// Restore pll_sys to the saved frequency. Skipped when we're staying at
-// kazu 12 MHz, because in that mode clk_peri/rtc/adc are running off XOSC
-// directly and we don't want to change them.
+// Restore pll_sys / clk_sys to the requested frequency. set_sys_clock_khz()
+// re-inits pll_sys internally if it was deinited.
 // -----------------------------------------------------------------------------
-static void restoreSysPll(uint32_t PLL_SYS_MHZ_restore) {
+static void restoreSysPll(uint32_t freq_khz) {
     busy_wait_ms(500);
-    uint32_t freq_khz = PLL_SYS_MHZ_restore * 1000UL;
     set_sys_clock_khz(freq_khz, true);
-    PLL_SYS_MHZ = PLL_SYS_MHZ_restore;
+    PLL_SYS_MHZ = freq_khz / 1000UL;
 }
 
 // -----------------------------------------------------------------------------
 // Bring pll_usb back up to 48 MHz and re-initialize the USB stack and the
-// debug Serial. Caller is responsible for the BALLOON_MODE / disable guards.
+// debug Serial.
 //
-// FIX! we need usb at 48 mhz ?
+// pll_init signature:
+//   void pll_init(PLL pll, uint ref_div, uint vco_freq,
+//                 uint post_div1, uint post_div2);
+//   pll        pll_sys or pll_usb
+//   ref_div    Input clock divider.
+//   vco_freq   Requested output from the VCO (voltage controlled oscillator)
+//   post_div1  Post Divider 1 -- range 1-7. Must be >= post_div2
+//   post_div2  Post Divider 2 -- range 1-7
+//
+// 1440 MHz VCO / 6 / 5 = 48 MHz USB reference clock.
 // -----------------------------------------------------------------------------
 static void restoreUsbAndSerial(void) {
-    // pll_init signature:
-    //   void pll_init(PLL pll, uint ref_div, uint vco_freq,
-    //                 uint post_div1, uint post_div2);
-    //   pll        pll_sys or pll_usb
-    //   ref_div    Input clock divider.
-    //   vco_freq   Requested output from the VCO (voltage controlled oscillator)
-    //   post_div1  Post Divider 1 -- range 1-7. Must be >= post_div2
-    //   post_div2  Post Divider 2 -- range 1-7
     pll_init(pll_usb, 1, 1440000000, 6, 5);  // return USB pll to 48mhz
     busy_wait_ms(1500);
+
     // High-level Adafruit TinyUSB init code, does many things to get USB
     // back online.
     tusb_init();
@@ -3428,38 +3464,135 @@ static void restoreUsbAndSerial(void) {
 }
 
 // -----------------------------------------------------------------------------
+// Restore clk_peri / clk_adc / clk_rtc to their normal sources. Only needed
+// if kazuClocksSlow's retargetPeripheralClocksToXosc actually ran.
+//
+// clk_peri  <- clk_sys      (UART baud rates scale with the system clock)
+// clk_adc   <- pll_usb @ 48 MHz
+// clk_rtc   <- pll_usb / 1024 = 46875 Hz
+//
+// Caller must have already restored pll_usb before calling this (clk_adc and
+// clk_rtc both source from pll_usb).
+// -----------------------------------------------------------------------------
+static void restorePeripheralClockSourcesToNormal(uint32_t freq_khz) {
+    uint32_t freq_hz = freq_khz * 1000UL;
+
+    clock_configure(clk_peri,
+        0,
+        CLOCKS_CLK_PERI_CTRL_AUXSRC_VALUE_CLK_SYS,
+        freq_hz,
+        freq_hz);
+
+    clock_configure(clk_adc,
+        0,
+        CLOCKS_CLK_ADC_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
+        48 * MHZ,
+        48 * MHZ);
+
+    clock_configure(clk_rtc,
+        0,
+        CLOCKS_CLK_RTC_CTRL_AUXSRC_VALUE_CLKSRC_PLL_USB,
+        48 * MHZ,
+        46875);
+}
+
+// -----------------------------------------------------------------------------
+// Reinit Serial2 to force its UART baud divider to be recomputed against
+// the new clk_peri.
+// -----------------------------------------------------------------------------
+static void reinitSerial2ForNewClkPeri(int currentGpsBaud) {
+    Serial2.end();
+    busy_wait_ms(10);
+    Serial2.begin(currentGpsBaud);
+}
+
+// -----------------------------------------------------------------------------
 // Main entry point
 // -----------------------------------------------------------------------------
-void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore) {
-    // Don't print here -- USB is still off (see header comment).
+//
+// `PLL_SYS_MHZ_restore` -- target sys clock in MHz (e.g. 18, 50, 125)
+// `currentGpsBaud`      -- baud the GPS chip is currently at; used to
+//                          re-begin Serial2. (You can drop this and let the
+//                          caller re-begin Serial2 itself if you'd rather.)
+// -----------------------------------------------------------------------------
+void kazuClocksRestore(uint32_t PLL_SYS_MHZ_restore, int currentGpsBaud) {
+    // Don't print here -- USB might still be off (see header comment).
     // V1_println(F("kazuClocksRestore START" EOL));
     // V1_flush();
 
-    // Restore pll_sys unless we're staying at kazu 12 MHz.
-    if (!ALLOW_KAZU_12MHZ_MODE) {
-        restoreSysPll(PLL_SYS_MHZ_restore);
+    // -------------------------------------------------------------------------
+    // Step 1: restore pll_sys / clk_sys, unless caller wants to STAY at
+    // kazu 12 MHz.
+    // -------------------------------------------------------------------------
+    uint32_t freq_khz = PLL_SYS_MHZ_restore * 1000UL;
+    if (ALLOW_KAZU_12MHZ_MODE) {
+        // ? have to force this? but will we try to set_freq_hz in tracker.ino?
+        // where do we calc the pwm dividers? Recalc?
+        PLL_SYS_MHZ = 12;
+        // shouldn't be used
+        freq_khz = 12000;
+    } else if (kazu_slow_didDeinitSysPll) {
+        restoreSysPll(freq_khz);
     }
     busy_wait_ms(500);
 
-    // Restore pll_usb (and TinyUSB / Serial) only if we actually disabled it.
-    if (!BALLOON_MODE && ALLOW_USB_DISABLE_MODE) {
+    // -------------------------------------------------------------------------
+    // Step 2: restore pll_usb (and TinyUSB / Serial) if slow took it down.
+    // Must come before step 3 since clk_adc and clk_rtc source from pll_usb.
+    // -------------------------------------------------------------------------
+    if (kazu_slow_didDeinitUsbPll) {
         restoreUsbAndSerial();
+        kazu_slow_didDeinitUsbPll = false;
     }
 
-    // Status line. After this point, printing should work (if not BALLOON_MODE).
+    // -------------------------------------------------------------------------
+    // Step 3: undo peripheral clock retargeting if slow did it AND we are
+    // not staying at kazu 12 MHz.
+    // (If staying at 12 MHz, leave clk_peri/adc/rtc on XOSC -- that's the
+    //  whole point of "kazu 12 MHz mode".)
+    // -------------------------------------------------------------------------
+    if (kazu_slow_didRetargetPeripherals && !ALLOW_KAZU_12MHZ_MODE) {
+        restorePeripheralClockSourcesToNormal(freq_khz);
+        kazu_slow_didRetargetPeripherals = false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Step 4: reinit Serial2 if clk_peri's effective frequency changed.
+    // That happens whenever we restored pll_sys (clk_peri follows clk_sys
+    // in normal config) or whenever we undid the peripheral retarget.
+    // -------------------------------------------------------------------------
+    bool clkPeriChanged =
+        (kazu_slow_didDeinitSysPll && !ALLOW_KAZU_12MHZ_MODE) ||      // sys restored
+        (kazu_slow_didRetargetPeripherals && !ALLOW_KAZU_12MHZ_MODE); // peri restored
+
+    if (clkPeriChanged) {
+        reinitSerial2ForNewClkPeri(currentGpsBaud);
+    }
+
+    // Clear the remaining handshake bit now that we've consumed it.
+    if (!ALLOW_KAZU_12MHZ_MODE) {
+        kazu_slow_didDeinitSysPll = false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Status print. By this point USB is up (if it's coming up at all).
+    // -------------------------------------------------------------------------
     V1_print(F("After long sleep,"));
+
     if (ALLOW_KAZU_12MHZ_MODE) {
-        V1_printf(" left it at kazu 12Mhz? no change to PLL_SYS_MHZ %lu" EOL, PLL_SYS_MHZ);
+        V1_printf(" left it at kazu 12Mhz? PLL_SYS_MHZ %lu" EOL, PLL_SYS_MHZ);
     } else {
         V1_printf(" Restored sys_clock_khz() and PLL_SYS_MHZ to %lu" EOL, PLL_SYS_MHZ);
     }
-
     V1_println(F("kazuClocksRestore END" EOL));
 
     // Serial communication uses the same system clock as everything else.
     // Baud rate of the serial communication is derived from this main clock
-    // frequency. What does it mean for Serial2 when we're running at 12Mhz?
+    // frequency. (At 12 MHz Serial2 may misbehave if dividers weren't
+    // recalculated -- that's what reinitSerial2ForNewClkPeri is for.)
 }
+
+
 //************************************************
 // blurb on pll_usb -> clk_peri uart 48 Mhz (clk_peri) and i2c can be different
 // https://github.com/raspberrypi/pico-sdk/issues/841

@@ -817,6 +817,8 @@ void loop() {
     //   FIX! Odd chars can arrive on USB data+power lines with no terminal open —
     //        verify we don't accidentally enter config mode from those.
     // -----------------------------------------------------------------------
+
+    // FIX! this wouldn't work if we had been in 12Mhz mode
     bool usbConnected = get_sie_connected();
     while (!BALLOON_MODE && usbConnected && !IGNORE_KEYBOARD_CHARS) {
 
@@ -862,6 +864,7 @@ void loop() {
 
         // FIX! Just-in-case fix: if core1 was mid-GPS-cold-reset and had slowed
         // the clock to 18 MHz, restore the correct clock speed before UI work.
+        // FIX! doesn't work if ALLOW_KAZU_12MHZ_MODE forces/keeps 12MHZ (gps_functions.cpp)
         initPicoClock(PLL_SYS_MHZ);
         initStatusLED();
         setStatusLEDBlinkCount(LED_STATUS_USER_CONFIG);
@@ -971,8 +974,9 @@ void setup1() {
         read_FLASH_result1, read_FLASH_result2);
     show_values();
 
-    // Set system clock. May be temporarily overridden to 18 MHz by
+    // Set system clock. May be temporarily overridden to 18 MHz (or 12Mhz?) by
     // GpsINIT() (Kazu slow-clock GPS cold reset); this restores it.
+    // FIX! shouldn't be needed now? the gps code should do the right thing?
     initPicoClock(PLL_SYS_MHZ);
 
     // Apply TCXO frequency correction once at boot.
@@ -2456,6 +2460,11 @@ int initPicoClock(uint32_t PLL_SYS_MHZ) {
     // we double check here and recover here, but don't update flash if it's wrong
     // to avoid flash conflict resolution issues (multi-core)
     uint32_t clk_khz = PLL_SYS_MHZ * 1000UL;
+
+    // UART baud rate: if you called Serial.begin() / Serial2.begin() before the clock change, 
+    // the UART divider was computed for the old clk_peri. 
+    // After set_sys_clock_khz, do Serial2.end(); Serial2.begin(baud); to recompute.
+
     if (!set_sys_clock_khz(clk_khz, false)) {
         V1_printf("ERROR: setup1(): can't change clock to %lu Mhz. Using %lu instead" EOL,
             PLL_SYS_MHZ, DEFAULT_PLL_SYS_MHZ);
