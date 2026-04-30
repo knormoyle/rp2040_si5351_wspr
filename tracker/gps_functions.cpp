@@ -2619,7 +2619,10 @@ uint32_t updateGpsDataAndTime(int ms) {
             // we use dollarStar_millis to make sure no race condition with '$'
             // RMC should be last sentence in the burst? has date.
             // GGA is first in the burst. we use that for time.
-            if (gps.time.updated && gps.date.updated) {
+            // if (gps.time.updated && gps.date.updated) {
+
+            // did we get the date already?
+            if (gps.time.updated) {
                 // TinyGPS should be setup so only one time update trigger per burst
                 doDelayedTimeUpdate = true;
                 // save the earlies millis from the time update
