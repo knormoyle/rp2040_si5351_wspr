@@ -384,45 +384,85 @@ int checkGpsBaudRate(int desiredBaud) {
 }
 
 //************************************************
+// =============================================================================
+// getInitialGpsOutput
+// -----------------------------------------------------------------------------
+// After a hot or cold GPS reset, read whatever the chip emits for up to 5
+// seconds, looking for proof-of-life. Returns true if we saw at least 2
+// NMEA sentence starts ('$').
+//
+// There can be a lot of bogus chars after hot/cold reset (over 200). If we
+// can get effective 900 chars/sec, we probably want 5x that as our cap --
+// hence the 5000-char early-out.
+//
+// Three early-exit conditions:
+//   1. Saw 2+ NMEA sentence starts ('$') -> success
+//   2. Read 5000+ characters             -> bail (probably noise)
+//   3. 5 seconds elapsed                 -> bail (timeout)
+// =============================================================================
+
+#define GPS_INITIAL_OUTPUT_TIMEOUT_MS  5000
+#define GPS_INITIAL_OUTPUT_MAX_CHARS   5000
+#define GPS_INITIAL_OUTPUT_MIN_NMEA    2
+
+// -----------------------------------------------------------------------------
+// Drain everything currently waiting on Serial2 into the NMEA buffer.
+// Increments *charCount and *sentenceCount as we go. Skips non-printable
+// characters so the captured log is clean (otherwise dos2unix on putty.log
+// would choke on stray binary bytes).
+//
+// Returns true once we hit one of the early-exit thresholds, signalling
+// the outer loop to break.
+// -----------------------------------------------------------------------------
+static bool drainSerial2AndCount(uint32_t *charCount, uint32_t *sentenceCount) {
+    while (Serial2.available()) {
+        char incomingChar = Serial2.read();
+
+        // skip any non-printable, as we won't be able to dos2unix the
+        // putty.log if those are in there
+        if (!isprint((unsigned char)incomingChar)) continue;
+
+        // buffer it up like we do normally below, so we can see sentences
+        nmeaBufferAndPrint(incomingChar, true);  // print if full
+        *charCount += 1;
+        if (incomingChar == '$') *sentenceCount += 1;
+    }
+
+    if (*charCount >= GPS_INITIAL_OUTPUT_MAX_CHARS) return true;
+    if (*sentenceCount >= GPS_INITIAL_OUTPUT_MIN_NMEA) return true;
+    return false;
+}
+
+// -----------------------------------------------------------------------------
+// Main entry point
+// -----------------------------------------------------------------------------
 bool getInitialGpsOutput(void) {
     V1_println(F("getInitialGpsOutput START"));
-    // there can be a lot of bogus chars after hot/cold reset, like over 200
-    // if we can get effective 900 chars/sec, probably want 5x that
     V1_println(F("Look for some Serial2 bytes for 5 secs or 5000 chars or 2 sentences"));
-    char incomingChar = { 0 };
-    uint32_t incomingCharCnt = 0;
-    uint32_t incomingSentenceCnt = 0;
 
+    uint32_t incomingCharCnt     = 0;
+    uint32_t incomingSentenceCnt = 0;
     uint32_t start_millis = millis();
-    uint32_t duration_millis = 0;
-    while (duration_millis < 5000) {
+
+    while ((millis() - start_millis) < GPS_INITIAL_OUTPUT_TIMEOUT_MS) {
         Watchdog.reset();
-        if (!Serial2.available()) {
-            ;
-        } else {
-            while (Serial2.available()) {
-                incomingChar = Serial2.read();
-                // buffer it up like we do normally below, so we can see sentences
-                // skip any non-printable, as we won't be able to dos2unix the putty.log if in there
-                bool printable = isprint(incomingChar);
-                if (printable) {
-                    nmeaBufferAndPrint(incomingChar, true);  // print if full
-                    incomingCharCnt += 1;
-                    if (incomingChar == '$') incomingSentenceCnt += 1;
-                }
-            }
-            if (incomingCharCnt >= 5000) break;
-            if (incomingSentenceCnt >= 2) break;
+
+        // Drain whatever's waiting. If we hit an early-exit threshold
+        // (enough chars or enough sentences), break out.
+        if (Serial2.available()) {
+            if (drainSerial2AndCount(&incomingCharCnt, &incomingSentenceCnt)) break;
         }
-        gpsSleepForMillis(1000, true);  // return early if Serial2.available()
-        duration_millis = millis() - start_millis;
+
+        // Sleep up to 1 sec, returning early if Serial2 has data again.
+        gpsSleepForMillis(1000, true);
     }
+
     nmeaBufferPrintAndClear();
     updateStatusLED();
     Watchdog.reset();
-    V1_println(F("getInitialGpsOutput END"));
 
-    return (incomingSentenceCnt >= 2);
+    V1_println(F("getInitialGpsOutput END"));
+    return (incomingSentenceCnt >= GPS_INITIAL_OUTPUT_MIN_NMEA);
 }
 
 //************************************************
