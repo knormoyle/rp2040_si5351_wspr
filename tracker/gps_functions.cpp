@@ -674,7 +674,8 @@ void setGpsBroadcast(void) {
         static const char *pair062_1sec[] = {
             "$PAIR062,0,1*3F" CR LF,  // GGA on
             "$PAIR062,1,0*3F" CR LF,  // GLL off (2/17/25)
-            "$PAIR062,2,0*3C" CR LF,  // GSA off (2/24/25)
+            // "$PAIR062,2,0*3C" CR LF,  // GSA off (2/24/25)
+            "$PAIR062,2,1*3D" CR LF,  // GSA on 4/30/26
             "$PAIR062,3,1*3C" CR LF,  // GSV on
             "$PAIR062,4,1*3B" CR LF,  // RMC on
             "$PAIR062,5,0*3B" CR LF,  // VTG off (2/17/25)
@@ -686,7 +687,8 @@ void setGpsBroadcast(void) {
         static const char *pair062_5sec[] = {
             "$PAIR062,0,5*3B" CR LF,  // GGA on
             "$PAIR062,1,0*3F" CR LF,  // GLL off (2/17/25)
-            "$PAIR062,2,0*3C" CR LF,  // GSA off (2/24/25)
+            // "$PAIR062,2,0*3C" CR LF,  // GSA off (2/24/25)
+            "$PAIR062,2,5*39" CR LF,  // GSA on 4/30/26
             "$PAIR062,3,5*38" CR LF,  // GSV on
             "$PAIR062,4,5*3F" CR LF,  // RMC on
             "$PAIR062,5,0*3B" CR LF,  // VTG off (2/17/25)
@@ -1168,11 +1170,15 @@ void setupSIM65M(int desiredBaud) {
 //     checkGpsBaudRate() we should only ever be looking up legal bauds.
 // =============================================================================
 
-// Set to false to use the older $PAIR860 sentences instead of $PAIR864.
-// PAIR864 is preferred -- strange that the spec doesn't list all baud rate
-// values for PAIR860 but does for PAIR864. 
+// Set to false to use the $PAIR860 sentences instead of $PAIR864.
+// PAIR864 is preferred -- strange that the spec doesn't list all
+// baud rate values for PAIR860 but does for PAIR864. 
+
 // PAIR860 and PAIR864 work for SIM65M 9600 baud 4/30/26
-#define SIM65M_USE_PAIR864 false
+// did PAIR860 not work for 115200 setting (if it was working at 9600) SIM65M
+// PAIR860 didn't change SIM65M-CB from 115200 to ??
+// PAIR864 did work for 115200 on SIM65M that was stuck at 9600?
+#define SIM65M_USE_PAIR864 true
 
 // -----------------------------------------------------------------------------
 // Pick the SIM65M baud-change NMEA sentence for a given baud.
@@ -1192,6 +1198,10 @@ static void buildSIM65MBaudSentence(int *usedBaud, char *out, size_t outSize) {
         // but 115200 minimum?
         // 2.3.147 Packet Type:860 PAIR_IO_OPEN_PORT Open a GNSS data port
         // PAIR860 checksum was wrong! try again 4/30/26
+        // the 37 is GNSS_IO_FLAG_OUT_* (all out data response) + GNSS_IN_CMD .. not DATA or RTCM in
+        // 0 is disable flow control
+
+        // PAIR864 might only support 115200 and above?
         case 4800:   // supported or ??
             s = SIM65M_USE_PAIR864 ? "$PAIR864,0,0,4800*10"   CR LF
                                    : "$PAIR860,0,0,37,4800,0*20" CR LF; break;
@@ -1506,13 +1516,6 @@ void GpsINIT(void) {
 // so the rail never actually gets pulled low this way.
 #define WEAK_PULLDOWN_FOR_ASSERT false
 
-// Strategy B parameters: PWM the mosfet, ramping duty cycle up over ~2 sec.
-// Starts at 1us on / 200us off and walks toward 200us on / 0us off in 20us
-// steps, ~10 iterations, ~200 usec per iteration.
-#define PWM_INITIAL_ON_USECS    1
-#define PWM_INITIAL_OFF_USECS   200
-#define PWM_STEP_USECS          20
-
 // Set true to log duty_cycle at every 10% boundary. Off in production
 // because the USB PLL is off during cold-reset GPS power-up, so prints
 // wouldn't make it out anyway.
@@ -1538,38 +1541,39 @@ static void gpsPwrOn_weakPulldown(void) {
 }
 
 // -----------------------------------------------------------------------------
-// Strategy B: bit-banged PWM that ramps from low duty to high duty over ~2s.
+// Strategy B: bit-banged PWM that ramps from 0% duty to 100% duty over ~0.5s.
 // LOW on the GPIO asserts the mosfet (turns GPS power on).
+// PWM period = 5ms (granularity), 100 steps total = 500ms ramp.
 // -----------------------------------------------------------------------------
-static void gpsPwrOn_pwmRamp(void) {
-    uint64_t on_usecs  = PWM_INITIAL_ON_USECS;
-    uint64_t off_usecs = PWM_INITIAL_OFF_USECS;
+#define PWM_PERIOD_USECS    5000UL   // 5 ms PWM period (granularity)
+#define PWM_TOTAL_STEPS     100UL    // 100 steps -> 500 ms total ramp
+#define PWM_STEP_USECS_NEW  (PWM_PERIOD_USECS / PWM_TOTAL_STEPS)  // 50 us per 1%
 
-    // Loop until off_usecs has been stepped down to 0 (the on time has
-    // taken over the full period).
-    while (off_usecs > 0) {
+static void gpsPwrOn_pwmRamp(void) {
+    // Start at 0% duty (mosfet fully off), ramp up to 100% (fully on).
+    // Recall: LOW asserts the mosfet, so "on time" means GPIO driven LOW.
+    for (uint64_t step = 0; step <= PWM_TOTAL_STEPS; step++) {
         Watchdog.reset();
 
-        digitalWrite(GpsPwr, LOW);   // assert mosfet (GPS power on)
-        sleep_us(on_usecs);          // lower-power light sleep
-        digitalWrite(GpsPwr, HIGH);  // deassert mosfet
-        sleep_us(off_usecs);         // lower-power light sleep
+        uint64_t on_usecs  = step * PWM_STEP_USECS_NEW;   // asserted (LOW) time
+        uint64_t off_usecs = PWM_PERIOD_USECS - on_usecs; // deasserted (HIGH) time
 
-        // Compute duty cycle as a percent, scaled. Shifts/scaling chosen
-        // to keep some accuracy through integer division:
-        // the delta (1000000/10000) gives a percent (*100).
-        // 100x pct
-        uint64_t duty_cycle =
-            (on_usecs * 1000000UL) / ((on_usecs + off_usecs) * 10000UL);
+        // Drive one PWM period. Skip zero-length halves to avoid
+        // unnecessary GPIO toggles at the 0% and 100% endpoints.
+        if (on_usecs > 0) {
+            digitalWrite(GpsPwr, LOW);    // assert mosfet (GPS power on)
+            sleep_us(on_usecs);
+        }
+        if (off_usecs > 0) {
+            digitalWrite(GpsPwr, HIGH);   // deassert mosfet
+            sleep_us(off_usecs);
+        }
 
-        // Print duty_cycle at every 10% boundary (disabled -- USB PLL is
-        // off during GPS cold-reset power-up, so prints wouldn't emit).
+        // duty_cycle as percent (step is already 0..100, so it IS the percent).
+        uint64_t duty_cycle = step;
         if (PWM_PRINT_DUTY_CYCLE && (duty_cycle % 10) == 0) {
             V1_printf("pwmGpsPwrOn() duty_cycle (pct) %" PRIu64 EOL, duty_cycle);
         }
-
-        on_usecs  += PWM_STEP_USECS;
-        off_usecs -= PWM_STEP_USECS;
     }
 
     // Make sure we end with GpsPwr fully on (asserted).
@@ -2444,11 +2448,11 @@ void invalidateTinyGpsState(void) {
     // we don't flush sat count stuff?
     gps.location.flush();
     gps.location.fixQualityFlush();
-    gps.location.fixModeFlush();
 
     gps.speed.flush();
     gps.altitude.flush();
 
+    gps.fix.fixModeFlush();
     gps.date.flush();
     gps.time.flush();
     V1_println(F("invalidateTinyGpsState END"));
@@ -2485,8 +2489,8 @@ void GpsOFF() {
     V1_printf("GpsOFF END GpsIsOn_state %u" EOL, GpsIsOn_state);
 }
 
-
 //************************************************
+// kevin9
 uint32_t updateGpsDataAndTime(int ms) {
     // to make sure we get some update, even if fix_age is larger than 1 sec.
     V1_println(F("updateGpsDataAndTime START"));
@@ -2544,7 +2548,7 @@ uint32_t updateGpsDataAndTime(int ms) {
     uint32_t time_dollarStar_millis = 0;
     // only one that causes gps.time.updated
     bool     doDelayedTimeUpdate  = false;
-    uint32_t timeUpdate_sentences = 0;
+    // uint32_t timeUpdate_sentences = 0;
     // bool     timeUpdateDone       = false;
     gps.time.updated = false;
     gps.date.updated = false;
@@ -2565,15 +2569,14 @@ uint32_t updateGpsDataAndTime(int ms) {
             if (VERBY[1] && charsAvailable >= 31)
                 StampPrintf("ERROR: full. uart rx depth %d incomingCharCnt %d" EOL,
                     (int)charsAvailable, incomingCharCnt);
-            char c      = incomingChar;
-            bool isCrlf = (c == '\r' || c == '\n');
-
             // FIX! ignoring unprintables. Do we even get any? maybe in error?
             // either a number (0123456789),
             // an uppercase letter ABCDEFGHIJKLMNOPQRSTUVWXYZ
             // a lowercase letter  abcdefghijklmnopqrstuvwxyz
             // a punctuation character !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~ ,
             // or <space>, or any character classified as printable by the current C locale.
+            char c       = incomingChar;
+            bool isCrlf  = (c == '\r' || c == '\n');
             bool isPrint = !isCrlf && isprint(c);
             // always strip non-printable, non-CRLF chars here and continue the loop
             // CR and LF isprint() is false
@@ -2615,62 +2618,59 @@ uint32_t updateGpsDataAndTime(int ms) {
             // unload each char to TinyGPS++ object as it arrives
             // https://arduino.stackexchange.com/questions/13452/tinygps-plus-library
             gps.encode(c);
+
+            // just save the first millis for the GGA sentence with time
             // updated has to transition before we get the next dollar_millis??
             // we use dollarStar_millis to make sure no race condition with '$'
             // RMC should be last sentence in the burst? has date.
             // GGA is first in the burst. we use that for time.
-            // if (gps.time.updated && gps.date.updated) {
-
-            // did we get the date already?
-            if (gps.time.updated) {
+            if (gps.time.updated && !doDelayedTimeUpdate) {
                 // TinyGPS should be setup so only one time update trigger per burst
+                // will qualify this later with gps.date.updated before using it
+                // gps.time.updated should be sticky, so can use that too
+
+                // save the earliest millis from the time update
                 doDelayedTimeUpdate = true;
-                // save the earlies millis from the time update
+                // keep as close as possible to the NMEA sentence arrival?
                 time_dollarStar_millis = dollarStar_millis;
             }
+
             // Note we disabled the GPTXT broadcast to reduce the NMEA load (for here)
             // Do we get any unprintable? ignore unprintable chars, just in case.
             if (VERBY[1] && isPrint) nmeaBufferAndPrint(c, false);  // no print if full
             getChar();
         }
 
+        // Trying to synchronize so GGA is always first
+        // Should only be one time update trigger now
+        // If we get two, we've gone too long on the burst
+        // if (timeUpdate_sentences >= 2) finished = true;
+
         if (finished) break;
 
-        // keep as close as possible to the NMEA sentence arrival?
-        // I suppose we'll see gps.time.updated every time?
-        updateStatusLED();
         // did we wait more than ?? millis() since good data read?
         // we wait until we get at least one char or go past the ms total wait
         // break out when we don't get the next char right away
         uint32_t gapMs = last_char_millis ? (millis() - last_char_millis) : 0;
-
-        // FIX! should the two delays used be dependent on baud rate?
-        // if we got slowed down by doing a timeUpdate, don't do this
-        // FIX! if the time update took more than 32ms the rx fifo would back up, full
-        // in any case, we don't break on this if we did a time update
-        // situation probably doesn't happen now.
-        // was 25
-        // if (gapMs >= 10 && !timeUpdateDone) break;
-        // no more timeUpdate delay in the loop
         if (gapMs >= 10) break;
 
+        // also moved the led update out of here
         // stop the wait early if Serial2.available
-        // was 25
+        // still didn't work with this removed
         gpsSleepForMillis(10, true);
+        // it was okay for 2 baud rate clicks below 115200 baud.
+        
         getChar();
     }
+    // maybe save some time in loop above..don't update led during 1 sec burst?
+    updateStatusLED();
 
     // how long does a burst take? 1 sec? this could e done one sec late relative to gps time
+    // gps.date.updated happends in a sentence after the first GGA that sets gps.time.updated
+    // gps.time.updated would have been cleared...just need to know we got gps.date.updated also
+    // if (doDelayedTimeUpdate && gps.date.updated) {
     if (doDelayedTimeUpdate) {
-        // if we get two, we've gone too long on the burst
-        timeUpdate_sentences++;
         checkUpdateTimeFromGps(time_dollarStar_millis);
-        gps.time.updated = false;
-        gps.date.updated = false;
-        // trying to synchronize so GGA is always first
-        // timeUpdateDone = true;
-        // should only be one time update trigger now
-        if (timeUpdate_sentences >= 2) finished = true;
     }
     
     // Reporting
@@ -2784,14 +2784,19 @@ static bool fixAgeIsAcceptable(bool forceUpdate, uint32_t timeUpdateCnt) {
         if (timeUpdateCnt != 0) {
             // (caller has already noted forceUpdate elapsed_millis2)
             // loose fix_age constraint, if we're forcing, just in case?
-            if (fix_age > 500) {
+            // with a really big NMEA burst now, the gps.time could have been set 1 sec ago
+            // because we wait to use it
+            // in fact, with 5 sec waits? we could be waiting 5 secs? 
+            // but I think 1 sec is realistic
+            if (fix_age > 1000) {
                 V1_printf("WARN: bad setTime forceUpdate. fix_age %lu" EOL, fix_age);
                 return false;
             }
         }
         return true;
     }
-    if (fix_age > 250) {
+    // 1 sec fix_age is realistic?
+    if (fix_age > 1000) {
         V1_printf("WARN: bad try. fix_age %lu" EOL, fix_age);
         return false;
     }
@@ -2860,6 +2865,8 @@ static void updateBestGuessSkewFromPPS(uint32_t setTime_millis,
     }
     // we should be using this at least once per rollover.
     uint32_t elapsed_millis3 = setTime_millis - PPS_rise_millis;
+    // even if we burst for 5 secs, this might be okay
+    // if stuff comes in the first sec?
     uint32_t elapsed_millis3_modulo = elapsed_millis3 % 1000;
     // print the modulo 1 sec also, if the last PPS was a while ago
     // (gps being reset or ?)
@@ -2868,7 +2875,7 @@ static void updateBestGuessSkewFromPPS(uint32_t setTime_millis,
               elapsed_millis3, elapsed_millis3_modulo, PPS_rise_cnt);
     V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
     // range check it..otherwise leave as it was (default 100 on first call)
-    if (elapsed_millis3_modulo > 10 && elapsed_millis3_modulo < 500) {
+    if (elapsed_millis3_modulo > 10 && elapsed_millis3_modulo < 1000) {
         *bestGuessSkewFromPPS = elapsed_millis3_modulo;
     } else {
         V1_printf("ERROR: setTime elapsed_millis3_modulo %lu out of range, ignoring" EOL,
@@ -2912,6 +2919,7 @@ static void reportDrift(int secondDelta, bool forceUpdate, uint32_t timeUpdateCn
 // -----------------------------------------------------------------------------
 static void reportRxFifoBackup(uint32_t fix_age_entry) {
     uint32_t fix_age = gps.time.age();
+    // local, not the global. doesn't matter?
     int charsAvailable = Serial2.available();
     if (charsAvailable > 25) {
         V1_print(F("ERROR: rx fifo backup (2): "));
@@ -3113,12 +3121,12 @@ void gpsDebug() {
     // can use this? gpsDebug will print the char?
     // is there no isValid() for these?
     bool validI = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
-    bool validJ = (gps.location.FixMode() != TinyGPSLocation::Mode::N);
+    bool validJ = (gps.fix.FixMode() != TinyGPSFix::Mode::N);
 
     // can compare char and int? 
     // this includes Estimated as valid?
     // bool validI = gps.location.FixQuality() != 0;
-    // bool validJ = gps.location.FixMode() != 'N';
+    // bool validJ = gps.fix.FixMode() != 'N';
 
     V1_printf("gps valids: %u %u %u %u %u %u %u %u %u %u %u" EOL,
         !GpsInvalidAll, validA, validB, validC, validD, validE, validF, validG, validH, validI, validJ);
@@ -3174,7 +3182,7 @@ void gpsDebug() {
         printStr(fq, true, 7);
 
         char fm[2] = { 0 };
-        fm[0] = gps.location.FixMode();
+        fm[0] = gps.fix.FixMode();
         printStr(fm, true, 7);
     }
     V1_print(F(EOL));

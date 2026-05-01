@@ -52,13 +52,9 @@ struct TinyGPSLocation
 {
    friend class TinyGPSPlus;
 public:
-   //***************
    // HACK: kevin moved from private 12_15_24 so the .ino can clear them in invalidateTinyGpsState()
    bool valid, updated;
-   //***************
-    
    enum Quality { Invalid = '0', GPS = '1', DGPS = '2', PPS = '3', RTK = '4', FloatRTK = '5', Estimated = '6', Manual = '7', Simulated = '8' };
-   enum Mode { N = 'N', A = 'A', D = 'D', E = 'E'};
 
    bool isValid() const    { return valid; }
    bool isUpdated() const  { return updated; }
@@ -68,24 +64,18 @@ public:
    double lat();
    double lng();
 
-   //***************
-   // HACK: kevin better: make public method and cover fixQuality and fixMode also
+   // HACK: kevin better: make public method and cover fixQuality (and fixMode in date)
    void flush()           { updated = false; valid = false; }
    void fixQualityFlush() { updated = false; fixQuality = Invalid; }
-   void fixModeFlush()    { updated = false; fixMode = N; }
-   //***************
-
-   Quality FixQuality() { updated = false; return fixQuality; }
-   Mode FixMode()       { updated = false; return fixMode; }
+   Quality FixQuality()   { updated = false; return fixQuality; }
     
-   TinyGPSLocation() : valid(false), updated(false), fixQuality(Invalid), fixMode(N)
+   TinyGPSLocation() : valid(false), updated(false), fixQuality(Invalid)
    {}
 
 
 private:
    RawDegrees rawLatData, rawLngData, rawNewLatData, rawNewLngData;
    Quality fixQuality, newFixQuality;
-   Mode fixMode, newFixMode;
    uint32_t lastCommitTime;
    void commit();
    void setLatitude(const char *term);
@@ -95,11 +85,12 @@ private:
 struct TinyGPSDate
 {
    friend class TinyGPSPlus;
+
 public:
    bool isValid() const       { return valid; }
    bool isUpdated() const     { return updated; }
-   uint32_t age() const       { return valid ? millis() - lastCommitTime : (uint32_t)ULONG_MAX; }
 
+   uint32_t age() const       { return valid ? millis() - lastCommitTime : (uint32_t)ULONG_MAX; }
    uint32_t value()           { updated = false; return date; }
    uint16_t year();
    uint8_t month();
@@ -109,10 +100,9 @@ public:
    // no longer do that. use flush()
    bool valid, updated;
    uint32_t date;
-   //*************
+
    // HACK: kevin better: make public method
-   void flush() { updated = false; valid = false; date = 0; }
-   //*************
+   void flush()           { updated = false; valid = false; date = 0; }
 
    TinyGPSDate() : valid(false), updated(false), date(0)
    {}
@@ -122,6 +112,36 @@ private:
    uint32_t lastCommitTime;
    void commit();
    void setDate(const char *term);
+};
+
+struct TinyGPSFix
+{
+   friend class TinyGPSPlus;
+
+public:
+   enum Mode { N = 'N', A = 'A', D = 'D', E = 'E' };
+
+   bool isValid() const       { return valid; }
+   bool isUpdated() const     { return updated; }
+   uint32_t age() const       { return valid ? millis() - lastCommitTime : (uint32_t)ULONG_MAX; }
+   Mode value()               { updated = false; return fixMode; }
+
+   bool valid, updated;
+   Mode fixMode;
+
+   // HACK: kevin better: make public method
+   void flush()           { updated = false; valid = false; fixMode = N; }
+   void fixModeFlush()    { updated = false; fixMode = N; }
+   Mode FixMode()         { updated = false; return fixMode; }
+
+   TinyGPSFix() : valid(false), updated(false), fixMode(N)
+   {}
+
+private:
+   Mode newFixMode;
+   uint32_t lastCommitTime;
+   void commit();
+   void set(const char *term);
 };
 
 struct TinyGPSTime
@@ -137,13 +157,9 @@ public:
    uint8_t minute();
    uint8_t second();
    uint8_t centisecond();
-   //*************
-   // HACK: kevin moved from private 12_15_24 so the .ino can clear them in invalidateTinyGpsState()
-   // no longer do that. use flush()
    bool valid, updated;
    uint32_t time;
-   //*************
-   // HACK: kevin better: make public method
+
    void flush() { updated = false; valid = false; time = 0; }
 
    TinyGPSTime() : valid(false), updated(false), time(0)
@@ -264,6 +280,7 @@ public:
 
   TinyGPSLocation location;
   TinyGPSDate date;
+  TinyGPSFix fix;
   TinyGPSTime time;
   TinyGPSSpeed speed;
   TinyGPSCourse course;

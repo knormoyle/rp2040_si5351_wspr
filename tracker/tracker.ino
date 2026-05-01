@@ -319,6 +319,7 @@ extern const int SERIAL2_FIFO_SIZE = 32;
 // what we want to change it too
 
 // 7/10/25 was:
+// extern const int SIM65M_BAUD_RATE = 9600;
 extern const int SIM65M_BAUD_RATE = 9600;
 // extern const int SIM65M_BAUD_RATE = 115200;
 
@@ -1004,11 +1005,12 @@ void setup1() {
     // manageable. Tested values: 18 MHz→1, 125/133 MHz→8.
     // FIX! Not all frequency/interrupt combinations have been fully tested.
     // -----------------------------------------------------------------------
+    // FIX! could we have have 12Mhz here? not unless we change initPicoClock() above
     if      (PLL_SYS_MHZ <=  18) INTERRUPTS_PER_SYMBOL = 1;
     else if (PLL_SYS_MHZ <=  33) INTERRUPTS_PER_SYMBOL = 2;
     else if (PLL_SYS_MHZ <=  66) INTERRUPTS_PER_SYMBOL = 4;
     else if (PLL_SYS_MHZ <= 133) INTERRUPTS_PER_SYMBOL = 8;
-    else                          INTERRUPTS_PER_SYMBOL = 16;
+    else                         INTERRUPTS_PER_SYMBOL = 16;
 
     calcPwmDivAndWrap(&PWM_DIV, &PWM_WRAP_CNT, INTERRUPTS_PER_SYMBOL, PLL_SYS_MHZ);
     V1_printf("calcPwmDivAndWrap(): PLL_SYS_MHZ %lu PWM_DIV %lu PWM_WRAP_CNT %lu"
@@ -1285,7 +1287,7 @@ void loop1() {
     // fix_mode / fix_qual are single chars:
     //   fix_qual: Invalid DGPS PPS RTK FloatRTK Estimated Manual Simulated
     //   fix_mode: N A D E
-    char fix_mode = gps.location.FixMode();
+    char fix_mode = gps.fix.FixMode();
     char fix_qual = gps.location.FixQuality();
 
     // isUpdated() = value refreshed since last query (not necessarily changed)

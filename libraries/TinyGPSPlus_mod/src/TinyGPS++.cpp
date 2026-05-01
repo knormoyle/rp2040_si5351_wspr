@@ -99,6 +99,7 @@ int32_t TinyGPSPlus::parseDecimal(const char *term)
 {
   bool negative = *term == '-';
   if (negative) ++term;
+
   // Inline integer parse — one forward pass, no atol() overhead
   int32_t whole = 0;
   while (isdigit(*term)) whole = whole * 10 + (*term++ - '0');
@@ -138,7 +139,22 @@ void TinyGPSPlus::parseDegrees(const char *term, RawDegrees &deg)
   deg.negative = false;
 }
 
+// This macro combines two values into a single unsigned integer by packing them into different bit fields
 #define COMBINE(sentence_type, term_number) (((unsigned)(sentence_type) << 5) | term_number)
+
+// (unsigned)(sentence_type) — casts sentence_type to an unsigned integer
+
+// << 5 — shifts it left by 5 bits (multiplies by 32), moving it into the upper bits
+// | term_number — ORs in term_number, which occupies the lower 5 bits
+
+// Resulting bit layout:
+// [ sentence_type bits ][ term_number bits ]
+//        ...              b4 b3 b2 b1 b0
+//                        ^--- 5 bits ---^
+
+// term_number can hold values 0–31 (5 bits)
+// sentence_type occupies all remaining upper bits
+// The two values are stored together in one integer, with no overlap — as long as term_number stays within 0–31
 
 // Processes a just-completed term
 // Returns true if new sentence has just passed checksum test and is validated
@@ -166,11 +182,14 @@ bool TinyGPSPlus::endOfTermHandler()
 
       case GPS_SENTENCE_RMC:
         // kbn 2/13/25 just use GGA for time consistency early in burst
+        // FixMode now lives on TinyGPSFix; commit it alongside date
         date.commit();
+        fix.commit();
         // time.commit();
         if (sentenceHasFix)
         {
-           location.commit();
+           // only want location from GGA?
+           // location.commit();
            speed.commit();
            course.commit();
         }
@@ -188,10 +207,18 @@ bool TinyGPSPlus::endOfTermHandler()
         hdop.commit();
         break;
       }
-
       // Commit all custom listeners of this sentence type
-      for (TinyGPSCustom *p = customCandidates; p != NULL && strcmp(p->sentenceName, customCandidates->sentenceName) == 0; p = p->next)
-         p->commit();
+      // Extracted customCandidates->sentenceName into referenceSentenceName — same reasoning as below
+      // Moved the strcmp out of the loop condition and into an explicit break — 
+      // the loop condition was doing double duty (null check + string comparison), 
+      // Separating them makes the early-exit logic stand on its own.
+      const char *referenceSentenceName = customCandidates->sentenceName;
+      for (TinyGPSCustom *p = customCandidates; p != NULL; p = p->next)
+      {
+        if (strcmp(p->sentenceName, referenceSentenceName) != 0) { break; }
+        p->commit();
+      }
+
       return true;
     }
     else { ++failedChecksumCount; }
@@ -209,56 +236,54 @@ bool TinyGPSPlus::endOfTermHandler()
     const char *sfx = term + 2;  // 3-char suffix: RMC / GGA / ZDA / GST
 
     // First char must be 'G' or 'B'; second char must be one of D,P,N,A,B,L
-    if ((c0 == 'G' || c0 == 'B') &&
-        (c1=='D'||c1=='P'||c1=='N'||c1=='A'||c1=='B'||c1=='L'))
+    if ((c0=='G' || c0=='B') &&
+        (c1=='D' || c1=='P'|| c1=='N'|| c1=='A'|| c1=='B'|| c1=='L'))
     {
       if      (TERM3EQ(sfx, 'R','M','C')) curSentenceType = GPS_SENTENCE_RMC;
       else if (TERM3EQ(sfx, 'G','G','A')) curSentenceType = GPS_SENTENCE_GGA;
+      // don't need to case on ZDA and GST anymore
       else if (TERM3EQ(sfx, 'Z','D','A')) curSentenceType = GPS_SENTENCE_ZDA;
       else if (TERM3EQ(sfx, 'G','S','T')) curSentenceType = GPS_SENTENCE_GST;
       else                                curSentenceType = GPS_SENTENCE_OTHER;
     }
     else { curSentenceType = GPS_SENTENCE_OTHER; }
 
+
+    // for with empty body → while to make the traversal explicit.
+    // > 0 → != 0 since < 0 was already ruled out by the loop.
+    // Comments explain the sorted-list assumption and the overshoot case.
+    // Advance through the sorted custom elements list to find a matching sentence name
+
     // Any custom candidates of this sentence type?
-    for (customCandidates = customElts; customCandidates != NULL && strcmp(customCandidates->sentenceName, term) < 0; customCandidates = customCandidates->next);
-    if (customCandidates != NULL && strcmp(customCandidates->sentenceName, term) > 0)
-       customCandidates = NULL;
+    while (customCandidates != NULL && strcmp(customCandidates->sentenceName, term) < 0)
+    {
+      customCandidates = customCandidates->next;
+    }
+
+    // If we overshot (no exact match exists), clear the candidates pointer
+    if (customCandidates != NULL && strcmp(customCandidates->sentenceName, term) != 0)
+    {
+      customCandidates = NULL;
+    }
+
     return false;
   }
 
   if (curSentenceType != GPS_SENTENCE_OTHER && term[0])
     switch(COMBINE(curSentenceType, curTermNumber))
   {
-    // this is weird, it doesn't do everything?
-    case COMBINE(GPS_SENTENCE_ZDA, 1): // kbn Add ZDA (last sentence in burst) for SIM65M
-    case COMBINE(GPS_SENTENCE_GST, 1): // kbn Add GST (last sentence in burst) for ATGM336
-    case COMBINE(GPS_SENTENCE_RMC, 1): // Time in both sentences
     case COMBINE(GPS_SENTENCE_GGA, 1):
       time.setTime(term); break;
-    case COMBINE(GPS_SENTENCE_RMC, 2): // RMC validity
-      sentenceHasFix = term[0] == 'A'; break;
-    case COMBINE(GPS_SENTENCE_RMC, 3): // Latitude
     case COMBINE(GPS_SENTENCE_GGA, 2):
       location.setLatitude(term); break;
-    case COMBINE(GPS_SENTENCE_RMC, 4): // N/S
     case COMBINE(GPS_SENTENCE_GGA, 3):
       location.rawNewLatData.negative = term[0] == 'S'; break;
-    case COMBINE(GPS_SENTENCE_RMC, 5): // Longitude
     case COMBINE(GPS_SENTENCE_GGA, 4):
       location.setLongitude(term); break;
-    case COMBINE(GPS_SENTENCE_RMC, 6): // E/W
     case COMBINE(GPS_SENTENCE_GGA, 5):
       location.rawNewLngData.negative = term[0] == 'W'; break;
-    case COMBINE(GPS_SENTENCE_RMC, 7): // Speed (RMC)
-      speed.set(term); break;
-    case COMBINE(GPS_SENTENCE_RMC, 8): // Course (RMC)
-      course.set(term); break;
-    // kbn ZDA also has date but in 3 fields. so don't use.
-    // RMC has 120225 (not 2025 ..just 2 digits)
-    case COMBINE(GPS_SENTENCE_RMC, 9): // Date (RMC)
-      date.setDate(term); break;
     case COMBINE(GPS_SENTENCE_GGA, 6): // Fix data (GGA)
+      // both GGA and RMC can have this? includes type 6? 
       sentenceHasFix = term[0] > '0';
       location.newFixQuality = (TinyGPSLocation::Quality)term[0]; break;
     case COMBINE(GPS_SENTENCE_GGA, 7): // Satellites used (GGA)
@@ -267,14 +292,58 @@ bool TinyGPSPlus::endOfTermHandler()
       hdop.set(term); break;
     case COMBINE(GPS_SENTENCE_GGA, 9): // Altitude (GGA)
       altitude.set(term); break;
+
+    // RMC comes after GGA. so can't have FixMode in location
+    case COMBINE(GPS_SENTENCE_RMC, 2): // RMC validity
+      // both GGA and RMC can have this?
+      sentenceHasFix = term[0] == 'A'; break;
+    case COMBINE(GPS_SENTENCE_RMC, 7): // Speed (RMC)
+      speed.set(term); break;
+    case COMBINE(GPS_SENTENCE_RMC, 8): // Course (RMC)
+      course.set(term); break;
+    case COMBINE(GPS_SENTENCE_RMC, 9): // Date (RMC)
+      date.setDate(term); break;
     case COMBINE(GPS_SENTENCE_RMC, 12):
-      location.newFixMode = (TinyGPSLocation::Mode)term[0]; break;
+      // if it's not a legal enum, it will just put the numeric value of the char?
+      // could it be non-printable (others could also?)
+      // FixMode lives on TinyGPSFix now (committed together with date in RMC)
+      fix.newFixMode = (TinyGPSFix::Mode)term[0]; break;
+
+    // these aren't used any more
+    /*
+    case COMBINE(GPS_SENTENCE_ZDA, 1): // kbn Add ZDA (last sentence in burst) for SIM65M
+    case COMBINE(GPS_SENTENCE_GST, 1): // kbn Add GST (last sentence in burst) for ATGM336
+    case COMBINE(GPS_SENTENCE_RMC, 1): // Time in both sentences
+    case COMBINE(GPS_SENTENCE_RMC, 3): // Latitude
+    case COMBINE(GPS_SENTENCE_RMC, 4): // N/S
+    case COMBINE(GPS_SENTENCE_RMC, 5): // Longitude
+    case COMBINE(GPS_SENTENCE_RMC, 6): // E/W
+    */
+    // kbn ZDA also has date but in 3 fields. so don't use.
+    // RMC has 120225 (not 2025 ..just 2 digits)
   }
 
   // Set custom values as needed
-  for (TinyGPSCustom *p = customCandidates; p != NULL && strcmp(p->sentenceName, customCandidates->sentenceName) == 0 && p->termNumber <= curTermNumber; p = p->next)
+  // this is kind of slow traversal for the GSV and GSA stuff I use custom for?
+
+  // Extracted customCandidates->sentenceName into referenceSentenceName
+  // makes it clear the loop is comparing against a fixed reference, not a moving target, 
+  // avoids re-dereferencing on every iteration.
+  // Converted for to while — the loop advances p as a side effect with no init expression, 
+  // which is a cleaner fit for while. 
+  // Separated the iterator advance (p = p->next) from the loop header into the body
+  TinyGPSCustom *p = customCandidates;
+  const char *referenceSentenceName = customCandidates->sentenceName;
+  while (p != NULL &&
+         strcmp(p->sentenceName, referenceSentenceName) == 0 &&
+         p->termNumber <= curTermNumber)
+  {
     if (p->termNumber == curTermNumber)
-       p->set(term);
+    {
+        p->set(term);
+    }
+    p = p->next;
+  }
 
   return false;
 }
@@ -327,9 +396,11 @@ const char *TinyGPSPlus::cardinal(double course)
 
 void TinyGPSLocation::commit()
 {
-   rawLatData = rawNewLatData; rawLngData = rawNewLngData;
-   fixQuality = newFixQuality; fixMode = newFixMode;
-   lastCommitTime = millis(); valid = updated = true;
+   rawLatData = rawNewLatData; 
+   rawLngData = rawNewLngData;
+   fixQuality = newFixQuality; 
+   lastCommitTime = millis(); 
+   valid = updated = true;
 }
 void TinyGPSLocation::setLatitude(const char *term)  { TinyGPSPlus::parseDegrees(term, rawNewLatData); }
 void TinyGPSLocation::setLongitude(const char *term) { TinyGPSPlus::parseDegrees(term, rawNewLngData); }
@@ -347,16 +418,35 @@ double TinyGPSLocation::lng()
    return rawLngData.negative ? -ret : ret;
 }
 
-void TinyGPSDate::commit() { date = newDate; lastCommitTime = millis(); valid = updated = true; }
 void TinyGPSTime::commit() { time = newTime; lastCommitTime = millis(); valid = updated = true; }
 void TinyGPSTime::setTime(const char *term) { newTime = (uint32_t)TinyGPSPlus::parseDecimal(term); }
 
 // Speed: replaced atol() with inline digit accumulator
+void TinyGPSDate::commit() 
+{ 
+    date = newDate; 
+    lastCommitTime = millis(); 
+    valid = updated = true; 
+}
+
 void TinyGPSDate::setDate(const char *term)
 {
    uint32_t v = 0;
    while (isdigit(*term)) v = v * 10 + (*term++ - '0');
    newDate = v;
+}
+
+void TinyGPSFix::commit()
+{
+    fixMode = newFixMode;
+    lastCommitTime = millis();
+    valid = updated = true;
+}
+
+void TinyGPSFix::set(const char *term)
+{
+    // Single-char NMEA mode indicator (N/A/D/E). If absent or unknown, fall back to N.
+    newFixMode = (term && term[0]) ? (Mode)term[0] : N;
 }
 
 uint16_t TinyGPSDate::year()        { updated = false; return (date % 100) + 2000; }

@@ -389,126 +389,153 @@ void freeMem() {
 //**********************************
 extern const uint32_t GPS_WAIT_FOR_NMEA_BURST_MAX; 
 // true for gps cold reset
-void gpsResetTest(bool gpsColdReset) {
+// Constants for the GPS reset test.
+namespace {
+constexpr uint32_t kSatellitesMinForFix = 3;
+constexpr uint32_t kStaleTimeWarnSecs = 10 * 60;     // 10 minutes
+constexpr uint32_t kStaleTimeFailSecs = 30 * 60;     // 30 minutes
+constexpr uint16_t kFixYearMin = 2025;
+constexpr uint16_t kFixYearMax = 2035;
+
+constexpr uint32_t kFastFixThresholdMs = 60000;      // 60 seconds
+constexpr uint32_t kFixTimeoutMs = 240000;           // 4 minutes
+constexpr uint32_t kDebugPrintIntervalMs = 10000;    // 10 seconds
+constexpr uint32_t kFirstDebugPrintDelayMs =10000;   // 10 seconds
+constexpr uint32_t kLoopTargetMs = 1000;             // 1 second per iteration
+
+}  // namespace
+
+extern const uint32_t GPS_WAIT_FOR_NMEA_BURST_MAX;
+
+// Returns true when every GPS field needed for a usable fix is valid.
+// Side effect: logs a warning if system time has not been refreshed for
+// longer than kStaleTimeWarnSecs.
+static bool IsFixValid(bool gps_cold_reset) {
+    const uint32_t elapsed_set_time_secs =
+        (millis() - setTime_millis) / 1000;
+    if (elapsed_set_time_secs > kStaleTimeWarnSecs) {
+        V1_printf(
+            "ERROR: gpsResetTest %u elapsed_setTime_secs %lu > (10 * 60)" EOL,
+            gps_cold_reset, elapsed_set_time_secs);
+    }
+
+    // FIX! tracker.ino uses the same predicate but does not consult
+    // FixMode or FixQuality. Keep them in sync.
+    return !GpsInvalidAll &&
+           (setTime_millis != 0) &&
+           (elapsed_set_time_secs < kStaleTimeFailSecs) &&
+           gps.date.isValid() &&
+           gps.time.isValid() &&
+           (gps.date.year() >= kFixYearMin &&
+            gps.date.year() <= kFixYearMax) &&
+           gps.satellites.isValid() &&
+           (gps.satellites.value() >= kSatellitesMinForFix) &&
+           gps.hdop.isValid() &&
+           gps.altitude.isValid() &&
+           gps.location.isValid() &&
+           gps.speed.isValid() &&
+           gps.course.isValid() &&
+           // 4/25/26: also reject 'N' (no fix) and 'E' (estimated/dead
+           // reckoning). tracker.ino currently allows 'E'.
+           gps.fix.FixMode() != 'N' &&
+           gps.fix.FixMode() != 'E';
+}
+
+// Runs a single GPS acquisition test. Pass true for a cold reset.
+//
+// On the first call the GPS is initialized; subsequent calls drive a
+// power-on, wait-for-fix, power-off cycle and log how long the fix took.
+void gpsResetTest(bool gps_cold_reset) {
     static uint32_t count = 0;
-    // FIX! currently don't have cold reset support
-    V0_printf("gpsResetTest START %u" EOL, gpsColdReset);
-    V0_print(F("WARN: checking sats >=5 as test here, tracker.ino uses >= 3" EOL));
-
+    // FIX! cold reset support is not implemented yet.
+    V0_printf("gpsResetTest START %u" EOL, gps_cold_reset);
+    V0_print(F("WARN: checking sats >=5 as test here, "
+               "tracker.ino uses >= 3" EOL));
     Watchdog.reset();
-    // void GpsON(bool GpsColdReset) {
 
+    // First invocation: bring the GPS up once so later calls have a
+    // fully initialized peripheral to toggle.
     if (count == 0) {
         V0_print(F("need gps init and cold reset once to fully setup gps"));
 
-        // make sure si5351a is off
+        // Make sure si5351a is off before powering the GPS.
         vfo_turn_off();
 
         GpsINIT();
         GpsOFF();
-        GpsON(gpsColdReset); 
+        GpsON(gps_cold_reset);
         GpsOFF();
         count += 1;
-        V0_printf("gpsResetTest END %u" EOL, gpsColdReset);
+        V0_printf("gpsResetTest END %u" EOL, gps_cold_reset);
         V0_flush();
         return;
     }
 
     Watchdog.reset();
-
-    uint32_t start_millis = millis();
-
-    GpsON(gpsColdReset); 
+    const uint32_t start_millis = millis();
+    GpsON(gps_cold_reset);
 
     bool fix_valid_all = false;
     uint32_t tries = 0;
     uint32_t duration_millis = 0;
-    uint32_t elapsed_setTime_secs;
+    uint32_t print_millis = start_millis + kFirstDebugPrintDelayMs;
 
-    uint32_t print_millis = start_millis + 5000;
     while (!fix_valid_all) {
         Watchdog.reset();
         tries += 1;
-        // we can look at time/drift updates here
+
+        // Pulls a fresh NMEA burst; this is also where time/drift updates
+        // happen, so we keep calling it even after we believe we have a fix.
         updateGpsDataAndTime(GPS_WAIT_FOR_NMEA_BURST_MAX);
-        elapsed_setTime_secs = (millis() - setTime_millis) / 1000;
-        if (elapsed_setTime_secs > (10 * 60)) {
-            V1_printf("ERROR: gpsResetTest %u elapsed_setTime_secs %lu > (10 * 60)" EOL, 
-                gpsColdReset, elapsed_setTime_secs);
-        }
 
-        // FIX! note this is same as tracker.ino. no use of FixMode or FixQuality though?
-        fix_valid_all = 
-            !GpsInvalidAll &&
-            // we got system time synced
-            (setTime_millis != 0) &&
-            // we got system time not too old (30 minutes)
-            (elapsed_setTime_secs < (30 * 60)) &&
-            gps.date.isValid() &&
-            gps.time.isValid() &&
-            (gps.date.year() >= 2025 && gps.date.year() <= 2035) &&
-    
-            // FIX! we check for 3 or more in tracker.ino
-            gps.satellites.isValid() && (gps.satellites.value() >= 3) &&
-            // check for 5 or more as test here
-            // gps.satellites.isValid() && (gps.satellites.value() >= 5) &&
-            gps.hdop.isValid() &&
-            gps.altitude.isValid() &&
-            gps.location.isValid() &&
-            gps.speed.isValid() &&
-            gps.course.isValid() && 
-            // 4/25/26.. add not N and not E !
-            // we allow E in the normal tracker.ino fix? 
-            gps.location.FixMode() != 'N' &&
-            gps.location.FixMode() != 'E';
-
-
+        fix_valid_all = IsFixValid(gps_cold_reset);
         duration_millis = millis() - start_millis;
-        if (millis() > print_millis) {  // print every 5 secs?
-            // prints out the summary info that we have so far?
-            V0_printf("ERROR: gpsResetTest %u %lu: gpsDebug print, but no fix at %lu millisecs interval" EOL, 
-                gpsColdReset, count, duration_millis);
+
+        if (millis() > print_millis) {
+            V0_printf("ERROR: gpsResetTest %u %lu: gpsDebug print, but no "
+                      "fix at %lu millisecs interval" EOL,
+                      gps_cold_reset, count, duration_millis);
             gpsDebug();
             tinyGpsCustom();
-
-            print_millis = millis() + 5000;
-        }
-
-        // Glonass-only was missing ?
-        else if (duration_millis > 240000) {  // 4 * 60 = 240 secs
-            V0_printf("ERROR: gpsResetTest %u %lu: no fix after %lu millisecs duration" EOL, 
-                gpsColdReset, count, duration_millis);
+            print_millis = millis() + kDebugPrintIntervalMs;
+        } else if (duration_millis > kFixTimeoutMs) {
+            // Glonass-only is one known way to land here.
+            V0_printf("ERROR: gpsResetTest %u %lu: no fix after %lu "
+                      "millisecs duration" EOL,
+                      gps_cold_reset, count, duration_millis);
             break;
         }
 
-        // by not sleeping, we should get better timing accuracy?
-        // maybe check that at least 1 sec has elapsed for each loop iteration
+        // Pace the loop to ~1 Hz so we get consistent timing samples
+        // without sleeping past the deadline if the iteration ran long.
+        // FIX! this doesn't work if 5 sec broadcast selected?
         V0_flush();
         Watchdog.reset();
-        // could be negative
-        int32_t wait_millis =  1000 - (int32_t) duration_millis;
+        const int32_t wait_millis =
+            static_cast<int32_t>(kLoopTargetMs) -
+            static_cast<int32_t>(duration_millis);
         if (wait_millis > 0) {
-            V0_printf("gpsResetTest %u will sleep for wait_millis %lu" EOL, 
-                gpsColdReset, wait_millis);
+            V0_printf("gpsResetTest %u will sleep for wait_millis %ld" EOL,
+                      gps_cold_reset, wait_millis);
             sleep_ms(wait_millis);
         }
     }
 
     if (fix_valid_all) {
-        if (duration_millis < 60000) { // 60 secs
-            V0_printf("GOOD: gpsResetTest %u %lu: fix took %lu millisecs" EOL, 
-                gpsColdReset, count, duration_millis);
+        if (duration_millis < kFastFixThresholdMs) {
+            V0_printf("GOOD: gpsResetTest %u %lu: fix took %lu millisecs" EOL,
+                      gps_cold_reset, count, duration_millis);
         } else {
-            V0_printf("ERROR: gpsResetTest %u %lu: fix (too slow) took %lu millisecs" EOL, 
-                gpsColdReset, count, duration_millis);
+            V0_printf("ERROR: gpsResetTest %u %lu: fix (too slow) took %lu "
+                      "millisecs" EOL,
+                      gps_cold_reset, count, duration_millis);
         }
-        // prints out the summary info
         gpsDebug();
         tinyGpsCustom();
     }
+
     GpsOFF();
     count += 1;
-    V0_printf("gpsResetTest END %u" EOL, gpsColdReset);
+    V0_printf("gpsResetTest END %u" EOL, gps_cold_reset);
     V0_flush();
 }
-

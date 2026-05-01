@@ -412,7 +412,7 @@ void snapForTelemetry() {
     // enum Mode { N = 'N', A = 'A', D = 'D', E = 'E'};
 
     // these are single chars?
-    snprintf(tt.fixMode, sizeof(tt.fixMode), "%c", gps.location.FixMode());
+    snprintf(tt.fixMode, sizeof(tt.fixMode), "%c", gps.fix.FixMode());
     snprintf(tt.fixQual, sizeof(tt.fixQual), "%c", gps.location.FixQuality());
 
     bool validA = gps.satellites.isValid() && !GpsInvalidAll;
@@ -484,12 +484,12 @@ void snapForTelemetry() {
     // can use this? gpsDebug will print the char?
     // is there no isValid() for these?
     // bool validI = (gps.location.FixQuality() != TinyGPSLocation::Quality::Invalid);
-    // bool validJ = (gps.location.FixMode() != TinyGPSLocation::Mode::N);
+    // bool validJ = (gps.fix.FixMode() != TinyGPSFix::Mode::N);
 
     // can compare char and int? 
     // this includes Estimated as valid?
     // bool validI = gps.location.FixQuality() != 0;
-    // bool validJ = gps.location.FixMode() != 'N';
+    // bool validJ = gps.fix.FixMode() != 'N';
 
     //*********************************
     V1_printf("************" EOL);
