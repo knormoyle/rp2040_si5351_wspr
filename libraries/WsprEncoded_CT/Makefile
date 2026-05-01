@@ -35,9 +35,9 @@ CXXFLAGS := $(CXXSTD) $(WARNINGS) $(INCLUDES) $(BUILD_FLAGS) $(EXTRA_CXXFLAGS)
 
 # Sources and outputs
 HEADERS  := $(wildcard *.h)
-TEST_SRC := test_main.cc
+TEST_SRC := test/test_main.cc
 TEST_OBJ := $(TEST_SRC:.cc=.o)
-TEST_BIN := test_main
+TEST_BIN := test/test_main
 DEP_FILE := $(TEST_OBJ:.o=.d)
 
 
@@ -81,5 +81,5 @@ help:
 	@echo "  EXTRA_CXXFLAGS=...   appended to compile flags"
 
 # Pull in auto-generated header dependencies so edits to any .h file
-# trigger a rebuild of test_main.o
+# trigger a rebuild of test/test_main.o
 -include $(DEP_FILE)

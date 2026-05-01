@@ -1,5 +1,5 @@
-#ifndef WSPR_CHANNEL_MAP_H_
-#define WSPR_CHANNEL_MAP_H_
+#ifndef WSPR_CHANNEL_MAP_H
+#define WSPR_CHANNEL_MAP_H
 
 #include <cstdint>
 
@@ -124,4 +124,4 @@ public:
     }
 };
 
-#endif  // WSPR_CHANNEL_MAP_H_
+#endif  // WSPR_CHANNEL_MAP_H

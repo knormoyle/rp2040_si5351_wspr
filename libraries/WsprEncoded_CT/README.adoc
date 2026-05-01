@@ -1,5 +1,5 @@
 :repository-owner: traquito
-:repository-name: WsprEncoded
+:repository-name: WsprEncoded_CT
 
 = {repository-name} =
 
@@ -9,6 +9,5 @@ image:https://github.com/{repository-owner}/{repository-name}/actions/workflows/
 
 This is the repo for standardizing and implementing the design of encoded WSPR messages as used by balloon trackers.
 
-See the website for more details.
-
+Derived from WsprEncoded
 https://traquito.github.io/pro/telemetry/code

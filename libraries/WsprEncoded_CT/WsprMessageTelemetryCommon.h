@@ -1,9 +1,8 @@
-#ifndef WSPR_MESSAGE_TELEMETRY_COMMON_H_
-#define WSPR_MESSAGE_TELEMETRY_COMMON_H_
+#ifndef WSPR_MESSAGE_TELEMETRY_COMMON_H
+#define WSPR_MESSAGE_TELEMETRY_COMMON_H
 
 #include <cstdint>
 #include <cstring>
-
 #include "WsprMessageRegularType1.h"
 
 class WsprMessageTelemetryCommon : public WsprMessageRegularType1 {
@@ -44,7 +43,6 @@ protected:
     /////////////////////////////////////////////////////////////////
     // Encode/Decode utilities
     /////////////////////////////////////////////////////////////////
-
     static char EncodeBase36(uint8_t val) {
         char ret_val;
         if (val < 10) {
@@ -85,4 +83,4 @@ private:
     char id13_[3];
 };
 
-#endif  // WSPR_MESSAGE_TELEMETRY_COMMON_H_
+#endif  // WSPR_MESSAGE_TELEMETRY_COMMON_H

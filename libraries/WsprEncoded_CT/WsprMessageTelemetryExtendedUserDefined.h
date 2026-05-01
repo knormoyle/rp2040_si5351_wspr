@@ -1,15 +1,12 @@
-#ifndef WSPR_MESSAGE_TELEMETRY_EXTENDED_USER_DEFINED_H_
-#define WSPR_MESSAGE_TELEMETRY_EXTENDED_USER_DEFINED_H_
+#ifndef WSPR_MESSAGE_TELEMETRY_EXTENDED_USER_DEFINED_H
+#define WSPR_MESSAGE_TELEMETRY_EXTENDED_USER_DEFINED_H
 
 #include <cstdint>
-
 #include "WsprMessageTelemetryExtendedCommon.h"
 
-
 // Extended Telemetry, User-Defined variant.
-//
-// This is the only Extended Telemetry subclass; it exists as a thin
-// naming convenience over WsprMessageTelemetryExtendedCommon.
+// This is the only Extended Telemetry subclass; 
+// it exists as a thin naming convenience over WsprMessageTelemetryExtendedCommon.
 class WsprMessageTelemetryExtendedUserDefined
         : public WsprMessageTelemetryExtendedCommon {
 public:
@@ -27,4 +24,4 @@ public:
     }
 };
 
-#endif  // WSPR_MESSAGE_TELEMETRY_EXTENDED_USER_DEFINED_H_
+#endif  // WSPR_MESSAGE_TELEMETRY_EXTENDED_USER_DEFINED_H

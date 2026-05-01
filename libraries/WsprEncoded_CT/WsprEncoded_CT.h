@@ -1,5 +1,5 @@
-#ifndef WSPR_ENCODED_CT_H_
-#define WSPR_ENCODED_CT_H_
+#ifndef WSPR_ENCODED_CT_H
+#define WSPR_ENCODED_CT_H
 
 // Umbrella header for the WSPR encoded-message library.
 //
@@ -15,4 +15,4 @@
 #include "WsprMessageTelemetryExtendedCommon.h"
 #include "WsprMessageTelemetryExtendedUserDefined.h"
 
-#endif  // WSPR_ENCODED_CT_H_
+#endif  // WSPR_ENCODED_CT_H

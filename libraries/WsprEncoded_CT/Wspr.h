@@ -1,5 +1,5 @@
-#ifndef WSPR_H_
-#define WSPR_H_
+#ifndef WSPR_H
+#define WSPR_H
 
 #include <cstdint>
 #include <cstring>
@@ -99,4 +99,4 @@ private:
     static const uint8_t kPowerDbmCount = 19;
 };
 
-#endif  // WSPR_H_
+#endif  // WSPR_H

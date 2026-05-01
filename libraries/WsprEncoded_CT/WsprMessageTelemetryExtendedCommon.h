@@ -1,25 +1,21 @@
-#ifndef WSPR_MESSAGE_TELEMETRY_EXTENDED_COMMON_H_
-#define WSPR_MESSAGE_TELEMETRY_EXTENDED_COMMON_H_
+#ifndef WSPR_MESSAGE_TELEMETRY_EXTENDED_COMMON_H
+#define WSPR_MESSAGE_TELEMETRY_EXTENDED_COMMON_H
 
 #include <cstdint>
 #include <cstring>
 #include <math.h>
-
 #include "WsprMessageTelemetryCommon.h"
 
-
-/////////////////////////////////////////////////////////////////
-// This class supports a configurable number of fields chosen at
-// construction time. The field array is heap-allocated using the
-// runtime size passed in to the constructor.
+// class supports a configurable number of fields at construction time. 
+// field array is heap-allocated with runtime size passed to the constructor.
 //
-// The total user-field bitspace is 35.180 bits, occupying everything
-// below HdrTelemetryType in the encoded WSPR Type 1 message.
-/////////////////////////////////////////////////////////////////
+// total user-field bitspace is 35.180 bits, 
+// occupying everything below HdrTelemetryType in the encoded WSPR Type 1 message.
 class WsprMessageTelemetryExtendedCommon : public WsprMessageTelemetryCommon {
 public:
-    // 29.180 (original budget) + 6.000 (freed by removing HdrRESERVED
-    // + HdrType) = 35.180 bits available for user-defined fields.
+    // 29.180 (original budget) + 6.000 freed 
+    // by removing HdrRESERVED +  HdrType) = 35.180 bits available 
+    // for user-defined fields.
     static constexpr double kMaxBits = 35.180;
     static const uint8_t kDefaultFieldCount = 35;
 
@@ -40,9 +36,8 @@ public:
     };
 
 public:
-    // The field_count is the maximum number of user-defined fields this
-    // object will support. The user-defined field array is allocated on
-    // the heap at the size requested.
+    // field_count is the maximum number of user-defined fields supported.
+    // user-defined field array is allocated on the heap with requested size.
     explicit WsprMessageTelemetryExtendedCommon(
             uint8_t field_count = kDefaultFieldCount)
             : field_count_(field_count),
@@ -52,6 +47,10 @@ public:
         ResetEverything();
     }
 
+    // A virtual function (C++) is a class member accessible to all, which derived classes can override
+    // Enables runtime polymorphism. 
+    // Allows a base class to define default behavior while permitting derived classes to specialize it.
+    // Public virtual methods allow anyone to alter behavior, which can break encapsulation.
     virtual ~WsprMessageTelemetryExtendedCommon() {
         FreeStorage();
     }
@@ -82,6 +81,7 @@ public:
         field_def_user_defined_list_idx_ = 0;
         field_def_fail_reason_ = "";
         num_bits_sum_ = 0.0;
+
         // header field 0: HdrTelemetryType
         field_def_header_list_[0].name       = "HdrTelemetryType";
         field_def_header_list_[0].low_value  = 0;
@@ -101,10 +101,7 @@ public:
     }
 
 
-    /////////////////////////////////////////////////////////////////
     // User-Defined Field Definitions, Setters, Getters
-    /////////////////////////////////////////////////////////////////
-
     // Set up this object to know about named fields with a given numeric
     // range and resolution (step size).
     //
@@ -162,13 +159,11 @@ public:
             // Is there an integer-number number of divisions of the
             // low-to-high range when incremented by the step size?
             //
-            // Due to floating point issues, this needs to be done in a way
-            // that scales the (potentially) decimal numbers into pure
-            // integer space. We know this is safe to do here because we
-            // already checked that the numbers are not any more precise
-            // than the amount we scale.
-            uint32_t step_count = GetStepCount(low_value, high_value,
-                                               step_size);
+            // Because of floating point issues, is done in a way
+            // that scales the (potentially) decimal numbers into pure integer space. 
+            // Safe to do here because already checked that the numbers are not 
+            // any more precise than the amount we scale.
+            uint32_t step_count = GetStepCount(low_value, high_value, step_size);
             if (step_count == 0) {
                 ret_val = false;
                 field_def_fail_reason_ =
@@ -187,23 +182,26 @@ public:
                 } else {
                     // increment number of bits used by total set of fields
                     num_bits_sum_ += fd.num_bits;
-                    // Copy the field name into our owned storage so callers
-                    // do not need to keep their string alive.
+
+                    // Copy the field name into our owned storage 
+                    // So callers do not need to keep their string alive.
                     char* owned_name =
                         field_def_user_defined_name_storage_[
                             field_def_user_defined_list_idx_];
                     strncpy(owned_name, field_name, kFieldNameCapacity - 1);
                     owned_name[kFieldNameCapacity - 1] = '\0';
+
                     // capture field def values
                     fd.name       = owned_name;
                     fd.low_value  = low_value;
                     fd.high_value = high_value;
                     fd.step_size  = step_size;
+
                     // set initial value to known-within-range
                     fd.value = low_value;
+
                     // add to field def list
-                    field_def_user_defined_list_[
-                        field_def_user_defined_list_idx_] = fd;
+                    field_def_user_defined_list_[field_def_user_defined_list_idx_] = fd;
                     ++field_def_user_defined_list_idx_;
                 }
             }
@@ -219,39 +217,36 @@ public:
         return field_def_user_defined_list_idx_;
     }
 
-    // Returns a pointer to the user-defined field def array.
+    // Return a pointer to the user-defined field def array.
     // Use GetFieldDefListLen() to know how many entries are valid.
     const FieldDef* GetFieldDefList() const {
         return field_def_user_defined_list_;
     }
 
-    // Returns the maximum number of user-defined fields this object can
-    // hold.
+    // Return the maximum number of user-defined fields this object can hold.
     uint8_t GetFieldCapacity() const {
         return field_count_;
     }
 
     // Set the value of a configured field.
     //
-    // The value parameter is a double to make accepting a wide range of
-    // values easily settable, even if you do not intend to use a floating
-    // point number.
+    // value parameter is double so a wide range of values easily settable, 
+    // Even if you do not intend to use a floating point number.
     //
     // A value that is set is retained internally at that precise value, and
     // will be returned at that value with a subsequent Get().
     //
-    // When a field is encoded, the encoded wspr data will contain the
-    // encoded value, which itself is rounded to the precision specified in
-    // the field definition.
+    // When a field is encoded, the encoded wspr data will contain the encoded value, 
+    // which is rounded to the precision specified in the field definition.
     //
     // Returns true on success.
     // Returns false on error.
-    //
     // An error will occur when the field is not defined.
     bool Set(const char* field_name, double value) {
         bool ret_val = true;
         if (FieldDefExists(field_name) && IsOkToSet(field_name)) {
             FieldDef& fd = *GetFieldDef(field_name);
+
             // do value type validation
             if (isnan(value)) {
                 value = fd.low_value;
@@ -260,12 +255,14 @@ public:
                 value = fd.low_value;
                 ret_val = false;
             }
+
             // Check for negative zero, which may still wind up getting
             // clamped.
             if (value == 0.0 && signbit(value)) {
                 value = 0.0;
                 ret_val = false;
             }
+
             // clamp to range
             if (value < fd.low_value) {
                 value = fd.low_value;
@@ -275,6 +272,7 @@ public:
                 ret_val = false;
             }
             fd.value = value;
+
         } else {
             ret_val = false;
         }
@@ -285,16 +283,14 @@ public:
     //
     // When a field is Set() then Get(), the value which was Set() will be
     // returned by Get().
-    //
     // When a Decode() operation occurs, the decoded values are overwritten
     // onto the field values, and will become the new value which is
     // returned by Get().
     //
     // Returns the field value on success.
     // Returns NAN on error.
-    // - You must use isnan() to check for NAN, you cannot compare via
-    //   == NAN
-    //
+    // - Must use isnan() to check for NAN, can't compare via  == NAN
+
     // An error will occur when the field is not defined.
     double Get(const char* field_name) {
         double ret_val = NAN;
@@ -305,11 +301,7 @@ public:
         return ret_val;
     }
 
-
-    /////////////////////////////////////////////////////////////////
     // Header Field Setters / Getters
-    /////////////////////////////////////////////////////////////////
-
     // Read the default HdrTelemetryType, or read the value which was set
     // from Decode().
     uint8_t GetHdrTelemetryType() {
@@ -317,9 +309,7 @@ public:
     }
 
     // Set the Extended Telemetry HdrSlot value.
-    //
     // This field associates the encoded telemetry with the sender.
-    //
     // In a given repeating 10-minute cycle, starting on the start minute,
     // which is the 0th minute, the slots are defined as:
     // - start minute = slot 0
@@ -337,11 +327,7 @@ public:
         return static_cast<uint8_t>(Get("HdrSlot"));
     }
 
-
-    /////////////////////////////////////////////////////////////////
     // Encode / Decode
-    /////////////////////////////////////////////////////////////////
-
     // Encode the values of the defined fields into a set of encoded WSPR
     // Type 1 message fields (callsign, grid4, power_dbm). This overwrites
     // the Type 1 message fields.
@@ -358,9 +344,11 @@ public:
                    field_def_user_defined_list_idx_);
         // pack header fields into message in reverse-definition order
         PackFields(val, field_def_header_list_, kHeaderFieldCount);
+
         // encode into power
         uint8_t power_val = val % 19; val /= 19;
         uint8_t power_dbm = Wspr::GetPowerDbmList()[power_val];
+
         // encode into grid
         uint8_t g4_val = val % 10; val /= 10;
         uint8_t g3_val = val % 10; val /= 10;
@@ -370,12 +358,14 @@ public:
         char g2 = 'A' + g2_val;
         char g3 = '0' + g3_val;
         char g4 = '0' + g4_val;
+
         static const uint8_t kGrid4Len = 4;
         char grid4[kGrid4Len + 1] = { 0 };
         grid4[0] = g1;
         grid4[1] = g2;
         grid4[2] = g3;
         grid4[3] = g4;
+
         // encode into callsign
         uint8_t id6_val = val % 26; val /= 26;
         uint8_t id5_val = val % 26; val /= 26;
@@ -385,6 +375,7 @@ public:
         char id4 = 'A' + id4_val;
         char id5 = 'A' + id5_val;
         char id6 = 'A' + id6_val;
+
         static const uint8_t kCallsignLen = 6;
         char callsign[kCallsignLen + 1] = { 0 };
         callsign[0] = WsprMessageTelemetryCommon::GetId13()[0];
@@ -393,6 +384,7 @@ public:
         callsign[3] = id4;
         callsign[4] = id5;
         callsign[5] = id6;
+
         // capture results
         WsprMessageRegularType1::SetCallsign(callsign);
         WsprMessageRegularType1::SetGrid4(grid4);
@@ -411,7 +403,6 @@ public:
     //
     // Even when Decode returns an error, Get() will still return the field
     // and header values which were decoded.
-    //
     // The decoded field values are stored internally and are retrieved by
     // using Get().
     bool Decode() {
@@ -420,20 +411,24 @@ public:
         const char* callsign  = WsprMessageRegularType1::GetCallsign();
         const char* grid4     = WsprMessageRegularType1::GetGrid4();
         uint8_t     power_dbm = WsprMessageRegularType1::GetPowerDbm();
+
         // break callsign down
         uint8_t id2_val =
             WsprMessageTelemetryCommon::DecodeBase36(callsign[1]);
         uint8_t id4_val = callsign[3] - 'A';
         uint8_t id5_val = callsign[4] - 'A';
         uint8_t id6_val = callsign[5] - 'A';
+
         // break grid down
         uint8_t g1_val = grid4[0] - 'A';
         uint8_t g2_val = grid4[1] - 'A';
         uint8_t g3_val = grid4[2] - '0';
         uint8_t g4_val = grid4[3] - '0';
+
         // break power down
         uint8_t power_val =
             WsprMessageTelemetryCommon::DecodePowerDbmToNum(power_dbm);
+
         // create big number
         uint64_t val = 0;
         val *= 36; val += id2_val;
@@ -485,10 +480,10 @@ private:
         field_def_user_defined_list_ = nullptr;
     }
 
-    // Scale a decimal value up by kFactor (1000) into integer space, with
-    // rounding away from zero. Used to test "is this value at most 3
-    // decimal places of precision?" and to do arithmetic without floating
-    // point error.
+    // Scale a decimal value up by kFactor (1000) into integer space, 
+    // with rounding away from zero. 
+    // Used to test "is this value at most 3 decimal places of precision?" 
+    // and to do arithmetic without floating point error.
     static int64_t ScaleUp(double value) {
         int64_t value_scaled_up = 0;
         if (value < 0) {
@@ -505,6 +500,7 @@ private:
         int64_t value_scaled_up   = ScaleUp(value);
         double  value_scaled_back = value_scaled_up / kFactor;
         double diff = fabs(value_scaled_back - value);
+
         bool ret_val = false;
         if (diff > 0.000000001) {  // billionth
             ret_val = true;
@@ -519,10 +515,11 @@ private:
         int64_t low_value_scaled_up_as_int  = ScaleUp(low_value);
         int64_t high_value_scaled_up_as_int = ScaleUp(high_value);
         int64_t step_size_scaled_up_as_int  = ScaleUp(step_size);
+
         double step_count =
             static_cast<double>(high_value_scaled_up_as_int -
-                                low_value_scaled_up_as_int) /
-            step_size_scaled_up_as_int;
+                (low_value_scaled_up_as_int) / step_size_scaled_up_as_int);
+
         if (step_count == static_cast<uint32_t>(step_count)) {
             ret_val = static_cast<uint32_t>(step_count);
         }
@@ -605,8 +602,9 @@ private:
         bool ret_val = true;
         if (field_name) {
             // reject if field name is on the restricted list
-            const char* kRestrictedFieldNameList[1] = {
+            const char* kRestrictedFieldNameList[2] = {
                 "HdrTelemetryType",
+                "HdrSlot",
             };
             int restricted_len = 1;
             for (int i = 0; i < restricted_len; ++i) {
@@ -624,11 +622,11 @@ private:
         return field_def_user_defined_list_idx_ < field_count_;
     }
 
-
     // Disallow copy / assign — we own heap storage and have not implemented
     // deep copy semantics.
     WsprMessageTelemetryExtendedCommon(
         const WsprMessageTelemetryExtendedCommon&);
+
     WsprMessageTelemetryExtendedCommon& operator=(
         const WsprMessageTelemetryExtendedCommon&);
 
@@ -641,17 +639,16 @@ private:
     FieldDef* field_def_user_defined_list_;
     uint16_t  field_def_user_defined_list_idx_;
 
-    // Heap-allocated parallel array of owned name buffers (one buffer per
-    // slot), so callers do not need to keep their field-name string alive
+    // Heap-allocated parallel array of owned name buffers 
+    // (one buffer per slot), 
+    // Callers do not need to keep their field-name string alive
     // after DefineField() returns.
     char** field_def_user_defined_name_storage_;
-
     const char* field_def_fail_reason_;
-
     double num_bits_sum_;
 
     // never changes count, but values can change
     FieldDef field_def_header_list_[kHeaderFieldCount];
 };
 
-#endif  // WSPR_MESSAGE_TELEMETRY_EXTENDED_COMMON_H_
+#endif  // WSPR_MESSAGE_TELEMETRY_EXTENDED_COMMON_H

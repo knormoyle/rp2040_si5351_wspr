@@ -2852,37 +2852,41 @@ static bool gpsDateTimeIsBad(uint8_t gps_hour, uint8_t gps_minute, uint8_t gps_s
 // the captured setTime millis. We use this to push setTime_millis backwards
 // so it represents the moment the NMEA sentence really started.
 //
-// elapsed_millis3 % 1000 is used so we still get a useful number even if we
-// missed a PPS rise update (e.g. because the GPS was off briefly).
+// elapsed_millis3 % 1000 is used so we still get a useful number 
+// even if we  missed a PPS rise update (e.g. because the GPS was off briefly).
 // -----------------------------------------------------------------------------
-static void updateBestGuessSkewFromPPS(uint32_t setTime_millis,
-                                       uint32_t *bestGuessSkewFromPPS,
-                                       bool forceUpdate) {
+static void updateBestGuessSkewFromPPS(uint32_t *bestGuessSkewFromPPS, bool forceUpdate) {
     if (!PPS_rise_valid) {
-        V1_printf("WARN: setTime PPS_rise_valid false. bestGuessSkewFromPPS %lu" EOL,
+        V1_printf("WARN: setTime PPS_rise_valid is false. no skew calcs. bestGuessSkewFromPPS %lu" EOL,
                   *bestGuessSkewFromPPS);
         return;
     }
+    V1_printf("setTime PPS_rise_valid is true, skew calcs with bestGuessSkewFromPPS %lu" EOL,
+              *bestGuessSkewFromPPS);
+
     // we should be using this at least once per rollover.
-    uint32_t elapsed_millis3 = setTime_millis - PPS_rise_millis;
+    uint32_t skew_millis3 = setTime_millis - PPS_rise_millis;
     // even if we burst for 5 secs, this might be okay
     // if stuff comes in the first sec?
-    uint32_t elapsed_millis3_modulo = elapsed_millis3 % 1000;
+
+    // uint32_t skew_millis3_modulo = skew_millis3 % 1000;
+    // FIX! updated 5/1/26 to not do modulo on the report
+    uint32_t skew_millis3_modulo = skew_millis3;
+
     // print the modulo 1 sec also, if the last PPS was a while ago
     // (gps being reset or ?)
     uint32_t fix_age = gps.time.age();
-    V1_printf("setTime elapsed_millis3 %lu %lu after PPS. PPS_rise_cnt %lu",
-              elapsed_millis3, elapsed_millis3_modulo, PPS_rise_cnt);
+    V1_printf("setTime skew_millis3 %lu %lu is skew after PPS. PPS_rise_cnt %lu",
+              skew_millis3, skew_millis3_modulo, PPS_rise_cnt);
+
     V1_printf(" fix_age %lu forceUpdate %u" EOL, fix_age, forceUpdate);
     // range check it..otherwise leave as it was (default 100 on first call)
-    if (elapsed_millis3_modulo > 10 && elapsed_millis3_modulo < 1000) {
-        *bestGuessSkewFromPPS = elapsed_millis3_modulo;
+    if (skew_millis3_modulo > 10 && skew_millis3_modulo < 1000) {
+        *bestGuessSkewFromPPS = skew_millis3_modulo;
     } else {
-        V1_printf("ERROR: setTime elapsed_millis3_modulo %lu out of range, ignoring" EOL,
-                  elapsed_millis3_modulo);
+        V1_printf("ERROR: setTime skew_millis3_modulo %lu out of range, ignoring" EOL,
+                  skew_millis3_modulo);
     }
-    V1_printf("setTime PPS_rise_valid true, using bestGuessSkewFromPPS %lu" EOL,
-              *bestGuessSkewFromPPS);
 }
 
 // -----------------------------------------------------------------------------
@@ -2894,13 +2898,13 @@ static void reportDrift(int secondDelta, bool forceUpdate, uint32_t timeUpdateCn
     if (timeUpdateCnt == 0) return;
     // V1_printf("system vs gps: total secondDelta %d" EOL, secondDelta);
     if (abs(secondDelta) > 1) {
-        V1_printf("ERROR: excess drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
+        V1_printf("ERROR: excess clk drift. abs(secondDelta)>1:  secondDelta %d forceUpdate %u ",
                   secondDelta, forceUpdate);
     } else if (abs(secondDelta) == 1) {
         V1_printf("WARN: drift. abs(secondDelta)==1:  secondDelta %d forceUpdate %u ",
                   secondDelta, forceUpdate);
     } else {
-        V1_printf("GOOD: no drift. secondDelta %d forceUpdate %u ",
+        V1_printf("GOOD: no clk drift. secondDelta %d forceUpdate %u ",
                   secondDelta, forceUpdate);
     }
     printSystemDateTime();
@@ -2942,7 +2946,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     static uint64_t lastCheck_millis  = 0;
     static uint32_t timeUpdateCnt    = 0;
 
-    // positive skew. make negative when adjusting millis time.
+    // positive skew. use as negative when adjusting millis time.
     static uint32_t bestGuessSkewFromPPS = 100;
     uint32_t fix_age_entry = gps.time.age();
     // -------------------------------------------------------------------------
@@ -2950,6 +2954,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // -------------------------------------------------------------------------
     // can't do anything if this isn't good!
     if (!gpsTimeIsUsableForUpdate()) return;
+
     // -------------------------------------------------------------------------
     // Early-out gate 2: rate limit -- once per burst at most.
     // We modified TinyGPS to only use GGA to commit time so we always see
@@ -2960,6 +2965,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // but this burst max time is slightly bigger than the burst interval
     // so we'll only update every other at most?
     if (elapsed_millis1 < GPS_WAIT_FOR_NMEA_BURST_MAX) return;
+
     // -------------------------------------------------------------------------
     // Decide whether this is a forced update.
     // Force at least every burst. (1 or 5 secs?) With 2 wsprs plus cw, this could
@@ -2976,6 +2982,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // Try to get as close to the NMEA timestamp as possible.
     // -------------------------------------------------------------------------
     if (!fixAgeIsAcceptable(forceUpdate, timeUpdateCnt)) return;
+
     // -------------------------------------------------------------------------
     // Early-out gate 4: hundredths must be 0.
     // PPS skew seems wrong often if not -- it goes to zero once we get a fix
@@ -3037,7 +3044,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // -------------------------------------------------------------------------
     // setTime_millis is extern
     setTime_millis = dollarStar_millis;
-    updateBestGuessSkewFromPPS(setTime_millis, &bestGuessSkewFromPPS, forceUpdate);
+    updateBestGuessSkewFromPPS(&bestGuessSkewFromPPS, forceUpdate);
 
     // pushes back the Time prevMillis (captured by setTime) to align more
     // with when the gps chip sent out the time NMEA sentence. Probably have
@@ -3045,9 +3052,10 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     //
     // Adjust less with USE_DOLLAR_TIME_MODE because it's time at the
     // beginning of the NMEA sentence, closer to the PPS edge (real time).
+    // bestGuessSkewFromPPS should always be 0 or positive. u_int32_t so can't be neg.
     if (bestGuessSkewFromPPS != 0) {
-        // V1_printf("Adjusting setTime_millis %lu with bestGuessSkewFromPPS %lu" EOL,
-        //     setTime_millis, bestGuessSkewFromPPS);
+        V1_printf("Adjusting setTime_millis %lu with bestGuessSkewFromPPS %lu" EOL,
+            setTime_millis, bestGuessSkewFromPPS);
         setTime_millis -= bestGuessSkewFromPPS;
     }
 
@@ -3057,7 +3065,9 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
                       setTime_millis);
 
     // -------------------------------------------------------------------------
-    // (Disabled) verbose pre/post snapshot. Left in for debug toggling.
+    // verbose pre/post snapshot.
+    // was disabled when we set time in the middle of a burst
+    // now we use saved info and set at end of burst so no problem with print delays
     // -------------------------------------------------------------------------
     if (true) {
         V1_print(F("GOOD: system setTime() with"));
@@ -3069,7 +3079,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
         V1_print(F("system time before: (should be gps time):"));
         // V1_printf(" month %d year %d", m, y);
         V1_printf(" day %d hour %d minute %d second %d", d, hh, mm, ss);
-        V1_printf(" forceUpdate %u now: ", forceUpdate);
+        V1_printf(" forceUpdate %u time now: ", forceUpdate);
         // this will be current system time
         printSystemDateTime();
         V1_print(F(EOL));
@@ -3081,11 +3091,13 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // -------------------------------------------------------------------------
     int secondDelta = ((int) monthSecs) - ((int) gps_monthSecs);
     reportDrift(secondDelta, forceUpdate, timeUpdateCnt);
+
     // -------------------------------------------------------------------------
     // Diagnostic: rx fifo backup at this point. Might give an indication of
     // how long it takes to do all this work.
     // -------------------------------------------------------------------------
     reportRxFifoBackup(fix_age_entry);
+
     // -------------------------------------------------------------------------
     // Bookkeeping
     // -------------------------------------------------------------------------

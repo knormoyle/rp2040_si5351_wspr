@@ -1,5 +1,5 @@
-#ifndef WSPR_UTL_H_
-#define WSPR_UTL_H_
+#ifndef WSPR_UTL_H
+#define WSPR_UTL_H
 
 #include <cctype>
 #include <cstdint>
@@ -144,9 +144,7 @@ private:
 };
 
 // Rotate a uint8_t array of length 5 by `count` positions.
-//
 // Positive values rotate right, negative values rotate left, zero is no-op.
-//
 // This is the only rotation use site in the codebase (minute lists). It is
 // intentionally not generic since templates are not used here.
 inline void Rotate5(uint8_t val_list[5], int count) {
@@ -169,4 +167,4 @@ inline void Rotate5(uint8_t val_list[5], int count) {
 }
 }  // namespace WsprUtl
 
-#endif  // WSPR_UTL_H_
+#endif  // WSPR_UTL_H

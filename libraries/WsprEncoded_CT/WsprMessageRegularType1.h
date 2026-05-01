@@ -1,9 +1,8 @@
-#ifndef WSPR_MESSAGE_REGULAR_TYPE_1_H_
-#define WSPR_MESSAGE_REGULAR_TYPE_1_H_
+#ifndef WSPR_MESSAGE_REGULAR_TYPE_1_H
+#define WSPR_MESSAGE_REGULAR_TYPE_1_H
 
 #include <cstdint>
 #include <cstring>
-
 #include "Wspr.h"
 #include "WsprUtl.h"
 
@@ -23,10 +22,8 @@ public:
     }
 
     // Set the callsign.
-    //
     // Returns true on success.
     // Returns false on error.
-    //
     // An error occurs when the format of the callsign is invalid.
     bool SetCallsign(const char* callsign) {
         bool ret_val = false;
@@ -128,8 +125,7 @@ private:
     static const uint8_t kGrid4Len = 4;
     char grid4_buf_[kGrid4Len + 1];
     WsprUtl::CString grid4_;
-
     uint8_t power_dbm_;
 };
 
-#endif  // WSPR_MESSAGE_REGULAR_TYPE_1_H_
+#endif  // WSPR_MESSAGE_REGULAR_TYPE_1_H

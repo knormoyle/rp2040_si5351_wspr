@@ -1,10 +1,9 @@
-#ifndef WSPR_MESSAGE_TELEMETRY_BASIC_H_
-#define WSPR_MESSAGE_TELEMETRY_BASIC_H_
+#ifndef WSPR_MESSAGE_TELEMETRY_BASIC_H
+#define WSPR_MESSAGE_TELEMETRY_BASIC_H
 
 #include <cstdint>
 #include <cstring>
 #include <math.h>
-
 #include "WsprMessageTelemetryCommon.h"
 
 class WsprMessageTelemetryBasic : public WsprMessageTelemetryCommon {
@@ -25,10 +24,7 @@ public:
         gps_is_valid_        = false;
     }
 
-    /////////////////////////////////////////////////////////////////
     // Telemetry Setter / Getter Interface
-    /////////////////////////////////////////////////////////////////
-
     // 'A' through 'X' for each char.
     bool SetGrid56(const char* grid56) {
         bool ret_val = false;
@@ -118,10 +114,7 @@ public:
         return gps_is_valid_;
     }
 
-    /////////////////////////////////////////////////////////////////
     // Encode / Decode Interface
-    /////////////////////////////////////////////////////////////////
-
     void Encode() {
         EncodeCallsign();
         EncodeGridPower();
@@ -135,10 +128,7 @@ public:
     }
 
 private:
-    /////////////////////////////////////////////////////////////////
     // Encode
-    /////////////////////////////////////////////////////////////////
-
     void EncodeCallsign() {
         // pick apart inputs
         char grid5 = grid56_[0];
@@ -216,10 +206,7 @@ private:
         WsprMessageRegularType1::SetPowerDbm(power_dbm);
     }
 
-    /////////////////////////////////////////////////////////////////
     // Decode
-    /////////////////////////////////////////////////////////////////
-
     bool DecodeU4BCall() {
         bool ret_val = true;
         static const uint8_t kCallsignDecodeLen = 6;
@@ -307,4 +294,4 @@ private:
     bool     gps_is_valid_;
 };
 
-#endif  // WSPR_MESSAGE_TELEMETRY_BASIC_H_
+#endif  // WSPR_MESSAGE_TELEMETRY_BASIC_H

@@ -5,11 +5,12 @@
 
 #include <Arduino.h>
 #include <Adafruit_SleepyDog.h>
+#include <WsprEncoded_CT.h>
+
 #include "led_functions.h"
 #include "debug_functions.h"
 #include "print_functions.h"
 #include "ct_functions.h"
-#include <WsprEncoded_CT.h>
 #include "global_structs.h"
 
 extern TeleStruct tt;
@@ -17,6 +18,9 @@ extern ConfigStruct cc;
 extern bool VERBY[10];
 
 WsprMessageTelemetryBasic msg;
+// arg is the number of fields allowed
+WsprMessageTelemetryExtendedUserDefined bmp_msg(3);
+WsprMessageTelemetryExtendedUserDefined gps_msg(4);
 
 // FIX! currently not using
 void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
@@ -69,8 +73,6 @@ void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
 }
 
 //***************************************************************
-WsprMessageTelemetryExtendedUserDefined gps_msg(4);
-
 void define_gps_msg() {
     V1_print(F("define_gps_msg() START" EOL));
 
@@ -82,6 +84,13 @@ void define_gps_msg() {
     // Define counts of GPS satellites for each constellation type.
     // Values will be clamped between 0 - 100 inclusive.
     // Resolution will be in increments of 1.
+
+    // Define a metric for GPS lock times, in seconds.
+    // Values will be clamped between 0 - 180 inclusive.
+    // Resolution will be in increments of 1.
+
+    // FIX! does this go in order of "field 0" to "field N" for internal state?
+    // "field 0" will be packed first ? or packed last to keep it on the "lsb side"
     bool accepted;
     accepted = gps_msg.DefineField("SatCountUSA", 0, 40, 1);
     if (!accepted) {
@@ -95,22 +104,18 @@ void define_gps_msg() {
     if (!accepted) {
         V1_println(F("ERROR: gps_msg.DefineField('SatCountRussia', 0, 40, 1) not accepted"));
     }
-
-    // Define a metric for GPS lock times, in seconds.
-    // Values will be clamped between 0 - 180 inclusive.
-    // Resolution will be in increments of 1.
     accepted = gps_msg.DefineField("LockTimeSecs", 0, 600, 10);
     if (!accepted) {
         V1_println(F("ERROR: gps_msg.DefineField('LockTimeSecs', 0, 600, 10) not accepted"));
     }
 
-
     // for use in the traquito website
+    // FIX! add wsprtv configurator info
     /* JSON
-{ "name": "SatUSA",       "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
-{ "name": "SatChina",     "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
-{ "name": "SatRussia",    "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
-{ "name": "LockTimeSecs",  "unit": "Seconds", "lowValue": 0, "highValue": 600, "stepSize": 10},
+    { "name": "SatUSA",       "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
+    { "name": "SatChina",     "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
+    { "name": "SatRussia",    "unit": "Count",   "lowValue": 0, "highValue": 40,  "stepSize": 1 },
+    { "name": "LockTimeSecs",  "unit": "Seconds", "lowValue": 0, "highValue": 600, "stepSize": 10},
     */
     /*
     */
@@ -118,25 +123,24 @@ void define_gps_msg() {
     // Returns true if field is accepted
     // Returns false if field is rejected
     //
-    // A field will be rejected due to:
-    // - The template-specified number of fields have already been configured
-    // - The field name is a nullptr
-    // - The field already exists
+    // A field will be rejected if:
+    // - template-specified number of fields have already been configured
+    // - field name is a nullptr
+    // - field already exists
     // - lowValue, highValue, or stepSize is too precise (more than 3 decimal places of precision)
     // - lowValue >= highValue
     // - stepSize <= 0
-    // - The stepSize does not evenly divide the range between lowValue and highValue
-    // - The field size exceeds the sum total capacity of 29.180 bits along with other fields
-    // or by itself
+    // - stepSize does not evenly divide the range between lowValue and highValue
+    // - field size exceeds total capacity of 29.180 bits along with other fields, or by itself
 
     // how to form url
     // https://traquito.github.io/copilot/dashboard/#overview
+    // FIX! add wsprtv url
 
     V1_print(F("define_gps_msg() END" EOL));
 }
 
 //***************************************************************
-// FIX! have to add parameters to encode or will it grab from global TinyGps state?
 void encode_gps_msg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
     V1_print(F("encode_gps_msg START" EOL));
     switch (slot) {
@@ -171,11 +175,10 @@ void encode_gps_msg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t s
     accepted &= gps_msg.Set("SatCountChina", atoi(tt.gb_sats));
     accepted &= gps_msg.Set("SatCountRussia", atoi(tt.gl_sats));
     accepted &= gps_msg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
-
-    gps_msg.Encode();
     if (!accepted) {
-        V1_println("Something didn't get accepted in encode_gps_msg(). missing defines?");
+        V1_println("ERROR: Something didn't get accepted in gps_msg.Encode(). missing defines?");
     }
+    gps_msg.Encode();
 
     const char *GetCallsign = gps_msg.GetCallsign();
     const char *GetGrid4 = gps_msg.GetGrid4();
@@ -205,11 +208,11 @@ void encode_gps_msg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t s
 }
 
 //***************************************************************
-WsprMessageTelemetryExtendedUserDefined bmp_msg(3);
 
 void define_bmp_msg() {
     V1_print(F("define_bmp_msg() START" EOL));
     bool accepted;
+
     accepted = bmp_msg.DefineField("Pressure", 0.0, 80000.0, 5);
     if (!accepted) {
         V1_println(F("ERROR: bmp_msg.DefineField('Pressure', 0.0, 80000.0, 5) not accepted"));
@@ -225,16 +228,16 @@ void define_bmp_msg() {
         V1_println(F("ERROR: bmp_msg.DefineField('Altitude', 0, 55000, 100) not accepted"));
     }
 
-// good expected values here
-// https://www.mide.com/air-pressure-at-altitude-calculator
+    // good expected values here
+    // https://www.mide.com/air-pressure-at-altitude-calculator
 
-// size fields at sandbox https://traquito.github.io/pro/codec
-// programmed channel 391. comes out on 384
-/* JSON
-{ "name": "Pressure",    "unit": "Pa", "lowValue": 0,   "highValue": 80000, "stepSize": 5 },
-{ "name": "Temperature", "unit": "C",  "lowValue": -60, "highValue": 100,    "stepSize": 2.5 },
-{ "name": "Altitude",    "unit": "M",  "lowValue": 0,   "highValue": 55000,  "stepSize": 100 },
-*/
+    // size fields at sandbox https://traquito.github.io/pro/codec
+    // programmed channel 391. comes out on 384
+    /* JSON
+    { "name": "Pressure",    "unit": "Pa", "lowValue": 0,   "highValue": 80000, "stepSize": 5 },
+    { "name": "Temperature", "unit": "C",  "lowValue": -60, "highValue": 100,    "stepSize": 2.5 },
+    { "name": "Altitude",    "unit": "M",  "lowValue": 0,   "highValue": 55000,  "stepSize": 100 },
+    */
 
     // how to form url
     // https://traquito.github.io/copilot/dashboard/#overview
@@ -243,7 +246,6 @@ void define_bmp_msg() {
 }
 
 //***************************************************************
-// FIX! have to add parameters to encode or will it grab from global TinyBmp state?
 void encode_bmp_msg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
     V1_print(F("encode_bmp_msg START" EOL));
     switch (slot) {
@@ -264,7 +266,6 @@ void encode_bmp_msg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t s
     // append 'm'
     snprintf(band, sizeof(band), "%sm", cc._Band);
     uint16_t channel = atoi(cc._U4B_chan);
-
     // Get channel details
     WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(band, channel);
 

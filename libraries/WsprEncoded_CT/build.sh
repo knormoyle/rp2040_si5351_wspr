@@ -55,7 +55,7 @@ build_one() {
 
 run_smoke_test() {
     color_blue "==> Running smoke test"
-    if ./test_main; then
+    if ./test/test_main; then
         color_green "==> Smoke test PASSED"
     else
         color_red "==> Smoke test FAILED"
