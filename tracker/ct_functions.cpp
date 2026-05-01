@@ -8,8 +8,8 @@
 #include "led_functions.h"
 #include "debug_functions.h"
 #include "print_functions.h"
-#include "doug_functions.h"
-#include "WsprEncoded.h"
+#include "ct_functions.h"
+#include <WsprEncoded_CT.h>
 #include "global_structs.h"
 
 extern TeleStruct tt;
@@ -22,7 +22,7 @@ WsprMessageTelemetryBasic msg;
 void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
     const char *id13, const char *grid56,
     uint32_t altitudeMeters, int8_t temperatureCelsius,
-    double voltageVolts, uint8_t speedKnots, bool gpsIsValid) {
+    double voltageVolts, uint8_t speedKnots, bool gps_msgIsValid) {
 
     V1_print(F("encodeBasicTele START" EOL));
 
@@ -32,7 +32,7 @@ void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
     msg.SetTemperatureCelsius(temperatureCelsius);
     msg.SetVoltageVolts(voltageVolts);
     msg.SetSpeedKnots(speedKnots);
-    msg.SetGpsIsValid(gpsIsValid);
+    msg.SetGpsIsValid(gps_msgIsValid);
     msg.SetId13(id13);
 
     V1_printf("id13 %s %s" EOL, id13, msg.GetId13());
@@ -41,7 +41,7 @@ void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
     V1_printf("tempC %u %u" EOL, temperatureCelsius, msg.GetTemperatureCelsius());
     V1_printf("voltage %.2f %.2f" EOL, voltageVolts, msg.GetVoltageVolts());
     V1_printf("speed %u %u" EOL, speedKnots, msg.GetSpeedKnots());
-    V1_printf("gpsValid %u %u" EOL, gpsIsValid, msg.GetGpsIsValid());
+    V1_printf("gps_msgValid %u %u" EOL, gps_msgIsValid, msg.GetGpsIsValid());
 
     msg.Encode();
 
@@ -69,9 +69,10 @@ void encodeBasicTele(char *hf_callsign, char *hf_grid4, char *hf_power,
 }
 
 //***************************************************************
-WsprMessageTelemetryExtendedUserDefined<4> codecGpsMsg;
-void define_codecGpsMsg() {
-    V1_print(F("define_codecGpsMsg() START" EOL));
+WsprMessageTelemetryExtendedUserDefined gps_msg(4);
+
+void define_gps_msg() {
+    V1_print(F("define_gps_msg() START" EOL));
 
     // Create User-Defined Telemetry object for the number of
     // fields you want, maximum of 29 1-bit fields possible.
@@ -82,25 +83,25 @@ void define_codecGpsMsg() {
     // Values will be clamped between 0 - 100 inclusive.
     // Resolution will be in increments of 1.
     bool accepted;
-    accepted = codecGpsMsg.DefineField("SatCountUSA", 0, 40, 1);
+    accepted = gps_msg.DefineField("SatCountUSA", 0, 40, 1);
     if (!accepted) {
-        V1_println(F("ERROR: codecGpsMsg.DefineField('SatCountUSA', 0, 40, 1) not accepted"));
+        V1_println(F("ERROR: gps_msg.DefineField('SatCountUSA', 0, 40, 1) not accepted"));
     }
-    accepted = codecGpsMsg.DefineField("SatCountChina", 0, 40, 1);
+    accepted = gps_msg.DefineField("SatCountChina", 0, 40, 1);
     if (!accepted) {
-        V1_println(F("ERROR: codecGpsMsg.DefineField('SatCountChina', 0, 40, 1) not accepted"));
+        V1_println(F("ERROR: gps_msg.DefineField('SatCountChina', 0, 40, 1) not accepted"));
     }
-    accepted = codecGpsMsg.DefineField("SatCountRussia", 0, 40, 1);
+    accepted = gps_msg.DefineField("SatCountRussia", 0, 40, 1);
     if (!accepted) {
-        V1_println(F("ERROR: codecGpsMsg.DefineField('SatCountRussia', 0, 40, 1) not accepted"));
+        V1_println(F("ERROR: gps_msg.DefineField('SatCountRussia', 0, 40, 1) not accepted"));
     }
 
     // Define a metric for GPS lock times, in seconds.
     // Values will be clamped between 0 - 180 inclusive.
     // Resolution will be in increments of 1.
-    accepted = codecGpsMsg.DefineField("LockTimeSecs", 0, 600, 10);
+    accepted = gps_msg.DefineField("LockTimeSecs", 0, 600, 10);
     if (!accepted) {
-        V1_println(F("ERROR: codecGpsMsg.DefineField('LockTimeSecs', 0, 600, 10) not accepted"));
+        V1_println(F("ERROR: gps_msg.DefineField('LockTimeSecs', 0, 600, 10) not accepted"));
     }
 
 
@@ -131,13 +132,13 @@ void define_codecGpsMsg() {
     // how to form url
     // https://traquito.github.io/copilot/dashboard/#overview
 
-    V1_print(F("define_codecGpsMsg() END" EOL));
+    V1_print(F("define_gps_msg() END" EOL));
 }
 
 //***************************************************************
 // FIX! have to add parameters to encode or will it grab from global TinyGps state?
-void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
-    V1_print(F("encode_codecGpsMsg START" EOL));
+void encode_gps_msg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
+    V1_print(F("encode_gps_msg START" EOL));
     switch (slot) {
         case 0: {;}
         case 1: {;}
@@ -146,7 +147,7 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
         case 4: break;
         default:
             // count 0,1,2,3,4 here
-            V1_printf("ERROR: encode_codecGpsMsg illegal slot %u ..using 2" EOL, slot);
+            V1_printf("ERROR: encode_gps_msg illegal slot %u ..using 2" EOL, slot);
             slot = 2;
     }
 
@@ -162,23 +163,23 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
 
     // Encode the data in preparation to transmit
     bool accepted = true;
-    codecGpsMsg.SetId13(cd.id13);
+    gps_msg.SetId13(cd.id13);
     // Note which transmission slot you will send in
-    codecGpsMsg.SetHdrSlot(slot);
+    gps_msg.SetHdrSlot(slot);
 
-    accepted &= codecGpsMsg.Set("SatCountUSA", atoi(tt.gp_sats));
-    accepted &= codecGpsMsg.Set("SatCountChina", atoi(tt.gb_sats));
-    accepted &= codecGpsMsg.Set("SatCountRussia", atoi(tt.gl_sats));
-    accepted &= codecGpsMsg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
+    accepted &= gps_msg.Set("SatCountUSA", atoi(tt.gp_sats));
+    accepted &= gps_msg.Set("SatCountChina", atoi(tt.gb_sats));
+    accepted &= gps_msg.Set("SatCountRussia", atoi(tt.gl_sats));
+    accepted &= gps_msg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
 
-    codecGpsMsg.Encode();
+    gps_msg.Encode();
     if (!accepted) {
-        V1_println("Something didn't get accepted in encode_codecGpsMsg(). missing defines?");
+        V1_println("Something didn't get accepted in encode_gps_msg(). missing defines?");
     }
 
-    const char *GetCallsign = codecGpsMsg.GetCallsign();
-    const char *GetGrid4 = codecGpsMsg.GetGrid4();
-    uint8_t GetPowerDbm = (uint8_t) codecGpsMsg.GetPowerDbm();
+    const char *GetCallsign = gps_msg.GetCallsign();
+    const char *GetGrid4 = gps_msg.GetGrid4();
+    uint8_t GetPowerDbm = (uint8_t) gps_msg.GetPowerDbm();
 
     V1_print(F("WsprEncode encoded data:" EOL));
     V1_printf("GetCallsign: %s" EOL, GetCallsign);
@@ -200,27 +201,28 @@ void encode_codecGpsMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     if (GetPowerDbm > 60) GetPowerDbm = 60;
     snprintf(hf_power, 3, "%u", GetPowerDbm);
 
-    V1_print(F("encode_codecGpsMsg END" EOL));
+    V1_print(F("encode_gps_msg END" EOL));
 }
 
 //***************************************************************
-WsprMessageTelemetryExtendedUserDefined<3> codecBmpMsg;
-void define_codecBmpMsg() {
-    V1_print(F("define_codecBmpMsg() START" EOL));
+WsprMessageTelemetryExtendedUserDefined bmp_msg(3);
+
+void define_bmp_msg() {
+    V1_print(F("define_bmp_msg() START" EOL));
     bool accepted;
-    accepted = codecBmpMsg.DefineField("Pressure", 0.0, 80000.0, 5);
+    accepted = bmp_msg.DefineField("Pressure", 0.0, 80000.0, 5);
     if (!accepted) {
-        V1_println(F("ERROR: codecBmpMsg.DefineField('Pressure', 0.0, 80000.0, 5) not accepted"));
+        V1_println(F("ERROR: bmp_msg.DefineField('Pressure', 0.0, 80000.0, 5) not accepted"));
     }
 
-    accepted = codecBmpMsg.DefineField("Temperature", -60, 100, 2.5);
+    accepted = bmp_msg.DefineField("Temperature", -60, 100, 2.5);
     if (!accepted) {
-        V1_println(F("ERROR: codecBmpMsg.DefineField('Temperature', -60, 100, 2.5) not accepted"));
+        V1_println(F("ERROR: bmp_msg.DefineField('Temperature', -60, 100, 2.5) not accepted"));
     }
 
-    accepted = codecBmpMsg.DefineField("Altitude", 0, 55000, 100);
+    accepted = bmp_msg.DefineField("Altitude", 0, 55000, 100);
     if (!accepted) {
-        V1_println(F("ERROR: codecBmpMsg.DefineField('Altitude', 0, 55000, 100) not accepted"));
+        V1_println(F("ERROR: bmp_msg.DefineField('Altitude', 0, 55000, 100) not accepted"));
     }
 
 // good expected values here
@@ -237,13 +239,13 @@ void define_codecBmpMsg() {
     // how to form url
     // https://traquito.github.io/copilot/dashboard/#overview
 
-    V1_print(F("define_codecBmpMsg() END" EOL));
+    V1_print(F("define_bmp_msg() END" EOL));
 }
 
 //***************************************************************
 // FIX! have to add parameters to encode or will it grab from global TinyBmp state?
-void encode_codecBmpMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
-    V1_print(F("encode_codecBmpMsg START" EOL));
+void encode_bmp_msg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t slot) {
+    V1_print(F("encode_bmp_msg START" EOL));
     switch (slot) {
         case 0: {;}
         case 1: {;}
@@ -252,7 +254,7 @@ void encode_codecBmpMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
         case 4: break;
         default:
             // count 0,1,2,3,4 here
-            V1_printf("ERROR: encode_codecBmpMsg illegal slot %u ..using 3" EOL, slot);
+            V1_printf("ERROR: encode_bmp_msg illegal slot %u ..using 3" EOL, slot);
             slot = 3;
     }
 
@@ -268,25 +270,25 @@ void encode_codecBmpMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
 
     bool accepted = true;
     // Encode the data in preparation to transmit
-    codecBmpMsg.SetId13(cd.id13);
+    bmp_msg.SetId13(cd.id13);
     // Note which transmission slot you will send in
-    codecBmpMsg.SetHdrSlot(slot);
+    bmp_msg.SetHdrSlot(slot);
 
-    accepted &= codecBmpMsg.Set("Pressure", atof(tt.bmp_pressure));
-    V1_printf("atof(tt.bmp_pressure %f" EOL, atof(tt.bmp_pressure));
-    accepted &= codecBmpMsg.Set("Temperature", atof(tt.bmp_temperature));
-    V1_printf("atof(tt.bmp_temperature %f" EOL, atof(tt.bmp_temperature));
-    accepted &= codecBmpMsg.Set("Altitude", atof(tt.bmp_altitude));
-    V1_printf("atof(tt.bmp_altitude %f" EOL, atof(tt.bmp_altitude));
+    accepted &= bmp_msg.Set("Pressure", atof(tt.bmp_pressure));
+    V1_printf("atof(tt.bmp_msg_pressure %f" EOL, atof(tt.bmp_pressure));
+    accepted &= bmp_msg.Set("Temperature", atof(tt.bmp_temperature));
+    V1_printf("atof(tt.bmp_msg_temperature %f" EOL, atof(tt.bmp_temperature));
+    accepted &= bmp_msg.Set("Altitude", atof(tt.bmp_altitude));
+    V1_printf("atof(tt.bmp_msg_altitude %f" EOL, atof(tt.bmp_altitude));
 
-    codecBmpMsg.Encode();
+    bmp_msg.Encode();
     if (!accepted) {
-        V1_println("Something didn't get accepted in encode_codecBmpMsg(). missing defines?");
+        V1_println("Something didn't get accepted in encode_bmp_msg(). missing defines?");
     }
 
-    const char *GetCallsign = codecBmpMsg.GetCallsign();
-    const char *GetGrid4 = codecBmpMsg.GetGrid4();
-    uint8_t GetPowerDbm = (uint8_t) codecBmpMsg.GetPowerDbm();
+    const char *GetCallsign = bmp_msg.GetCallsign();
+    const char *GetGrid4 = bmp_msg.GetGrid4();
+    uint8_t GetPowerDbm = (uint8_t) bmp_msg.GetPowerDbm();
 
     V1_print(F("WsprEncode encoded data:" EOL));
     V1_printf("GetCallsign: %s" EOL, GetCallsign);
@@ -308,5 +310,5 @@ void encode_codecBmpMsg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8
     if (GetPowerDbm > 60) GetPowerDbm = 60;
     snprintf(hf_power, 3, "%u", GetPowerDbm);
 
-    V1_print(F("encode_codecBmpMsg END" EOL));
+    V1_print(F("encode_bmp_msg END" EOL));
 }

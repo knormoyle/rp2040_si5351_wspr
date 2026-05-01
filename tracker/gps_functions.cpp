@@ -2933,7 +2933,10 @@ static void reportRxFifoBackup(uint32_t fix_age_entry) {
 // -----------------------------------------------------------------------------
 // Main entry point
 // -----------------------------------------------------------------------------
+// kevin10
 void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
+    // okay to have prints here now that we delay the time update more?
+    V1_println(F("checkUpdateTimeFromGps START"));
     static bool     forceUpdate     = true;
     static uint64_t lastUpdate_millis = 0;
     static uint64_t lastCheck_millis  = 0;
@@ -3056,7 +3059,7 @@ void checkUpdateTimeFromGps(uint32_t dollarStar_millis) {
     // -------------------------------------------------------------------------
     // (Disabled) verbose pre/post snapshot. Left in for debug toggling.
     // -------------------------------------------------------------------------
-    if (false) {
+    if (true) {
         V1_print(F("GOOD: system setTime() with"));
         // V1_printf(" %u gps_month %u gps_year %u",
         //     gps_month, gps_year);

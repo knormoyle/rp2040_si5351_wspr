@@ -262,7 +262,7 @@ TinyGPSCustom gl_vdop(gps, "GLGSA", 17);
 #include "tinygps_functions.h"
 #include "cw_functions.h"
 #include "sweep_functions.h"
-#include "doug_functions.h"
+#include "ct_functions.h"
 #include "global_structs.h"
 #include "pps_functions.h"
 
@@ -953,8 +953,8 @@ void setup1() {
     gpsPPS_init();
 
     // Initialise extended-telemetry codec objects (time slot set later)
-    define_codecGpsMsg();
-    define_codecBmpMsg();
+    define_gps_msg();
+    define_bmp_msg();
 
     // -----------------------------------------------------------------------
     // Serial check (non-balloon mode only)
@@ -1713,13 +1713,13 @@ static void encodeTelenSlot(int txNum, uint8_t slot, char cfg, bool defaultIsBmp
     }
 
     if (useBmp) {
-        V1_printf("WSPR txNum %d Preparing with encode_codecBmpMsg() slot %u" EOL,
+        V1_printf("WSPR txNum %d Preparing with encode_bmp_msg() slot %u" EOL,
                   txNum, slot);
-        encode_codecBmpMsg(hf_callsign, hf_grid4, hf_power, slot);
+        encode_bmp_msg(hf_callsign, hf_grid4, hf_power, slot);
     } else {
-        V1_printf("WSPR txNum %d Preparing with encode_codecGpsMsg() slot %u" EOL,
+        V1_printf("WSPR txNum %d Preparing with encode_gps_msg() slot %u" EOL,
                   txNum, slot);
-        encode_codecGpsMsg(hf_callsign, hf_grid4, hf_power, slot);
+        encode_gps_msg(hf_callsign, hf_grid4, hf_power, slot);
     }
 }
 
