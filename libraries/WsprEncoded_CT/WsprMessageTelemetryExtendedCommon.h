@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <cstring>
-#include <math.h>
+#include <cmath>
 #include "WsprMessageTelemetryCommon.h"
 
 // class supports a configurable number of fields at construction time. 
@@ -18,6 +18,11 @@ public:
     // for user-defined fields.
     static constexpr double kMaxBits = 35.180;
     static const uint8_t kDefaultFieldCount = 35;
+    // Hard upper bound on user-defined field slots. The 35.180-bit budget
+    // can not in practice support more than a few dozen 1-bit fields, so a
+    // cap of 64 is well above any realistic schema and prevents callers
+    // from accidentally allocating large name-storage arrays.
+    static const uint8_t kMaxFieldCount     = 64;
 
     struct FieldDef {
         const char* name;
@@ -35,14 +40,20 @@ public:
         double value;
     };
 
-public:
     // field_count is the maximum number of user-defined fields supported.
-    // user-defined field array is allocated on the heap with requested size.
+    // user-defined field array is allocated on the heap with runtime size.
+    //
+    // field_count is clamped to [1, kMaxFieldCount]. A value of 0 is treated
+    // as 1 because zero-sized object arrays would make every DefineField()
+    // call fail and offer no useful behavior.
     explicit WsprMessageTelemetryExtendedCommon(
             uint8_t field_count = kDefaultFieldCount)
-            : field_count_(field_count),
+            : field_count_(ClampFieldCount(field_count)),
               field_def_user_defined_list_(nullptr),
-              field_def_user_defined_name_storage_(nullptr) {
+              field_def_user_defined_list_idx_(0),
+              field_def_user_defined_name_storage_(nullptr),
+              field_def_fail_reason_(""),
+              num_bits_sum_(0.0) {
         AllocateStorage();
         ResetEverything();
     }
@@ -56,7 +67,7 @@ public:
     }
 
     // Reset field values, but not field definitions.
-    void Reset() {
+    void Reset() override {
         WsprMessageTelemetryCommon::Reset();
         // reset default field value for user-defined fields
         for (int i = 0; i < field_def_user_defined_list_idx_; ++i) {
@@ -72,7 +83,7 @@ public:
     void ResetEverything() {
         WsprMessageTelemetryCommon::Reset();
         // zero all user-defined field defs and clear owned name buffers
-        for (uint8_t i = 0; i < field_count_; ++i) {
+        for (uint16_t i = 0; i < field_count_; ++i) {
             field_def_user_defined_list_[i] = FieldDef();
             if (field_def_user_defined_name_storage_[i] != nullptr) {
                 field_def_user_defined_name_storage_[i][0] = '\0';
@@ -96,7 +107,7 @@ public:
         field_def_header_list_[1].high_value = 4;
         field_def_header_list_[1].step_size  = 1;
         field_def_header_list_[1].num_values = 5;
-        field_def_header_list_[1].num_bits   = log(5.0) / log(2.0);  // ~2.321
+        field_def_header_list_[1].num_bits   = std::log(5.0) / std::log(2.0);  // ~2.321
         field_def_header_list_[1].value      = 0;
     }
 
@@ -174,9 +185,16 @@ public:
                 fd.num_values = step_count + 1;
                 // calc bits used by this field
                 fd.num_bits =
-                    log(static_cast<double>(fd.num_values)) / log(2.0);
+                    std::log(static_cast<double>(fd.num_values)) /
+                    std::log(2.0);
                 // check if can fit
-                if (num_bits_sum_ + fd.num_bits > kMaxBits) {
+                // Small epsilon (1e-9 bits) absorbs floating-point rounding
+                // when a schema is constructed to fit exactly into the
+                // 35.180-bit budget. Without it, sum + bits could test as
+                // 35.180000000001 and reject a mathematically-valid schema.
+                static const double kBitBudgetEpsilon = 1e-9;
+                if (num_bits_sum_ + fd.num_bits >
+                        kMaxBits + kBitBudgetEpsilon) {
                     ret_val = false;
                     field_def_fail_reason_ = "Field overflows available bits";
                 } else {
@@ -241,42 +259,13 @@ public:
     //
     // Returns true on success.
     // Returns false on error.
-    // An error will occur when the field is not defined.
+    // An error will occur when the field is not defined, or when the field
+    // is one of the reserved header fields (HdrTelemetryType, HdrSlot).
     bool Set(const char* field_name, double value) {
-        bool ret_val = true;
-        if (FieldDefExists(field_name) && IsOkToSet(field_name)) {
-            FieldDef& fd = *GetFieldDef(field_name);
-
-            // do value type validation
-            if (isnan(value)) {
-                value = fd.low_value;
-                ret_val = false;
-            } else if (isinf(value)) {
-                value = fd.low_value;
-                ret_val = false;
-            }
-
-            // Check for negative zero, which may still wind up getting
-            // clamped.
-            if (value == 0.0 && signbit(value)) {
-                value = 0.0;
-                ret_val = false;
-            }
-
-            // clamp to range
-            if (value < fd.low_value) {
-                value = fd.low_value;
-                ret_val = false;
-            } else if (value > fd.high_value) {
-                value = fd.high_value;
-                ret_val = false;
-            }
-            fd.value = value;
-
-        } else {
-            ret_val = false;
+        if (!IsOkToSet(field_name)) {
+            return false;
         }
-        return ret_val;
+        return SetInternal(field_name, value);
     }
 
     // Get the value of a configured field.
@@ -292,10 +281,10 @@ public:
     // - Must use isnan() to check for NAN, can't compare via  == NAN
 
     // An error will occur when the field is not defined.
-    double Get(const char* field_name) {
+    double Get(const char* field_name) const {
         double ret_val = NAN;
         if (FieldDefExists(field_name)) {
-            FieldDef& fd = *GetFieldDef(field_name);
+            const FieldDef& fd = *GetFieldDef(field_name);
             ret_val = fd.value;
         }
         return ret_val;
@@ -304,7 +293,7 @@ public:
     // Header Field Setters / Getters
     // Read the default HdrTelemetryType, or read the value which was set
     // from Decode().
-    uint8_t GetHdrTelemetryType() {
+    uint8_t GetHdrTelemetryType() const {
         return static_cast<uint8_t>(Get("HdrTelemetryType"));
     }
 
@@ -318,12 +307,14 @@ public:
     // - +6 min       = slot 3
     // - +8 min       = slot 4
     void SetHdrSlot(uint8_t val) {
-        Set("HdrSlot", val);
+        // Bypass the public Set() guard: HdrSlot is reserved for external
+        // callers but must be writable through this dedicated setter.
+        SetInternal("HdrSlot", val);
     }
 
     // Read the default HdrSlot, the previously SetHdrSlot() slot number, or
     // read the slot number which was set from Decode().
-    uint8_t GetHdrSlot() {
+    uint8_t GetHdrSlot() const {
         return static_cast<uint8_t>(Get("HdrSlot"));
     }
 
@@ -359,7 +350,7 @@ public:
         char g3 = '0' + g3_val;
         char g4 = '0' + g4_val;
 
-        static const uint8_t kGrid4Len = 4;
+        // Use the inherited kGrid4Len from WsprMessageRegularType1.
         char grid4[kGrid4Len + 1] = { 0 };
         grid4[0] = g1;
         grid4[1] = g2;
@@ -376,8 +367,9 @@ public:
         char id5 = 'A' + id5_val;
         char id6 = 'A' + id6_val;
 
-        static const uint8_t kCallsignLen = 6;
-        char callsign[kCallsignLen + 1] = { 0 };
+        // Use the inherited kCallsignLenMax (which is 6 — the only valid
+        // length for an encoded telemetry callsign).
+        char callsign[kCallsignLenMax + 1] = { 0 };
         callsign[0] = WsprMessageTelemetryCommon::GetId13()[0];
         callsign[1] = id2;
         callsign[2] = WsprMessageTelemetryCommon::GetId13()[1];
@@ -406,7 +398,6 @@ public:
     // The decoded field values are stored internally and are retrieved by
     // using Get().
     bool Decode() {
-        bool ret_val = true;
         // pull in inputs
         const char* callsign  = WsprMessageRegularType1::GetCallsign();
         const char* grid4     = WsprMessageRegularType1::GetGrid4();
@@ -447,8 +438,7 @@ public:
                      field_def_user_defined_list_,
                      field_def_user_defined_list_idx_);
         // validate only that this is Extended Telemetry
-        ret_val = GetHdrTelemetryType() == 0;
-        return ret_val;
+        return GetHdrTelemetryType() == 0;
     }
 
 
@@ -457,20 +447,56 @@ private:
     static const uint8_t kHeaderFieldCount = 2;
     static const uint8_t kFieldNameCapacity = 32;
 
-    void AllocateStorage() {
-        field_def_user_defined_list_ = new FieldDef[field_count_];
-        // allocate parallel array of owned name buffers (one per slot)
-        field_def_user_defined_name_storage_ = new char*[field_count_];
-        for (uint8_t i = 0; i < field_count_; ++i) {
-            field_def_user_defined_name_storage_[i] =
-                new char[kFieldNameCapacity];
-            field_def_user_defined_name_storage_[i][0] = '\0';
+    static uint8_t ClampFieldCount(uint8_t requested) {
+        if (requested == 0) {
+            return 1;
         }
+        if (requested > kMaxFieldCount) {
+            return kMaxFieldCount;
+        }
+        return requested;
+    }
+
+    // AllocateStorage is exception-safe: if any inner `new` throws, we tear
+    // down all storage that has been allocated so far and rethrow. This
+    // means a partially-constructed object is never observed by the
+    // destructor, which would otherwise read uninitialized pointers.
+    void AllocateStorage() {
+        FieldDef* field_list = nullptr;
+        char**    name_array = nullptr;
+        // can't do exceptions in arduino ide? don't want to enable
+        // try {
+            field_list = new FieldDef[field_count_];
+            name_array = new char*[field_count_];
+            // Initialize every name pointer to nullptr first so that if a
+            // later `new` throws, the cleanup loop can safely delete[]
+            // each slot whether or not it was populated.
+            for (uint16_t i = 0; i < field_count_; ++i) {
+                name_array[i] = nullptr;
+            }
+            for (uint16_t i = 0; i < field_count_; ++i) {
+                name_array[i] = new char[kFieldNameCapacity];
+                name_array[i][0] = '\0';
+            }
+        /*
+        } catch (...) {
+            if (name_array != nullptr) {
+                for (uint16_t i = 0; i < field_count_; ++i) {
+                    delete[] name_array[i];
+                }
+                delete[] name_array;
+            }
+            delete[] field_list;
+            throw;
+        }
+        */
+        field_def_user_defined_list_         = field_list;
+        field_def_user_defined_name_storage_ = name_array;
     }
 
     void FreeStorage() {
         if (field_def_user_defined_name_storage_ != nullptr) {
-            for (uint8_t i = 0; i < field_count_; ++i) {
+            for (uint16_t i = 0; i < field_count_; ++i) {
                 delete[] field_def_user_defined_name_storage_[i];
             }
             delete[] field_def_user_defined_name_storage_;
@@ -499,7 +525,7 @@ private:
     static bool FieldIsTooPrecise(double value) {
         int64_t value_scaled_up   = ScaleUp(value);
         double  value_scaled_back = value_scaled_up / kFactor;
-        double diff = fabs(value_scaled_back - value);
+        double diff = std::fabs(value_scaled_back - value);
 
         bool ret_val = false;
         if (diff > 0.000000001) {  // billionth
@@ -518,7 +544,7 @@ private:
 
         double step_count =
             static_cast<double>(high_value_scaled_up_as_int -
-                (low_value_scaled_up_as_int) / step_size_scaled_up_as_int);
+                low_value_scaled_up_as_int) / step_size_scaled_up_as_int;
 
         if (step_count == static_cast<uint32_t>(step_count)) {
             ret_val = static_cast<uint32_t>(step_count);
@@ -535,7 +561,7 @@ private:
             FieldDef& fd = field_def_list[i];
             // calculate field number for packing
             uint32_t field_number = static_cast<uint32_t>(
-                round((fd.value - fd.low_value) / fd.step_size));
+                std::round((fd.value - fd.low_value) / fd.step_size));
             // pack
             val *= fd.num_values; val += field_number;
         }
@@ -557,13 +583,16 @@ private:
         }
     }
 
-    FieldDef* GetFieldDefFrom(const char* field_name,
-                              FieldDef*   field_def_list,
-                              uint8_t     field_def_list_len) {
-        FieldDef* ret_val = nullptr;
+    // Const + non-const lookup. The non-const overload is implemented in
+    // terms of the const one (Meyers' standard trick) to avoid duplicating
+    // the search logic.
+    static const FieldDef* GetFieldDefFrom(const char*     field_name,
+                                           const FieldDef* field_def_list,
+                                           uint8_t         field_def_list_len) {
+        const FieldDef* ret_val = nullptr;
         if (field_name) {
             for (int i = 0; i < static_cast<int>(field_def_list_len); ++i) {
-                FieldDef& fd = field_def_list[i];
+                const FieldDef& fd = field_def_list[i];
                 if (strcmp(field_name, fd.name) == 0) {
                     ret_val = &fd;
                     break;
@@ -573,52 +602,118 @@ private:
         return ret_val;
     }
 
+    static FieldDef* GetFieldDefFrom(const char* field_name,
+                                     FieldDef*   field_def_list,
+                                     uint8_t     field_def_list_len) {
+        return const_cast<FieldDef*>(
+            GetFieldDefFrom(field_name,
+                            const_cast<const FieldDef*>(field_def_list),
+                            field_def_list_len));
+    }
+
+    const FieldDef* GetFieldDefHeader(const char* field_name) const {
+        return GetFieldDefFrom(field_name,
+                               field_def_header_list_,
+                               kHeaderFieldCount);
+    }
     FieldDef* GetFieldDefHeader(const char* field_name) {
         return GetFieldDefFrom(field_name,
                                field_def_header_list_,
                                kHeaderFieldCount);
     }
 
+    const FieldDef* GetFieldDefUserDefined(const char* field_name) const {
+        return GetFieldDefFrom(field_name,
+                               field_def_user_defined_list_,
+                               field_def_user_defined_list_idx_);
+    }
     FieldDef* GetFieldDefUserDefined(const char* field_name) {
         return GetFieldDefFrom(field_name,
                                field_def_user_defined_list_,
                                field_def_user_defined_list_idx_);
     }
 
+    const FieldDef* GetFieldDef(const char* field_name) const {
+        const FieldDef* ret_val = GetFieldDefHeader(field_name);
+        if (ret_val == nullptr) {
+            ret_val = GetFieldDefUserDefined(field_name);
+        }
+        return ret_val;
+    }
     FieldDef* GetFieldDef(const char* field_name) {
-        FieldDef* ret_val = nullptr;
-        ret_val = GetFieldDefHeader(field_name);
+        FieldDef* ret_val = GetFieldDefHeader(field_name);
         if (ret_val == nullptr) {
             ret_val = GetFieldDefUserDefined(field_name);
         }
         return ret_val;
     }
 
-    bool FieldDefExists(const char* field_name) {
+    bool FieldDefExists(const char* field_name) const {
         return GetFieldDef(field_name) != nullptr;
     }
 
-    bool IsOkToSet(const char* field_name) {
+    // Internal write path for field values that bypasses the public
+    // IsOkToSet() guard. Used by Set() (after the guard has passed) and by
+    // dedicated header setters (SetHdrSlot) which need to write reserved
+    // names.
+    bool SetInternal(const char* field_name, double value) {
         bool ret_val = true;
-        if (field_name) {
-            // reject if field name is on the restricted list
-            const char* kRestrictedFieldNameList[2] = {
-                "HdrTelemetryType",
-                "HdrSlot",
-            };
-            int restricted_len = 1;
-            for (int i = 0; i < restricted_len; ++i) {
-                if (strcmp(field_name, kRestrictedFieldNameList[i]) == 0) {
-                    ret_val = false;
-                }
+        if (FieldDefExists(field_name)) {
+            FieldDef& fd = *GetFieldDef(field_name);
+
+            // do value type validation
+            if (std::isnan(value)) {
+                value = fd.low_value;
+                ret_val = false;
+            } else if (std::isinf(value)) {
+                value = fd.low_value;
+                ret_val = false;
             }
+
+            // Normalize negative zero to positive zero so downstream
+            // arithmetic is well-behaved.
+            if (value == 0.0 && std::signbit(value)) {
+                value = 0.0;
+            }
+
+            // clamp to range
+            if (value < fd.low_value) {
+                value = fd.low_value;
+                ret_val = false;
+            } else if (value > fd.high_value) {
+                value = fd.high_value;
+                ret_val = false;
+            }
+            fd.value = value;
         } else {
             ret_val = false;
         }
         return ret_val;
     }
 
-    bool CanFitOneMore() {
+    // Returns false if `field_name` is one of the reserved header field
+    // names that public Set() callers are not allowed to write directly.
+    // Returns false on nullptr.
+    bool IsOkToSet(const char* field_name) const {
+        if (field_name == nullptr) {
+            return false;
+        }
+        static const char* const kRestrictedFieldNameList[] = {
+            "HdrTelemetryType",
+            "HdrSlot",
+        };
+        const size_t kRestrictedLen =
+            sizeof(kRestrictedFieldNameList) /
+            sizeof(kRestrictedFieldNameList[0]);
+        for (size_t i = 0; i < kRestrictedLen; ++i) {
+            if (strcmp(field_name, kRestrictedFieldNameList[i]) == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool CanFitOneMore() const {
         return field_def_user_defined_list_idx_ < field_count_;
     }
 
@@ -631,13 +726,18 @@ private:
         const WsprMessageTelemetryExtendedCommon&);
 
 
-private:
     // configured at construction time
     uint8_t field_count_;
 
     // heap-allocated user-defined field array, sized to field_count_
     FieldDef* field_def_user_defined_list_;
     uint16_t  field_def_user_defined_list_idx_;
+    // Note: kept uint16_t (rather than narrowing to match field_count_'s
+    // uint8_t) so loops `for (int i = 0; i < idx; ...)` cannot exhibit the
+    // edge case where i == 0xFF would be a valid loop variable but the
+    // count comparison wraps. The 64-field cap (kMaxFieldCount) means
+    // neither type observably differs in practice, but uint16_t keeps the
+    // index unambiguously larger than any valid count.
 
     // Heap-allocated parallel array of owned name buffers 
     // (one buffer per slot), 

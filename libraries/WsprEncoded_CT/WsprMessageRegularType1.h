@@ -8,15 +8,22 @@
 
 class WsprMessageRegularType1 {
 public:
-    WsprMessageRegularType1() {
+    WsprMessageRegularType1()
+            : callsign_(callsign_buf_, kCallsignLenMax + 1),
+              grid4_(grid4_buf_, kGrid4Len + 1) {
         Reset();
     }
 
+    // The class is intended to be used polymorphically
+    // (see TelemetryCommon, TelemetryBasic, TelemetryExtendedCommon
+    // derived from it). Both the destructor and Reset() are virtual so
+    // that operations dispatched on a base pointer reach the most-derived
+    // version.
+    virtual ~WsprMessageRegularType1() {}
+
     // Reset the object back to its default state.
-    void Reset() {
-        callsign_.Target(callsign_buf_, kCallsignLenMax + 1);
+    virtual void Reset() {
         callsign_.Set("0A0AAA");
-        grid4_.Target(grid4_buf_, kGrid4Len + 1);
         grid4_.Set("AA00");
         power_dbm_ = 0;
     }
@@ -78,8 +85,7 @@ public:
             // temporary copy of string
             size_t len = strlen(callsign);
             char buf[kCallsignLenMax + 1] = { 0 };
-            WsprUtl::CString callsign_check(static_cast<char*>(buf),
-                                            kCallsignLenMax + 1);
+            WsprUtl::CString callsign_check(buf, kCallsignLenMax + 1);
             callsign_check.Set(callsign);
             bool is_padded_left  = callsign_check.IsPaddedLeft();
             bool is_padded_right = callsign_check.IsPaddedRight();
@@ -116,13 +122,17 @@ public:
         return ret_val;
     }
 
-private:
+protected:
+    // Promoted from private to protected so derived telemetry classes can
+    // reference them in their encode/decode paths without redeclaring.
     static const uint8_t kCallsignLenMax = 6;
     static const uint8_t kCallsignLenMin = 4;
+    static const uint8_t kGrid4Len       = 4;
+
+private:
     char callsign_buf_[kCallsignLenMax + 1];
     WsprUtl::CString callsign_;
 
-    static const uint8_t kGrid4Len = 4;
     char grid4_buf_[kGrid4Len + 1];
     WsprUtl::CString grid4_;
     uint8_t power_dbm_;

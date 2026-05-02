@@ -30,13 +30,15 @@ fix_future_mtimes() {
     local now
     now=$(date +%s)
     local fixed=0
-    # Use find -newermt to locate any file dated past "now"
+    # Use find -newermt to locate any file dated past "now". Look in the
+    # project root and the test/ directory; this matches the directories
+    # actually involved in the build.
     while IFS= read -r -d '' file; do
         touch "$file"
         fixed=1
-    done < <(find . -maxdepth 1 \( -name '*.h' -o -name '*.cc' \
-                                   -o -name 'Makefile' -o -name '*.sh' \) \
-                    -newermt "@$now" -print0 2>/dev/null)
+    done < <(find . ./test \( -name '*.h' -o -name '*.cc' \
+                              -o -name 'Makefile' -o -name '*.sh' \) \
+                    -maxdepth 2 -newermt "@$now" -print0 2>/dev/null)
     if [[ $fixed -eq 1 ]]; then
         echo "(reset future-dated file mtimes to now)"
     fi
@@ -72,22 +74,23 @@ case "$MODE" in
         build_one debug
         run_smoke_test
         # Save the debug binary, do a release build to verify it compiles
-        # cleanly under -O2 too
-        mv test_main test_main.debug
+        # cleanly under -O2 too. The Makefile produces test/test_main; we
+        # rename siblings of it to keep both flavours around.
+        mv test/test_main test/test_main.debug
         make clean >/dev/null
         build_one release
-        mv test_main test_main.release
+        mv test/test_main test/test_main.release
         # Restore the debug binary as the default for subsequent runs
-        cp test_main.debug test_main
+        cp test/test_main.debug test/test_main
         color_green "==> Both builds succeeded"
-        color_blue "    test_main.debug   (ASan + UBSan)"
-        color_blue "    test_main.release (-O2)"
-        color_blue "    test_main         (= debug copy, default)"
+        color_blue "    test/test_main.debug   (ASan + UBSan)"
+        color_blue "    test/test_main.release (-O2)"
+        color_blue "    test/test_main         (= debug copy, default)"
         ;;
     clean)
         color_blue "==> Cleaning"
         make clean
-        rm -f test_main.debug test_main.release
+        rm -f test/test_main.debug test/test_main.release
         color_green "==> Clean complete"
         ;;
     -h|--help|help)

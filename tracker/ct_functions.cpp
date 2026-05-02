@@ -95,18 +95,22 @@ void define_gps_msg() {
     accepted = gps_msg.DefineField("SatCountUSA", 0, 40, 1);
     if (!accepted) {
         V1_println(F("ERROR: gps_msg.DefineField('SatCountUSA', 0, 40, 1) not accepted"));
+        V1_println(gps_msg.GetDefineFieldErr());
     }
     accepted = gps_msg.DefineField("SatCountChina", 0, 40, 1);
     if (!accepted) {
         V1_println(F("ERROR: gps_msg.DefineField('SatCountChina', 0, 40, 1) not accepted"));
+        V1_println(gps_msg.GetDefineFieldErr());
     }
     accepted = gps_msg.DefineField("SatCountRussia", 0, 40, 1);
     if (!accepted) {
         V1_println(F("ERROR: gps_msg.DefineField('SatCountRussia', 0, 40, 1) not accepted"));
+        V1_println(gps_msg.GetDefineFieldErr());
     }
     accepted = gps_msg.DefineField("LockTimeSecs", 0, 600, 10);
     if (!accepted) {
         V1_println(F("ERROR: gps_msg.DefineField('LockTimeSecs', 0, 600, 10) not accepted"));
+        V1_println(gps_msg.GetDefineFieldErr());
     }
 
     // for use in the traquito website
@@ -175,8 +179,10 @@ void encode_gps_msg(char *hf_callsign, char *hf_grid4, char *hf_power, uint8_t s
     accepted &= gps_msg.Set("SatCountChina", atoi(tt.gb_sats));
     accepted &= gps_msg.Set("SatCountRussia", atoi(tt.gl_sats));
     accepted &= gps_msg.Set("LockTimeSecs", atoi(tt.gpsLockSecs));
+    // FIX! just print the last one?? no isolation? like in bmp_msg
     if (!accepted) {
         V1_println("ERROR: Something didn't get accepted in gps_msg.Encode(). missing defines?");
+        V1_println(gps_msg.GetDefineFieldErr());
     }
     gps_msg.Encode();
 

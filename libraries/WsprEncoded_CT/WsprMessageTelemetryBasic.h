@@ -3,7 +3,7 @@
 
 #include <cstdint>
 #include <cstring>
-#include <math.h>
+#include <cmath>
 #include "WsprMessageTelemetryCommon.h"
 
 class WsprMessageTelemetryBasic : public WsprMessageTelemetryCommon {
@@ -12,7 +12,7 @@ public:
         Reset();
     }
 
-    void Reset() {
+    void Reset() override {
         WsprMessageTelemetryCommon::Reset();
         grid56_[0] = 'A';
         grid56_[1] = 'A';
@@ -68,6 +68,12 @@ public:
         bool ret_val = true;
         if      (temperature_celsius < -50) { temperature_celsius = -50; ret_val = false; }
         else if (temperature_celsius >  39) { temperature_celsius =  39; ret_val = false; }
+        // INVARIANT: after this clamp, temperature_celsius_ is in [-50, 39].
+        // EncodeGridPower() relies on this: it computes
+        //     uint8_t temp_c_num = temperature_celsius_ - (-50);
+        // which produces a value in [0, 89]. Loosening the clamp here
+        // without updating the encoder will silently corrupt the encoded
+        // bitstream (uint8_t wrap or mod-90 collision).
         temperature_celsius_ = temperature_celsius;
         return ret_val;
     }
@@ -121,10 +127,13 @@ public:
     }
 
     bool Decode() {
-        bool ret_val = true;
-        ret_val &= DecodeU4BCall();
-        ret_val &= DecodeU4BGridPower();
-        return ret_val;
+        // Both halves run unconditionally. Even if DecodeU4BCall() fails
+        // (e.g. bad callsign length), DecodeU4BGridPower() may still
+        // populate fields, and we want callers to see the union of
+        // failures rather than only the first one.
+        bool ok_call  = DecodeU4BCall();
+        bool ok_power = DecodeU4BGridPower();
+        return ok_call && ok_power;
     }
 
 private:
@@ -137,12 +146,12 @@ private:
         uint8_t grid5_val = grid5 - 'A';
         uint8_t grid6_val = grid6 - 'A';
         uint16_t alt_frac_m = static_cast<uint16_t>(
-            round(static_cast<double>(altitude_meters_) / 20));
+            std::round(static_cast<double>(altitude_meters_) / kAltStepMeters));
         // convert inputs into a big number
         uint32_t val = 0;
         val *=   24; val += grid5_val;
         val *=   24; val += grid6_val;
-        val *= 1068; val += alt_frac_m;
+        val *= kAltNumValues; val += alt_frac_m;
         // extract
         uint8_t id6_val = val % 26; val = val / 26;
         uint8_t id5_val = val % 26; val = val / 26;
@@ -153,9 +162,9 @@ private:
         char id4 = 'A' + id4_val;
         char id5 = 'A' + id5_val;
         char id6 = 'A' + id6_val;
-        // store callsign
-        static const uint8_t kCallsignLen = 6;
-        char buf[kCallsignLen + 1] = { 0 };
+        // store callsign — use the inherited kCallsignLenMax (== 6) rather
+        // than redeclaring a local constant.
+        char buf[kCallsignLenMax + 1] = { 0 };
         buf[0] = GetId13()[0];
         buf[1] = id2;
         buf[2] = GetId13()[1];
@@ -169,11 +178,16 @@ private:
         // map input presentations onto input radix (numbers within their
         // stated range of possibilities)
         uint8_t temp_c_num      = temperature_celsius_ - -50;
+        // Voltage is encoded with a circular shift: both encoder and decoder
+        // apply (+20) mod 40. This means encode(decode(x)) and decode(encode(x))
+        // are both identity (the two shifts compose to 0 mod 40), provided
+        // the underlying value fits in [0, 39] before the cast — which it
+        // does for all valid inputs in [3.00 V, 4.95 V].
         uint8_t voltage_num     =
             (static_cast<uint8_t>(
-                 round(((voltage_volts_ * 100) - 300) / 5)) + 20) % 40;
+                 std::round(((voltage_volts_ * 100) - 300) / 5)) + 20) % 40;
         uint8_t speed_knots_num =
-            static_cast<uint8_t>(round(static_cast<double>(speed_knots_) / 2.0));
+            static_cast<uint8_t>(std::round(static_cast<double>(speed_knots_) / 2.0));
         uint8_t gps_valid_num   = gps_is_valid_ ? 1 : 0;
         // convert inputs into a big number
         uint32_t val = 0;
@@ -193,8 +207,7 @@ private:
         char g2 = 'A' + g2_val;
         char g3 = '0' + g3_val;
         char g4 = '0' + g4_val;
-        // store grid
-        static const uint8_t kGrid4Len = 4;
+        // store grid — use the inherited kGrid4Len.
         char buf[kGrid4Len + 1] = { 0 };
         buf[0] = g1;
         buf[1] = g2;
@@ -230,7 +243,7 @@ private:
             val *= 26; val += id5_val;   // spaces aren't used, so 26 not 27
             val *= 26; val += id6_val;   // spaces aren't used, so 26 not 27
             // extract values
-            uint16_t alt_frac_m = val % 1068; val /= 1068;
+            uint16_t alt_frac_m = val % kAltNumValues; val /= kAltNumValues;
             uint8_t  grid6_val  = val %   24; val /=   24;
             uint8_t  grid5_val  = val %   24; val /=   24;
             // store grid56
@@ -239,10 +252,14 @@ private:
             char grid56[3] = { 0 };
             grid56[0] = grid5;
             grid56[1] = grid6;
-            ret_val &= SetGrid56(grid56);
+            // Run both setters unconditionally so that all decoded values
+            // are installed even if one fails validation. Combine with
+            // logical AND at the end.
+            bool ok_grid = SetGrid56(grid56);
             // store altitude_meters
-            uint16_t altitude_meters = alt_frac_m * 20;
-            ret_val &= SetAltitudeMeters(altitude_meters);
+            uint16_t altitude_meters = alt_frac_m * kAltStepMeters;
+            bool ok_alt = SetAltitudeMeters(altitude_meters);
+            ret_val = ret_val && ok_grid && ok_alt;
         } else {
             ret_val = false;
         }
@@ -275,10 +292,13 @@ private:
             double  voltage     = 3.0 + (((voltage_num + 20) % 40) * 0.05);
             uint8_t speed_knots = speed_knots_num * 2;
             bool    gps_valid   = bit2;
-            ret_val &= SetTemperatureCelsius(temp_c);
-            ret_val &= SetVoltageVolts(voltage);
-            ret_val &= SetSpeedKnots(speed_knots);
-            ret_val &= SetGpsIsValid(gps_valid);
+            // Run all four setters; AND their results so callers see the
+            // union of validation failures.
+            bool ok_temp  = SetTemperatureCelsius(temp_c);
+            bool ok_volt  = SetVoltageVolts(voltage);
+            bool ok_speed = SetSpeedKnots(speed_knots);
+            bool ok_gps   = SetGpsIsValid(gps_valid);
+            ret_val = ret_val && ok_temp && ok_volt && ok_speed && ok_gps;
         } else {
             ret_val = false;
         }
@@ -286,6 +306,16 @@ private:
     }
 
 private:
+    // Altitude is encoded in 20-metre steps in [0, 21340], producing 1068
+    // distinct values: kAltMax / kAltStep + 1 = 21340 / 20 + 1 = 1068.
+    // This must match the mod / multiplier used in EncodeCallsign() and
+    // DecodeU4BCall(); the static_assert below enforces that.
+    static const int32_t  kAltMaxMeters    = 21340;
+    static const int32_t  kAltStepMeters   = 20;
+    static const uint16_t kAltNumValues    = 1068;
+    static_assert(kAltMaxMeters / kAltStepMeters + 1 == kAltNumValues,
+                  "altitude num-values constant is out of sync with range");
+
     char     grid56_[3];
     uint16_t altitude_meters_;
     int8_t   temperature_celsius_;

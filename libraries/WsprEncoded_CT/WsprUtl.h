@@ -13,8 +13,12 @@ class CString {
 public:
     CString() {}
 
-    CString(const char* str, size_t buf_capacity) {
-        Target(const_cast<char*>(str), buf_capacity);
+    // The buffer must be writable since this class mutates it through
+    // Set(), ToUpper(), Trim*(), etc. Accepting `char*` here makes that
+    // requirement visible at the type level (the previous overload took
+    // `const char*` and silently `const_cast`'d it).
+    CString(char* buf, size_t buf_capacity) {
+        Target(buf, buf_capacity);
     }
 
     void Target(char* buf, size_t buf_capacity) {
@@ -32,8 +36,19 @@ public:
 
     void Set(const char* str) {
         if (str && buf_capacity_) {
+            // Clear() zero-fills the entire buffer, so we can copy up to
+            // buf_capacity_ - 1 bytes without worrying about a separate
+            // null terminator: byte [buf_capacity_ - 1] is already '\0',
+            // and any unused trailing bytes are too. Using memcpy with an
+            // explicit length avoids the -Wstringop-truncation warning
+            // that strncpy(buf, str, capacity - 1) emits when callers pass
+            // a string of exactly capacity - 1 characters (a common case
+            // here: "0A0AAA" into a 7-byte buffer).
             Clear();
-            strncpy(buf_, str, buf_capacity_ - 1);
+            size_t copy_max = buf_capacity_ - 1;
+            size_t src_len  = strlen(str);
+            size_t copy_len = src_len < copy_max ? src_len : copy_max;
+            memcpy(buf_, str, copy_len);
         }
     }
 
@@ -41,17 +56,17 @@ public:
         if (buf_capacity_) {
             char* p = buf_;
             while (*p != '\0') {
-                *p = toupper(*p);
+                *p = static_cast<char>(toupper(static_cast<unsigned char>(*p)));
                 ++p;
             }
         }
     }
 
-    bool IsPaddedLeft() {
+    bool IsPaddedLeft() const {
         return buf_capacity_ && buf_[0] == ' ';
     }
 
-    bool IsPaddedRight() {
+    bool IsPaddedRight() const {
         bool ret_val = false;
         size_t len = Len();
         if (len) {
@@ -60,7 +75,7 @@ public:
         return ret_val;
     }
 
-    bool IsUppercase() {
+    bool IsUppercase() const {
         // empty string considered uppercase
         // non-alpha chars are considered uppercase
         bool ret_val = false;
@@ -68,8 +83,10 @@ public:
             if (buf_[0] == '\0') {
                 ret_val = true;
             } else {
-                char* p = buf_;
-                while (*p != '\0' && *p == toupper(*p)) {
+                const char* p = buf_;
+                while (*p != '\0' &&
+                       *p == static_cast<char>(
+                                 toupper(static_cast<unsigned char>(*p)))) {
                     ++p;
                 }
                 ret_val = *p == '\0';
@@ -78,7 +95,7 @@ public:
         return ret_val;
     }
 
-    bool IsEqual(const char* str) {
+    bool IsEqual(const char* str) const {
         bool ret_val = false;
         if (str && buf_capacity_) {
             ret_val = strcmp(buf_, str) == 0;
@@ -86,7 +103,7 @@ public:
         return ret_val;
     }
 
-    size_t Len() {
+    size_t Len() const {
         size_t ret_val = 0;
         if (buf_capacity_) {
             ret_val = strlen(buf_);

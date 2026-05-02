@@ -2,6 +2,7 @@
 #define WSPR_CHANNEL_MAP_H
 
 #include <cstdint>
+#include <cstring>
 
 #include "Wspr.h"
 #include "WsprUtl.h"
@@ -27,13 +28,13 @@ public:
         const Wspr::BandData* band_list = Wspr::GetBandDataList();
         uint8_t band_count = Wspr::GetBandDataCount();
         for (uint8_t i = 0; i < band_count; ++i) {
-            if (band_list[i].band == band) {
+            if (strcmp(band_list[i].band, band) == 0) {
                 break;
             }
             ++idx;
         }
         // rotation is modded place within this list
-        const uint8_t kRotationList[5] = { 4, 2, 0, 3, 1 };
+        static const uint8_t kRotationList[5] = { 4, 2, 0, 3, 1 };
         uint8_t rotation = kRotationList[idx % 5];
         minute_list_out[0] = 8;
         minute_list_out[1] = 0;
@@ -68,8 +69,19 @@ public:
         uint32_t freq_tx_high   = dial_freq + 1500 + 100;
         uint32_t freq_tx_window = freq_tx_high - freq_tx_low;
         const uint8_t kFreqBandCount = 5;
-        uint8_t band_size_hz = freq_tx_window / kFreqBandCount;
-        // skip middle band 3, but really label as 1,2,3,4
+        // Widened from uint8_t to uint16_t: for the standard 200 Hz WSPR
+        // window divided into 5 sub-bands, band_size_hz is 40 and the
+        // accumulated values stay well under 256. But future tuning of
+        // freq_tx_window or kFreqBandCount could push these over a byte,
+        // so we use the wider type defensively.
+        uint16_t band_size_hz = static_cast<uint16_t>(
+            freq_tx_window / kFreqBandCount);
+        // The 5 frequency sub-bands across the 200 Hz WSPR window are
+        // numbered 1..5; band 3 is the center 40 Hz around the dial-tone
+        // frequency where the WSPR-2 standard places its own beacon, so
+        // user channels avoid it. We iterate over the four usable bands
+        // {1, 2, 4, 5} and remap the on-air "lane" label to 1..4 below
+        // (see freq_band_label).
         const uint8_t kFreqBandList[4] = { 1, 2, 4, 5 };
         const uint8_t kFreqBandListLen = 4;
         uint8_t minute_list[5];
@@ -78,9 +90,12 @@ public:
         for (uint8_t fb_idx = 0; fb_idx < kFreqBandListLen; ++fb_idx) {
             uint8_t freq_band = kFreqBandList[fb_idx];
             // figure out the frequency
-            uint8_t freq_band_low    = (freq_band - 1) * band_size_hz;
-            uint8_t freq_band_high   = freq_band_low + band_size_hz;
-            uint8_t freq_band_center = (freq_band_high + freq_band_low) / 2;
+            uint16_t freq_band_low    =
+                static_cast<uint16_t>((freq_band - 1) * band_size_hz);
+            uint16_t freq_band_high   =
+                static_cast<uint16_t>(freq_band_low + band_size_hz);
+            uint16_t freq_band_center =
+                static_cast<uint16_t>((freq_band_high + freq_band_low) / 2);
             uint8_t rows_per_col = kFreqBandCount * kFreqBandListLen;
             for (uint8_t m_idx = 0; m_idx < 5; ++m_idx) {
                 uint8_t minute = minute_list[m_idx];
