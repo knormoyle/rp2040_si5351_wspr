@@ -1,6 +1,13 @@
 #ifndef WSPR_CHANNEL_MAP_H
 #define WSPR_CHANNEL_MAP_H
 
+// WsprChannelMap.h — Maps a (band, channel) pair to its full transmission
+// details: frequency, lane, minute-offset, and encoded ID characters.
+//
+// The channel space covers 600 channels (0–599) spread across three ID1
+// prefixes ('0', '1', 'Q') and ten ID3 digits, partitioned into five
+// frequency lanes and five minute offsets per band.
+
 #include <cstdint>
 #include <cstring>
 
@@ -34,26 +41,41 @@ public:
             ++idx;
         }
         // rotation is modded place within this list
-        static const uint8_t kRotationList[5] = { 4, 2, 0, 3, 1 };
+        static constexpr uint8_t kRotationList[5] = { 4, 2, 0, 3, 1 };
         uint8_t rotation = kRotationList[idx % 5];
         minute_list_out[0] = 8;
         minute_list_out[1] = 0;
         minute_list_out[2] = 2;
         minute_list_out[3] = 4;
         minute_list_out[4] = 6;
-        WsprUtl::Rotate5(minute_list_out, rotation);
+        wspr_utl::Rotate5(minute_list_out, rotation);
     }
 
-    struct ChannelDetails {
-        const char* band      = "20m";
-        uint16_t    channel   = 0;
-        char        id1       = '0';
-        char        id3       = '0';
-        char        id13[3]   = { '0', '0', '\0' };
-        uint8_t     min       = 8;
-        uint8_t     lane      = 1;
-        uint32_t    freq      = 14097020UL;
-        uint32_t    freq_dial = 14095600UL;
+    class ChannelDetails {
+    public:
+        ChannelDetails()
+                : band("20m"),
+                  channel(0),
+                  id1('0'),
+                  id3('0'),
+                  min(8),
+                  lane(1),
+                  freq(14097020UL),
+                  freq_dial(14095600UL) {
+            id13[0] = '0';
+            id13[1] = '0';
+            id13[2] = '\0';
+        }
+
+        const char* band;
+        uint16_t    channel;
+        char        id1;
+        char        id3;
+        char        id13[3];
+        uint8_t     min;
+        uint8_t     lane;
+        uint32_t    freq;
+        uint32_t    freq_dial;
     };
 
     static ChannelDetails GetChannelDetails(const char* band,
@@ -87,6 +109,9 @@ public:
         uint8_t minute_list[5];
         GetMinuteListForBand(band, minute_list);
         uint8_t row_count = 0;
+        // row_count is a global counter across all freq-band passes: the
+        // channel map is a single flat sequential space, and channel_calc
+        // depends on the accumulated row index — not a per-band offset.
         for (uint8_t fb_idx = 0; fb_idx < kFreqBandListLen; ++fb_idx) {
             uint8_t freq_band = kFreqBandList[fb_idx];
             // figure out the frequency

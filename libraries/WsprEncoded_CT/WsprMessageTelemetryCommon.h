@@ -1,6 +1,12 @@
 #ifndef WSPR_MESSAGE_TELEMETRY_COMMON_H
 #define WSPR_MESSAGE_TELEMETRY_COMMON_H
 
+// WsprMessageTelemetryCommon.h — Shared base for U4B telemetry messages.
+//
+// Adds the two-character ID13 field (id1 + id3) that identifies the
+// sending station, and provides base-36 encode/decode utilities used by
+// all telemetry subclasses.
+
 #include <cstdint>
 #include <cstring>
 #include "WsprMessageRegularType1.h"

@@ -6,23 +6,23 @@
 #include <cmath>
 #include "WsprMessageTelemetryCommon.h"
 
-// class supports a configurable number of fields at construction time. 
+// class supports a configurable number of fields at construction time.
 // field array is heap-allocated with runtime size passed to the constructor.
 //
-// total user-field bitspace is 35.180 bits, 
-// occupying everything below HdrTelemetryType in the encoded WSPR Type 1 message.
+// total user-field bitspace is 35.180 bits, occupying everything below
+// HdrTelemetryType in the encoded WSPR Type 1 message.
 class WsprMessageTelemetryExtendedCommon : public WsprMessageTelemetryCommon {
 public:
-    // 29.180 (original budget) + 6.000 freed 
-    // by removing HdrRESERVED +  HdrType) = 35.180 bits available 
+    // 29.180 (original budget) + 6.000 freed
+    // by removing HdrRESERVED +  HdrType) = 35.180 bits available
     // for user-defined fields.
     static constexpr double kMaxBits = 35.180;
-    static const uint8_t kDefaultFieldCount = 35;
+    static constexpr uint8_t kDefaultFieldCount = 35;
     // Hard upper bound on user-defined field slots. The 35.180-bit budget
     // can not in practice support more than a few dozen 1-bit fields, so a
     // cap of 64 is well above any realistic schema and prevents callers
     // from accidentally allocating large name-storage arrays.
-    static const uint8_t kMaxFieldCount     = 64;
+    static constexpr uint8_t kMaxFieldCount     = 64;
 
     struct FieldDef {
         const char* name;
@@ -58,10 +58,8 @@ public:
         ResetEverything();
     }
 
-    // A virtual function (C++) is a class member accessible to all, which derived classes can override
-    // Enables runtime polymorphism. 
-    // Allows a base class to define default behavior while permitting derived classes to specialize it.
-    // Public virtual methods allow anyone to alter behavior, which can break encapsulation.
+    // Virtual so that deleting through a base pointer reaches the
+    // most-derived destructor and FreeStorage() is always called.
     virtual ~WsprMessageTelemetryExtendedCommon() {
         FreeStorage();
     }
@@ -107,7 +105,8 @@ public:
         field_def_header_list_[1].high_value = 4;
         field_def_header_list_[1].step_size  = 1;
         field_def_header_list_[1].num_values = 5;
-        field_def_header_list_[1].num_bits   = std::log(5.0) / std::log(2.0);  // ~2.321
+        field_def_header_list_[1].num_bits   =
+            std::log(5.0) / std::log(2.0);  // ~2.321
         field_def_header_list_[1].value      = 0;
     }
 
@@ -171,10 +170,12 @@ public:
             // low-to-high range when incremented by the step size?
             //
             // Because of floating point issues, is done in a way
-            // that scales the (potentially) decimal numbers into pure integer space. 
-            // Safe to do here because already checked that the numbers are not 
+            // that scales the (potentially) decimal numbers into
+            // pure integer space.
+            // Safe to do here because already checked that the numbers are not
             // any more precise than the amount we scale.
-            uint32_t step_count = GetStepCount(low_value, high_value, step_size);
+            uint32_t step_count =
+                GetStepCount(low_value, high_value, step_size);
             if (step_count == 0) {
                 ret_val = false;
                 field_def_fail_reason_ =
@@ -192,7 +193,7 @@ public:
                 // when a schema is constructed to fit exactly into the
                 // 35.180-bit budget. Without it, sum + bits could test as
                 // 35.180000000001 and reject a mathematically-valid schema.
-                static const double kBitBudgetEpsilon = 1e-9;
+                static constexpr double kBitBudgetEpsilon = 1e-9;
                 if (num_bits_sum_ + fd.num_bits >
                         kMaxBits + kBitBudgetEpsilon) {
                     ret_val = false;
@@ -201,7 +202,7 @@ public:
                     // increment number of bits used by total set of fields
                     num_bits_sum_ += fd.num_bits;
 
-                    // Copy the field name into our owned storage 
+                    // Copy the field name into our owned storage
                     // So callers do not need to keep their string alive.
                     char* owned_name =
                         field_def_user_defined_name_storage_[
@@ -219,7 +220,8 @@ public:
                     fd.value = low_value;
 
                     // add to field def list
-                    field_def_user_defined_list_[field_def_user_defined_list_idx_] = fd;
+                    uint16_t idx = field_def_user_defined_list_idx_;
+                    field_def_user_defined_list_[idx] = fd;
                     ++field_def_user_defined_list_idx_;
                 }
             }
@@ -248,14 +250,15 @@ public:
 
     // Set the value of a configured field.
     //
-    // value parameter is double so a wide range of values easily settable, 
+    // value parameter is double so a wide range of values easily settable,
     // Even if you do not intend to use a floating point number.
     //
     // A value that is set is retained internally at that precise value, and
     // will be returned at that value with a subsequent Get().
     //
-    // When a field is encoded, the encoded wspr data will contain the encoded value, 
-    // which is rounded to the precision specified in the field definition.
+    // When a field is encoded, the encoded wspr data will contain the
+    // encoded value, which is rounded to the precision specified in the
+    // field definition.
     //
     // Returns true on success.
     // Returns false on error.
@@ -441,11 +444,18 @@ public:
         return GetHdrTelemetryType() == 0;
     }
 
+    // Disallow copy / assign — we own heap storage and have not implemented
+    // deep copy semantics.
+    WsprMessageTelemetryExtendedCommon(
+        const WsprMessageTelemetryExtendedCommon&) = delete;
+
+    WsprMessageTelemetryExtendedCommon& operator=(
+        const WsprMessageTelemetryExtendedCommon&) = delete;
 
 private:
-    static constexpr double kFactor = 1000.0;  // 3 decimal places
-    static const uint8_t kHeaderFieldCount = 2;
-    static const uint8_t kFieldNameCapacity = 32;
+    static constexpr double  kFactor           = 1000.0;  // 3 decimal places
+    static constexpr uint8_t kHeaderFieldCount = 2;
+    static constexpr uint8_t kFieldNameCapacity = 32;
 
     static uint8_t ClampFieldCount(uint8_t requested) {
         if (requested == 0) {
@@ -457,14 +467,16 @@ private:
         return requested;
     }
 
-    // AllocateStorage is exception-safe: if any inner `new` throws, we tear
-    // down all storage that has been allocated so far and rethrow. This
-    // means a partially-constructed object is never observed by the
-    // destructor, which would otherwise read uninitialized pointers.
+    // AllocateStorage allocates the field and name-storage arrays.
+    // Exception safety is not implemented: `new` failures are not handled
+    // because the Arduino target does not enable exceptions. The commented-out
+    // try/catch block below shows what a safe version would look like on a
+    // hosted implementation.
     void AllocateStorage() {
         FieldDef* field_list = nullptr;
         char**    name_array = nullptr;
-        // can't do exceptions in arduino ide? don't want to enable
+        // Exceptions are disabled on the Arduino target; the try/catch block
+        // below is left as a reference for hosted implementations.
         // try {
             field_list = new FieldDef[field_count_];
             name_array = new char*[field_count_];
@@ -478,18 +490,16 @@ private:
                 name_array[i] = new char[kFieldNameCapacity];
                 name_array[i][0] = '\0';
             }
-        /*
-        } catch (...) {
-            if (name_array != nullptr) {
-                for (uint16_t i = 0; i < field_count_; ++i) {
-                    delete[] name_array[i];
-                }
-                delete[] name_array;
-            }
-            delete[] field_list;
-            throw;
-        }
-        */
+        // } catch (...) {
+        //     if (name_array != nullptr) {
+        //         for (uint16_t i = 0; i < field_count_; ++i) {
+        //             delete[] name_array[i];
+        //         }
+        //         delete[] name_array;
+        //     }
+        //     delete[] field_list;
+        //     throw;
+        // }
         field_def_user_defined_list_         = field_list;
         field_def_user_defined_name_storage_ = name_array;
     }
@@ -506,9 +516,9 @@ private:
         field_def_user_defined_list_ = nullptr;
     }
 
-    // Scale a decimal value up by kFactor (1000) into integer space, 
-    // with rounding away from zero. 
-    // Used to test "is this value at most 3 decimal places of precision?" 
+    // Scale a decimal value up by kFactor (1000) into integer space,
+    // with rounding away from zero.
+    // Used to test "is this value at most 3 decimal places of precision?"
     // and to do arithmetic without floating point error.
     static int64_t ScaleUp(double value) {
         int64_t value_scaled_up = 0;
@@ -546,8 +556,16 @@ private:
             static_cast<double>(high_value_scaled_up_as_int -
                 low_value_scaled_up_as_int) / step_size_scaled_up_as_int;
 
-        if (step_count == static_cast<uint32_t>(step_count)) {
-            ret_val = static_cast<uint32_t>(step_count);
+        // Use an epsilon to absorb any floating-point rounding before
+        // testing whether step_count is a whole number. A tolerance of
+        // 1e-9 is tight enough to reject genuinely fractional step counts
+        // but loose enough to tolerate double-precision accumulation errors.
+        static constexpr double kStepEpsilon = 1e-9;
+        uint32_t step_count_int =
+            static_cast<uint32_t>(step_count + kStepEpsilon);
+        if (std::fabs(step_count - static_cast<double>(step_count_int)) <
+                kStepEpsilon) {
+            ret_val = step_count_int;
         }
         return ret_val;
     }
@@ -717,15 +735,6 @@ private:
         return field_def_user_defined_list_idx_ < field_count_;
     }
 
-    // Disallow copy / assign — we own heap storage and have not implemented
-    // deep copy semantics.
-    WsprMessageTelemetryExtendedCommon(
-        const WsprMessageTelemetryExtendedCommon&);
-
-    WsprMessageTelemetryExtendedCommon& operator=(
-        const WsprMessageTelemetryExtendedCommon&);
-
-
     // configured at construction time
     uint8_t field_count_;
 
@@ -739,8 +748,8 @@ private:
     // neither type observably differs in practice, but uint16_t keeps the
     // index unambiguously larger than any valid count.
 
-    // Heap-allocated parallel array of owned name buffers 
-    // (one buffer per slot), 
+    // Heap-allocated parallel array of owned name buffers
+    // (one buffer per slot),
     // Callers do not need to keep their field-name string alive
     // after DefineField() returns.
     char** field_def_user_defined_name_storage_;

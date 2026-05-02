@@ -1,6 +1,12 @@
 #ifndef WSPR_MESSAGE_TELEMETRY_BASIC_H
 #define WSPR_MESSAGE_TELEMETRY_BASIC_H
 
+// WsprMessageTelemetryBasic.h — U4B "basic telemetry" encode/decode.
+//
+// Encodes six telemetry fields (6-char grid, altitude, temperature, voltage,
+// speed, GPS validity) into a standard WSPR Type 1 callsign/grid/power
+// triple using the U4B protocol mapping.
+
 #include <cstdint>
 #include <cstring>
 #include <cmath>
@@ -52,8 +58,13 @@ public:
     // 0 through 21,340, steps of 20.
     bool SetAltitudeMeters(int32_t altitude_meters) {
         bool ret_val = true;
-        if      (altitude_meters < 0)     { altitude_meters = 0;     ret_val = false; }
-        else if (altitude_meters > 21340) { altitude_meters = 21340; ret_val = false; }
+        if (altitude_meters < 0) {
+            altitude_meters = 0;
+            ret_val = false;
+        } else if (altitude_meters > 21340) {
+            altitude_meters = 21340;
+            ret_val = false;
+        }
         altitude_meters_ = altitude_meters;
         return ret_val;
     }
@@ -66,8 +77,13 @@ public:
     // -50 through 39.
     bool SetTemperatureCelsius(int32_t temperature_celsius) {
         bool ret_val = true;
-        if      (temperature_celsius < -50) { temperature_celsius = -50; ret_val = false; }
-        else if (temperature_celsius >  39) { temperature_celsius =  39; ret_val = false; }
+        if (temperature_celsius < -50) {
+            temperature_celsius = -50;
+            ret_val = false;
+        } else if (temperature_celsius > 39) {
+            temperature_celsius = 39;
+            ret_val = false;
+        }
         // INVARIANT: after this clamp, temperature_celsius_ is in [-50, 39].
         // EncodeGridPower() relies on this: it computes
         //     uint8_t temp_c_num = temperature_celsius_ - (-50);
@@ -86,8 +102,13 @@ public:
     // 3.0v through 4.95v, steps of 0.05v.
     bool SetVoltageVolts(double voltage_volts) {
         bool ret_val = true;
-        if      (voltage_volts < 3.00) { voltage_volts = 3.00; ret_val = false; }
-        else if (voltage_volts > 4.95) { voltage_volts = 4.95; ret_val = false; }
+        if (voltage_volts < 3.00) {
+            voltage_volts = 3.00;
+            ret_val = false;
+        } else if (voltage_volts > 4.95) {
+            voltage_volts = 4.95;
+            ret_val = false;
+        }
         voltage_volts_ = voltage_volts;
         return ret_val;
     }
@@ -179,15 +200,15 @@ private:
         // stated range of possibilities)
         uint8_t temp_c_num      = temperature_celsius_ - -50;
         // Voltage is encoded with a circular shift: both encoder and decoder
-        // apply (+20) mod 40. This means encode(decode(x)) and decode(encode(x))
-        // are both identity (the two shifts compose to 0 mod 40), provided
-        // the underlying value fits in [0, 39] before the cast — which it
-        // does for all valid inputs in [3.00 V, 4.95 V].
+        // apply (+20) mod 40. This means encode(decode(x)) and
+        // decode(encode(x)) are both identity (the two shifts compose to
+        // 0 mod 40), provided the underlying value fits in [0, 39] before
+        // the cast — which it does for all valid inputs in [3.00 V, 4.95 V].
         uint8_t voltage_num     =
             (static_cast<uint8_t>(
                  std::round(((voltage_volts_ * 100) - 300) / 5)) + 20) % 40;
-        uint8_t speed_knots_num =
-            static_cast<uint8_t>(std::round(static_cast<double>(speed_knots_) / 2.0));
+        uint8_t speed_knots_num = static_cast<uint8_t>(
+            std::round(static_cast<double>(speed_knots_) / 2.0));
         uint8_t gps_valid_num   = gps_is_valid_ ? 1 : 0;
         // convert inputs into a big number
         uint32_t val = 0;
@@ -222,7 +243,7 @@ private:
     // Decode
     bool DecodeU4BCall() {
         bool ret_val = true;
-        static const uint8_t kCallsignDecodeLen = 6;
+        static constexpr uint8_t kCallsignDecodeLen = 6;
         const char* call = WsprMessageRegularType1::GetCallsign();
         if (strlen(call) == kCallsignDecodeLen) {
             // break call down
@@ -310,9 +331,9 @@ private:
     // distinct values: kAltMax / kAltStep + 1 = 21340 / 20 + 1 = 1068.
     // This must match the mod / multiplier used in EncodeCallsign() and
     // DecodeU4BCall(); the static_assert below enforces that.
-    static const int32_t  kAltMaxMeters    = 21340;
-    static const int32_t  kAltStepMeters   = 20;
-    static const uint16_t kAltNumValues    = 1068;
+    static constexpr int32_t  kAltMaxMeters    = 21340;
+    static constexpr int32_t  kAltStepMeters   = 20;
+    static constexpr uint16_t kAltNumValues    = 1068;
     static_assert(kAltMaxMeters / kAltStepMeters + 1 == kAltNumValues,
                   "altitude num-values constant is out of sync with range");
 

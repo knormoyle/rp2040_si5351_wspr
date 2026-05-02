@@ -1,6 +1,11 @@
 #ifndef WSPR_H
 #define WSPR_H
 
+// Wspr.h — Band and power-level tables for the WSPR protocol.
+//
+// Provides the canonical list of WSPR dial frequencies indexed by band
+// string (e.g. "20m"), and the set of valid power-in-dBm values.
+
 #include <cstdint>
 #include <cstring>
 
@@ -95,8 +100,8 @@ public:
     }
 
 private:
-    static const uint8_t kBandCount = 17;
-    static const uint8_t kPowerDbmCount = 19;
+    static constexpr uint8_t kBandCount = 17;
+    static constexpr uint8_t kPowerDbmCount = 19;
 };
 
 #endif  // WSPR_H

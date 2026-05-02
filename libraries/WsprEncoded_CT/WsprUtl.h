@@ -1,14 +1,21 @@
 #ifndef WSPR_UTL_H
 #define WSPR_UTL_H
 
+// WsprUtl.h — General-purpose utilities for the WSPR library.
+//
+// Provides wspr_utl::CString, a lightweight fixed-buffer string wrapper
+// that operates on caller-supplied storage (no heap allocation), and
+// wspr_utl::Rotate5, an in-place rotation helper for 5-element uint8_t
+// arrays used by the minute-list scheduler.
+
 #include <cctype>
 #include <cstdint>
 #include <cstring>
 
-// Note: The namespace is PascalCase to preserve the project's existing public
-// API. Strict Google style would rename it to `wspr_utl`, but doing so would
-// break every caller of this library.
-namespace WsprUtl {
+// Note: this namespace was historically named WsprUtl (PascalCase). It has
+// been renamed to wspr_utl to comply with Google style. Call sites outside
+// this library that still use WsprUtl:: will need to be updated.
+namespace wspr_utl {
 class CString {
 public:
     CString() {}
@@ -182,6 +189,6 @@ inline void Rotate5(uint8_t val_list[5], int count) {
         val_list[i] = tmp[i];
     }
 }
-}  // namespace WsprUtl
+}  // namespace wspr_utl
 
 #endif  // WSPR_UTL_H

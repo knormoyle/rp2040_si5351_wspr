@@ -1,6 +1,12 @@
 #ifndef WSPR_MESSAGE_REGULAR_TYPE_1_H
 #define WSPR_MESSAGE_REGULAR_TYPE_1_H
 
+// WsprMessageRegularType1.h — WSPR Type 1 message fields: callsign, 4-char
+// Maidenhead grid locator, and transmit power in dBm.
+//
+// This class is the base for all telemetry message types; it holds the three
+// encoded fields that map directly onto an over-the-air WSPR Type 1 frame.
+
 #include <cstdint>
 #include <cstring>
 #include "Wspr.h"
@@ -85,7 +91,7 @@ public:
             // temporary copy of string
             size_t len = strlen(callsign);
             char buf[kCallsignLenMax + 1] = { 0 };
-            WsprUtl::CString callsign_check(buf, kCallsignLenMax + 1);
+            wspr_utl::CString callsign_check(buf, kCallsignLenMax + 1);
             callsign_check.Set(callsign);
             bool is_padded_left  = callsign_check.IsPaddedLeft();
             bool is_padded_right = callsign_check.IsPaddedRight();
@@ -125,16 +131,16 @@ public:
 protected:
     // Promoted from private to protected so derived telemetry classes can
     // reference them in their encode/decode paths without redeclaring.
-    static const uint8_t kCallsignLenMax = 6;
-    static const uint8_t kCallsignLenMin = 4;
-    static const uint8_t kGrid4Len       = 4;
+    static constexpr uint8_t kCallsignLenMax = 6;
+    static constexpr uint8_t kCallsignLenMin = 4;
+    static constexpr uint8_t kGrid4Len       = 4;
 
 private:
     char callsign_buf_[kCallsignLenMax + 1];
-    WsprUtl::CString callsign_;
+    wspr_utl::CString callsign_;
 
     char grid4_buf_[kGrid4Len + 1];
-    WsprUtl::CString grid4_;
+    wspr_utl::CString grid4_;
     uint8_t power_dbm_;
 };
 

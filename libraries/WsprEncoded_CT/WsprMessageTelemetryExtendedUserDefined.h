@@ -5,8 +5,8 @@
 #include "WsprMessageTelemetryExtendedCommon.h"
 
 // Extended Telemetry, User-Defined variant.
-// This is the only Extended Telemetry subclass; 
-// it exists as a thin naming convenience over WsprMessageTelemetryExtendedCommon.
+// This is the only Extended Telemetry subclass; it exists as a thin
+// naming convenience over WsprMessageTelemetryExtendedCommon.
 class WsprMessageTelemetryExtendedUserDefined
         : public WsprMessageTelemetryExtendedCommon {
 public:
