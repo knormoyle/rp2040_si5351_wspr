@@ -339,6 +339,30 @@ public:
         // pack header fields into message in reverse-definition order
         PackFields(val, field_def_header_list_, kHeaderFieldCount);
 
+        // as per the rationale in the ET_CT Bignum_Format_Conversion_v2.pdf explains
+        // val was created as USERDATA + HdrSlot + HdrTelemetryType
+        // USERDATA reclaims the old mixed-radix digits for HdrType and HdrReservedd
+        // since val is created as continiguous, some math is done that's cognizant
+        // of the multi-radix digits. This keeps HdrSlot in the same radix 6 position as 
+        // the definition of ET. so CT and ET are compatible with a HdrSlot contract
+        // but CT can use the reclaimed HdrType and HdrReserved digits.
+
+        // val is reassigned to keep the equations following, unchanged
+        // This is the ET to CT mapping algo. Full parens to avoid operator precedence
+        // questions. All data is integer so divides are floor divides (truncate)
+        // Expression 1 — ET → CT (Explicit Precedence)
+        uint64_t CT = val;
+
+        // Expression 2 — CT → ET (Explicit Precedence)
+        uint64_t ET = (CT % 2)   * 1
+            + (((CT / 2)  % 5))  * 128
+            + (((CT / 10) % 4))  * 2
+            + (((CT / 40) % 16)) * 8
+            + (( CT / 640))      * 640;
+
+        val = ET;
+
+        // now the rest is all the same for ET or CT
         // encode into power
         uint8_t power_val = val % 19; val /= 19;
         uint8_t power_dbm = Wspr::GetPowerDbmList()[power_val];
@@ -434,7 +458,29 @@ public:
         val *= 10; val += g3_val;
         val *= 10; val += g4_val;
         val *= 19; val += power_val;
+
+        // as per the rationale in the ET_CT Bignum_Format_Conversion_v2.pdf explains
+        // val was created as USERDATA + HdrSlot + HdrTelemetryType
+        // USERDATA reclaims the old mixed-radix digits for HdrType and HdrReservedd
+        // since val is created as continiguous, some math is done that's cognizant
+        // of the multi-radix digits. This keeps HdrSlot in the same radix 6 position as 
+        // the definition of ET. so CT and ET are compatible with a HdrSlot contract
+        // but CT can use the reclaimed HdrType and HdrReserved digits.
+
+        // Expression 1 — ET → CT (Explicit Precedence)
+        uint64_t ET = val;
+
+        // This is the ET to mapping algo. Full parens to avoid operator precedence
+        // questions. All data is integer so divides are floor divides (truncate)
         // unpack header fields
+        uint64_t CT = (ET % 2)   * 1   \
+            + (((ET / 128) % 5)) * 2   \
+            + (((ET / 2) % 4))   * 10  \
+            + (((ET / 8) % 16))  * 40  \
+            + (( ET / 640))      * 640;
+
+        // val is reassigned to keep the equations following, unchanged
+        val = CT;
         UnpackFields(val, field_def_header_list_, kHeaderFieldCount);
         // unpack application fields
         UnpackFields(val,
