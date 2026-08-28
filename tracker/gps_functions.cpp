@@ -2923,19 +2923,35 @@ void checkUpdateTimeFromGps(uint32_t sentence_dollar_millis,
     //        anchor on top of a multi-second error makes it worse, not better.
     // Fix D: snap_PPS_rise_millis was captured at '*', before the ISR could
     //        overwrite PPS_rise_millis with the next second's edge.
+    // Fix E: pps_skew plausibility check — skew must be < 300 ms. After a
+    //        hot reset, PPS_rise_cnt 1 can carry a snap_PPS_rise_millis from
+    //        an edge fired seconds before the GGA sentence (observed: 4059 ms).
+    //        Fix C and Fix A both passed in that case because PPS had started
+    //        and the prior raw anchor had set the clock correctly. The skew
+    //        check is the only guard that catches the wrong-edge case.
     // -------------------------------------------------------------------------
     setTime_millis = sentence_dollar_millis;
     int secondDelta  = ((int) monthSecs) - ((int) gps_monthSecs);
     bool clockIsClose = (abs(secondDelta) <= 1);
 
-    if (snap_PPS_rise_valid && clockIsClose && snap_PPS_rise_millis != 0) {
-        V1_printf("Anchoring at PPS edge: setTime_millis %lu -> snap_PPS_rise_millis %lu" EOL,
-                  setTime_millis, snap_PPS_rise_millis);
+    // pps_skew: time from PPS edge to sentence '$'. Normal range 41-241 ms
+    // (observed across 884 samples). Values >= 300 ms indicate a stale or
+    // wrong PPS edge — typically PPS_rise_cnt 1 after hot reset, whose
+    // snap_PPS_rise_millis was captured from an edge fired seconds earlier.
+    // uint32_t subtraction wraps if snap_PPS_rise_millis > setTime_millis
+    // (Fix D race), producing a huge value that also fails the < 300 check.
+    uint32_t pps_skew = setTime_millis - snap_PPS_rise_millis;
+
+    if (snap_PPS_rise_valid && clockIsClose &&
+        snap_PPS_rise_millis != 0 && pps_skew < 300) {
+        V1_printf("Anchoring at PPS edge: setTime_millis %lu -> snap_PPS_rise_millis %lu"
+                  " skew %lu ms" EOL,
+                  setTime_millis, snap_PPS_rise_millis, pps_skew);
         setTime_millis = snap_PPS_rise_millis;
     } else {
         V1_printf("Using raw sentence timestamp: snap_PPS_rise_valid %u clockIsClose %u"
-                  " setTime_millis %lu" EOL,
-                  snap_PPS_rise_valid, clockIsClose, setTime_millis);
+                  " pps_skew %lu setTime_millis %lu" EOL,
+                  snap_PPS_rise_valid, clockIsClose, pps_skew, setTime_millis);
     }
 
     // setTime_millis is now the best available anchor for the GPS second boundary.
