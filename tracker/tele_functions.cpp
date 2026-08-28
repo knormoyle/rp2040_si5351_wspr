@@ -672,7 +672,7 @@ void telemetrySweepAllForTest(void) {
 
 //****************************************************
 void solarElevationCalcs(double solarElevation) {
-    V1_print(F("solarElevationCalcs START"));
+    V1_println(F("solarElevationCalcs START"));
     // Do nothing if the gps data isn't good
     // what about GpsInvalidAll from tracker.ino???
 
@@ -826,5 +826,5 @@ void solarElevationCalcs(double solarElevation) {
     solarPeakPos_sticky |= solarPeakPos;
     solarPeakNeg_sticky |= solarPeakNeg;
 
-    V1_print(F("solarElevationCalcs END"));
+    V1_println(F("solarElevationCalcs END"));
 }
