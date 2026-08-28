@@ -144,7 +144,7 @@ static bool ATGM336H_BROADCAST_5SECS = true;
 // Set from cc._const_group in GpsINIT(). 1=GPS 3=GPS+BDS 7=GPS+BDS+GLONASS.
 static int CONSTELLATIONS_GROUP = 0;
 
-//*******************************************
+// -----------------------------------------------------------------------------
 // ATGM336H uses AT6558 silicon
 // AT6558 BDS/GNSS Full Constellation SOC Chip Data Sheet Version 1.14
 // AT6558-5N-3X is GPS + BDS, QFN package 40 pin 5x5x0.8mm
@@ -152,31 +152,31 @@ static int CONSTELLATIONS_GROUP = 0;
 // VDD_POR or nRST going low causes internal reset (nRESET).
 // nRST can be asserted/deasserted after power-on; tcxo_xref must be running.
 
-//*******************************************
+// -----------------------------------------------------------------------------
 // Timing constraint: must call Serial2.read() within ~1.1 ms per char at 9600
 // baud (effective rate ~900 chars/sec from GPS chip). RP2040 UART FIFO is 32
 // bytes — that is ~33 ms headroom, but do not rely on it.
 // Polling mode is used (not interrupt-driven) for deterministic loop timing.
 
-//**************************************************
+// -----------------------------------------------------------------------------
 // SIM65M contains AG3352 core chip from Airoha.
 // https://www.airoha.com/products/p/zy4r082hgNywp1bg
 // Adds B1C and L1C frequency bands of Beidou-3 and GPS.
-//**************************************************
+// -----------------------------------------------------------------------------
 
-//************************************************
+// -----------------------------------------------------------------------------
 static bool GpsIsOn_state = false;
 bool GpsIsOn(void) {
     return GpsIsOn_state;
 }
 
-//************************************************
+// -----------------------------------------------------------------------------
 // 8 NMEA sentences per burst (max), each up to 255 bytes per NMEA spec.
 // Buffer holds one full burst without blocking the serial read loop.
 #define NMEA_BUFFER_SIZE (8 * 255)
 static char nmeaBuffer[NMEA_BUFFER_SIZE] = { 0 };
 
-//************************************************
+// -----------------------------------------------------------------------------
 // Shared UART drain state for updateGpsDataAndTime() and nmeaBufferFastPoll().
 // Static: internal to this file; not exported. Use getChar() to update both.
 static char s_incomingChar   = '\0';
@@ -247,7 +247,7 @@ void nmeaBufferFastPoll(uint32_t duration_millis, bool printIfFull) {
     nmeaBufferPrintAndClear();
     V1_println(F("nmeaBufferFastPoll END"));
 }
-//***************************************************
+// -----------------------------------------------------------------------------
 // Outputs the content of the nmea buffer to stdio (UART and/or USB)
 void nmeaBufferPrintAndClear(void) {
     if (!VERBY[1]) return;
@@ -344,7 +344,7 @@ void gpsSleepForMillis(int n, bool enableEarlyOut) {
         busy_wait_ms(GPS_SLEEP_TICK_MILLIS);
     }
 }
-//************************************************
+// -----------------------------------------------------------------------------
 // Internal helper: validate and normalise a requested GPS baud rate.
 // Falls back to 9600 for any unsupported value. Only called within this file.
 static int checkGpsBaudRate(int desiredBaud) {
@@ -434,7 +434,7 @@ bool getInitialGpsOutput(void) {
     return (incomingSentenceCnt >= GPS_INITIAL_OUTPUT_MIN_NMEA);
 }
 
-//************************************************
+// -----------------------------------------------------------------------------
 void setGpsBalloonMode(void) {
     V1_println(F("setGpsBalloonMode START"));
     //************************
@@ -502,7 +502,7 @@ void setGpsBalloonMode(void) {
     V1_println(F("setGpsBalloonMode END"));
 }
 
-//************************************************
+// -----------------------------------------------------------------------------
 void setGnssOn_SIM65M(void) {
     // Packet Type:002 PAIR_GNSS_SUBSYS_POWER_ON
     // Power on the GNSS system. Include DSP/RF/Clock and other GNSS modules.
@@ -567,7 +567,7 @@ void setGnssOn_SIM65M(void) {
     V1_println(F(EOL "setGnssOn_SIM65M END"));
 }
 
-//************************************************
+// -----------------------------------------------------------------------------
 void setGnssOff_SIM65M(void) {
     V1_println(F("setGnssOff_SIM65M START"));
     // PAIR_GNSS_SUBSYS_POWER_OFF
@@ -577,7 +577,7 @@ void setGnssOff_SIM65M(void) {
     V1_println(F("setGnssOff_SIM65M END"));
 }
 
-//************************************************
+// -----------------------------------------------------------------------------
 // always GGA GSA GSV RMC
 // never ZDA TXT
 // never VTG GLL?
@@ -784,7 +784,7 @@ void setGpsBroadcast(void) {
 
     V1_print(F("setGpsBroadcast END" EOL));
 }
-//************************************************
+// -----------------------------------------------------------------------------
 void disableGpsBroadcast(void) {
     // OPEN: SIM65M per-sentence disable verified working 2026-04-30. ATGM path unchanged.
     V1_print(F("disableGpsBroadcast START" EOL));
@@ -821,7 +821,7 @@ void disableGpsBroadcast(void) {
     V1_print(F("disableGpsBroadcast END" EOL));
 }
 
-//***************************************
+// -----------------------------------------------------------------------------
 // my GPTXT on 11/18/24.
 // $GPTXT,01,01,02,HW=ATGM336H,0004090746370*1E
 // $GPTXT,01,01,02,IC=AT6558-5N-31-0C510800,EF16CKJ-F2-008017*5A
@@ -832,7 +832,7 @@ void disableGpsBroadcast(void) {
 // $GPTXT,01,01,02,FI=00856014*71
 // $GPTXT,01,01,01,ANTENNAOPEN*25
 
-//***************************************
+// -----------------------------------------------------------------------------
 // examples of GPTXT messages from spec. we are disabling them now in setGpsBroadcast
 // this is not from oiurs
 // $GPTXT,01,01,02,MA=CASIC*27
@@ -851,7 +851,7 @@ void disableGpsBroadcast(void) {
 // $GPTXT,01,01,02,CI=00000000*7A
 // Indicates the customer number (the customer number is 00000000)
 
-//************************************************
+// -----------------------------------------------------------------------------
 // re: GSV nmea sentences from SIM65M
 // Depending on the number of satellites tracked,
 // multiple messages of GSV data may be required.
@@ -859,7 +859,7 @@ void disableGpsBroadcast(void) {
 // even though more may be visible
 // Hmm: is this fully compatible with max number expected by TinyGPS++ parsing?
 
-//************************************************
+// -----------------------------------------------------------------------------
 // re: SIM65M comments on the *RMC nmea sentences
 // A valid status is derived from all the parameters set in the software.
 // This includes the minimum number of satellites required,
@@ -870,7 +870,7 @@ void disableGpsBroadcast(void) {
 // Does not support magnetic declination.
 // All “course over ground” data are geodetic WGS84 directions relative to true North
 
-//************************************************
+// -----------------------------------------------------------------------------
 // re: SIM65M 'PAIR' sentences:
 // PAIR command is an AIROHA proprietary GNSS data transferring protocol.
 // This protocol is used to configure the GNSS module’s parameters,
@@ -1468,7 +1468,7 @@ void pwmGpsPwrOn(void) {
         gpsPwrOn_pwmRamp();
     }
 }
-//************************************************
+// -----------------------------------------------------------------------------
 // =============================================================================
 // GpsFullColdReset
 // -----------------------------------------------------------------------------
@@ -2246,7 +2246,7 @@ void GpsON(bool GpsColdReset) {
     V1_flush();
 }
 
-//************************************************
+// -----------------------------------------------------------------------------
 /*
 This used to be in the LightAPRS version of TinyGPSPlus-0.95
 instead updated TinyGPSPlus (latest) in libraries to make them public,
@@ -2260,7 +2260,7 @@ not private
 < #endif
 */
 
-//************************************************
+// -----------------------------------------------------------------------------
 void invalidateTinyGpsState(void) {
     V1_println(F("invalidateTinyGpsState() START"));
     // TinyGPS++ originally had private flush methods. We added public flush()
@@ -2294,7 +2294,7 @@ void invalidateTinyGpsState(void) {
     V1_println(F("invalidateTinyGpsState END"));
 }
 
-//************************************************
+// -----------------------------------------------------------------------------
 void GpsOFF() {
     GpsIsOn_state = false;
     GpsStartTime = 0;
@@ -2322,7 +2322,7 @@ void GpsOFF() {
     V1_printf("GpsOFF END GpsIsOn_state %u" EOL, GpsIsOn_state);
 }
 
-//************************************************
+// -----------------------------------------------------------------------------
 uint32_t updateGpsDataAndTime(int ms) {
     // to make sure we get some update, even if fix_age is larger than 1 sec.
     V1_println(F("updateGpsDataAndTime START"));
@@ -2488,18 +2488,33 @@ uint32_t updateGpsDataAndTime(int ms) {
 
         if (finished) break;
 
-        // did we wait more than ?? millis() since good data read?
-        // we wait until we get at least one char or go past the ms total wait
-        // break out when we don't get the next char right away
+        // Break when no char has arrived for GPS_BURST_GAP_MS.
+        //
+        // The ATGM336H at 9600 baud inserts inter-sentence gaps of ~10-40 ms
+        // within a burst (observed between the GSA and GSV sentence groups).
+        // The inter-burst silence is ~4500 ms.
+        //
+        // The gap threshold is NOT the right lever for preventing GSV data loss.
+        // The loss occurs at call ENTRY (FIFO overflow during ~500 ms inter-call
+        // overhead), not at the gap detector. Increasing this value makes the
+        // short call longer, which increases the inter-call overhead for the
+        // subsequent call — making the overflow slightly worse, not better.
+        //
+        // The correct fixes are:
+        //   A) Disable GSV in PCAS03 (burst shrinks to ~200 chars, fits cleanly
+        //      within one call, no overflow at entry).
+        //   B) Increase baud rate to 115200 (burst transmits in ~51 ms, finishes
+        //      before the next call starts — FIFO holds only the tail).
+        //   19200 baud is insufficient: burst still takes ~300 ms, the overflow
+        //   window shrinks by half but the problem persists.
+        //
+        // 10 ms is kept as a clean exit threshold — enough to detect the end of
+        // the burst without adding unnecessary latency between calls.
+        static const uint32_t GPS_BURST_GAP_MS = 10;
         uint32_t gapMs = last_char_millis ? (millis() - last_char_millis) : 0;
-        if (gapMs >= 10) break;
+        if (gapMs >= GPS_BURST_GAP_MS) break;
 
-        // also moved the led update out of here
-        // stop the wait early if Serial2.available
-        // still didn't work with this removed
-        gpsSleepForMillis(10, true);
-        // it was okay for 2 baud rate clicks below 115200 baud.
-        
+        gpsSleepForMillis(10, true);   // enableEarlyOut: returns early if char arrives
         getChar();
     }
     // maybe save some time in loop above..don't update led during 1 sec burst?
@@ -2969,7 +2984,7 @@ void checkUpdateTimeFromGps(uint32_t sentence_dollar_millis,
 }
 
 
-//************************************************
+// -----------------------------------------------------------------------------
 void gpsDebug() {
     if (!VERBY[1]) return;
     // am I getting problems with constant strings in ram??
